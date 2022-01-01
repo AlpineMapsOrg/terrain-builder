@@ -39,10 +39,11 @@ public:
 
   /// Initialise the profile with a specific tile size
   GlobalGeodetic(i_tile tileSize, bool tmsCompatible = true):
-    Grid(tileSize,
-         CRSBounds(-180, -90, 180, 90),
-         cSRS,
-         (tmsCompatible) ? 2 : 1)
+      Grid(tileSize,
+           CRSBounds(-180, -90, 180, 90),
+           cSRS,
+           (tmsCompatible) ? 2 : 1,
+           2)
   {}
 
 protected:

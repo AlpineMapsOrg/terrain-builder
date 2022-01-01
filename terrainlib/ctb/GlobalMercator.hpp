@@ -38,10 +38,12 @@ class ctb::GlobalMercator :
   public Grid {
 public:
 
-  GlobalMercator(i_tile tileSize):
-    Grid(tileSize,
-         CRSBounds(-cOriginShift, -cOriginShift, cOriginShift, cOriginShift),
-         cSRS)
+  GlobalMercator(i_tile tileSize = 256) :
+      Grid(tileSize,
+           CRSBounds(-cOriginShift, -cOriginShift, cOriginShift, cOriginShift),
+           cSRS,
+           1,
+           2)
   {}
 
 protected:

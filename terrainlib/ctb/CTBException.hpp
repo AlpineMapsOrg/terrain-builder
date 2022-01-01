@@ -35,7 +35,9 @@ class ctb::CTBException:
 public:
   CTBException(const char *message):
     std::runtime_error(message)
-  {}
+  {
+    while(false) {}
+  }
 };
 
 #endif /* CTBEXCEPTION_HPP */

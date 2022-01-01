@@ -22,7 +22,11 @@ public:
   std::unique_ptr<OGRCoordinateTransformation> srsTransformation(const OGRSpatialReference& targetSrs) const;
   ctb::CRSBounds bounds(const OGRSpatialReference& targetSrs) const;
   OGRSpatialReference srs() const;
-//  double resolution(const Grid& grid) const;
+  ctb::i_pixel widthInPixels() const;
+  ctb::i_pixel heightInPixels() const;
+
+  double pixelWidthIn(const OGRSpatialReference& targetSrs) const;
+  double pixelHeightIn(const OGRSpatialReference& targetSrs) const;
 
 private:
   std::unique_ptr<GDALDataset> m_gdal_dataset;

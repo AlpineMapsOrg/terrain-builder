@@ -3,6 +3,7 @@
 
 /*******************************************************************************
  * Copyright 2014 GeoData <geodata@soton.ac.uk>
+ * Copyright 2022 Adam Celarek <lastname at cg tuwien ac at>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy
@@ -44,12 +45,6 @@ public:
     zoom(0)
   {}
 
-  /// The const copy constructor
-  TileCoordinate(const TileCoordinate &other):
-    TilePoint(other.x, other.y),
-    zoom(other.zoom)
-  {}
-
   /// Instantiate a tile coordinate from the zoom, x and y
   TileCoordinate(i_zoom zoom, i_tile x, i_tile y):
     TilePoint(x, y),
@@ -61,20 +56,6 @@ public:
     TilePoint(coord),
     zoom(zoom)
   {}
-
-  /// Override the equality operator
-  inline bool
-  operator==(const TileCoordinate &other) const {
-    return TilePoint::operator==(other)
-      && zoom == other.zoom;
-  }
-
-  /// Override the assignment operator
-  inline void
-  operator=(const TileCoordinate &other) {
-    TilePoint::operator=(other);
-    zoom = other.zoom;
-  }
 
   /// Set the point
   inline void

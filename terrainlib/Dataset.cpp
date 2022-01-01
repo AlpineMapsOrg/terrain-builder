@@ -6,6 +6,7 @@
 
 #include <gdal_priv.h>
 
+#include "Exception.h"
 #include "ctb/Grid.hpp"
 #include "tntn/logging.h"
 #include "tntn/gdal_init.h"
@@ -16,7 +17,7 @@ Dataset::Dataset(const std::string& path)
   m_gdal_dataset.reset(static_cast<GDALDataset *>(GDALOpen(path.c_str(), GA_ReadOnly)));
   if (!m_gdal_dataset) {
     TNTN_LOG_FATAL("Couldn't open dataset {}.\n", path);
-    throw std::runtime_error("");
+    throw Exception("");
   }
 }
 
@@ -35,7 +36,7 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
 {
   std::array<double, 6> adfGeoTransform = {};
   if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None)
-    throw std::runtime_error("Could not get transformation information from source dataset");
+    throw Exception("Could not get transformation information from source dataset");
 
   // https://gdal.org/user/raster_data_model.html
   // gdal has a row/column raster format, where row 0 is the top most row.
@@ -44,20 +45,12 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
 
   // we don't support sheering or rotation for now
   if (adfGeoTransform[2] != 0.0 || adfGeoTransform[4] != 0.0)
-    throw std::runtime_error("Dataset geo transform contains sheering or rotation. This is not supported!");
-
-  const double width = m_gdal_dataset->GetRasterXSize();
-  const double height = m_gdal_dataset->GetRasterYSize();
-//  const double westX =  adfGeoTransform[0] + (0.5            * adfGeoTransform[1]);
-//  const double southY = adfGeoTransform[3] + ((height - 0.5) * adfGeoTransform[5]);
-
-//  const double eastX =  adfGeoTransform[0] + ((width - 0.5)  * adfGeoTransform[1]);
-//  const double northY = adfGeoTransform[3] + (0.5            * adfGeoTransform[5]);
+    throw Exception("Dataset geo transform contains sheering or rotation. This is not supported!");
 
   const double westX =  adfGeoTransform[0];
-  const double southY = adfGeoTransform[3] + (height * adfGeoTransform[5]);
+  const double southY = adfGeoTransform[3] + (heightInPixels() * adfGeoTransform[5]);
 
-  const double eastX =  adfGeoTransform[0] + (width  * adfGeoTransform[1]);
+  const double eastX =  adfGeoTransform[0] + (widthInPixels()  * adfGeoTransform[1]);
   const double northY = adfGeoTransform[3];
   auto bound_in_data_crs = ctb::CRSBounds(westX, southY, eastX, northY);
   const auto data_srs = srs();
@@ -74,14 +67,14 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
 
   const auto deltaX = (eastX - westX) / 2000.0;
   if (deltaX <= 0.0)
-    throw std::runtime_error("west coordinate > east coordinate. This is not supported.");
+    throw Exception("west coordinate > east coordinate. This is not supported.");
   for (double s = westX; s < eastX; s += deltaX) {
     addCoordinate(s, southY);
     addCoordinate(s, northY);
   }
   const auto deltaY = (northY - southY) / 2000.0;
   if (deltaY <= 0.0)
-    throw std::runtime_error("south coordinate > north coordinate. This is not supported.");
+    throw Exception("south coordinate > north coordinate. This is not supported.");
   for (double s = southY; s < northY; s += deltaY) {
     addCoordinate(westX, s);
     addCoordinate(eastX, s);
@@ -107,8 +100,30 @@ OGRSpatialReference Dataset::srs() const
 {
   const char *srcWKT = m_gdal_dataset->GetProjectionRef();
   if (!strlen(srcWKT))
-    throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
+    throw Exception("The source dataset does not have a spatial reference system assigned");
   auto srs = OGRSpatialReference(srcWKT);
   srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
   return srs;
+}
+
+ctb::i_pixel Dataset::widthInPixels() const
+{
+  return ctb::i_pixel(m_gdal_dataset->GetRasterXSize());
+}
+
+ctb::i_pixel Dataset::heightInPixels() const
+{
+  return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
+}
+
+double Dataset::pixelWidthIn(const OGRSpatialReference& targetSrs) const
+{
+  const auto b = bounds(targetSrs);
+  return (b.getMaxX() - b.getMinX()) / widthInPixels();
+}
+
+double Dataset::pixelHeightIn(const OGRSpatialReference& targetSrs) const
+{
+  const auto b = bounds(targetSrs);
+  return (b.getMaxY() - b.getMinY()) / heightInPixels();
 }

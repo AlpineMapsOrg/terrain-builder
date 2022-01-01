@@ -224,6 +224,13 @@ public:
     return getMinX() < other.getMaxX() && other.getMinX() < getMaxX() &&
            getMinY() < other.getMaxY() && other.getMinY() < getMaxY();
   }
+
+  void clampBy(const Bounds<T> &other) {
+    bounds[0] = std::max(bounds[0], other.bounds[0]); // min x
+    bounds[1] = std::max(bounds[1], other.bounds[1]); // min y;
+    bounds[2] = std::min(bounds[2], other.bounds[2]); // max x;
+    bounds[3] = std::min(bounds[3], other.bounds[3]); // max y;
+  }
   
 private:
   /// The extents themselves as { minx, miny, maxx, maxy }
