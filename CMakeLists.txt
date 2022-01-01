@@ -44,12 +44,27 @@ set(ATB_INCLUDE_PATHS
 
 set(ATB_TERRAINLIB_HEADERS
     terrainlib/Dataset.h
+    terrainlib/ctb/Bounds.hpp
+    terrainlib/ctb/Coordinate.hpp
+    terrainlib/ctb/Coordinate3D.hpp
+    terrainlib/ctb/CTBException.hpp
+    terrainlib/tntn/gdal_init.h
+    terrainlib/ctb/GlobalGeodetic.hpp
+    terrainlib/ctb/GlobalMercator.hpp
+    terrainlib/ctb/Grid.hpp
+    terrainlib/ctb/types.hpp
+    terrainlib/tntn/logging.h
 )
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/Dataset.cpp
+    terrainlib/tntn/gdal_init.cpp
+    terrainlib/ctb/GlobalGeodetic.cpp
+    terrainlib/ctb/GlobalMercator.cpp
+    terrainlib/tntn/logging.cpp
 )
 
 set(ATB_UNITTESTS_SOURCES
+    unittests/dataset_reading.cpp
     unittests/main.cpp
 )
 
@@ -77,6 +92,7 @@ add_library(terrainlib STATIC
 target_compile_definitions(terrainlib PUBLIC GLM_FORCE_SWIZZLE GLM_ENABLE_EXPERIMENTAL)
 target_link_libraries(terrainlib PUBLIC ZLIB::ZLIB GDAL::GDAL fmt)
 target_include_directories(terrainlib
+    PUBLIC terrainlib
     SYSTEM PUBLIC
     ${ATB_INCLUDE_PATHS}
 )
@@ -91,5 +107,6 @@ if (ATB_UNITTESTS)
     add_executable(unittests
         ${ATB_UNITTESTS_SOURCES}
     )
+    target_compile_definitions(unittests PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
     target_link_libraries(unittests PUBLIC terrainlib Catch2::Catch2)
 endif()
