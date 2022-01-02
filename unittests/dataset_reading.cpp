@@ -3,6 +3,8 @@
 #include <ogr_spatialref.h>
 
 #include "Dataset.h"
+#include "DatasetReader.h"
+#include "HeightData.h"
 #include "Tiler.h"
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/GlobalGeodetic.hpp"
@@ -60,6 +62,19 @@ TEST_CASE("datasets are as expected") {
     const auto grid = ctb::GlobalMercator();
     const auto gridResuloution = std::min(d_mgi.pixelWidthIn(grid.getSRS()), d_mgi.pixelHeightIn(grid.getSRS()));
     REQUIRE(grid.zoomForResolution(gridResuloution) == 7);
+  }
+
+  SECTION("read without overviews") {
+    const auto dataset = std::make_shared<Dataset>(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    OGRSpatialReference geodetic;
+    geodetic.importFromEPSG(4326);
+    geodetic.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    const auto reader = DatasetReader(dataset, geodetic);
+    const auto vienna_bounds = ctb::CRSBounds(16.17, 48.11, 16.59, 48.33);
+    const auto heights = reader.read(vienna_bounds, 42, 420);
+    REQUIRE(heights.width() == 42);
+    REQUIRE(heights.height() == 420);
+    REQUIRE(heights.pixel(21, 200) > 0);
   }
 }
 

@@ -44,7 +44,9 @@ set(ATB_INCLUDE_PATHS
 
 set(ATB_TERRAINLIB_HEADERS
     terrainlib/Dataset.h
+    terrainlib/DatasetReader.h
     terrainlib/Exception.h
+    terrainlib/HeightData.h
     terrainlib/Tile.h
     terrainlib/Tiler.h
     terrainlib/ctb/Bounds.hpp
@@ -61,6 +63,7 @@ set(ATB_TERRAINLIB_HEADERS
 )
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/Dataset.cpp
+    terrainlib/DatasetReader.cpp
     terrainlib/Tile.cpp
     terrainlib/Tiler.cpp
     terrainlib/tntn/gdal_init.cpp
