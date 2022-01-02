@@ -71,6 +71,7 @@ set(ATB_TERRAINLIB_SOURCES
 
 set(ATB_UNITTESTS_SOURCES
     unittests/dataset_reading.cpp
+    unittests/tiler.cpp
     unittests/main.cpp
 )
 
