@@ -8,8 +8,9 @@ In order to build, you need to install:
 - glm (https://github.com/g-truc/glm)
 - boost
 - catch2 (version 2.x) (https://github.com/catchorg/Catch2/tree/v2.x)
+- FreeImage
 
-sudo apt-get install libfmt-dev libglm-dev libgdal-dev libboost-dev catch2
+sudo apt-get install libfmt-dev libglm-dev libgdal-dev libboost-dev catch2 libfreeimage-dev
 
 
 -------------------------------------------------------------------------------

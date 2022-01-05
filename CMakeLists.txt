@@ -3,7 +3,10 @@ cmake_minimum_required(VERSION 3.18)
 project(alpine-terrain-builder)
 
 option(ATB_UNITTESTS "include unit test targets in the buildsystem" ON)
+option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" ON)
+option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
 option(ATB_ENABLE_ADDRESS_SANITIZER "compiles ctb with address sanitizer enabled (works only on g++ and clang)" ON)
+option(ATB_ENABLE_ASSERTS "enable asserts (do not define NDEBUG)" ON)
 option(ATB_USE_LLVM_LINKER "use lld (llvm) for linking. it's parallel and much faster, but not installed by default. if it's not installed, you'll get errors, that openmp or other stuff is not installed (hard to track down)" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -46,9 +49,10 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/Dataset.h
     terrainlib/DatasetReader.h
     terrainlib/Exception.h
-    terrainlib/HeightData.h
+    terrainlib/Image.h
     terrainlib/Tile.h
     terrainlib/Tiler.h
+    terrainlib/util.h
     terrainlib/ctb/Bounds.hpp
     terrainlib/ctb/Coordinate.hpp
     terrainlib/ctb/Coordinate3D.hpp
@@ -64,6 +68,7 @@ set(ATB_TERRAINLIB_HEADERS
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
+    terrainlib/Image.cpp
     terrainlib/Tile.cpp
     terrainlib/Tiler.cpp
     terrainlib/tntn/gdal_init.cpp
@@ -74,6 +79,7 @@ set(ATB_TERRAINLIB_SOURCES
 
 set(ATB_UNITTESTS_SOURCES
     unittests/dataset_reading.cpp
+    unittests/image.cpp
     unittests/tiler.cpp
     unittests/main.cpp
 )
@@ -100,12 +106,15 @@ add_library(terrainlib STATIC
     ${ATB_TERRAINLIB_SOURCES}
 )
 target_compile_definitions(terrainlib PUBLIC GLM_FORCE_SWIZZLE GLM_ENABLE_EXPERIMENTAL GLM_FORCE_XYZW_ONLY)
-target_link_libraries(terrainlib PUBLIC ZLIB::ZLIB GDAL::GDAL fmt)
+target_link_libraries(terrainlib PUBLIC ZLIB::ZLIB GDAL::GDAL fmt freeimage)
 target_include_directories(terrainlib
     PUBLIC terrainlib
     SYSTEM PUBLIC
     ${ATB_INCLUDE_PATHS}
 )
+if (ATB_ENABLE_ASSERTS)
+    target_compile_options(terrainlib PUBLIC "-U NDEBUG")
+endif()
 
 
 add_executable(terrainbuilder
@@ -118,5 +127,15 @@ if (ATB_UNITTESTS)
         ${ATB_UNITTESTS_SOURCES}
     )
     target_compile_definitions(unittests PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
+    if (ATB_UNITTESTS_EXTENDED)
+        target_compile_definitions(unittests PUBLIC "ATB_UNITTESTS_EXTENDED=true")
+    else()
+        target_compile_definitions(unittests PUBLIC "ATB_UNITTESTS_EXTENDED=false")
+    endif()
+    if (ATB_UNITTESTS_DEBUG_IMAGES)
+        target_compile_definitions(unittests PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=true")
+    else()
+        target_compile_definitions(unittests PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=false")
+    endif()
     target_link_libraries(unittests PUBLIC terrainlib Catch2::Catch2)
 endif()

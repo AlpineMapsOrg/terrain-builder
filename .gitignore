@@ -1,0 +1,3 @@
+*.tif
+*.tif.aux.xml
+/CMakeLists.txt.user

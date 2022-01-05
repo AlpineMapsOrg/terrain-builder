@@ -1,5 +1,6 @@
 #include "tntn/gdal_init.h"
 #include "tntn/logging.h"
+#include <FreeImage.h>
 #include <mutex> //for call_once
 
 #include <gdal.h>
@@ -16,4 +17,22 @@ void initialize_gdal_once()
     });
 }
 
+std::once_flag g_freeimage_initialized_once_flag;
+
+namespace {
+struct FreeImageDeinitialiserHandler {
+  ~FreeImageDeinitialiserHandler() {
+    FreeImage_DeInitialise();
+  }
+};
+}
+
+void initialize_freeimage_once()
+{
+  std::call_once(g_freeimage_initialized_once_flag, []() {
+    TNTN_LOG_DEBUG("calling GDALAllRegister...");
+    FreeImage_Initialise();
+  });
+  static FreeImageDeinitialiserHandler deinitialiser;
+}
 } //namespace tntn

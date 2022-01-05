@@ -22,6 +22,7 @@
  * @file Bounds.hpp
  * @brief This declares and defines the `Bounds` class
  */
+#include <array>
 
 #include "Coordinate.hpp"
 #include "CTBException.hpp"
@@ -49,13 +50,7 @@ public:
   }
 
   /// Overload the equality operator
-  virtual bool
-  operator==(const Bounds<T> &other) const {
-    return bounds[0] == other.bounds[0]
-      && bounds[1] == other.bounds[1]
-      && bounds[2] == other.bounds[2]
-      && bounds[3] == other.bounds[3];
-  }
+  bool operator==(const Bounds<T> &other) const = default;
 
   /// Set the bounds from extents
   inline void
@@ -232,9 +227,13 @@ public:
     bounds[3] = std::min(bounds[3], other.bounds[3]); // max y;
   }
   
+  std::array<T, 4> data() const {
+    return bounds;
+  }
+
 private:
   /// The extents themselves as { minx, miny, maxx, maxy }
-  T bounds[4];
+  std::array<T, 4> bounds;
 };
 
 }

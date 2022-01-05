@@ -7,6 +7,7 @@
 #include <gdal_priv.h>
 
 #include "Exception.h"
+#include "util.h"
 #include "ctb/Grid.hpp"
 #include "tntn/logging.h"
 #include "tntn/gdal_init.h"
@@ -21,18 +22,19 @@ Dataset::Dataset(const std::string& path)
   }
 }
 
-std::unique_ptr<OGRCoordinateTransformation> Dataset::srsTransformation(const OGRSpatialReference& targetSrs) const
+Dataset::Dataset(GDALDataset* dataset)
 {
-  const auto data_srs = srs();
-  auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&data_srs, &targetSrs));
-  if (!transformer)
-    throw std::runtime_error("Couldn't create SRS transformation");
-  return transformer;
+  tntn::initialize_gdal_once();
+  m_gdal_dataset.reset(dataset);
+  if (!m_gdal_dataset) {
+    TNTN_LOG_FATAL("dataset is null.\n");
+    throw Exception("");
+  }
 }
 
 Dataset::~Dataset() = default;
 
-ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
+ctb::CRSBounds Dataset::bounds() const
 {
   std::array<double, 6> adfGeoTransform = {};
   if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None)
@@ -52,10 +54,16 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
 
   const double eastX =  adfGeoTransform[0] + (widthInPixels()  * adfGeoTransform[1]);
   const double northY = adfGeoTransform[3];
-  auto bound_in_data_crs = ctb::CRSBounds(westX, southY, eastX, northY);
+  return {westX, southY, eastX, northY};
+}
+
+ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
+{
+
+  auto [westX, southY, eastX, northY] = bounds().data();
   const auto data_srs = srs();
   if (targetSrs.IsSame(&data_srs))
-    return bound_in_data_crs;
+    return ctb::CRSBounds(westX, southY, eastX, northY);
 
   // We need to transform the bounds to the target SRS
   // this might involve warping, i.e. some of the edges can be arcs.
@@ -82,7 +90,7 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
   // don't wanna miss out the max/max edge vertex
   addCoordinate(eastX, northY);
 
-  const auto transformer = srsTransformation(targetSrs);
+  const auto transformer = util::srsTransformation(srs(), targetSrs);
   if (! transformer->Transform(int(x.size()), x.data(), y.data())) {
     throw std::string("Could not transform dataset bounds to target SRS");
   }
@@ -114,6 +122,18 @@ ctb::i_pixel Dataset::widthInPixels() const
 ctb::i_pixel Dataset::heightInPixels() const
 {
   return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
+}
+
+unsigned Dataset::n_bands() const
+{
+  const auto n = m_gdal_dataset->GetRasterCount();
+  assert(n >= 0);
+  return unsigned(n);
+}
+
+GDALDataset* Dataset::gdalDataset()
+{
+  return m_gdal_dataset.get();
 }
 
 double Dataset::pixelWidthIn(const OGRSpatialReference& targetSrs) const

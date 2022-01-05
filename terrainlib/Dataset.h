@@ -17,13 +17,16 @@ class Grid;
 class Dataset {
 public:
   Dataset(const std::string& path);
+  Dataset(GDALDataset* dataset);  // takes over ownership
   ~Dataset();
 
-  std::unique_ptr<OGRCoordinateTransformation> srsTransformation(const OGRSpatialReference& targetSrs) const;
+  ctb::CRSBounds bounds() const;
   ctb::CRSBounds bounds(const OGRSpatialReference& targetSrs) const;
   OGRSpatialReference srs() const;
   ctb::i_pixel widthInPixels() const;
   ctb::i_pixel heightInPixels() const;
+  unsigned n_bands() const;
+  GDALDataset* gdalDataset();
 
   double pixelWidthIn(const OGRSpatialReference& targetSrs) const;
   double pixelHeightIn(const OGRSpatialReference& targetSrs) const;
