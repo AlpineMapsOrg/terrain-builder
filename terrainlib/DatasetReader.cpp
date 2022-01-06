@@ -50,7 +50,6 @@ std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> makeImageTran
 
 struct MyWarpOptions {
   std::unique_ptr<GDALWarpOptions, decltype (&GDALDestroyWarpOptions)> gdal = {nullptr, &GDALDestroyWarpOptions};
-  std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> image_transform_args = {nullptr, &GDALDestroyGenImgProjTransformer};
 };
 
 MyWarpOptions make_warp_options(const DatasetReader& reader, Dataset* dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height)
@@ -79,12 +78,52 @@ MyWarpOptions make_warp_options(const DatasetReader& reader, Dataset* dataset, c
     options.gdal->panSrcBands[0] = int(reader.dataset_band());
     options.gdal->panDstBands[0] = 1;
   }
-  options.image_transform_args = makeImageTransformArgs(reader, dataset, bounds, width, height);
-  options.gdal->pTransformerArg = options.image_transform_args.release();
+  options.gdal->pTransformerArg = makeImageTransformArgs(reader, dataset, bounds, width, height).release();
   options.gdal->pfnTransformer = GDALGenImgProjTransform;
 
-
   return options;
+}
+
+std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& dataset, void *hTransformerArg) {
+  GDALDataset* poSrcDS = dataset->gdalDataset();
+  int nOvLevel = -2;
+  int nOvCount = poSrcDS->GetRasterBand(1)->GetOverviewCount();
+  if( nOvCount > 0 )
+  {
+    double adfSuggestedGeoTransform[6];
+    double adfExtent[4];
+    int    nPixels, nLines;
+    /* Compute what the "natural" output resolution (in pixels) would be for this */
+    /* input dataset */
+    if( GDALSuggestedWarpOutput2(poSrcDS, GDALGenImgProjTransform, hTransformerArg,
+                                 adfSuggestedGeoTransform, &nPixels, &nLines,
+                                 adfExtent, 0) == CE_None)
+    {
+      double dfTargetRatio = 1.0 / adfSuggestedGeoTransform[1];
+      if( dfTargetRatio > 1.0 )
+      {
+        int iOvr;
+        for( iOvr = -1; iOvr < nOvCount-1; iOvr++ )
+        {
+          double dfOvrRatio = (iOvr < 0) ? 1.0 : (double)poSrcDS->GetRasterXSize() /
+                                                   poSrcDS->GetRasterBand(1)->GetOverview(iOvr)->GetXSize();
+          double dfNextOvrRatio = (double)poSrcDS->GetRasterXSize() /
+                                  poSrcDS->GetRasterBand(1)->GetOverview(iOvr+1)->GetXSize();
+          if( dfOvrRatio < dfTargetRatio && dfNextOvrRatio > dfTargetRatio )
+            break;
+          if( fabs(dfOvrRatio - dfTargetRatio) < 1e-1 )
+            break;
+        }
+        iOvr += (nOvLevel+2);
+        if( iOvr >= 0 )
+        {
+          //std::cout << "CTB WARPING: Selecting overview level " << iOvr << " for output dataset " << nPixels << "x" << nLines << std::endl;
+          return std::make_shared<Dataset>(static_cast<GDALDataset*>(GDALCreateOverviewDataset( poSrcDS, iOvr, FALSE )));
+        }
+      }
+    }
+  }
+  return {};
 }
 
 }
@@ -110,10 +149,35 @@ HeightData DatasetReader::read(const ctb::CRSBounds& bounds, unsigned width, uns
     throw Exception("Could not set geo transform on VRT");
   }
 
-//  if (!warped_dataset)
-//    throw Exception("Could not create warped VRT");
+  auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1);  // non-owning pointer
+  auto heights_data = HeightData(width, height);
+  if (heights_band->RasterIO(GF_Read, 0, 0, int(width), int(height),
+                             static_cast<void*>(heights_data.data()), int(width), int(height), GDT_Float32, 0, 0) != CE_None)
+    throw Exception("couldn't read data");
 
-  const auto dbg_bounds = warped_dataset.bounds();
+
+  return heights_data;
+}
+
+HeightData DatasetReader::readWithOverviews(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const
+{
+  auto warpOptions = make_warp_options(*this, m_dataset.get(), bounds, width, height);
+  auto adfGeoTransform = computeGeoTransform(bounds, width, height);
+
+  const auto overview = getOverviewDataset(m_dataset, warpOptions.gdal->pTransformerArg);
+  if (overview) {
+    warpOptions.gdal->hSrcDS = overview->gdalDataset();
+
+    // We need to recreate the transform when operating on an overview.
+    warpOptions.gdal->pTransformerArg = makeImageTransformArgs(*this, overview.get(), bounds, width, height).release();
+  }
+
+  auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(overview ? overview->gdalDataset() : m_dataset->gdalDataset(),
+                                                                               int(width), int(height), adfGeoTransform.data(), warpOptions.gdal.get())));
+  // Set the shifted geo transform to the VRT
+  if (GDALSetGeoTransform(warped_dataset.gdalDataset(), adfGeoTransform.data()) != CE_None) {   // todo: necessary? remove?
+    throw Exception("Could not set geo transform on VRT");
+  }
 
   auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1);  // non-owning pointer
   auto heights_data = HeightData(width, height);

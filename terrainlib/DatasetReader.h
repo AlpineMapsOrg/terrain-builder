@@ -16,7 +16,7 @@ public:
   DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band);
 
   HeightData read(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
-  HeightData read_version2(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
+  HeightData readWithOverviews(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
 
   unsigned dataset_band() const { return m_band; }
   bool isReprojecting() const { return m_requires_reprojection; }

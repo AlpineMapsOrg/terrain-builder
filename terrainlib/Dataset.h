@@ -25,6 +25,8 @@ public:
   OGRSpatialReference srs() const;
   ctb::i_pixel widthInPixels() const;
   ctb::i_pixel heightInPixels() const;
+  double widthInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
+  double heightInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
   unsigned n_bands() const;
   GDALDataset* gdalDataset();
 

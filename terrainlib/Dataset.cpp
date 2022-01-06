@@ -27,8 +27,8 @@ Dataset::Dataset(GDALDataset* dataset)
   tntn::initialize_gdal_once();
   m_gdal_dataset.reset(dataset);
   if (!m_gdal_dataset) {
-    TNTN_LOG_FATAL("dataset is null.\n");
-    throw Exception("");
+    TNTN_LOG_FATAL("Dataset is null.\n");
+    throw Exception("Dataset is null.");
   }
 }
 
@@ -124,6 +124,33 @@ ctb::i_pixel Dataset::heightInPixels() const
   return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
 }
 
+double Dataset::widthInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const
+{
+  const auto wip = widthInPixels();
+  const auto hip = heightInPixels();
+  const auto bnds = this->bounds();
+
+  const auto bndW = bounds.getWidth();
+  const auto pwibs = pixelWidthIn(bounds_srs);
+
+  return bounds.getWidth() / pixelWidthIn(bounds_srs);
+}
+
+double Dataset::heightInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const
+{
+  const auto wip = widthInPixels();
+  const auto hip = heightInPixels();
+
+  const auto bnds = this->bounds();
+  const auto bnds_h = this->bounds().getHeight();
+  const auto ph = pixelHeightIn(srs());
+
+  const auto s_bnds_h = bounds.getHeight();
+  const auto s_ph = pixelHeightIn(bounds_srs);
+
+  return bounds.getHeight() / pixelHeightIn(bounds_srs);
+}
+
 unsigned Dataset::n_bands() const
 {
   const auto n = m_gdal_dataset->GetRasterCount();
@@ -136,14 +163,15 @@ GDALDataset* Dataset::gdalDataset()
   return m_gdal_dataset.get();
 }
 
-double Dataset::pixelWidthIn(const OGRSpatialReference& targetSrs) const
+double Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const
 {
-  const auto b = bounds(targetSrs);
-  return (b.getMaxX() - b.getMinX()) / widthInPixels();
+  const auto b0 = bounds();
+  const auto b1 = util::nonExactBoundsTransform(b0, srs(), target_srs);
+  return b1.getWidth() / widthInPixels();
 }
 
-double Dataset::pixelHeightIn(const OGRSpatialReference& targetSrs) const
+double Dataset::pixelHeightIn(const OGRSpatialReference& target_srs) const
 {
-  const auto b = bounds(targetSrs);
-  return (b.getMaxY() - b.getMinY()) / heightInPixels();
+  const auto b = util::nonExactBoundsTransform(bounds(), srs(), target_srs);
+  return b.getHeight() / heightInPixels();
 }
