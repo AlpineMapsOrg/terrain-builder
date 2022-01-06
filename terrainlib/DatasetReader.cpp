@@ -143,12 +143,6 @@ HeightData DatasetReader::read(const ctb::CRSBounds& bounds, unsigned width, uns
   auto adfGeoTransform = computeGeoTransform(bounds, width, height);
   auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(m_dataset->gdalDataset(), int(width), int(height), adfGeoTransform.data(), warpOptions.gdal.get())));
 
-
-  // Set the shifted geo transform to the VRT
-  if (GDALSetGeoTransform(warped_dataset.gdalDataset(), adfGeoTransform.data()) != CE_None) {   // todo: necessary? remove?
-    throw Exception("Could not set geo transform on VRT");
-  }
-
   auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1);  // non-owning pointer
   auto heights_data = HeightData(width, height);
   if (heights_band->RasterIO(GF_Read, 0, 0, int(width), int(height),
@@ -174,10 +168,6 @@ HeightData DatasetReader::readWithOverviews(const ctb::CRSBounds& bounds, unsign
 
   auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(overview ? overview->gdalDataset() : m_dataset->gdalDataset(),
                                                                                int(width), int(height), adfGeoTransform.data(), warpOptions.gdal.get())));
-  // Set the shifted geo transform to the VRT
-  if (GDALSetGeoTransform(warped_dataset.gdalDataset(), adfGeoTransform.data()) != CE_None) {   // todo: necessary? remove?
-    throw Exception("Could not set geo transform on VRT");
-  }
 
   auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1);  // non-owning pointer
   auto heights_data = HeightData(width, height);

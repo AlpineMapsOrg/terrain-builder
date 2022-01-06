@@ -346,7 +346,7 @@ TEST_CASE("reading") {
 
     const auto low_res_time = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     const auto high_res_time = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    fmt::print("low res time: {}; high res time: {}\n", double(low_res_time) / 1000.0, double(high_res_time) / 1000.0);
+//    fmt::print("low res time: {}; high res time: {}\n", double(low_res_time) / 1000.0, double(high_res_time) / 1000.0);
 
     if (ATB_UNITTESTS_DEBUG_IMAGES) {
       image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
