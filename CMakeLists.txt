@@ -50,6 +50,7 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/DatasetReader.h
     terrainlib/Exception.h
     terrainlib/Image.h
+    terrainlib/layer_json_writer.h
     terrainlib/MetaDataGenerator.h
     terrainlib/Tile.h
     terrainlib/Tiler.h
@@ -70,6 +71,7 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
     terrainlib/Image.cpp
+    terrainlib/layer_json_writer.cpp
     terrainlib/MetaDataGenerator.cpp
     terrainlib/Tile.cpp
     terrainlib/Tiler.cpp
@@ -85,6 +87,7 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/dataset_reading.cpp
     unittests/grid.cpp
     unittests/image.cpp
+    unittests/layer_json.cpp
     unittests/meta_data_generator.cpp
     unittests/tiler.cpp
     unittests/main.cpp
