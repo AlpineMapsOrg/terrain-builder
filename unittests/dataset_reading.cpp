@@ -143,7 +143,7 @@ TEST_CASE("reading") {
     const std::array test_srses = {4326, 3857};
     const std::array test_locations = {
       // CRS bounds, [lower limit, at least one value smaller, at least one value larger, upper limit]
-#ifdef ATB_UNITTESTS_EXTENDED
+#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
       std::make_tuple(
         "at100m",
         at100m,
@@ -199,7 +199,7 @@ TEST_CASE("reading") {
 
   SECTION("compare with ref render") {
     const std::array test_data= {
-#ifdef ATB_UNITTESTS_EXTENDED
+#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
       std::make_tuple(
         "at100m",
         at100m,
@@ -211,7 +211,7 @@ TEST_CASE("reading") {
         pizbuin1m,
         ctb::CRSBounds(10.105646780, 46.839864531, 10.129815588, 46.847626067),
         740U, 315U, 3.01, 0.006),
-#ifdef ATB_UNITTESTS_EXTENDED
+#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
       std::make_tuple(
         "pizbuin1m_highres",
         pizbuin1m,
@@ -260,6 +260,7 @@ TEST_CASE("reading") {
 
   }
 
+#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
   SECTION("overview without warping") {
     const auto border = 5;
     const auto low_res_ds = std::make_shared<Dataset>(ATB_TEST_DATA_DIR "/austria/at_100m_mgi.tif");
@@ -332,21 +333,13 @@ TEST_CASE("reading") {
     const auto max_abs_diff = 34.0;
     const auto max_mse = 1.2;
 
-
-    const auto t0 = std::chrono::high_resolution_clock::now();
     const auto low_res_heights = low_res_reader.read(srs_bounds, render_width, render_height);
-    const auto t1 = std::chrono::high_resolution_clock::now();
     const auto high_res_heights = high_res_reader.readWithOverviews(srs_bounds, render_width, render_height);
-    const auto t2 = std::chrono::high_resolution_clock::now();
 
     REQUIRE(low_res_heights.width() == render_width);
     REQUIRE(low_res_heights.height() == render_height);
     REQUIRE(high_res_heights.width() == render_width);
     REQUIRE(high_res_heights.height() == render_height);
-
-    const auto low_res_time = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-    const auto high_res_time = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-//    fmt::print("low res time: {}; high res time: {}\n", double(low_res_time) / 1000.0, double(high_res_time) / 1000.0);
 
     if (ATB_UNITTESTS_DEBUG_IMAGES) {
       image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
@@ -363,6 +356,48 @@ TEST_CASE("reading") {
                        return t * t;
                      }) / double(low_res_heights.size());
 //    fmt::print("mse: {}, largest_abs_diff: {}\n", mse, largest_abs_diff);
+    CHECK(largest_abs_diff < double(max_abs_diff));
+    CHECK(mse < max_mse);
+  }
+#endif
+
+  SECTION("lowres overview with warping") {
+    const auto low_res_ds = std::make_shared<Dataset>(ATB_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif");
+    const auto high_res_ds = std::make_shared<Dataset>("/home/madam/valtava/raw/Oe_2020/OeRect_01m_gt_31287.img");
+    const auto srs = low_res_ds->srs();
+    const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
+    const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
+    const auto srs_bounds = util::nonExactBoundsTransform(ctb::CRSBounds(9.5, 46.4, 17.1, 49.0), geodetic_srs, srs);
+
+
+    const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs)) / 10;
+    const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs)) / 10;
+    const auto max_abs_diff = 96;
+    const auto max_mse = 105.0;
+
+    const auto low_res_heights = low_res_reader.read(srs_bounds, render_width, render_height);
+    const auto high_res_heights = high_res_reader.readWithOverviews(srs_bounds, render_width, render_height);
+
+    REQUIRE(low_res_heights.width() == render_width);
+    REQUIRE(low_res_heights.height() == render_height);
+    REQUIRE(high_res_heights.width() == render_width);
+    REQUIRE(high_res_heights.height() == render_height);
+
+    if (ATB_UNITTESTS_DEBUG_IMAGES) {
+      image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
+      image::debugOut(high_res_heights, fmt::format("./ov_with_warping_high_res_heights.png"));
+
+      auto height_diffs = HeightData(render_width, render_height);
+      std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a-b); });
+      image::debugOut(height_diffs, "./ov_with_warping_diff_low_res_high_res.png");
+    }
+    auto largest_abs_diff = 0.0;
+    const auto mse = std::transform_reduce(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), 0.0, std::plus<>(), [max_abs_diff=max_abs_diff, &largest_abs_diff](auto a, auto b) {
+                       const auto t = std::abs(double(a)-double(b));
+                       largest_abs_diff = std::max(t, largest_abs_diff);
+                       return t * t;
+                     }) / double(low_res_heights.size());
+//    fmt::print("render w/h: {}/{}, mse: {}, largest_abs_diff: {}\n", render_width, render_height, mse, largest_abs_diff);
     CHECK(largest_abs_diff < double(max_abs_diff));
     CHECK(mse < max_mse);
   }
