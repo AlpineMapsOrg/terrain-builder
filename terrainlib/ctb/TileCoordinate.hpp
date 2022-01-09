@@ -35,8 +35,7 @@ namespace ctb {
  * An instance of this class is composed of a tile point and a zoom level:
  * together this identifies an individual tile.
  */
-class ctb::TileCoordinate:
-  public TilePoint {
+class ctb::TileCoordinate : public TilePoint {
 public:
 
   /// Create the 0-0-0 level tile coordinate

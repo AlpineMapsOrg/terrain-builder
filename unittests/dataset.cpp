@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include "Dataset.h"
+#include "ctb/GlobalGeodetic.hpp"
 #include "util.h"
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/types.hpp"
@@ -28,6 +29,10 @@ TEST_CASE("datasets are as expected") {
   webmercator.importFromEPSG(3857);
   webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
+  OGRSpatialReference wgs84;
+  wgs84.importFromEPSG(4326);
+  wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
   SECTION("SRS") {
     REQUIRE_FALSE(d_mgi.srs().IsEmpty());
     REQUIRE_FALSE(d_wgs84.srs().IsEmpty());
@@ -53,14 +58,24 @@ TEST_CASE("datasets are as expected") {
     //    }
   }
   SECTION("resolution") {
-    REQUIRE(d_mgi.widthInPixels() == 620);
-    REQUIRE(d_mgi.heightInPixels() == 350);
-    REQUIRE(d_mgi.n_bands() == 1);
-    REQUIRE(std::abs(d_mgi.pixelWidthIn(webmercator) - 573000.0/620) / 573000.0/620 < 0.01);
-    REQUIRE(std::abs(d_mgi.pixelHeightIn(webmercator) - 294000.0/350) / 294000.0/350 < 0.01);
-    const auto grid = ctb::GlobalMercator();
-    const auto gridResuloution = std::min(d_mgi.pixelWidthIn(grid.getSRS()), d_mgi.pixelHeightIn(grid.getSRS()));
-    REQUIRE(grid.zoomForResolution(gridResuloution) == 7);
+    CHECK(d_mgi.widthInPixels() == 620);
+    CHECK(d_mgi.heightInPixels() == 350);
+    CHECK(d_mgi.n_bands() == 1);
+
+    const auto northern = 49.222158096;
+    const auto southern = 46.077736128;
+    const auto eastern = 17.58967912;
+    const auto western = 9.323270147;
+
+    CHECK(d_mgi.pixelWidthIn(wgs84) == Approx((eastern - western)/620));
+    CHECK(d_mgi.pixelHeightIn(wgs84) == Approx((northern - southern)/350));
+    CHECK(d_mgi.gridResolution(wgs84) == Approx((northern - southern)/350));
+
+    const auto wgs84_grid = ctb::GlobalGeodetic(256);
+    CHECK(wgs84_grid.zoomForResolution(d_mgi.gridResolution(wgs84)) == 7);
+
+    const auto webmercator_grid = ctb::GlobalMercator();
+    CHECK(webmercator_grid.zoomForResolution(d_mgi.gridResolution(webmercator)) == 7);
   }
 }
 

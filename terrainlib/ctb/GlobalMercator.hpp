@@ -42,6 +42,7 @@ public:
       Grid(tileSize,
            CRSBounds(-cOriginShift, -cOriginShift, cOriginShift, cOriginShift),
            cSRS,
+           3857,
            1,
            2)
   {}

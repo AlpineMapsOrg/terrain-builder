@@ -14,24 +14,31 @@ namespace ctb {
 class Grid;
 }
 
+class Dataset;
+using DatasetPtr = std::shared_ptr<Dataset>;
+
 class Dataset {
 public:
   Dataset(const std::string& path);
   Dataset(GDALDataset* dataset);  // takes over ownership
+  static DatasetPtr make_shared(const std::string& path);
+  static DatasetPtr make(GDALDataset* dataset);  // takes over ownership
+
   ~Dataset();
 
-  ctb::CRSBounds bounds() const;
-  ctb::CRSBounds bounds(const OGRSpatialReference& targetSrs) const;
-  OGRSpatialReference srs() const;
-  ctb::i_pixel widthInPixels() const;
-  ctb::i_pixel heightInPixels() const;
-  double widthInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
-  double heightInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
-  unsigned n_bands() const;
-  GDALDataset* gdalDataset();
+  [[nodiscard]] ctb::CRSBounds bounds() const;
+  [[nodiscard]] ctb::CRSBounds bounds(const OGRSpatialReference& targetSrs) const;
+  [[nodiscard]] OGRSpatialReference srs() const;
+  [[nodiscard]] ctb::i_pixel widthInPixels() const;
+  [[nodiscard]] ctb::i_pixel heightInPixels() const;
+  [[nodiscard]] double widthInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
+  [[nodiscard]] double heightInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
+  [[nodiscard]] unsigned n_bands() const;
+  [[nodiscard]] GDALDataset* gdalDataset();
 
-  double pixelWidthIn(const OGRSpatialReference& targetSrs) const;
-  double pixelHeightIn(const OGRSpatialReference& targetSrs) const;
+  [[nodiscard]] double gridResolution(const OGRSpatialReference& target_srs) const;
+  [[nodiscard]] double pixelWidthIn(const OGRSpatialReference& target_srs) const;
+  [[nodiscard]] double pixelHeightIn(const OGRSpatialReference& target_srs) const;
 
 private:
   std::unique_ptr<GDALDataset> m_gdal_dataset;

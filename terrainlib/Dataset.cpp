@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <memory>
 #include <stdexcept>
 
 #include <gdal_priv.h>
@@ -30,6 +31,16 @@ Dataset::Dataset(GDALDataset* dataset)
     TNTN_LOG_FATAL("Dataset is null.\n");
     throw Exception("Dataset is null.");
   }
+}
+
+DatasetPtr Dataset::make_shared(const std::string& path)
+{
+  return std::make_shared<Dataset>(path);
+}
+
+DatasetPtr Dataset::make(GDALDataset* dataset)
+{
+  return std::make_shared<Dataset>(dataset);
 }
 
 Dataset::~Dataset() = default;
@@ -63,7 +74,7 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
   auto [westX, southY, eastX, northY] = bounds().data();
   const auto data_srs = srs();
   if (targetSrs.IsSame(&data_srs))
-    return ctb::CRSBounds(westX, southY, eastX, northY);
+    return {westX, southY, eastX, northY};
 
   // We need to transform the bounds to the target SRS
   // this might involve warping, i.e. some of the edges can be arcs.
@@ -126,28 +137,11 @@ ctb::i_pixel Dataset::heightInPixels() const
 
 double Dataset::widthInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const
 {
-  const auto wip = widthInPixels();
-  const auto hip = heightInPixels();
-  const auto bnds = this->bounds();
-
-  const auto bndW = bounds.getWidth();
-  const auto pwibs = pixelWidthIn(bounds_srs);
-
   return bounds.getWidth() / pixelWidthIn(bounds_srs);
 }
 
 double Dataset::heightInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const
 {
-  const auto wip = widthInPixels();
-  const auto hip = heightInPixels();
-
-  const auto bnds = this->bounds();
-  const auto bnds_h = this->bounds().getHeight();
-  const auto ph = pixelHeightIn(srs());
-
-  const auto s_bnds_h = bounds.getHeight();
-  const auto s_ph = pixelHeightIn(bounds_srs);
-
   return bounds.getHeight() / pixelHeightIn(bounds_srs);
 }
 
@@ -161,6 +155,11 @@ unsigned Dataset::n_bands() const
 GDALDataset* Dataset::gdalDataset()
 {
   return m_gdal_dataset.get();
+}
+
+double Dataset::gridResolution(const OGRSpatialReference& target_srs) const
+{
+  return std::min(pixelWidthIn(target_srs), pixelHeightIn(target_srs));
 }
 
 double Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const

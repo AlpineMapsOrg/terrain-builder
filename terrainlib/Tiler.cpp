@@ -1,13 +1,36 @@
 #include "Tiler.h"
 
 #include "Exception.h"
+#include <functional>
 
 
-Tiler::Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border) :
+Tiler::Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme) :
     m_grid(grid), m_bounds(bounds),
-    m_border_south_east(border)
+    m_border_south_east(border),
+    m_scheme(scheme)
 {
 
+}
+
+ctb::TileCoordinate Tiler::southWestTile(ctb::i_zoom zoom_level) const
+{
+  return convertToTilerScheme(m_grid.crsToTile(m_bounds.getLowerLeft(), zoom_level), n_y_tiles(zoom_level));
+}
+
+ctb::TileCoordinate Tiler::northEastTile(ctb::i_zoom zoom_level) const
+{
+  const auto epsilon = m_grid.resolution(zoom_level) / 100;
+  return convertToTilerScheme(m_grid.crsToTile(m_bounds.getUpperRight() - epsilon, zoom_level), n_y_tiles(zoom_level));
+}
+
+ctb::TileCoordinate Tiler::convertToTilerScheme(const ctb::TileCoordinate& coord, ctb::i_tile n_y_tiles) const
+{
+  return {coord.zoom, coord.x, (m_scheme == Scheme::Tms) ? coord.y : n_y_tiles - coord.y - 1};
+}
+
+ctb::i_tile Tiler::n_y_tiles(ctb::i_zoom zoom_level) const
+{
+  return  m_grid.getTileExtent(zoom_level).getHeight();
 }
 
 std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
@@ -17,14 +40,19 @@ std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
   const auto epsilon = m_grid.resolution(zoom_level) / 100;
   const auto ne = m_grid.crsToTile(m_bounds.getUpperRight() - epsilon, zoom_level);
 
+  const ctb::i_tile n_y_tiles = this->n_y_tiles(zoom_level);
+//  const auto schemeTyFromInternalTy = (m_scheme == Scheme::Tms) ? ([](ctb::i_tile ty) -> ctb::i_tile { return ty; }) : ([n_y_tiles](ctb::i_tile ty) -> ctb::i_tile { return n_y_tiles - ty; });
+
   std::vector<Tile> tiles;
   for (auto ty = sw.y; ty <= ne.y; ++ty) {
     for (auto tx = sw.x; tx <= ne.x; ++tx) {
-      ctb::TilePoint point = {tx, ty};
+      const auto ty_p = (m_scheme == Scheme::Tms) ? ty : n_y_tiles - ty - 1;
+      const auto point = ctb::TilePoint{tx, ty_p};
       ctb::CRSBounds srs_bounds = m_grid.srsBounds(ctb::TileCoordinate(zoom_level, tx, ty), m_border_south_east == Border::Yes);
       srs_bounds.clampBy(m_grid.getExtent());
       ctb::i_tile grid_size = m_grid.tileSize();
       ctb::i_tile tile_size = grid_size + unsigned(m_border_south_east);
+
       tiles.emplace_back(point, zoom_level, srs_bounds, grid_size, tile_size);
 
       if (tiles.size() >= 100'000'000)
@@ -37,4 +65,8 @@ std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
   }
 
   return tiles;
+}
+
+Tiler::Scheme Tiler::scheme() const {
+  return m_scheme;
 }

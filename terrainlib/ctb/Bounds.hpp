@@ -55,12 +55,6 @@ public:
   /// Set the bounds from extents
   inline void
   setBounds(T minx, T miny, T maxx, T maxy) {
-    if (minx > maxx) {
-      throw CTBException("The minimum X value is greater than the maximum X value");
-    } else if (miny > maxy) {
-      throw CTBException("The minimum Y value is greater than the maximum Y value");
-    }
-
     bounds[0] = minx;
     bounds[1] = miny;
     bounds[2] = maxx;
@@ -100,36 +94,24 @@ public:
   /// Set the minimum X value
   inline void
   setMinX(T newValue) {
-    if (newValue > getMaxX())
-      throw CTBException("The value is greater than the maximum X value");
-
     bounds[0] = newValue;
   }
 
   /// Set the minimum Y value
   inline void
   setMinY(T newValue) {
-    if (newValue > getMaxY())
-      throw CTBException("The value is greater than the maximum Y value");
-
     bounds[1] = newValue;
   }
 
   /// Set the maximum X value
   inline void
   setMaxX(T newValue) {
-    if (newValue < getMinX())
-      throw CTBException("The value is less than the minimum X value");
-
     bounds[2] = newValue;
   }
 
   /// Set the maximum Y value
   inline void
   setMaxY(T newValue) {
-    if (newValue < getMinY())
-      throw CTBException("The value is less than the minimum Y value");
-
     bounds[3] = newValue;
   }
 

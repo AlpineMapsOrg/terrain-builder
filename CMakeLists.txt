@@ -50,6 +50,7 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/DatasetReader.h
     terrainlib/Exception.h
     terrainlib/Image.h
+    terrainlib/MetaDataGenerator.h
     terrainlib/Tile.h
     terrainlib/Tiler.h
     terrainlib/util.h
@@ -69,6 +70,7 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
     terrainlib/Image.cpp
+    terrainlib/MetaDataGenerator.cpp
     terrainlib/Tile.cpp
     terrainlib/Tiler.cpp
     terrainlib/tntn/gdal_init.cpp
@@ -77,10 +79,13 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/tntn/logging.cpp
 )
 
-set(ATB_UNITTESTS_SOURCES
+set(ATB_UNITTESTS_HEADERS_AND_SOURCES
+    unittests/catch2_helpers.h
     unittests/dataset.cpp
     unittests/dataset_reading.cpp
+    unittests/grid.cpp
     unittests/image.cpp
+    unittests/meta_data_generator.cpp
     unittests/tiler.cpp
     unittests/main.cpp
 )
@@ -124,9 +129,7 @@ add_executable(terrainbuilder
 target_link_libraries(terrainbuilder PUBLIC terrainlib)
 
 if (ATB_UNITTESTS)
-    add_executable(unittests
-        ${ATB_UNITTESTS_SOURCES}
-    )
+    add_executable(unittests ${ATB_UNITTESTS_HEADERS_AND_SOURCES})
     target_compile_definitions(unittests PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
     if (ATB_UNITTESTS_EXTENDED)
         target_compile_definitions(unittests PUBLIC "ATB_UNITTESTS_EXTENDED=true")

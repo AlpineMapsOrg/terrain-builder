@@ -42,6 +42,7 @@ public:
       Grid(tileSize,
            CRSBounds(-180, -90, 180, 90),
            cSRS,
+           4326,
            (tmsCompatible) ? 2 : 1,
            2)
   {}
