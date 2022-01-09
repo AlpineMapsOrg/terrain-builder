@@ -1,6 +1,24 @@
+/*******************************************************************************
+ * Copyright 2014 GeoData <geodata@soton.ac.uk>
+ * Copyright 2022 Adam Celarek <lastname at cg tuwien ac at>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License.  You may obtain a copy
+ * of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *******************************************************************************/
+
 #include "DatasetReader.h"
 #include "Dataset.h"
 
+#include <cmath>
 #include <fmt/core.h>
 #include <gdal.h>
 #include <memory>
@@ -12,6 +30,7 @@
 #include "Exception.h"
 #include "Image.h"
 #include "ctb/types.hpp"
+#include "tntn/logging.h"
 
 namespace {
 std::string toWkt(const OGRSpatialReference& srs) {
@@ -27,7 +46,7 @@ std::array<double, 6> computeGeoTransform(const ctb::CRSBounds& bounds, unsigned
           bounds.getMaxY(), 0, -bounds.getHeight() / height};
   }
 
-std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> makeImageTransformArgs(const DatasetReader& reader,
+std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> make_image_transform_args(const DatasetReader& reader,
                                                                                           Dataset* dataset,
                                                                                           const ctb::CRSBounds& bounds, unsigned width, unsigned height)
 {
@@ -48,38 +67,35 @@ std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> makeImageTran
   return args;
 }
 
-struct MyWarpOptions {
-  std::unique_ptr<GDALWarpOptions, decltype (&GDALDestroyWarpOptions)> gdal = {nullptr, &GDALDestroyWarpOptions};
-};
+using GDALWarpOptionsPtr = std::unique_ptr<GDALWarpOptions, decltype (&GDALDestroyWarpOptions)>;
 
-MyWarpOptions make_warp_options(const DatasetReader& reader, Dataset* dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height)
+GDALWarpOptionsPtr makeWarpOptions(const DatasetReader& reader, Dataset* dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height)
 {
-  MyWarpOptions options;
-  options.gdal.reset(GDALCreateWarpOptions());
-  options.gdal->hSrcDS = dataset->gdalDataset();
-  options.gdal->nBandCount = 1;
-  options.gdal->eResampleAlg = GDALResampleAlg::GRA_Cubic;
-  options.gdal->panSrcBands = static_cast<int *>(CPLMalloc(sizeof(int) * 1));
-  options.gdal->panDstBands = static_cast<int *>(CPLMalloc(sizeof(int) * 1));
-  options.gdal->padfSrcNoDataReal = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
-  options.gdal->padfSrcNoDataImag = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
-  options.gdal->padfDstNoDataReal = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
-  options.gdal->padfDstNoDataImag = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
+  auto options = GDALWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
+  options->hSrcDS = dataset->gdalDataset();
+  options->nBandCount = 1;
+  options->eResampleAlg = GDALResampleAlg::GRA_Cubic;
+  options->panSrcBands = static_cast<int *>(CPLMalloc(sizeof(int) * 1));
+  options->panDstBands = static_cast<int *>(CPLMalloc(sizeof(int) * 1));
+  options->padfSrcNoDataReal = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
+  options->padfSrcNoDataImag = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
+  options->padfDstNoDataReal = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
+  options->padfDstNoDataImag = static_cast<double *>(CPLMalloc(sizeof(double) * 1));
   {
     int bGotNoData = false;
     double noDataValue = dataset->gdalDataset()->GetRasterBand(1)->GetNoDataValue(&bGotNoData);
     if (!bGotNoData) noDataValue = -32768;
 
-    options.gdal->padfSrcNoDataReal[0] = noDataValue;
-    options.gdal->padfSrcNoDataImag[0] = 0;
-    options.gdal->padfDstNoDataReal[0] = noDataValue;
-    options.gdal->padfDstNoDataImag[0] = 0;
+    options->padfSrcNoDataReal[0] = noDataValue;
+    options->padfSrcNoDataImag[0] = 0;
+    options->padfDstNoDataReal[0] = noDataValue;
+    options->padfDstNoDataImag[0] = 0;
 
-    options.gdal->panSrcBands[0] = int(reader.dataset_band());
-    options.gdal->panDstBands[0] = 1;
+    options->panSrcBands[0] = int(reader.dataset_band());
+    options->panDstBands[0] = 1;
   }
-  options.gdal->pTransformerArg = makeImageTransformArgs(reader, dataset, bounds, width, height).release();
-  options.gdal->pfnTransformer = GDALGenImgProjTransform;
+  options->pTransformerArg = make_image_transform_args(reader, dataset, bounds, width, height).release();
+  options->pfnTransformer = GDALGenImgProjTransform;
 
   return options;
 }
@@ -88,42 +104,48 @@ std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& data
   GDALDataset* poSrcDS = dataset->gdalDataset();
   int nOvLevel = -2;
   int nOvCount = poSrcDS->GetRasterBand(1)->GetOverviewCount();
-  if( nOvCount > 0 )
-  {
-    double adfSuggestedGeoTransform[6];
-    double adfExtent[4];
-    int    nPixels, nLines;
-    /* Compute what the "natural" output resolution (in pixels) would be for this */
-    /* input dataset */
-    if( GDALSuggestedWarpOutput2(poSrcDS, GDALGenImgProjTransform, hTransformerArg,
-                                 adfSuggestedGeoTransform, &nPixels, &nLines,
-                                 adfExtent, 0) == CE_None)
-    {
-      double dfTargetRatio = 1.0 / adfSuggestedGeoTransform[1];
-      if( dfTargetRatio > 1.0 )
-      {
-        int iOvr;
-        for( iOvr = -1; iOvr < nOvCount-1; iOvr++ )
-        {
-          double dfOvrRatio = (iOvr < 0) ? 1.0 : (double)poSrcDS->GetRasterXSize() /
-                                                   poSrcDS->GetRasterBand(1)->GetOverview(iOvr)->GetXSize();
-          double dfNextOvrRatio = (double)poSrcDS->GetRasterXSize() /
-                                  poSrcDS->GetRasterBand(1)->GetOverview(iOvr+1)->GetXSize();
-          if( dfOvrRatio < dfTargetRatio && dfNextOvrRatio > dfTargetRatio )
-            break;
-          if( fabs(dfOvrRatio - dfTargetRatio) < 1e-1 )
-            break;
-        }
-        iOvr += (nOvLevel+2);
-        if( iOvr >= 0 )
-        {
-          //std::cout << "CTB WARPING: Selecting overview level " << iOvr << " for output dataset " << nPixels << "x" << nLines << std::endl;
-          return std::make_shared<Dataset>(static_cast<GDALDataset*>(GDALCreateOverviewDataset( poSrcDS, iOvr, FALSE )));
-        }
-      }
-    }
+
+  assert(nOvCount >= 0);
+  if (nOvCount == 0) {
+    TNTN_LOG_WARN("No dataset overviews found.");
+    return dataset;
   }
-  return {};
+
+  std::array<double, 6> adfSuggestedGeoTransform;
+  std::array<double, 4> adfExtent;
+  int nPixels;
+  int nLines;
+  /* Compute what the "natural" output resolution (in pixels) would be for this */
+  /* input dataset */
+  if( GDALSuggestedWarpOutput2(poSrcDS, GDALGenImgProjTransform, hTransformerArg,
+                               adfSuggestedGeoTransform.data(), &nPixels, &nLines,
+                               adfExtent.data(), 0) == CE_Failure) {
+    TNTN_LOG_WARN("GDALSuggestedWarpOutput2 failed. We won't use dataset overviews!");
+    return dataset;
+  }
+
+  double dfTargetRatio = 1.0 / adfSuggestedGeoTransform[1];
+  if( dfTargetRatio <= 1.0 ) {
+    TNTN_LOG_WARN("dfTargetRatio <= 1.0. We won't use dataset overviews!");
+    return dataset;
+  }
+
+  int iOvr;
+  for( iOvr = -1; iOvr < nOvCount-1; iOvr++ )
+  {
+    const auto dfOvrRatio = (iOvr < 0) ? 1.0 : double(poSrcDS->GetRasterXSize()) / poSrcDS->GetRasterBand(1)->GetOverview(iOvr)->GetXSize();
+    const auto dfNextOvrRatio = double(poSrcDS->GetRasterXSize()) / poSrcDS->GetRasterBand(1)->GetOverview(iOvr+1)->GetXSize();
+    if( dfOvrRatio < dfTargetRatio && dfNextOvrRatio > dfTargetRatio )
+      break;
+    if( std::abs(dfOvrRatio - dfTargetRatio) < 1e-1 )
+      break;
+  }
+  iOvr += nOvLevel+2;
+  if( iOvr >= 0 ) {
+    TNTN_LOG_DEBUG("WARPING: Selecting overview level {} for output dataset {}x{}\n", iOvr, nPixels, nLines);
+    return std::make_shared<Dataset>(static_cast<GDALDataset*>(GDALCreateOverviewDataset( poSrcDS, iOvr, FALSE )));
+  }
+  return dataset;
 }
 
 }
@@ -139,35 +161,25 @@ DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRS
 
 HeightData DatasetReader::read(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const
 {
-  auto warpOptions = make_warp_options(*this, m_dataset.get(), bounds, width, height);
-  auto adfGeoTransform = computeGeoTransform(bounds, width, height);
-  auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(m_dataset->gdalDataset(), int(width), int(height), adfGeoTransform.data(), warpOptions.gdal.get())));
-
-  auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1);  // non-owning pointer
-  auto heights_data = HeightData(width, height);
-  if (heights_band->RasterIO(GF_Read, 0, 0, int(width), int(height),
-                             static_cast<void*>(heights_data.data()), int(width), int(height), GDT_Float32, 0, 0) != CE_None)
-    throw Exception("couldn't read data");
-
-
-  return heights_data;
+  return readFrom(m_dataset, bounds, width, height);
 }
 
 HeightData DatasetReader::readWithOverviews(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const
 {
-  auto warpOptions = make_warp_options(*this, m_dataset.get(), bounds, width, height);
+  auto transformer_args = make_image_transform_args(*this, m_dataset.get(), bounds, width, height);
+  auto source_dataset = getOverviewDataset(m_dataset, transformer_args.get());
+
+  return readFrom(source_dataset, bounds, width, height);
+}
+
+HeightData DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height) const
+{
+  // if we have performance problems with the warping, it'd still be possible to approximate the warping operation with a linear transform (mostly when zoomed in / on higher zoom levels).
+  // CTB does this in GDALTiler.cpp around line 375 ("// Decide if we are doing an approximate or exact transformation").
+
+  auto warp_options = makeWarpOptions(*this, source_dataset.get(), bounds, width, height);
   auto adfGeoTransform = computeGeoTransform(bounds, width, height);
-
-  const auto overview = getOverviewDataset(m_dataset, warpOptions.gdal->pTransformerArg);
-  if (overview) {
-    warpOptions.gdal->hSrcDS = overview->gdalDataset();
-
-    // We need to recreate the transform when operating on an overview.
-    warpOptions.gdal->pTransformerArg = makeImageTransformArgs(*this, overview.get(), bounds, width, height).release();
-  }
-
-  auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(overview ? overview->gdalDataset() : m_dataset->gdalDataset(),
-                                                                               int(width), int(height), adfGeoTransform.data(), warpOptions.gdal.get())));
+  auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(source_dataset->gdalDataset(), int(width), int(height), adfGeoTransform.data(), warp_options.get())));
 
   auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1);  // non-owning pointer
   auto heights_data = HeightData(width, height);

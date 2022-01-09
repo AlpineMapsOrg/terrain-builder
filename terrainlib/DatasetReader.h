@@ -23,6 +23,9 @@ public:
   std::string dataset_srs_wkt() const { return m_dataset_srs_wkt; }
   std::string target_srs_wkt() const { return m_target_srs_wkt; }
 
+protected:
+  HeightData readFrom(const std::shared_ptr<Dataset>& dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
+
 private:
   std::shared_ptr<Dataset> m_dataset;
   std::string m_dataset_srs_wkt;
