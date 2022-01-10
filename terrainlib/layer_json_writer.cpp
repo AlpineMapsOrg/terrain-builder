@@ -67,10 +67,32 @@ std::string layer_json_writer::internal::projection(int epsg_number)
 std::string layer_json_writer::internal::bounds(const ctb::Grid& grid)
 {
   const auto bounds = grid.getExtent();
-  return fmt::format("\"bounds\": [{}, {}, {}, {}],", bounds.getMinX(), bounds.getMinY(), bounds.getMaxX(), bounds.getMaxY());
+  return fmt::format("\"bounds\": [{:.2f}, {:.2f}, {:.2f}, {:.2f}],", bounds.getMinX(), bounds.getMinY(), bounds.getMaxX(), bounds.getMaxY());
 }
 
 std::string layer_json_writer::internal::zoom_layer(const ctb::TileBounds& bounds)
 {
   return fmt::format(R"([ {{ "startX": {}, "startY": {}, "endX": {}, "endY": {} }} ],)", bounds.getMinX(), bounds.getMinY(), bounds.getMaxX(), bounds.getMaxY());
+}
+
+std::string layer_json_writer::process(const MetaDataGenerator& m)
+{
+  std::string s = "{\n";
+  s += internal::tilejson("2.1.0") + "\n";
+  s += internal::name(m.dataset()->name()) + "\n";
+  s += internal::description("") + "\n";
+  s += internal::version("1.1.0") + "\n";
+  s += internal::format() + "\n";
+  s += internal::attribution("") + "\n";
+  s += internal::schema(m.tiler().scheme()) + "\n";
+  s += internal::tiles() + "\n";
+  s += internal::projection(m.grid().getEpsgCode()) + "\n";
+  s += internal::bounds(m.grid()) + "\n";
+  s += R"("available": [)";
+  s += "\n";
+  for (const auto& z : m.availableTiles()) {
+    s += internal::zoom_layer(z) + "\n";
+  }
+  s += R"(]})" "\n";
+  return s;
 }

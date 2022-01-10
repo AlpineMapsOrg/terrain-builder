@@ -33,6 +33,12 @@ TEST_CASE("datasets are as expected") {
   wgs84.importFromEPSG(4326);
   wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
+
+  SECTION("file name") {
+    CHECK(d_mgi.name() == "at_mgi");
+    CHECK(d_wgs84.name() == "at_wgs84");
+  }
+
   SECTION("SRS") {
     REQUIRE_FALSE(d_mgi.srs().IsEmpty());
     REQUIRE_FALSE(d_wgs84.srs().IsEmpty());

@@ -19,6 +19,7 @@ public:
   [[nodiscard]] const Tiler& tiler() const;
 
   [[nodiscard]] std::vector<ctb::TileBounds> availableTiles() const;
+  [[nodiscard]] const DatasetPtr& dataset() const;
 
 private:
   DatasetPtr m_dataset;

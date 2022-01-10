@@ -51,3 +51,8 @@ std::vector<ctb::TileBounds> MetaDataGenerator::availableTiles() const
   }
   return list;
 }
+
+const DatasetPtr& MetaDataGenerator::dataset() const
+{
+  return m_dataset;
+}

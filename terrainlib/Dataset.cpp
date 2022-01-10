@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
+#include <regex>
 #include <stdexcept>
 
 #include <gdal_priv.h>
@@ -21,6 +22,8 @@ Dataset::Dataset(const std::string& path)
     TNTN_LOG_FATAL("Couldn't open dataset {}.\n", path);
     throw Exception("");
   }
+  m_name = std::regex_replace(path, std::regex("^.*/"), "");
+  m_name = std::regex_replace(m_name, std::regex(R"(\.\w+$)"), "");
 }
 
 Dataset::Dataset(GDALDataset* dataset)
@@ -41,6 +44,11 @@ DatasetPtr Dataset::make_shared(const std::string& path)
 DatasetPtr Dataset::make(GDALDataset* dataset)
 {
   return std::make_shared<Dataset>(dataset);
+}
+
+std::string Dataset::name() const
+{
+  return m_name;
 }
 
 Dataset::~Dataset() = default;

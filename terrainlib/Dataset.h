@@ -21,10 +21,11 @@ class Dataset {
 public:
   Dataset(const std::string& path);
   Dataset(GDALDataset* dataset);  // takes over ownership
+  ~Dataset();
   static DatasetPtr make_shared(const std::string& path);
   static DatasetPtr make(GDALDataset* dataset);  // takes over ownership
 
-  ~Dataset();
+  [[nodiscard]] std::string name() const;
 
   [[nodiscard]] ctb::CRSBounds bounds() const;
   [[nodiscard]] ctb::CRSBounds bounds(const OGRSpatialReference& targetSrs) const;
@@ -42,6 +43,7 @@ public:
 
 private:
   std::unique_ptr<GDALDataset> m_gdal_dataset;
+  std::string m_name;
 };
 
 #endif
