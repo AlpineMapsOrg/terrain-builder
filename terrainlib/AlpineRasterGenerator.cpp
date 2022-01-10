@@ -55,8 +55,12 @@ void AlpineRasterGenerator::write(const ctb::TilePoint& tilepoint, ctb::i_zoom z
 
 std::vector<Tile> AlpineRasterGenerator::listTiles() const
 {
+  return listTiles(maxZoom());
+}
+
+std::vector<Tile> AlpineRasterGenerator::listTiles(ctb::i_zoom max_zoom) const
+{
   std::vector<Tile> tiles;
-  const auto max_zoom = m_grid.zoomForResolution(m_dataset->gridResolution(m_grid.getSRS()));
   for (ctb::i_zoom i = 0; i < max_zoom; ++i) {
     auto zoom_level_tiles = m_tiler.generateTiles(i);
     std::move(zoom_level_tiles.begin(), zoom_level_tiles.end(), std::back_inserter(tiles));
@@ -66,11 +70,21 @@ std::vector<Tile> AlpineRasterGenerator::listTiles() const
 
 void AlpineRasterGenerator::process() const
 {
+  return process(maxZoom());
+}
+
+void AlpineRasterGenerator::process(ctb::i_zoom max_zoom) const
+{
   DatasetReader reader(m_dataset, m_grid.getSRS(), 1);
-  const auto tiles = listTiles();
+  const auto tiles = listTiles(max_zoom);
   const auto fun = [&reader, this](const Tile& tile) {
     const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
     write(tile.point, tile.zoom, heights);
   };
   std::for_each(tiles.begin(), tiles.end(), fun);
+}
+
+ctb::i_zoom AlpineRasterGenerator::maxZoom() const
+{
+  return m_grid.zoomForResolution(m_dataset->gridResolution(m_grid.getSRS()));
 }

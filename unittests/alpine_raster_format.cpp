@@ -106,6 +106,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
     for (const auto& t : tiles) {
       n_tiles[t.zoom]++;
     }
+    REQUIRE(n_tiles.size() == 7);
     CHECK(n_tiles[0] == 1);
     CHECK(n_tiles[1] == 1);
     CHECK(n_tiles[2] == 1);
@@ -120,13 +121,39 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
     CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
   }
 
+  SECTION("list tiles with given zoom level") {
+    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    for (ctb::i_zoom max = 1; max < 10; ++max) {
+      const auto tiles = generator.listTiles(max);
+      CHECK(!tiles.empty());
+      std::map<ctb::i_zoom, unsigned> n_tiles;
+      for (const auto& t : tiles) {
+        n_tiles[t.zoom]++;
+      }
+      CHECK(n_tiles.size() == max);
+    }
+  }
 
   SECTION("process all tiles") {
     const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
     generator.process();
     const auto tiles = generator.listTiles();
-    for (const auto& t : tiles) {
-      CHECK(std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.zoom, t.point.x, t.point.y)));
-    }
+
+    const auto check = [](const Tile& t) {
+      return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.zoom, t.point.x, t.point.y));
+    };
+    CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
   }
+#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
+  SECTION("process all tiles with max zoom") {
+    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    generator.process(8);
+    const auto tiles = generator.listTiles(8);
+
+    const auto check = [](const Tile& t) {
+      return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.zoom, t.point.x, t.point.y));
+    };
+    CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
+  }
+#endif
 }
