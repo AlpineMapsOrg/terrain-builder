@@ -54,13 +54,14 @@ void AlpineRasterGenerator::write(const ctb::TilePoint& tilepoint, ctb::i_zoom z
 
 std::vector<Tile> AlpineRasterGenerator::listTiles() const
 {
-  return listTiles(maxZoom());
+  return listTiles({0, maxZoom()});
 }
 
-std::vector<Tile> AlpineRasterGenerator::listTiles(ctb::i_zoom max_zoom) const
+std::vector<Tile> AlpineRasterGenerator::listTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
 {
   std::vector<Tile> tiles;
-  for (ctb::i_zoom i = 0; i < max_zoom; ++i) {
+  assert(zoom_range.first <= zoom_range.second);
+  for (ctb::i_zoom i = zoom_range.first; i <= zoom_range.second; ++i) {
     auto zoom_level_tiles = m_tiler.generateTiles(i);
     std::move(zoom_level_tiles.begin(), zoom_level_tiles.end(), std::back_inserter(tiles));
   }
@@ -69,12 +70,12 @@ std::vector<Tile> AlpineRasterGenerator::listTiles(ctb::i_zoom max_zoom) const
 
 void AlpineRasterGenerator::process() const
 {
-  return process(maxZoom());
+  return process({0, maxZoom()});
 }
 
-void AlpineRasterGenerator::process(ctb::i_zoom max_zoom) const
+void AlpineRasterGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
 {
-  const auto tiles = listTiles(max_zoom);
+  const auto tiles = listTiles(zoom_range);
   const auto fun = [this](const Tile& tile) {
     // Recreating Dataset for every tile. This was the easiest fix for multithreading,
     // and it takes only 0.5% of the time (half a percent).

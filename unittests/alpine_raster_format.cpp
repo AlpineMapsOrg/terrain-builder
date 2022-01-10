@@ -10,6 +10,7 @@
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <type_traits>
+#include <utility>
 
 #include "Dataset.h"
 #include "Image.h"
@@ -106,7 +107,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
     for (const auto& t : tiles) {
       n_tiles[t.zoom]++;
     }
-    REQUIRE(n_tiles.size() == 7);
+    REQUIRE(n_tiles.size() == 8);
     CHECK(n_tiles[0] == 1);
     CHECK(n_tiles[1] == 1);
     CHECK(n_tiles[2] == 1);
@@ -114,6 +115,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
     CHECK(n_tiles[4] == 1);
     CHECK(n_tiles[5] == 4);
     CHECK(n_tiles[6] == 6);
+    CHECK(n_tiles[7] == 12);
 
     const auto check = [](const Tile& t) {
       return t.tileSize == (256 + unsigned(testTypeValue2Border(TestType::value))) && t.gridSize == 256;
@@ -123,14 +125,14 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
   SECTION("list tiles with given zoom level") {
     const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
-    for (ctb::i_zoom max = 1; max < 10; ++max) {
-      const auto tiles = generator.listTiles(max);
+    for (ctb::i_zoom max = 3; max < 10; ++max) {
+      const auto tiles = generator.listTiles(std::make_pair(max - 3, max));
       CHECK(!tiles.empty());
       std::map<ctb::i_zoom, unsigned> n_tiles;
       for (const auto& t : tiles) {
         n_tiles[t.zoom]++;
       }
-      CHECK(n_tiles.size() == max);
+      CHECK(n_tiles.size() == 4);
     }
   }
 
@@ -147,8 +149,8 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 #if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
   SECTION("process all tiles with max zoom") {
     const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
-    generator.process(8);
-    const auto tiles = generator.listTiles(8);
+    generator.process({4, 8});
+    const auto tiles = generator.listTiles({4, 8});
 
     const auto check = [](const Tile& t) {
       return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.zoom, t.point.x, t.point.y));

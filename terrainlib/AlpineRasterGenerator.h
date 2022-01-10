@@ -26,12 +26,12 @@ public:
   [[nodiscard]] static RgbImage convertHeights(const HeightData& heights);
   void write(const ctb::TilePoint& tilepoint, ctb::i_zoom zoom, const HeightData& heights) const;
   [[nodiscard]] std::vector<Tile> listTiles() const;
-  [[nodiscard]] std::vector<Tile> listTiles(ctb::i_zoom max_zoom) const;
+  [[nodiscard]] std::vector<Tile> listTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
   void process() const;
-  void process(ctb::i_zoom max_zoom) const;
+  void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
 
 protected:
-  ctb::i_zoom maxZoom() const;
+  [[nodiscard]] ctb::i_zoom maxZoom() const;
 
 
 private:
