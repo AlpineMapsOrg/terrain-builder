@@ -22,14 +22,14 @@ AlpineRasterGenerator::AlpineRasterGenerator(const std::string& output_data_path
 
 }
 
-AlpineRasterGenerator AlpineRasterGenerator::make(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme)
+AlpineRasterGenerator AlpineRasterGenerator::make(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border)
 {
   const auto dataset = Dataset::make_shared(input_data_path);
   ctb::Grid grid = ctb::GlobalGeodetic(256);
   if (srs == ctb::Grid::Srs::SphericalMercator)
     grid = ctb::GlobalMercator(256);
 
-  return {output_data_path, dataset, grid, Tiler(grid, dataset->bounds(grid.getSRS()), Tiler::Border::Yes, tiling_scheme)};
+  return {output_data_path, dataset, grid, Tiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme)};
 }
 
 glm::u8vec3 AlpineRasterGenerator::convert(float height)

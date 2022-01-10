@@ -1,15 +1,15 @@
 #include "AlpineRasterGenerator.h"
+#include <algorithm>
+#include <filesystem>
 #include <functional>
-#include <glm/fwd.hpp>
 #include <map>
 #include <numeric>
 #include <ranges>
-#include <algorithm>
-#include <filesystem>
 
 #include <catch2/catch.hpp>
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <type_traits>
 
 #include "Dataset.h"
 #include "Image.h"
@@ -51,7 +51,11 @@ TEST_CASE("conversion math") {
   CHECK(AlpineRasterGenerator::convert(141 * one_red + 1 * one_green + eps) == glm::u8vec3(141, 1, 0));
 }
 
-TEST_CASE("alpine raster format") {
+Tiler::Border testTypeValue2Border(bool v) {
+  return v ? Tiler::Border::Yes : Tiler::Border::No;
+}
+
+TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::false_type) {
   std::filesystem::remove_all("./unittest_tiles/");
 
   SECTION("raster conversion: 0 heights") {
@@ -79,7 +83,7 @@ TEST_CASE("alpine raster format") {
   }
 
   SECTION("raste write") {
-    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms);
+    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::Yes);
     generator.write(ctb::TilePoint(0, 0), 0, HeightData(257, 257));
     CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.png"));
 
@@ -95,7 +99,7 @@ TEST_CASE("alpine raster format") {
   }
 
   SECTION("list tiles") {
-    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms);
+    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
     const auto tiles = generator.listTiles();
     CHECK(!tiles.empty());
     std::map<ctb::i_zoom, unsigned> n_tiles;
@@ -111,14 +115,14 @@ TEST_CASE("alpine raster format") {
     CHECK(n_tiles[6] == 6);
 
     const auto check = [](const Tile& t) {
-      return t.tileSize == 257 && t.gridSize == 256;
+      return t.tileSize == (256 + unsigned(testTypeValue2Border(TestType::value))) && t.gridSize == 256;
     };
     CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
   }
 
 
   SECTION("process all tiles") {
-    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms);
+    const auto generator = AlpineRasterGenerator::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
     generator.process();
     const auto tiles = generator.listTiles();
     for (const auto& t : tiles) {
