@@ -46,6 +46,7 @@ set(ATB_INCLUDE_PATHS
 
 
 set(ATB_TERRAINLIB_HEADERS
+    terrainlib/AlpineRasterGenerator.h
     terrainlib/Dataset.h
     terrainlib/DatasetReader.h
     terrainlib/Exception.h
@@ -68,6 +69,7 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/tntn/logging.h
 )
 set(ATB_TERRAINLIB_SOURCES
+    terrainlib/AlpineRasterGenerator.cpp
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
     terrainlib/Image.cpp
@@ -82,6 +84,7 @@ set(ATB_TERRAINLIB_SOURCES
 )
 
 set(ATB_UNITTESTS_HEADERS_AND_SOURCES
+    unittests/alpine_raster_format.cpp
     unittests/catch2_helpers.h
     unittests/dataset.cpp
     unittests/dataset_reading.cpp

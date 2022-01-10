@@ -13,7 +13,7 @@
 class MetaDataGenerator
 {
 public:
-  MetaDataGenerator(const DatasetPtr& input_data_path, const ctb::Grid& grid, const Tiler& tiler);
+  MetaDataGenerator(const DatasetPtr& dataset, const ctb::Grid& grid, const Tiler& tiler);
   [[nodiscard]] static MetaDataGenerator make(const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme);
   [[nodiscard]] const ctb::Grid& grid() const;
   [[nodiscard]] const Tiler& tiler() const;

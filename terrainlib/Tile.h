@@ -8,7 +8,7 @@
 struct Tile
 {
   ctb::TilePoint point;  // int / used to generate file name
-  unsigned zoom;
+  ctb::i_zoom zoom;
   ctb::CRSBounds srsBounds;
 
   // some tiling schemes require a border (e.g. cesium heightmap https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0).

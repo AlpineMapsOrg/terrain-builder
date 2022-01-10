@@ -41,6 +41,7 @@ private:
 };
 
 using HeightData = Image<float>;
+using RgbImage = Image<glm::u8vec3>;
 using uchar = unsigned char;
 
 namespace image {
