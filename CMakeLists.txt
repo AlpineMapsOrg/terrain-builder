@@ -5,7 +5,8 @@ project(alpine-terrain-builder)
 option(ATB_UNITTESTS "include unit test targets in the buildsystem" ON)
 option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" ON)
 option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
-option(ATB_ENABLE_ADDRESS_SANITIZER "compiles ctb with address sanitizer enabled (works only on g++ and clang)" ON)
+option(ATB_ENABLE_ADDRESS_SANITIZER "compiles atb with address sanitizer enabled (only debug, works only on g++ and clang)" ON)
+option(ATB_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ATB_ENABLE_ASSERTS "enable asserts (do not define NDEBUG)" ON)
 option(ATB_USE_LLVM_LINKER "use lld (llvm) for linking. it's parallel and much faster, but not installed by default. if it's not installed, you'll get errors, that openmp or other stuff is not installed (hard to track down)" OFF)
 
@@ -15,6 +16,8 @@ find_package(GDAL REQUIRED)
 if(NOT GDAL_CONFIG)
     message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
 endif()
+
+find_package(TBB REQUIRED)
 
 execute_process(
   COMMAND ${GDAL_CONFIG} --version
@@ -107,10 +110,16 @@ if (ATB_ENABLE_ADDRESS_SANITIZER)
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
     set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 endif()
+if (ATB_ENABLE_THREAD_SANITIZER)
+    message(NOTICE "building with thread sanitizer enabled")
+    message(WARN ": use the thread sanitizer supression file, e.g.: TSAN_OPTIONS=\"suppressions=thread_sanitizer_suppression.txt\" ./terrainbuilder")
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=thread")
+    set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=thread")
+endif()
+
 if (ATB_USE_LLVM_LINKER)
     string(APPEND CMAKE_EXE_LINKER_FLAGS " -fuse-ld=lld")
 endif()
-
 
 
 add_library(terrainlib STATIC
@@ -118,7 +127,7 @@ add_library(terrainlib STATIC
     ${ATB_TERRAINLIB_SOURCES}
 )
 target_compile_definitions(terrainlib PUBLIC GLM_FORCE_SWIZZLE GLM_ENABLE_EXPERIMENTAL GLM_FORCE_XYZW_ONLY)
-target_link_libraries(terrainlib PUBLIC ZLIB::ZLIB GDAL::GDAL fmt freeimage)
+target_link_libraries(terrainlib PUBLIC ZLIB::ZLIB GDAL::GDAL fmt freeimage TBB::tbb)
 target_include_directories(terrainlib
     PUBLIC terrainlib
     SYSTEM PUBLIC

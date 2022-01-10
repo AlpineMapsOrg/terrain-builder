@@ -1,11 +1,10 @@
 #include "AlpineRasterGenerator.h"
 
 #include <algorithm>
-
+#include <execution>
 #include <filesystem>
+
 #include <fmt/core.h>
-#include <iterator>
-#include <memory>
 
 #include "Dataset.h"
 #include "DatasetReader.h"
@@ -16,8 +15,8 @@
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
-AlpineRasterGenerator::AlpineRasterGenerator(const std::string& output_data_path, DatasetPtr dataset, const ctb::Grid& grid, const Tiler& tiler) :
-    m_output_data_path(output_data_path), m_dataset(dataset), m_grid(grid), m_tiler(tiler)
+AlpineRasterGenerator::AlpineRasterGenerator(const std::string& output_data_path, const std::string& input_data_path, const ctb::Grid& grid, const Tiler& tiler) :
+    m_output_data_path(output_data_path), m_input_data_path(input_data_path), m_grid(grid), m_tiler(tiler)
 {
 
 }
@@ -29,7 +28,7 @@ AlpineRasterGenerator AlpineRasterGenerator::make(const std::string& output_data
   if (srs == ctb::Grid::Srs::SphericalMercator)
     grid = ctb::GlobalMercator(256);
 
-  return {output_data_path, dataset, grid, Tiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme)};
+  return {output_data_path, input_data_path, grid, Tiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme)};
 }
 
 glm::u8vec3 AlpineRasterGenerator::convert(float height)
@@ -75,16 +74,22 @@ void AlpineRasterGenerator::process() const
 
 void AlpineRasterGenerator::process(ctb::i_zoom max_zoom) const
 {
-  DatasetReader reader(m_dataset, m_grid.getSRS(), 1);
   const auto tiles = listTiles(max_zoom);
-  const auto fun = [&reader, this](const Tile& tile) {
+  const auto fun = [this](const Tile& tile) {
+    // Recreating Dataset for every tile. This was the easiest fix for multithreading,
+    // and it takes only 0.5% of the time (half a percent).
+    // most of the cpu time is used in 'readWithOverviews' (specificly 'RasterIO', and
+    // 'VRTWarpedRasterBand::IReadBlock') and a bit in 'write' (specifically 'FreeImage_Save').
+    const auto dataset = Dataset::make_shared(m_input_data_path);
+    DatasetReader reader(dataset, m_grid.getSRS(), 1);
     const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
     write(tile.point, tile.zoom, heights);
   };
-  std::for_each(tiles.begin(), tiles.end(), fun);
+  std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
 }
 
 ctb::i_zoom AlpineRasterGenerator::maxZoom() const
 {
-  return m_grid.zoomForResolution(m_dataset->gridResolution(m_grid.getSRS()));
+  const auto dataset = Dataset::make_shared(m_input_data_path);
+  return m_grid.zoomForResolution(dataset->gridResolution(m_grid.getSRS()));
 }

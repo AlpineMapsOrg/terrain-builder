@@ -19,7 +19,7 @@ using DatasetPtr = std::shared_ptr<Dataset>;
 class AlpineRasterGenerator
 {
 public:
-  AlpineRasterGenerator(const std::string& output_data_path, DatasetPtr dataset, const ctb::Grid& grid, const Tiler& tiler);
+  AlpineRasterGenerator(const std::string& output_data_path, const std::string& input_data_path, const ctb::Grid& grid, const Tiler& tiler);
   [[nodiscard]] static AlpineRasterGenerator make(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border);
 
   [[nodiscard]] static glm::u8vec3 convert(float height);
@@ -36,7 +36,7 @@ protected:
 
 private:
   std::string m_output_data_path;
-  DatasetPtr m_dataset;
+  std::string m_input_data_path;
   ctb::Grid m_grid;
   Tiler m_tiler;
 
