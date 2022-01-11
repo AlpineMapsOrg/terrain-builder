@@ -68,8 +68,42 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/ctb/Grid.hpp
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
+    terrainlib/tntn/BinaryIO.h
+    terrainlib/tntn/Delaunator.h
+    terrainlib/tntn/DelaunayMesh.h
+    terrainlib/tntn/DelaunayTriangle.h
+    terrainlib/tntn/endianness.h
+    terrainlib/tntn/FileFormat.h
+    terrainlib/tntn/File.h
     terrainlib/tntn/gdal_init.h
+    terrainlib/tntn/geometrix.h
     terrainlib/tntn/logging.h
+    terrainlib/tntn/Mesh2Raster.h
+    terrainlib/tntn/Mesh.h
+    terrainlib/tntn/MeshIO.h
+    terrainlib/tntn/MeshMode.h
+    terrainlib/tntn/MeshWriter.h
+    terrainlib/tntn/ObjPool.h
+    terrainlib/tntn/OFFReader.h
+    terrainlib/tntn/Points2Mesh.h
+    terrainlib/tntn/QuadEdge.h
+    terrainlib/tntn/QuantizedMeshIO.h
+    terrainlib/tntn/Raster.h
+    terrainlib/tntn/RasterIO.h
+    terrainlib/tntn/RasterOverviews.h
+    terrainlib/tntn/raster_tools.h
+    terrainlib/tntn/simple_meshing.h
+    terrainlib/tntn/SuperTriangle.h
+    terrainlib/tntn/SurfacePoints.h
+    terrainlib/tntn/TerraMesh.h
+    terrainlib/tntn/terra_meshing.h
+    terrainlib/tntn/TerraUtils.h
+    terrainlib/tntn/tntn_assert.h
+    terrainlib/tntn/util.h
+    terrainlib/tntn/ZemlyaMesh.h
+    terrainlib/tntn/zemlya_meshing.h
+    terrainlib/tntn/ZoomRange.h
+
 )
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/AlpineRasterGenerator.cpp
@@ -80,10 +114,35 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/MetaDataGenerator.cpp
     terrainlib/Tile.cpp
     terrainlib/Tiler.cpp
-    terrainlib/tntn/gdal_init.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.cpp
+    terrainlib/tntn/Delaunator.cpp
+    terrainlib/tntn/DelaunayMesh.cpp
+    terrainlib/tntn/DelaunayTriangle.cpp
+    terrainlib/tntn/File.cpp
+    terrainlib/tntn/gdal_init.cpp
+    terrainlib/tntn/geometrix.cpp
     terrainlib/tntn/logging.cpp
+    terrainlib/tntn/Mesh2Raster.cpp
+    terrainlib/tntn/Mesh.cpp
+    terrainlib/tntn/MeshIO.cpp
+    terrainlib/tntn/MeshWriter.cpp
+    terrainlib/tntn/OFFReader.cpp
+    terrainlib/tntn/Points2Mesh.cpp
+    terrainlib/tntn/QuadEdge.cpp
+    terrainlib/tntn/QuantizedMeshIO.cpp
+    terrainlib/tntn/RasterIO.cpp
+    terrainlib/tntn/RasterOverviews.cpp
+    terrainlib/tntn/raster_tools.cpp
+    terrainlib/tntn/simple_meshing.cpp
+    terrainlib/tntn/SuperTriangle.cpp
+    terrainlib/tntn/SurfacePoints.cpp
+    terrainlib/tntn/TerraMesh.cpp
+    terrainlib/tntn/terra_meshing.cpp
+    terrainlib/tntn/TerraUtils.cpp
+    terrainlib/tntn/util.cpp
+    terrainlib/tntn/ZemlyaMesh.cpp
+    terrainlib/tntn/zemlya_meshing.cpp
 )
 
 set(ATB_UNITTESTS_HEADERS_AND_SOURCES
