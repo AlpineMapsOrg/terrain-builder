@@ -156,6 +156,30 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/meta_data_generator.cpp
     unittests/tiler.cpp
     unittests/main.cpp
+    unittests/tntn/Delaunay_tests.cpp
+    unittests/tntn/File_tests.cpp
+    unittests/tntn/geometrix_tests.cpp
+    unittests/tntn/Mesh_tests.cpp
+    unittests/tntn/ObjPool_tests.cpp
+    unittests/tntn/OFFReader_tests.cpp
+    unittests/tntn/QuantizedMeshIO_tests.cpp
+    unittests/tntn/RasterIO_tests.cpp
+    unittests/tntn/RasterOverviews_tests.cpp
+    unittests/tntn/Raster_tests.cpp
+    unittests/tntn/raster_tools_tests.cpp
+    unittests/tntn/simple_meshing_tests.cpp
+    unittests/tntn/SimpleRange_tests.cpp
+    unittests/tntn/SuperTriangle_tests.cpp
+    unittests/tntn/SurfacePoints_tests.cpp
+    unittests/tntn/terra_meshing_tests.cpp
+    unittests/tntn/test_common.cpp
+    unittests/tntn/test_common.h
+    unittests/tntn/triangle_indices.cpp
+    unittests/tntn/triangle_indices_data.cpp
+    unittests/tntn/triangle_indices.h
+    unittests/tntn/util_tests.cpp
+    unittests/tntn/vertex_points.cpp
+    unittests/tntn/vertex_points.h
 )
 
 set(ATB_TERRAINBUILDER_SOURCES
