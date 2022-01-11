@@ -19,7 +19,7 @@ bool double_eq(double a, double b, double eps){
 // Takes a path relative to fixture directory and returns an absolute file path
 fs::path fixture_path(const fs::path& fragment)
 {
-    // TNTN_FIXTURES_PATH is a macro defined via CMakeLists for test suite.
-    static fs::path base_fixture_path(TNTN_FIXTURES_PATH);
+    // ATB_TEST_DATA_DIR is a macro defined via CMakeLists for test suite.
+    static fs::path base_fixture_path(ATB_TEST_DATA_DIR "/tntn");
     return base_fixture_path / fs::path(fragment);
 }

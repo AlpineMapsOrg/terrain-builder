@@ -1,10 +1,7 @@
-#include "catch.hpp"
+#include <catch2/catch.hpp>
 
 #include <chrono>
 #include <fstream>
-
-#include <boost/filesystem.hpp>
-#include <boost/scope_exit.hpp>
 
 #include "tntn/File.h"
 
@@ -13,7 +10,7 @@
 
 #include "tntn/MeshIO.h"
 
-#include "delaunator_cpp/Delaunator.h"
+#include "tntn/Delaunator.h"
 
 // data
 #include "vertex_points.h"

@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include <catch2/catch.hpp>
 
 #include "tntn/raster_tools.h"
 #include "tntn/Raster.h"

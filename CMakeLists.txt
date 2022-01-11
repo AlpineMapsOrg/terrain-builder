@@ -116,6 +116,7 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/Tiler.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.cpp
+    terrainlib/tntn/BinaryIO.cpp
     terrainlib/tntn/Delaunator.cpp
     terrainlib/tntn/DelaunayMesh.cpp
     terrainlib/tntn/DelaunayTriangle.cpp

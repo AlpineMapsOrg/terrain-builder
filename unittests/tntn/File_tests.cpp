@@ -1,29 +1,52 @@
-#include "catch.hpp"
+#include <catch2/catch.hpp>
 
 #include <fstream>
-#include <boost/filesystem.hpp>
-#include <boost/scope_exit.hpp>
+#include <filesystem>
+#include <random>
+#include <chrono>
+//#include <boost/scope_exit.hpp>
+
+#include <fmt/format.h>
 
 #include "tntn/File.h"
 
 namespace tntn {
 namespace unittests {
 
+namespace fs = std::filesystem;
+
+namespace {
+const auto milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+static auto gen64 = std::mt19937_64(uint_fast64_t(milliseconds_since_epoch));
+std::string unique_path() {
+  return fmt::format("tntn_{}_{}", gen64(), gen64());
+}
+
+class FileKiller {
+  fs::path m_file_path;
+public:
+  FileKiller(const fs::path& p) : m_file_path(p) {}
+  ~FileKiller() {
+    fs::remove(m_file_path);
+    REQUIRE(!fs::exists(m_file_path));
+  }
+};
+}
+
+
 TEST_CASE("File open existing and read", "[tntn]")
 {
-    auto tempfilename =
-        boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    auto tempfilename = fs::temp_directory_path() / unique_path();
+    const auto fk = FileKiller{tempfilename};
 
     File fout;
     REQUIRE(fout.open(tempfilename.c_str(), File::OM_RWC));
-    BOOST_SCOPE_EXIT(&tempfilename) { boost::filesystem::remove(tempfilename); }
-    BOOST_SCOPE_EXIT_END
     CHECK(fout.write(0, "fooo", 4));
     CHECK(fout.write(3, "bar", 3));
     CHECK(fout.size() == 6);
     CHECK(fout.close());
 
-    REQUIRE(boost::filesystem::exists(tempfilename));
+    REQUIRE(fs::exists(tempfilename));
 
     File fin;
     REQUIRE(fin.open(tempfilename.c_str(), File::OM_R));
@@ -36,13 +59,11 @@ TEST_CASE("File open existing and read", "[tntn]")
 
 TEST_CASE("File write past end", "[tntn]")
 {
-    auto tempfilename =
-        boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    auto tempfilename = fs::temp_directory_path() / unique_path();
+    const auto fk = FileKiller{tempfilename};
 
     File fout;
     REQUIRE(fout.open(tempfilename.c_str(), File::OM_RWC));
-    BOOST_SCOPE_EXIT(&tempfilename) { boost::filesystem::remove(tempfilename); }
-    BOOST_SCOPE_EXIT_END
 
     CHECK(fout.write(42, "foo", 3));
 

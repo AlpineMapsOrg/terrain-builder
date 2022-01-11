@@ -1,9 +1,8 @@
 #pragma once
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
-
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 bool double_eq(double a, double b, double eps);
 
