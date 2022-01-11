@@ -1,5 +1,5 @@
+#include "tntn/Delaunator.h"
 
-#include "delaunator_cpp/Delaunator.h"
 #include <algorithm>
 #include <cstdio>
 #include <limits>
