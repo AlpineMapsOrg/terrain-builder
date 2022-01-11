@@ -2,18 +2,6 @@ This software includes code from (see comments in the respective files):
 - Cesium Terrain Builder (Apache License, Version 2.0, https://github.com/ahuarte47/cesium-terrain-builder)
 - tin-terrain (MIT License, https://github.com/heremaps/tin-terrain)
 
-In order to build, you need to install:
-- fmt (https://fmt.dev/latest/index.html)
-- GDAL 3 (https://gdal.org/)
-- glm (https://github.com/g-truc/glm)
-- boost
-- catch2 (version 2.x) (https://github.com/catchorg/Catch2/tree/v2.x)
-- FreeImage
-- tbb (intel threading building blocks)
-
-sudo apt-get install libfmt-dev libglm-dev libgdal-dev libboost-dev catch2 libfreeimage-dev libtbb-dev
-
-
 -------------------------------------------------------------------------------
 
 Copyright 2014 GeoData <geodata@soton.ac.uk>
