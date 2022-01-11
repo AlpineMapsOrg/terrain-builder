@@ -296,8 +296,8 @@ double Mesh2Raster::findRMSError(const RasterDouble& r1,
     for(int r = 2; r < h - 2; r++)
     {
         double* pE = errorMap.get_ptr(r);
-        double* pH1 = r1.get_ptr(r);
-        double* pH2 = r2.get_ptr(r);
+        const double* pH1 = r1.get_ptr(r);
+        const double* pH2 = r2.get_ptr(r);
 
         for(int c = 2; c < w - 2; c++)
         {
@@ -412,8 +412,8 @@ RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
     for(int r = 2; r < h - 2; r++)
     {
         double* pE = errorMap.get_ptr(r); // output error map
-        double* pH1 = r1.get_ptr(r); // raster 1
-        double* pH2 = r2.get_ptr(r); // raster 2
+        const double* pH1 = r1.get_ptr(r); // raster 1
+        const double* pH2 = r2.get_ptr(r); // raster 2
 
         for(int c = 2; c < w - 2; c++)
         {

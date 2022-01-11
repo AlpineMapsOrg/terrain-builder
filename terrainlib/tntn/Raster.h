@@ -9,8 +9,8 @@
 #include <map>
 #include <cmath>
 
-#include "logging.h"
-
+#include "Image.h"
+#include "tntn/logging.h"
 #include "tntn/geometrix.h"
 
 namespace tntn {
@@ -57,30 +57,16 @@ class Raster
 {
   private:
     //disallow copy and assign, only move semantics allowed to avoid accidential copies
-    Raster(const Raster& other) = delete;
+    Raster(const Raster& other) = default;
     Raster& operator=(const Raster& other) = delete;
 
   public:
     Raster() { ::tntn::detail::NDVDefault<T>::set(m_noDataValue); }
-
-    Raster(Raster&& other) noexcept { swap(other); }
-
-    Raster& operator=(Raster&& other) noexcept
-    {
-        swap(other);
-        return *this;
+    Raster(Raster&& other) noexcept = default;
+    explicit Raster(Image<T>&& other) : m_width(other.width()), m_height(other.height()), m_data(std::move(other.m_data)) {
+      ::tntn::detail::NDVDefault<T>::set(m_noDataValue);
     }
-
-    void swap(Raster& other) noexcept
-    {
-        std::swap(m_width, other.m_width);
-        std::swap(m_height, other.m_height);
-        std::swap(m_xpos, other.m_xpos);
-        std::swap(m_ypos, other.m_ypos);
-        std::swap(m_cellsize, other.m_cellsize);
-        std::swap(m_noDataValue, other.m_noDataValue);
-        std::swap(m_data, other.m_data);
-    }
+    Raster& operator=(Raster&& other) noexcept = default;
 
     /**
      deep copy raster
@@ -89,11 +75,7 @@ class Raster
     */
     Raster clone() const
     {
-        Raster ret;
-        ret.allocate(m_width, m_height);
-        std::copy(get_ptr(), get_ptr() + m_width * m_height, ret.get_ptr());
-        ret.copy_parameters(*this);
-        return ret;
+        return *this;
     }
 
     /**
@@ -130,7 +112,7 @@ class Raster
         m_ypos = 0;
         m_cellsize = 0;
 
-        m_data.reset();
+        m_data.resize(0);
     }
 
     /**
@@ -143,7 +125,7 @@ class Raster
     {
         m_width = w;
         m_height = h;
-        alloc();
+        m_data.resize(m_width * m_height);
     }
 
     /**
@@ -261,7 +243,7 @@ class Raster
         // copy pixels across
         for(int r = min_y; r < max_y; r++)
         {
-            T* pIn = get_ptr(r);
+            const T* pIn = get_ptr(r);
             T* pOut = dst_raster.get_ptr(r - min_y);
 
             for(int c = min_x; c < max_x; c++)
@@ -373,24 +355,24 @@ class Raster
      get raw pointer to beginning of raster (top left is origin)
      @return raw pointer
     */
-    T* get_ptr() const { return m_data.get(); }
+    const T* get_ptr() const { return m_data.data(); }
+    T* get_ptr() { return m_data.data(); }
 
     /**
      get raw pointer to beginning of raster row (top left is origin)
      @param r row
      @return raw pointer
     */
-    T* get_ptr(const unsigned int r) const { return m_data.get() + r * m_width; }
+    const T* get_ptr(const unsigned int r) const { return m_data.data() + r * m_width; }
+    T* get_ptr(const unsigned int r) { return m_data.data() + r * m_width; }
 
     /**
      get raw pointer to beginning of raster row (lower left is origin)
      @param r row
      @return raw pointer
     */
-    T* get_ptr_ll(const unsigned int r) const
-    {
-        return m_data.get() + (m_height - 1 - r) * m_width;
-    }
+    const T* get_ptr_ll(const unsigned int r) const { return m_data.data() + (m_height - 1 - r) * m_width; }
+    T* get_ptr_ll(const unsigned int r) { return m_data.data() + (m_height - 1 - r) * m_width; }
 
     /**
      get value at raster position
@@ -399,7 +381,8 @@ class Raster
      @param c column
      @return value
     */
-    T& value(const unsigned int r, const unsigned int c) const { return get_ptr(r)[c]; }
+    const T& value(const unsigned int r, const unsigned int c) const { return get_ptr(r)[c]; }
+    T& value(const unsigned int r, const unsigned int c) { return get_ptr(r)[c]; }
 
     /**
      get value at raster position (using lower left coordinate system)
@@ -408,7 +391,8 @@ class Raster
      @param c column
      @return value
     */
-    T& value_ll(const unsigned int r, const unsigned int c) const { return get_ptr_ll(r)[c]; }
+    const T& value_ll(const unsigned int r, const unsigned int c) const { return get_ptr_ll(r)[c]; }
+    T& value_ll(const unsigned int r, const unsigned int c) { return get_ptr_ll(r)[c]; }
 
     /**
      get x component of geo/world coordinates at column c
@@ -522,13 +506,11 @@ class Raster
         return detail::isnan_helper<T>::isnan(a_value) || a_value == m_noDataValue;
     }
 
-  private:
-    void alloc()
-    {
-        size_t width = m_width;
-        size_t height = m_height;
-        m_data.reset(new T[width * height], [](T* d) { delete[] d; });
-    }
+    auto begin() const { return m_data.begin(); }
+    auto begin() { return m_data.begin(); }
+
+    auto end() const { return m_data.end(); }
+    auto end() { return m_data.end(); }
 
   private:
     // raster width and height
@@ -544,7 +526,7 @@ class Raster
     // value of data that indicates absence of data
     T m_noDataValue;
 
-    std::shared_ptr<T> m_data;
+    std::vector<T> m_data;
 };
 
 typedef Raster<double> RasterDouble;

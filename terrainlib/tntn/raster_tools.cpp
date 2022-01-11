@@ -59,106 +59,6 @@ RasterDouble raster_tools::integer_downsample_mean(const RasterDouble& src, int 
     return dst;
 }
 
-RasterDouble raster_tools::convolution_filter(const RasterDouble& src,
-                                              std::vector<double> kernel,
-                                              int size)
-{
-    RasterDouble dst;
-
-    if(size - 2 * (size / 2) != 1)
-    {
-        TNTN_LOG_ERROR("kernel size must be odd");
-        return dst;
-    }
-
-    int w = src.get_width();
-    int h = src.get_height();
-
-    dst.allocate(w, h);
-    dst.copy_parameters(src);
-    dst.set_all(dst.get_no_data_value());
-
-    double src_ndv = src.get_no_data_value();
-    double* pS = src.get_ptr(0);
-    int s2 = size / 2;
-
-    // not optimsed yet!
-    for(int r = s2; r < h - s2; r++)
-    {
-        double* pD = dst.get_ptr(r);
-
-        for(int c = s2; c < w - s2; c++)
-        {
-            pD[c] = 0;
-
-            for(int i = 0; i < size; i++) // filter rows
-            {
-                for(int j = 0; j < size; j++) // filter colums
-                {
-                    if(pS[(r + i - s2) * w + (c + j - s2)] != src_ndv)
-                    {
-                        pD[c] += pS[(r + i - s2) * w + (c + j - s2)] * kernel[i * size + j];
-                    }
-                }
-            }
-        }
-    }
-
-    return dst;
-}
-
-RasterDouble raster_tools::max_filter(const RasterDouble& src,
-                                      int size,
-                                      double pos,
-                                      double factor)
-{
-    RasterDouble dst;
-
-    if(size - 2 * (size / 2) != 1)
-    {
-        TNTN_LOG_ERROR("kernel size must be odd");
-        return dst;
-    }
-
-    int w = src.get_width();
-    int h = src.get_height();
-
-    dst.allocate(w, h);
-
-    double* pS = src.get_ptr(0);
-
-    int s2 = size / 2;
-
-    dst.set_all(dst.get_no_data_value());
-
-    for(int r = s2; r < h - s2; r++)
-    {
-        double* pD = dst.get_ptr(r);
-
-        for(int c = s2; c < w - s2; c++)
-        {
-            double max = -std::numeric_limits<double>::max();
-            for(int i = 0; i < size; i++) // filter rows
-            {
-                for(int j = 0; j < size; j++) // filter colums
-                {
-                    if(pS[(r + i - s2) * w + (c + j - s2)] > max)
-                    {
-                        max = pS[(r + i - s2) * w + (c + j - s2)];
-                    }
-                }
-            }
-
-            if(pS[r * w + c] >= max * factor)
-            {
-                pD[c] = pos;
-            }
-        }
-    }
-
-    return dst;
-}
-
 void raster_tools::flip_data_x(RasterDouble& raster)
 {
     const int height = raster.get_height();
@@ -190,34 +90,6 @@ void raster_tools::flip_data_y(RasterDouble& raster)
     }
 }
 
-void raster_tools::find_minmax(const RasterDouble& raster, double& min_val, double& max_val)
-{
-    if(raster.empty())
-    {
-        return;
-    }
-
-    double min = raster.value(0, 0);
-    double max = raster.value(0, 0);
-
-    const auto pixel_start = raster.get_ptr();
-    const auto pixel_end = pixel_start + raster.get_height() * raster.get_width();
-
-    for(auto pixel = pixel_start; pixel != pixel_end; ++pixel)
-    {
-        if(raster.is_no_data(*pixel))
-        {
-            continue;
-        }
-
-        min = std::min(*pixel, min);
-        max = std::max(*pixel, max);
-    }
-
-    min_val = min;
-    max_val = max;
-}
-
 /**
 	 Treat raster as a DEM and return 3D bounding box
        
@@ -225,12 +97,9 @@ void raster_tools::find_minmax(const RasterDouble& raster, double& min_val, doub
 	*/
 BBox3D raster_tools::get_bounding_box3d(const RasterDouble& raster)
 {
-    double min_height = 0.0;
-    double max_height = 0.0;
-
     auto bbox2d = raster.get_bounding_box();
 
-    raster_tools::find_minmax(raster, min_height, max_height);
+    auto [min_height, max_height] = std::ranges::minmax(raster);
 
     BBox3D bbox3d;
     bbox3d.min = {bbox2d.min.x, bbox2d.min.y, min_height};

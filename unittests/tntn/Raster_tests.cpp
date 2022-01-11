@@ -343,19 +343,37 @@ TEST_CASE("Raster setAll", "[tntn]")
     }
 }
 
+class FailOnCopy {
+  int v = 0;
+public:
+  FailOnCopy() = default;
+  FailOnCopy(const FailOnCopy& other) : v(other.v) { CHECK(false); }
+  FailOnCopy(FailOnCopy&& other) noexcept : v(other.v) { CHECK(true); }
+  FailOnCopy& operator=(const FailOnCopy& other) { v = other.v; CHECK(false); return *this; }
+  FailOnCopy& operator=(FailOnCopy&& other) noexcept { v = other.v; CHECK(true); return *this; }
+  ~FailOnCopy() = default;
+};
+
 TEST_CASE("move-construct Raster", "[tntn]")
 {
 
-    Raster<double> r;
+    Raster<FailOnCopy> r;
     r.allocate(10, 10);
 
-    Raster<double> r2(std::move(r));
-
-    CHECK(r.get_width() == 0);
-    CHECK(r.get_height() == 0);
+    Raster<FailOnCopy> r2(std::move(r));
 
     CHECK(r2.get_width() == 10);
     CHECK(r2.get_height() == 10);
+}
+
+TEST_CASE("move-construct Raster from Image", "[tntn]")
+{
+  Image<FailOnCopy> r(10, 10);
+
+  Raster<FailOnCopy> r2(std::move(r));
+
+  CHECK(r2.get_width() == 10);
+  CHECK(r2.get_height() == 10);
 }
 
 TEST_CASE("move-assign Raster", "[tntn]")
@@ -366,9 +384,6 @@ TEST_CASE("move-assign Raster", "[tntn]")
 
     Raster<double> r2;
     r2 = std::move(r);
-
-    CHECK(r.get_width() == 0);
-    CHECK(r.get_height() == 0);
 
     CHECK(r2.get_width() == 10);
     CHECK(r2.get_height() == 10);

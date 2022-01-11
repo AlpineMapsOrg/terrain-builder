@@ -11,12 +11,6 @@ struct raster_tools //just a namespace
 {
     static RasterDouble integer_downsample_mean(const RasterDouble& src, int window_size);
 
-    static RasterDouble convolution_filter(const RasterDouble& src,
-                                           std::vector<double> kernel,
-                                           int size);
-
-    static RasterDouble max_filter(const RasterDouble& src, int size, double pos, double factor);
-
     static void flip_data_x(RasterDouble& r);
 
     static void flip_data_y(RasterDouble& r);
