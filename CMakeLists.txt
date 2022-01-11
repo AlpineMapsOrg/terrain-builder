@@ -90,7 +90,6 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/tntn/QuantizedMeshIO.h
     terrainlib/tntn/Raster.h
     terrainlib/tntn/RasterIO.h
-    terrainlib/tntn/RasterOverviews.h
     terrainlib/tntn/raster_tools.h
     terrainlib/tntn/simple_meshing.h
     terrainlib/tntn/SuperTriangle.h
@@ -133,7 +132,6 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/tntn/QuadEdge.cpp
     terrainlib/tntn/QuantizedMeshIO.cpp
     terrainlib/tntn/RasterIO.cpp
-    terrainlib/tntn/RasterOverviews.cpp
     terrainlib/tntn/raster_tools.cpp
     terrainlib/tntn/simple_meshing.cpp
     terrainlib/tntn/SuperTriangle.cpp
@@ -165,7 +163,6 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/tntn/OFFReader_tests.cpp
     unittests/tntn/QuantizedMeshIO_tests.cpp
     unittests/tntn/RasterIO_tests.cpp
-    unittests/tntn/RasterOverviews_tests.cpp
     unittests/tntn/Raster_tests.cpp
     unittests/tntn/raster_tools_tests.cpp
     unittests/tntn/simple_meshing_tests.cpp
