@@ -17,20 +17,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "AlpineRasterGenerator.h"
-#include <algorithm>
 #include <filesystem>
-#include <functional>
-#include <map>
-#include <numeric>
-#include <ranges>
 
 #include <catch2/catch.hpp>
 #include <fmt/core.h>
-#include <glm/glm.hpp>
-#include <type_traits>
-#include <utility>
 
+#include "AlpineRasterGenerator.h"
 #include "Dataset.h"
 #include "Image.h"
 #include "Tiler.h"
@@ -38,7 +30,7 @@
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
-TEST_CASE("conversion math") {
+TEST_CASE("alpine raster format conversion math") {
   const auto one_red = 32.0f;
   const auto one_green = 32.000000001f / 256;
   const auto eps = 0.000000001f;

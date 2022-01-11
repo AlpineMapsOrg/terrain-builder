@@ -60,11 +60,6 @@ DatasetPtr Dataset::make_shared(const std::string& path)
   return std::make_shared<Dataset>(path);
 }
 
-DatasetPtr Dataset::make(GDALDataset* dataset)
-{
-  return std::make_shared<Dataset>(dataset);
-}
-
 std::string Dataset::name() const
 {
   return m_name;

@@ -56,7 +56,9 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/Image.h
     terrainlib/layer_json_writer.h
     terrainlib/MetaDataGenerator.h
+    terrainlib/ParallelTileGenerator.h
     terrainlib/Tile.h
+    terrainlib/TiledTinBuilder.h
     terrainlib/Tiler.h
     terrainlib/util.h
     terrainlib/ctb/Bounds.hpp
@@ -111,7 +113,9 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/Image.cpp
     terrainlib/layer_json_writer.cpp
     terrainlib/MetaDataGenerator.cpp
+    terrainlib/ParallelTileGenerator.cpp
     terrainlib/Tile.cpp
+    terrainlib/TiledTinBuilder.cpp
     terrainlib/Tiler.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.cpp
@@ -153,6 +157,8 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/image.cpp
     unittests/layer_json.cpp
     unittests/meta_data_generator.cpp
+    unittests/parallel_tile_generator.cpp
+    unittests/tiled_tin_builder.cpp
     unittests/tiler.cpp
     unittests/main.cpp
     unittests/tntn/Delaunay_tests.cpp

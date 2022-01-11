@@ -43,6 +43,7 @@ public:
   Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme);
 
   [[nodiscard]] std::vector<Tile> generateTiles(ctb::i_zoom zoom_level) const;
+  [[nodiscard]] std::vector<Tile> generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
   [[nodiscard]] Scheme scheme() const;
 
   [[nodiscard]] ctb::TileCoordinate southWestTile(ctb::i_zoom zoom_level) const;

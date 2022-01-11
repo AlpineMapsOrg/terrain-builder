@@ -86,6 +86,17 @@ std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
   return tiles;
 }
 
+std::vector<Tile> Tiler::generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
+{
+  std::vector<Tile> tiles;
+  assert(zoom_range.first <= zoom_range.second);
+  for (ctb::i_zoom i = zoom_range.first; i <= zoom_range.second; ++i) {
+    auto zoom_level_tiles = generateTiles(i);
+    std::move(zoom_level_tiles.begin(), zoom_level_tiles.end(), std::back_inserter(tiles));
+  }
+  return tiles;
+}
+
 Tiler::Scheme Tiler::scheme() const {
   return m_scheme;
 }

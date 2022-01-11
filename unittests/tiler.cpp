@@ -268,3 +268,32 @@ TEMPLATE_TEST_CASE("Tiler, using tms scheme", "", std::true_type, std::false_typ
     }
   }
 }
+
+TEST_CASE("tiler returns tiles for several zoom levels") {
+  const auto dataset = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+  const auto grid = ctb::GlobalMercator(256);
+  const auto tiler = Tiler(grid, dataset.bounds(grid.getSRS()), Tiler::Border::Yes, Tiler::Scheme::Tms);
+
+  SECTION("generate from 0 to 7") {
+    const auto tiles = tiler.generateTiles({0, 7});
+    CHECK(!tiles.empty());
+    std::map<ctb::i_zoom, unsigned> n_tiles;
+    for (const auto& t : tiles) {
+      n_tiles[t.zoom]++;
+    }
+    REQUIRE(n_tiles.size() == 8);
+    CHECK(n_tiles[0] == 1);
+    CHECK(n_tiles[1] == 1);
+    CHECK(n_tiles[2] == 1);
+    CHECK(n_tiles[3] == 1);
+    CHECK(n_tiles[4] == 1);
+    CHECK(n_tiles[5] == 4);
+    CHECK(n_tiles[6] == 6);
+    CHECK(n_tiles[7] == 12);
+
+    const auto check = [](const Tile& t) {
+      return t.tileSize == 257 && t.gridSize == 256;
+    };
+    CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
+  }
+}

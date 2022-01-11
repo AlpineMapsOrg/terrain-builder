@@ -73,18 +73,12 @@ void AlpineRasterGenerator::write(const ctb::TilePoint& tilepoint, ctb::i_zoom z
 
 std::vector<Tile> AlpineRasterGenerator::listTiles() const
 {
-  return listTiles({0, maxZoom()});
+  return m_tiler.generateTiles({0, maxZoom()});
 }
 
 std::vector<Tile> AlpineRasterGenerator::listTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
 {
-  std::vector<Tile> tiles;
-  assert(zoom_range.first <= zoom_range.second);
-  for (ctb::i_zoom i = zoom_range.first; i <= zoom_range.second; ++i) {
-    auto zoom_level_tiles = m_tiler.generateTiles(i);
-    std::move(zoom_level_tiles.begin(), zoom_level_tiles.end(), std::back_inserter(tiles));
-  }
-  return tiles;
+  return m_tiler.generateTiles(zoom_range);
 }
 
 void AlpineRasterGenerator::process() const

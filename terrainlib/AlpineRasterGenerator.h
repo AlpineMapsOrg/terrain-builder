@@ -20,7 +20,6 @@
 #ifndef ALPINERASTERGENERATOR_H
 #define ALPINERASTERGENERATOR_H
 
-#include <memory>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -31,9 +30,6 @@
 #include "Tile.h"
 #include "Tiler.h"
 #include "ctb/types.hpp"
-
-class Dataset;
-using DatasetPtr = std::shared_ptr<Dataset>;
 
 class AlpineRasterGenerator
 {

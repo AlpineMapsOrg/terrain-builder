@@ -100,7 +100,7 @@ GDALWarpOptionsPtr makeWarpOptions(const DatasetReader& reader, Dataset* dataset
     options->pfnTransformer = GDALGenImgProjTransform;
   }
   else {
-    // need tiles / second display for measuring performance.
+    // need tiles per second display for measuring performance.
     const auto error_threshold = 0.125;
     options->pTransformerArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, make_image_transform_args(reader, dataset, bounds, width, height).release(), error_threshold);
     options->pfnTransformer = GDALApproxTransform;

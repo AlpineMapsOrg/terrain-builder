@@ -42,7 +42,6 @@ public:
   Dataset(GDALDataset* dataset);  // takes over ownership
   ~Dataset();
   static DatasetPtr make_shared(const std::string& path);
-  static DatasetPtr make(GDALDataset* dataset);  // takes over ownership
 
   [[nodiscard]] std::string name() const;
 
