@@ -2,7 +2,7 @@
 #include "tntn/Points2Mesh.h"
 #include "tntn/logging.h"
 
-#include "delaunator_cpp/Delaunator.h"
+#include "tntn/Delaunator.h"
 
 using namespace std;
 namespace tntn {

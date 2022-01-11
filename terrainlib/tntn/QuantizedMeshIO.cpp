@@ -345,7 +345,7 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
     QuantizedMeshHeader header;
     header.center = c;
     header.bounding_sphere_center = c;
-    header.BoundingSphereRadius = glm::distance(bbox.min.xy(), bbox.max.xy());
+    header.BoundingSphereRadius = glm::distance(xy(bbox.min), xy(bbox.max));
 
     header.MinimumHeight = bbox.min.z;
     header.MaximumHeight = bbox.max.z;

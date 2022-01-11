@@ -179,11 +179,11 @@ BBox2D::BBox2D(glm::vec2 a, glm::vec2 b) : BBox2D(glm::dvec2(a.x, a.y), glm::dve
 
 BBox2D::BBox2D(glm::vec3 a, glm::vec3 b) : BBox2D(glm::dvec2(a.x, a.y), glm::dvec2(b.x, b.y)) {}
 
-BBox2D::BBox2D(glm::dvec3 a, glm::dvec3 b) : BBox2D(a.xy(), b.xy()) {}
+BBox2D::BBox2D(glm::dvec3 a, glm::dvec3 b) : BBox2D(xy(a), xy(b)) {}
 
-BBox2D::BBox2D(const Triangle& t) : BBox2D(t[0].xy(), t[1].xy())
+BBox2D::BBox2D(const Triangle& t) : BBox2D(xy(t[0]), xy(t[1]))
 {
-    add(t[2].xy());
+    add(xy(t[2]));
 }
 
 void BBox2D::reset()
@@ -207,19 +207,19 @@ void BBox2D::add(glm::dvec2 p)
 
 void BBox2D::add(glm::vec3 p)
 {
-    add(p.xy());
+    add(xy(p));
 }
 
 void BBox2D::add(glm::dvec3 p)
 {
-    add(p.xy());
+    add(xy(p));
 }
 
 void BBox2D::add(const Triangle& t)
 {
     for(int i = 0; i < 3; i++)
     {
-        add(t[i].xy());
+        add(t[i]);
     }
 }
 
@@ -445,11 +445,11 @@ glm::dvec3 intersect_25D_linesegment_by_line(glm::dvec3 p0,
     //interpolate z
 
     //z = mx + n
-    const double d_p0p1 = glm::distance(p0.xy(), p1.xy());
+    const double d_p0p1 = glm::distance(xy(p0), xy(p1));
     const double m = (p1.z - p0.z) / d_p0p1;
     const double n = p0.z;
 
-    const double d_p0c = glm::distance(p0.xy(), c.xy());
+    const double d_p0c = glm::distance(xy(p0), xy(c));
     if(d_p0c < 0.0 - eps || d_p0c > (d_p0p1 + eps))
     {
         return glm::dvec3(NAN, NAN, NAN);

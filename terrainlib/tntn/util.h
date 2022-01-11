@@ -2,10 +2,19 @@
 
 #include <algorithm>
 #include <functional>
+#include <glm/detail/qualifier.hpp>
 #include <vector>
 #include <string>
 
+
+#include <glm/glm.hpp>
+
 namespace tntn {
+
+template<typename T, glm::qualifier P>
+glm::tvec2<T, P> xy(const glm::tvec3<T, P>& v) {
+  return {v.x, v.y};
+}
 
 template<typename T>
 struct SimpleRange
