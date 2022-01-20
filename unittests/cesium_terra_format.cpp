@@ -17,13 +17,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <filesystem>
+
 #include <catch2/catch.hpp>
 
-#include "TiledTinBuilder.h"
+#include "Tile.h"
+#include "Image.h"
+#include "cesium_tin_terra.h"
 
 
-TEST_CASE("tiled tin builder") {
-  SECTION("out tile to tin mesh with valid srs bounds") {
-    auto builder = TiledTinBuilder::make("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::Yes);
+TEST_CASE("tin terra write") {
+
+  SECTION("cesium terrain") {
+    const auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
+    generator.write(Tile{ctb::TilePoint(0, 0), 0, {0, 0, 255, 255}, 256, 256}, HeightData(256, 256));
+    CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
+  }
+
+  SECTION("obj debug terrain") {
+    const auto generator = cesium_tin_terra::make_objGenerator("./debugtest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::Yes);
+    generator.process({5, 7});
+    CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
   }
 }

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <map>
 #include <cmath>
+#include <Tile.h>
 
 #include "Image.h"
 #include "tntn/logging.h"
@@ -63,7 +64,10 @@ class Raster
   public:
     Raster() { ::tntn::detail::NDVDefault<T>::set(m_noDataValue); }
     Raster(Raster&& other) noexcept = default;
-    explicit Raster(Image<T>&& other) : m_width(other.width()), m_height(other.height()), m_data(std::move(other.m_data)) {
+    explicit Raster(Image<T>&& other, const Tile& tile) :
+        m_width(other.width()), m_height(other.height()), m_data(std::move(other.m_data)),
+        m_cellsize(tile.srsBounds.getWidth() / tile.tileSize),
+        m_xpos(tile.srsBounds.getMinX()), m_ypos(tile.srsBounds.getMinY()) {
       ::tntn::detail::NDVDefault<T>::set(m_noDataValue);
     }
     Raster& operator=(Raster&& other) noexcept = default;

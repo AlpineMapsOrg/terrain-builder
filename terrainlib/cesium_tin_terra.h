@@ -1,6 +1,6 @@
 /*****************************************************************************
  * Alpine Terrain Builder
- * Copyright (C) 2022  alpinemaps.org
+ * Copyright (C) 2022 alpinemaps.org
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,25 +16,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef TILEDTINBUILDER_H
-#define TILEDTINBUILDER_H
+#ifndef CESIUM_TIN_TERRA_H
+#define CESIUM_TIN_TERRA_H
 
-#include <string>
+#include "ParallelTileGenerator.h"
 
-#include "Tiler.h"
-#include "ctb/Grid.hpp"
 
-class TiledTinBuilder
+namespace cesium_tin_terra
 {
+class TileWriter : public ParallelTileWriterInterface {
 public:
-  TiledTinBuilder(const std::string& output_data_path, const std::string& input_data_path, const ctb::Grid& grid, const Tiler& tiler);
-  [[nodiscard]] static TiledTinBuilder make(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border);
-
-private:
-  std::string m_output_data_path;
-  std::string m_input_data_path;
-  ctb::Grid m_grid;
-  Tiler m_tiler;
+  TileWriter(Tiler::Border border) : ParallelTileWriterInterface(border, "terrain") {}
+  void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const override;
 };
 
-#endif // TILEDTINBUILDER_H
+[[nodiscard]] ParallelTileGenerator make_generator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border);
+[[nodiscard]] ParallelTileGenerator make_objGenerator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border);
+};
+
+#endif // CESIUM_TIN_TERRA_H

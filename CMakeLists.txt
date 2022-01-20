@@ -50,6 +50,7 @@ set(ATB_INCLUDE_PATHS
 
 set(ATB_TERRAINLIB_HEADERS
     terrainlib/alpine_raster.h
+    terrainlib/cesium_tin_terra.h
     terrainlib/Dataset.h
     terrainlib/DatasetReader.h
     terrainlib/Exception.h
@@ -58,7 +59,6 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/MetaDataGenerator.h
     terrainlib/ParallelTileGenerator.h
     terrainlib/Tile.h
-    terrainlib/TiledTinBuilder.h
     terrainlib/Tiler.h
     terrainlib/util.h
     terrainlib/ctb/Bounds.hpp
@@ -108,6 +108,7 @@ set(ATB_TERRAINLIB_HEADERS
 )
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/alpine_raster.cpp
+    terrainlib/cesium_tin_terra.cpp
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
     terrainlib/Image.cpp
@@ -115,7 +116,6 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/MetaDataGenerator.cpp
     terrainlib/ParallelTileGenerator.cpp
     terrainlib/Tile.cpp
-    terrainlib/TiledTinBuilder.cpp
     terrainlib/Tiler.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.cpp
@@ -158,7 +158,7 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/layer_json.cpp
     unittests/meta_data_generator.cpp
     unittests/parallel_tile_generator.cpp
-    unittests/tiled_tin_builder.cpp
+    unittests/cesium_terra_format.cpp
     unittests/tiler.cpp
     unittests/main.cpp
     unittests/tntn/Delaunay_tests.cpp

@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include "Tile.h"
 #include "tntn/Raster.h"
 #include "tntn/raster_tools.h"
 #include "tntn/SurfacePoints.h"
@@ -370,7 +371,7 @@ TEST_CASE("move-construct Raster from Image", "[tntn]")
 {
   Image<FailOnCopy> r(10, 10);
 
-  Raster<FailOnCopy> r2(std::move(r));
+  Raster<FailOnCopy> r2(std::move(r), {});
 
   CHECK(r2.get_width() == 10);
   CHECK(r2.get_height() == 10);

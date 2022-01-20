@@ -15,6 +15,7 @@ class MeshWriter
 
 class ObjMeshWriter : public MeshWriter
 {
+public:
     virtual bool write_mesh_to_file(const char* filename,
                                     Mesh& mesh,
                                     const BBox3D& bbox) override;
