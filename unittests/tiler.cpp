@@ -296,4 +296,22 @@ TEST_CASE("tiler returns tiles for several zoom levels") {
     };
     CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
   }
+
+  SECTION("generate from 4 to 6") {
+    const auto tiles = tiler.generateTiles({4, 6});
+    CHECK(!tiles.empty());
+    std::map<ctb::i_zoom, unsigned> n_tiles;
+    for (const auto& t : tiles) {
+      n_tiles[t.zoom]++;
+    }
+    REQUIRE(n_tiles.size() == 3);
+    CHECK(n_tiles[4] == 1);
+    CHECK(n_tiles[5] == 4);
+    CHECK(n_tiles[6] == 6);
+
+    const auto check = [](const Tile& t) {
+      return t.tileSize == 257 && t.gridSize == 256;
+    };
+    CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
+  }
 }

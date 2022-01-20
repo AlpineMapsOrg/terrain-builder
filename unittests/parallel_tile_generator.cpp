@@ -17,6 +17,8 @@
  *****************************************************************************/
 
 #include <atomic>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <utility>
 
@@ -26,22 +28,34 @@
 
 TEST_CASE("parallel tile generator") {
   std::atomic<int> tile_counter = 0;
+  std::filesystem::remove_all("./unittest_tiles/");
 
   class MockTileWriter : public ParallelTileWriterInterface {
     std::atomic<int>* m_tile_counter = nullptr;
   public:
-    MockTileWriter(std::atomic<int>* tile_counter) : ParallelTileWriterInterface(Tiler::Border::No), m_tile_counter(tile_counter) {}
-    void write(const std::string& base_path, const Tile& tile, const HeightData& heights) const override {
-      CHECK(base_path.size() > 0);
+    MockTileWriter(std::atomic<int>* tile_counter) : ParallelTileWriterInterface(Tiler::Border::No, "empty"), m_tile_counter(tile_counter) {}
+    void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const override {
+      CHECK(!file_path.empty());
       CHECK(tile.gridSize == 256);
       CHECK(heights.width() == 256);
       CHECK(heights.height() == 256);
       REQUIRE(m_tile_counter != nullptr);
       (*m_tile_counter)++;
+
+      std::ofstream ofs(file_path);
+      ofs << "this is some text in the new file\n";
     }
   };
 
-  const auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter), "./unittest_tiles/");
+  std::filesystem::path base_path = "./unittest_tiles/";
+  const auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter), base_path);
   generator.process({0, 7});
   CHECK(tile_counter == 27);
+  CHECK(std::filesystem::exists(base_path / "0" / "0" / "0.empty"));
+  CHECK(std::filesystem::exists(base_path / "1" / "1" / "1.empty"));
+  CHECK(std::filesystem::exists(base_path / "2" / "2" / "2.empty"));
+  CHECK(std::filesystem::exists(base_path / "3" / "4" / "5.empty"));
+  CHECK(std::filesystem::exists(base_path / "4" / "8" / "10.empty"));
+  CHECK(std::filesystem::exists(base_path / "5" / "16" / "20.empty"));
+  CHECK(std::filesystem::exists(base_path / "7" / "70" / "84.empty"));
 }

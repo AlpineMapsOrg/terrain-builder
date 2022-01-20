@@ -19,6 +19,9 @@
 #include "ParallelTileGenerator.h"
 
 #include <execution>
+#include <filesystem>
+
+#include <fmt/core.h>
 
 #include "Dataset.h"
 #include "ctb/GlobalGeodetic.hpp"
@@ -42,6 +45,19 @@ ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_
   return {input_data_path, grid, Tiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path};
 }
 
+const Tiler& ParallelTileGenerator::tiler() const
+{
+  return m_tiler;
+}
+
+void ParallelTileGenerator::write(const Tile& tile, const HeightData& heights) const
+{
+  const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.zoom, tile.point.x);
+  const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.point.y, m_tile_writer->formatFileEnding());
+  std::filesystem::create_directories(dir_path);
+  m_tile_writer->write(file_path, tile, heights);
+}
+
 void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
 {
   const auto tiles = m_tiler.generateTiles(zoom_range);
@@ -53,7 +69,7 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
     const auto dataset = Dataset::make_shared(m_input_data_path);
     DatasetReader reader(dataset, m_grid.getSRS(), 1);
     const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
-    m_tile_writer->write(m_output_data_path, tile, heights);
+    write(tile, heights);
   };
   std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
 }
@@ -61,4 +77,9 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
 Tiler::Border ParallelTileWriterInterface::formatRequiresBorder() const
 {
   return m_format_requires_border;
+}
+
+const std::string& ParallelTileWriterInterface::formatFileEnding() const
+{
+  return m_file_ending;
 }

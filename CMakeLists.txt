@@ -49,7 +49,7 @@ set(ATB_INCLUDE_PATHS
 
 
 set(ATB_TERRAINLIB_HEADERS
-    terrainlib/AlpineRasterGenerator.h
+    terrainlib/alpine_raster.h
     terrainlib/Dataset.h
     terrainlib/DatasetReader.h
     terrainlib/Exception.h
@@ -107,7 +107,7 @@ set(ATB_TERRAINLIB_HEADERS
 
 )
 set(ATB_TERRAINLIB_SOURCES
-    terrainlib/AlpineRasterGenerator.cpp
+    terrainlib/alpine_raster.cpp
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
     terrainlib/Image.cpp
