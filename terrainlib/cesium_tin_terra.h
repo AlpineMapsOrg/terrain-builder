@@ -21,12 +21,16 @@
 
 #include "ParallelTileGenerator.h"
 
+namespace tntn {
+class Mesh;
+}
 
 namespace cesium_tin_terra
 {
 class TileWriter : public ParallelTileWriterInterface {
 public:
   TileWriter(Tiler::Border border) : ParallelTileWriterInterface(border, "terrain") {}
+  static std::unique_ptr<tntn::Mesh> toMesh(const ctb::CRSBounds& srs_bounds, const HeightData& heights);
   void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const override;
 };
 

@@ -31,12 +31,7 @@ class ObjTileWriter : public ParallelTileWriterInterface {
 public:
   ObjTileWriter(Tiler::Border border) : ParallelTileWriterInterface(border, "obj") {}
   void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const override {
-    const auto max_error = tile.srsBounds.getWidth() / tile.tileSize;
-    auto raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights, [](auto v) { return double(v); }), tile);
-    auto mesh = tntn::generate_tin_terra(std::move(raster), max_error);
-
-    mesh->generate_triangles();
-
+    const auto mesh = cesium_tin_terra::TileWriter::toMesh(tile.srsBounds, heights);
     tntn::BBox3D bbox;
     mesh->get_bbox(bbox);
     auto mesh_writer = tntn::ObjMeshWriter();
@@ -45,14 +40,19 @@ public:
 };
 }
 
-void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Tile& tile, const HeightData& heights) const
+std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const ctb::CRSBounds& srs_bounds, const HeightData& heights)
 {
-  const auto max_error = tile.srsBounds.getWidth() / tile.tileSize;
-  auto raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights, [](auto v) { return double(v); }), tile);
+  const auto max_error = srs_bounds.getWidth() / heights.width();
+  auto raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights, [](auto v) { return double(v); }), srs_bounds);
   auto mesh = tntn::generate_tin_terra(std::move(raster), max_error);
 
   mesh->generate_triangles();
+  return mesh;
+}
 
+void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Tile& tile, const HeightData& heights) const
+{
+  const auto mesh = cesium_tin_terra::TileWriter::toMesh(tile.srsBounds, heights);
   tntn::BBox3D bbox;
   mesh->get_bbox(bbox);
   auto mesh_writer = tntn::QuantizedMeshWriter(true);

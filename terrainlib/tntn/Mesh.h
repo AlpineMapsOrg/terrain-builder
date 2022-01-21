@@ -56,6 +56,7 @@ class Mesh
     bool semantic_equal(const Mesh& other) const;
 
     void get_bbox(BBox3D& bbox) const;
+    BBox3D bbox() const;
 
     bool check_tin_properties() const;
 

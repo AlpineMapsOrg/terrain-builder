@@ -378,7 +378,14 @@ bool Mesh::semantic_equal_tri_dec(const Mesh& other) const
 
 void Mesh::get_bbox(BBox3D& bbox) const
 {
-    bbox.add(m_vertices.begin(), m_vertices.end());
+  bbox.add(m_vertices.begin(), m_vertices.end());
+}
+
+BBox3D Mesh::bbox() const
+{
+  BBox3D bbox;
+  bbox.add(m_vertices.begin(), m_vertices.end());
+  return bbox;
 }
 
 static bool face_edge_crosses_other_edge(const size_t fi,

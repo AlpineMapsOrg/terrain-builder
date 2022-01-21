@@ -21,9 +21,13 @@
 
 #include <catch2/catch.hpp>
 
+#include "Dataset.h"
+#include "DatasetReader.h"
 #include "Tile.h"
 #include "Image.h"
 #include "cesium_tin_terra.h"
+#include "util.h"
+#include "tntn/Mesh.h"
 
 
 TEST_CASE("tin terra write") {
@@ -34,9 +38,30 @@ TEST_CASE("tin terra write") {
     CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
   }
 
+  SECTION("mesh vertex ranges") {
+    const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+    const auto at_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
+    OGRSpatialReference webmercator;
+    webmercator.importFromEPSG(3857);
+    webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+    OGRSpatialReference wgs84;
+    wgs84.importFromEPSG(4326);
+    wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+    const auto at_webmercator_bounds = util::nonExactBoundsTransform(at_bounds, wgs84, webmercator);
+
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, webmercator, 1);
+    const auto heights = reader.read(at_webmercator_bounds, 256, 256);
+
+    const auto mesh = converter.toMesh(at_webmercator_bounds, heights);
+    REQUIRE(mesh->vertices().distance() > 0);
+  }
+
   SECTION("obj debug terrain") {
     const auto generator = cesium_tin_terra::make_objGenerator("./debugtest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::Yes);
     generator.process({5, 7});
-    CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
   }
+
 }

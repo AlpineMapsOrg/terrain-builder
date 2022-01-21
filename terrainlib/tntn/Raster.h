@@ -64,10 +64,10 @@ class Raster
   public:
     Raster() { ::tntn::detail::NDVDefault<T>::set(m_noDataValue); }
     Raster(Raster&& other) noexcept = default;
-    explicit Raster(Image<T>&& other, const Tile& tile) :
+    explicit Raster(Image<T>&& other, const ctb::CRSBounds& srs_bounds) :
         m_width(other.width()), m_height(other.height()), m_data(std::move(other.m_data)),
-        m_cellsize(tile.srsBounds.getWidth() / tile.tileSize),
-        m_xpos(tile.srsBounds.getMinX()), m_ypos(tile.srsBounds.getMinY()) {
+        m_cellsize(srs_bounds.getWidth() / other.width()),
+        m_xpos(srs_bounds.getMinX()), m_ypos(srs_bounds.getMinY()) {
       ::tntn::detail::NDVDefault<T>::set(m_noDataValue);
     }
     Raster& operator=(Raster&& other) noexcept = default;
