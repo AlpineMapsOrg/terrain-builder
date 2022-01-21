@@ -139,7 +139,7 @@ bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m)
     //for (const Face *f = faces_range.begin; f != faces_range.end; f++)
 
     // write points
-    for(int i = 0; i < vertices_range.distance(); i++)
+    for(int i = 0; i < vertices_range.size(); i++)
     {
         const Vertex& v = vertices_range.begin[i];
 
@@ -155,7 +155,7 @@ bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m)
     }
 
     // write triangels
-    for(int i = 0; i < faces_range.distance(); i++)
+    for(int i = 0; i < faces_range.size(); i++)
     {
 
         TNTN_LOG_TRACE("write face {}...", i);
@@ -170,7 +170,7 @@ bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m)
 
         std::string face_string = make_geojson_face(v1, v2, v3);
 
-        if(i == faces_range.distance() - 1)
+        if(i == faces_range.size() - 1)
         {
             TNTN_LOG_DEBUG("write end seg v2-v3");
             fmt::format_to(line_buffer, "{} \n ] \n }}", face_string);
@@ -370,8 +370,8 @@ bool write_mesh_as_off(FileLike& out_file, const Mesh& m)
     out_file.write(write_offset, "OFF\n", 4);
     write_offset += 4;
 
-    const size_t num_vertices = vertices_range.distance();
-    const size_t num_faces = faces_range.distance();
+    const size_t num_vertices = vertices_range.size();
+    const size_t num_faces = faces_range.size();
     const size_t num_edges = calculate_num_edges(faces_range);
 
     line_buffer.resize(0);

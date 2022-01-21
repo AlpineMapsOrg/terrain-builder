@@ -190,7 +190,7 @@ static void write_faces(BinaryIO& bio,
 
     log.IndexData_bits = sizeof(index_t) * 8;
 
-    const uint32_t ntriangles = tris.distance();
+    const uint32_t ntriangles = tris.size();
 
     std::vector<index_t> indices;
 
@@ -376,7 +376,7 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
     std::vector<uint16_t> vs;
     std::vector<uint16_t> hs;
 
-    const uint32_t nvertices = m.vertices().distance();
+    const uint32_t nvertices = m.vertices().size();
 
     us.reserve(nvertices);
     vs.reserve(nvertices);
@@ -392,7 +392,7 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
 
     auto triangles = m.triangles();
 
-    vertices_order.reserve(triangles.distance() / 2);
+    vertices_order.reserve(triangles.size() / 2);
     for(auto it = triangles.begin; it != triangles.end; ++it)
     {
         for(int n = 0; n < 3; ++n)

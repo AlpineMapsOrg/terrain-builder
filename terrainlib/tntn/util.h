@@ -23,7 +23,7 @@ struct SimpleRange
     T begin;
     T end;
 
-    size_t distance() const { return std::distance(begin, end); }
+    size_t size() const { return std::distance(begin, end); }
 
     template<typename CallableT>
     void for_each(CallableT&& c) const
@@ -45,7 +45,7 @@ struct SimpleRange
     template<typename ContainerT>
     void copy_into(ContainerT& c) const
     {
-        c.reserve(distance());
+        c.reserve(size());
         std::copy(begin, end, std::back_inserter(c));
     }
 };

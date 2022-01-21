@@ -47,9 +47,9 @@ TEST_CASE("OFFReader interop with write_mesh_as_off", "[tntn]")
     SimpleRange<const Vertex*> v_src = m.vertices();
     SimpleRange<const Vertex*> v_dst = m2->vertices();
 
-    CHECK(v_src.distance() == v_dst.distance());
+    CHECK(v_src.size() == v_dst.size());
 
-    for(int i = 0; i < v_dst.distance(); i++)
+    for(int i = 0; i < v_dst.size(); i++)
     {
         double prec = 1e-15;
 

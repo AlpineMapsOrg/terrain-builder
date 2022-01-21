@@ -56,7 +56,7 @@ TEST_CASE("tin terra write") {
     const auto heights = reader.read(at_webmercator_bounds, 256, 256);
 
     const auto mesh = converter.toMesh(at_webmercator_bounds, heights);
-    REQUIRE(mesh->vertices().distance() > 0);
+    REQUIRE(mesh->vertices().size() > 0);
   }
 
   SECTION("obj debug terrain") {

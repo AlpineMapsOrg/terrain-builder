@@ -211,9 +211,9 @@ RasterDouble Mesh2Raster::rasterise(
         //SuperTriangle super_triangle(*ptr);
         rasterise_triangle(raster, super_triangle);
 
-        if((tcount % (1 + trange.distance() / 10)) == 0)
+        if((tcount % (1 + trange.size() / 10)) == 0)
         {
-            float p = tcount / (float)trange.distance();
+            float p = tcount / (float)trange.size();
             TNTN_LOG_INFO("{} %", p * 100.0);
         }
         tcount++;

@@ -273,7 +273,7 @@ bool Mesh::semantic_equal_tri_tri(const Mesh& other) const
 {
     const auto other_tris = other.triangles();
     std::vector<const Triangle*> other_tri_ptrs;
-    other_tri_ptrs.reserve(other_tris.distance());
+    other_tri_ptrs.reserve(other_tris.size());
     other_tris.for_each([&other_tri_ptrs](const Triangle& t) { other_tri_ptrs.push_back(&t); });
 
     //for each triangle find and equivalent triangle in other
@@ -300,7 +300,7 @@ bool Mesh::semantic_equal_dec_dec(const Mesh& other) const
 {
     const auto other_faces = other.faces();
     std::vector<const Face*> other_face_ptrs;
-    other_face_ptrs.reserve(other_faces.distance());
+    other_face_ptrs.reserve(other_faces.size());
     other_faces.for_each([&other_face_ptrs](const Face& f) { other_face_ptrs.push_back(&f); });
 
     //for each face, find equivalend face in other
@@ -344,7 +344,7 @@ bool Mesh::semantic_equal_tri_dec(const Mesh& other) const
 
     const auto other_faces = other.faces();
     std::vector<const Face*> other_face_ptrs;
-    other_face_ptrs.reserve(other_faces.distance());
+    other_face_ptrs.reserve(other_faces.size());
     other_faces.for_each([&other_face_ptrs](const Face& f) { other_face_ptrs.push_back(&f); });
 
     //for each triangle, find equivalend face in other

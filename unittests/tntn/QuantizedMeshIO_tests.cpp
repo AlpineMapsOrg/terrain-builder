@@ -94,10 +94,10 @@ TEST_CASE("quantized mesh writer/loader round trip on small mesh", "[tntn]")
     REQUIRE(mesh != nullptr);
     //CHECK(mesh->check_tin_properties());
 
-    const auto original_faces_count = mesh->faces().distance();
+    const auto original_faces_count = mesh->faces().size();
 
     mesh->generate_triangles();
-    CHECK(mesh->triangles().distance() == original_faces_count);
+    CHECK(mesh->triangles().size() == original_faces_count);
 
     auto mf = std::make_shared<MemoryFile>();
     //write_mesh_as_obj("terrain.obj", *mesh);
@@ -106,7 +106,7 @@ TEST_CASE("quantized mesh writer/loader round trip on small mesh", "[tntn]")
 
     auto loaded_mesh = load_mesh_from_qm(mf);
     REQUIRE(loaded_mesh != nullptr);
-    CHECK(loaded_mesh->faces().distance() == original_faces_count);
+    CHECK(loaded_mesh->faces().size() == original_faces_count);
 
     //TODO: investigate why this doesn't hold. Probably because of quantization differences?
     //CHECK(loaded_mesh->semantic_equal(*mesh));
