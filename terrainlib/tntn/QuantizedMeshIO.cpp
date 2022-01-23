@@ -352,8 +352,9 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
 
     // FIXME: is there a better choice for a horizon occlusion point?
     // Currently it's the center of tile elevated to bbox's max Z
-    header.horizon_occlusion = c;
-    header.horizon_occlusion.z = bbox.max.z;
+    // todo: https://cesium.com/blog/2013/05/09/computing-the-horizon-occlusion-point/
+    header.horizon_occlusion = c * (1.0 + 20.0 / 6371.0); // 20km height, definitely not universal and probably causing problems. pending a fix.
+//    header.horizon_occlusion.z = bbox.max.z;
 
     log.QuantizedMeshHeader_start = bio.write_pos();
     write_qmheader(bio, e, header);

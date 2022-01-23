@@ -21,24 +21,11 @@
 #include <memory>
 
 #include "Image.h"
-#include "tntn/MeshWriter.h"
 #include "tntn/Raster.h"
 #include "tntn/geometrix.h"
 #include "tntn/terra_meshing.h"
+#include "tntn/QuantizedMeshIO.h"
 
-namespace {
-class ObjTileWriter : public ParallelTileWriterInterface {
-public:
-  ObjTileWriter(Tiler::Border border) : ParallelTileWriterInterface(border, "obj") {}
-  void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const override {
-    const auto mesh = cesium_tin_terra::TileWriter::toMesh(tile.srsBounds, heights);
-    tntn::BBox3D bbox;
-    mesh->get_bbox(bbox);
-    auto mesh_writer = tntn::ObjMeshWriter();
-    mesh_writer.write_mesh_to_file(file_path.c_str(), *mesh, bbox);
-  }
-};
-}
 
 std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const ctb::CRSBounds& srs_bounds, const HeightData& heights)
 {
@@ -55,16 +42,10 @@ void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Til
   const auto mesh = cesium_tin_terra::TileWriter::toMesh(tile.srsBounds, heights);
   tntn::BBox3D bbox;
   mesh->get_bbox(bbox);
-  auto mesh_writer = tntn::QuantizedMeshWriter(true);
-  mesh_writer.write_mesh_to_file(file_path.c_str(), *mesh, bbox);
+  tntn::write_mesh_as_qm(file_path.c_str(), *mesh, bbox, false, true);
 }
 
 ParallelTileGenerator cesium_tin_terra::make_generator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border)
 {
   return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<cesium_tin_terra::TileWriter>(border), output_data_path);
-}
-
-ParallelTileGenerator cesium_tin_terra::make_objGenerator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border)
-{
-  return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<ObjTileWriter>(border), output_data_path);
 }

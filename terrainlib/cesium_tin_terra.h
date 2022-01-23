@@ -35,7 +35,6 @@ public:
 };
 
 [[nodiscard]] ParallelTileGenerator make_generator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border);
-[[nodiscard]] ParallelTileGenerator make_objGenerator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border);
 };
 
 #endif // CESIUM_TIN_TERRA_H

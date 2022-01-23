@@ -31,6 +31,7 @@
 
 
 TEST_CASE("tin terra write") {
+  std::filesystem::remove_all("./unittest_tiles/");
 
   SECTION("cesium terrain") {
     const auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
@@ -50,18 +51,25 @@ TEST_CASE("tin terra write") {
     wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
     const auto at_webmercator_bounds = util::nonExactBoundsTransform(at_bounds, wgs84, webmercator);
+//    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto reader = DatasetReader(dataset, webmercator, 1);
-    const auto heights = reader.read(at_webmercator_bounds, 256, 256);
+    const auto heights = reader.read(at_webmercator_bounds, 512, 512);
 
     const auto mesh = converter.toMesh(at_webmercator_bounds, heights);
     REQUIRE(mesh->vertices().size() > 0);
+    CHECK(mesh->vertices().size() > 500);
+    const auto mesh_bb = mesh->bbox();
+    CHECK(mesh_bb.min.x >= at_webmercator_bounds.getMinX());
+    CHECK(mesh_bb.min.y >= at_webmercator_bounds.getMinY());
+    CHECK(mesh_bb.max.x <= at_webmercator_bounds.getMaxX());
+    CHECK(mesh_bb.max.y <= at_webmercator_bounds.getMaxY());
   }
 
-  SECTION("obj debug terrain") {
-    const auto generator = cesium_tin_terra::make_objGenerator("./debugtest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::Yes);
-    generator.process({5, 7});
+  SECTION("cesium terrain correct header") {
+    const auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
+    generator.process({4, 4});
+    CHECK(std::filesystem::exists("./unittest_tiles/4/8/10.terrain"));
   }
-
 }
