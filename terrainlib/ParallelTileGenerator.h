@@ -46,7 +46,7 @@ public:
   void setWarnOnMissingOverviews(bool flag) { m_warn_on_missing_overviews = flag; }
   [[nodiscard]] const Tiler& tiler() const;
   void write(const Tile& tile, const HeightData& heights) const;
-  void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
+  void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console = false) const;
 };
 
 class ParallelTileWriterInterface {

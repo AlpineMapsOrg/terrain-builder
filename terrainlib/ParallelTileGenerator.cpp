@@ -17,6 +17,7 @@
  *****************************************************************************/
 
 #include "ParallelTileGenerator.h"
+#include "ProgressIndicator.h"
 
 #include <execution>
 #include <filesystem>
@@ -28,6 +29,7 @@
 #include "ctb/GlobalMercator.hpp"
 
 #include <DatasetReader.h>
+#include <thread>
 
 ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const Tiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path) :
     m_output_data_path(output_data_path), m_input_data_path(input_data_path), m_grid(grid), m_tiler(tiler), m_tile_writer(std::move(tile_writer))
@@ -58,10 +60,17 @@ void ParallelTileGenerator::write(const Tile& tile, const HeightData& heights) c
   m_tile_writer->write(file_path, tile, heights);
 }
 
-void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
+void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console) const
 {
   const auto tiles = m_tiler.generateTiles(zoom_range);
-  const auto fun = [this](const Tile& tile) {
+
+  auto pi = ProgressIndicator(tiles.size());
+  std::jthread monitoring_thread;
+
+  if (progress_bar_on_console)
+    monitoring_thread = pi.startMonitoring(); // destructor will join.
+
+  const auto fun = [&pi, progress_bar_on_console, this](const Tile& tile) {
     // Recreating Dataset for every tile. This was the easiest fix for multithreading,
     // and it takes only 0.5% of the time (half a percent).
     // most of the cpu time is used in 'readWithOverviews' (specificly 'RasterIO', and
@@ -70,6 +79,8 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
     DatasetReader reader(dataset, m_grid.getSRS(), 1, m_warn_on_missing_overviews);
     const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
     write(tile, heights);
+    if (progress_bar_on_console)
+      pi.taskFinished();
   };
   std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
 }

@@ -58,6 +58,7 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/layer_json_writer.h
     terrainlib/MetaDataGenerator.h
     terrainlib/ParallelTileGenerator.h
+    terrainlib/ProgressIndicator.h
     terrainlib/Tile.h
     terrainlib/Tiler.h
     terrainlib/util.h
@@ -115,6 +116,7 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/layer_json_writer.cpp
     terrainlib/MetaDataGenerator.cpp
     terrainlib/ParallelTileGenerator.cpp
+    terrainlib/ProgressIndicator.cpp
     terrainlib/Tile.cpp
     terrainlib/Tiler.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
@@ -161,6 +163,7 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/cesium_terra_format.cpp
     unittests/tiler.cpp
     unittests/main.cpp
+    unittests/progress_indicator_test.cpp
     unittests/tntn/Delaunay_tests.cpp
     unittests/tntn/File_tests.cpp
     unittests/tntn/geometrix_tests.cpp
