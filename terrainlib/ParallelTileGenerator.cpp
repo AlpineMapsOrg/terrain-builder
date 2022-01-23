@@ -67,7 +67,7 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
     // most of the cpu time is used in 'readWithOverviews' (specificly 'RasterIO', and
     // 'VRTWarpedRasterBand::IReadBlock') and a bit in 'write' (specifically 'FreeImage_Save').
     const auto dataset = Dataset::make_shared(m_input_data_path);
-    DatasetReader reader(dataset, m_grid.getSRS(), 1);
+    DatasetReader reader(dataset, m_grid.getSRS(), 1, m_warn_on_missing_overviews);
     const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
     write(tile, heights);
   };

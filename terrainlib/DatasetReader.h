@@ -32,7 +32,7 @@ class OGRSpatialReference;
 class DatasetReader
 {
 public:
-  DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band);
+  DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band, bool warn_on_missing_overviews = true);
 
   HeightData read(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
   HeightData readWithOverviews(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
@@ -50,6 +50,7 @@ private:
   std::string m_dataset_srs_wkt;
   std::string m_target_srs_wkt;
   bool m_requires_reprojection;
+  bool m_warn_on_missing_overviews;
   unsigned m_band;
 };
 

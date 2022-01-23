@@ -68,7 +68,8 @@ TEST_CASE("tin terra write") {
   }
 
   SECTION("cesium terrain correct header") {
-    const auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
+    auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
+    generator.setWarnOnMissingOverviews(false);
     generator.process({4, 4});
     CHECK(std::filesystem::exists("./unittest_tiles/4/8/10.terrain"));
   }

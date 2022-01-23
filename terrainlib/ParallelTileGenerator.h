@@ -37,11 +37,13 @@ class ParallelTileGenerator
   ctb::Grid m_grid;
   Tiler m_tiler;
   std::unique_ptr<ParallelTileWriterInterface> m_tile_writer;
+  bool m_warn_on_missing_overviews = true;
 
 public:
   ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const Tiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path);
   [[nodiscard]] static ParallelTileGenerator make(const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path);
 
+  void setWarnOnMissingOverviews(bool flag) { m_warn_on_missing_overviews = flag; }
   [[nodiscard]] const Tiler& tiler() const;
   void write(const Tile& tile, const HeightData& heights) const;
   void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;

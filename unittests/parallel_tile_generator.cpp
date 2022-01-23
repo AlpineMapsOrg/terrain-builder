@@ -48,7 +48,8 @@ TEST_CASE("parallel tile generator") {
   };
 
   std::filesystem::path base_path = "./unittest_tiles/";
-  const auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter), base_path);
+  auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter), base_path);
+  generator.setWarnOnMissingOverviews(false);
   generator.process({0, 7});
   CHECK(tile_counter == 27);
   CHECK(std::filesystem::exists(base_path / "0" / "0" / "0.empty"));

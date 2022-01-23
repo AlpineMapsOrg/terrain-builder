@@ -87,7 +87,8 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
   }
 
   SECTION("process all tiles") {
-    const auto generator = alpine_raster::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    auto generator = alpine_raster::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    generator.setWarnOnMissingOverviews(false);
     generator.process({0, 7});
     const auto tiles = generator.tiler().generateTiles({0, 7});
 
@@ -98,7 +99,8 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
   }
 #if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
   SECTION("process all tiles with max zoom") {
-    const auto generator = alpine_raster::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    auto generator = alpine_raster::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    generator.setWarnOnMissingOverviews(false);
     generator.process({4, 8});
     const auto tiles = generator.tiler().generateTiles({4, 8});
 

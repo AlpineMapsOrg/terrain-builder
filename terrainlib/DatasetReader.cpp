@@ -109,14 +109,15 @@ GDALWarpOptionsPtr makeWarpOptions(const DatasetReader& reader, Dataset* dataset
   return options;
 }
 
-std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& dataset, void *hTransformerArg) {
+std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& dataset, void *hTransformerArg, bool warn_on_missing_overviews) {
   GDALDataset* poSrcDS = dataset->gdalDataset();
   int nOvLevel = -2;
   int nOvCount = poSrcDS->GetRasterBand(1)->GetOverviewCount();
 
   assert(nOvCount >= 0);
   if (nOvCount == 0) {
-    TNTN_LOG_WARN("No dataset overviews found.");
+    if (warn_on_missing_overviews)
+      TNTN_LOG_WARN("No dataset overviews found.");
     return dataset;
   }
 
@@ -160,8 +161,8 @@ std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& data
 }
 
 
-DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band) :
-    m_dataset(dataset), m_dataset_srs_wkt(toWkt(dataset->srs())), m_target_srs_wkt(toWkt(targetSRS)), m_requires_reprojection(!dataset->srs().IsSame(&targetSRS)), m_band(band)
+DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band, bool warn_on_missing_overviews) :
+    m_dataset(dataset), m_dataset_srs_wkt(toWkt(dataset->srs())), m_target_srs_wkt(toWkt(targetSRS)), m_requires_reprojection(!dataset->srs().IsSame(&targetSRS)), m_warn_on_missing_overviews(warn_on_missing_overviews), m_band(band)
 {
   if (band > dataset->n_bands())
     throw Exception(fmt::format("Dataset does not contain band number {} (there are {} bands).", band, dataset->n_bands()));
@@ -176,7 +177,7 @@ HeightData DatasetReader::read(const ctb::CRSBounds& bounds, unsigned width, uns
 HeightData DatasetReader::readWithOverviews(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const
 {
   auto transformer_args = make_image_transform_args(*this, m_dataset.get(), bounds, width, height);
-  auto source_dataset = getOverviewDataset(m_dataset, transformer_args.get());
+  auto source_dataset = getOverviewDataset(m_dataset, transformer_args.get(), m_warn_on_missing_overviews);
 
   return readFrom(source_dataset, bounds, width, height);
 }
