@@ -133,7 +133,7 @@ bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m)
     if(!out_file.write(write_pos, line_buffer.data(), line_buffer.size())) return false;
     write_pos += line_buffer.size();
 
-    TNTN_LOG_INFO("number of faces {}", faces_range.distance());
+    TNTN_LOG_INFO("number of faces {}", faces_range.size());
 
     int count = 0;
     //for (const Face *f = faces_range.begin; f != faces_range.end; f++)
