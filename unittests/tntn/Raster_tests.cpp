@@ -32,12 +32,13 @@ TEST_CASE("raster bb", "[tntn]")
 
     raster.set_pos_x(11.024);
     raster.set_pos_y(-334.242);
-    raster.set_cell_size(1.341);
+    raster.set_cell_width(1.123);
+    raster.set_cell_height(1.341);
 
     BBox2D rbb = raster.get_bounding_box();
 
-    double w = (raster.get_width() - 1) * raster.get_cell_size();
-    double h = (raster.get_height() - 1) * raster.get_cell_size();
+    double w = (raster.get_width() - 1) * raster.get_cell_width();
+    double h = (raster.get_height() - 1) * raster.get_cell_height();
 
     CHECK(std::abs((rbb.max.x - rbb.min.x) - w) < 0.001);
     CHECK(std::abs((rbb.max.y - rbb.min.y) - h) < 0.001);
@@ -49,7 +50,8 @@ TEST_CASE("raster coordinates", "[tntn]")
 
     raster.set_pos_x(11);
     raster.set_pos_y(-334);
-    raster.set_cell_size(1.341);
+    raster.set_cell_width(1.123);
+    raster.set_cell_height(1.341);
 
     for(int r = 0; r < raster.get_height(); r++)
     {
@@ -106,15 +108,38 @@ TEST_CASE("mesh 2 raster", "[tntn]")
     m.from_triangles(std::move(trList));
     m.generate_decomposed();
 
-    Mesh2Raster m2r;
 
-    RasterDouble raster_4 = m2r.rasterise(m, 4, 4);
+    SECTION("pixel width / height == 1") {
+      Mesh2Raster m2r;
+      RasterDouble raster_4 = m2r.rasterise(m, 4, 4);
 
-    CHECK(raster_4.get_cell_size() == 1);
+      CHECK(raster_4.get_cell_width() == 1);
+      CHECK(raster_4.get_cell_height() == 1);
 
-    RasterDouble raster_10 = m2r.rasterise(m, 10, 10, 4, 4);
+      RasterDouble raster_10 = m2r.rasterise(m, 10, 10, 4, 4);
 
-    CHECK(raster_10.get_cell_size() == 0.4);
+      CHECK(raster_10.get_cell_width() == 0.4);
+      CHECK(raster_10.get_cell_height() == 0.4);
+    }
+
+    SECTION("pixel width / height == 1.5") {
+      Mesh2Raster m2r;
+      RasterDouble raster_4 = m2r.rasterise(m, 6, 4);
+
+      CHECK(raster_4.get_cell_width() == Approx(0.6));
+      CHECK(raster_4.get_cell_height() == Approx(1.0));
+
+      RasterDouble raster_10 = m2r.rasterise(m, 15, 10, 6, 4);
+
+      CHECK(raster_10.get_cell_width() == Approx((3.0/(6.0-1.0))*(6.0/15.0)));
+      CHECK(raster_10.get_cell_height() == Approx((3.0/(4.0-1.0))*(4.0/10.0)));
+
+      RasterDouble raster_15 = m2r.rasterise(m, 15, 15, 6, 4);
+
+      CHECK(raster_15.get_cell_width() == Approx((3.0/(6.0-1.0))*(6.0/15.0)));
+      CHECK(raster_15.get_cell_height() == Approx((3.0/(4.0-1.0))*(4.0/15.0)));
+    }
+
 }
 
 TEST_CASE("Raster integer downsampe", "[tntn]")
@@ -150,7 +175,8 @@ TEST_CASE("Raster crop", "[tntn]")
     Raster<P> raster;
     raster.allocate(5, 6);
 
-    raster.set_cell_size(1);
+    raster.set_cell_width(1);
+    raster.set_cell_height(1);
     raster.set_pos_x(0);
     raster.set_pos_y(0);
 
@@ -240,7 +266,8 @@ TEST_CASE("Raster crop", "[tntn]")
     raster_int.set_all(-1);
     raster_int.set_pos_x(-14);
     raster_int.set_pos_y(18);
-    raster_int.set_cell_size(0.3);
+    raster_int.set_cell_width(0.3);
+    raster_int.set_cell_height(0.3);
     raster_int.set_no_data_value(-9999);
 
     for(int r = 0; r < raster_int.get_height(); r++)
@@ -397,7 +424,7 @@ TEST_CASE("Raster::toVertices", "[tntn]")
     r.allocate(10, 10);
     r.set_pos_x(10);
     r.set_pos_y(10);
-    r.set_cell_size(1.0);
+    r.set_cell_size({1.0, 1.0});
 
     for(int y = 0; y < r.get_height(); y++)
     {

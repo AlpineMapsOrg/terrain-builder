@@ -225,7 +225,7 @@ std::unique_ptr<RasterDouble> SurfacePoints::to_raster() const
     // TODO: double check / write unit tests etc
     raster->set_pos_x(min_x);
     raster->set_pos_y(min_y);
-    raster->set_cell_size((min_dx + min_dy) / 2.0);
+    raster->set_cell_width((min_dx + min_dy) / 2.0);
 
     for(const auto& p : m_points)
     {
@@ -270,12 +270,12 @@ std::unique_ptr<Raster<Vertex>> SurfacePoints::to_vxraster() const
 
     vxraster->set_pos_x(min_x);
     vxraster->set_pos_y(min_y);
-    vxraster->set_cell_size((min_dx + min_dy) / 2.0);
+    vxraster->set_cell_width((min_dx + min_dy) / 2.0);
 
     TNTN_LOG_DEBUG("raster: ({}, {}, {})",
                    vxraster->get_pos_x(),
                    vxraster->get_pos_y(),
-                   vxraster->get_cell_size());
+                   vxraster->get_cell_width());
 
     //assign each point to a raster cell
     {

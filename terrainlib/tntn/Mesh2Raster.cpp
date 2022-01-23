@@ -158,9 +158,12 @@ RasterDouble Mesh2Raster::rasterise(
     }
 
     if(original_width == -1) original_width = out_width;
+    if(original_height == -1) original_height = out_height;
 
-    double cellSize_original = mesh_w / (double)(original_width - 1);
-    double cellSize = (mesh_w + cellSize_original) / (double)(out_width);
+    double cellWidth_original = mesh_w / double(original_width - 1);
+    double cellWidth = (mesh_w + cellWidth_original) / double(out_width);
+    double cellHeight_original = mesh_h / double(original_height - 1);
+    double cellHeight = (mesh_h + cellHeight_original) / double(out_height);
 
     // width is user supplied (in pixels)
     double raster_w = out_width;
@@ -178,8 +181,8 @@ RasterDouble Mesh2Raster::rasterise(
     double os_h = oversample * raster_h;
 
     // round to nearest integer for raster
-    int w = (int)(os_w + 0.5);
-    int h = (int)(os_h + 0.5);
+    const auto w = int(os_w + 0.5);
+    const auto h = int(os_h + 0.5);
 
     TNTN_LOG_DEBUG("raster w: {}", w);
     TNTN_LOG_DEBUG("raster h: {}", h);
@@ -191,12 +194,13 @@ RasterDouble Mesh2Raster::rasterise(
     raster.set_no_data_value(-99999);
     raster.set_all(raster.get_no_data_value());
 
-    TNTN_LOG_DEBUG("cell size w: {}", cellSize);
+    TNTN_LOG_DEBUG("cell size width: {}, height: {}", cellWidth, cellHeight);
 
-    raster.set_cell_size(cellSize);
+    raster.set_cell_width(cellWidth);
+    raster.set_cell_height(cellHeight);
 
-    raster.set_pos_x(m_bb.min.x - cellSize_original * 0.5);
-    raster.set_pos_y(m_bb.min.y - cellSize_original * 0.5);
+    raster.set_pos_x(m_bb.min.x - cellWidth_original * 0.5);
+    raster.set_pos_y(m_bb.min.y - cellWidth_original * 0.5);
 
     TNTN_LOG_DEBUG("x-pos:: {}", raster.get_pos_x());
     TNTN_LOG_DEBUG("y-pos: {}", raster.get_pos_y());

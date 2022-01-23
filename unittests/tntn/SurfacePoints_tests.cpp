@@ -44,7 +44,7 @@ TEST_CASE("SurfacePoints::load_from_raster", "[tntn]")
     //per convention: lower left corner
     r.set_pos_x(100);
     r.set_pos_y(200);
-    r.set_cell_size(1.0);
+    r.set_cell_size({1.0, 1.0});
 
     for(int y = 0; y < r.get_height(); y++)
     {

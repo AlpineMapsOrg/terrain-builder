@@ -72,7 +72,7 @@ RasterDouble load_raster_from_asc(const std::string& filename)
             }
             else if(count == 4)
             {
-                raster.set_cell_size(std::stod(getFirstNonZero(tokens, 1)));
+                raster.set_cell_width(std::stod(getFirstNonZero(tokens, 1)));
             }
             else if(count == 5)
             {
@@ -181,7 +181,7 @@ bool write_raster_to_asc(FileLike& file, const RasterDouble& raster)
     //file << "YLLCORNER "    << std::setprecision(9) << raster.getYPos()        << std::endl;
     fmt::format_to(line_buffer, "YLLCORNER {:.9f}\n", raster.get_pos_y());
     //file << "CELLSIZE "     << std::setprecision(9) << raster.getCellsize()    << std::endl;
-    fmt::format_to(line_buffer, "CELLSIZE {:.9f}\n", raster.get_cell_size());
+    fmt::format_to(line_buffer, "CELLSIZE {:.9f}\n", raster.get_cell_width());
     //file << "NODATA_VALUE " << std::setprecision(9) << raster.getNoDataValue() << std::endl;
     fmt::format_to(line_buffer, "NODATA_VALUE {:.9f}\n", raster.get_no_data_value());
 
@@ -397,7 +397,8 @@ bool load_raster_file(const std::string& file_name,
     int raster_width = raster_band->GetXSize();
     int raster_height = raster_band->GetYSize();
 
-    target_raster.set_cell_size(fabs(gt.scale_x));
+    target_raster.set_cell_width(fabs(gt.scale_x));
+    target_raster.set_cell_height(fabs(gt.scale_y));
     target_raster.allocate(raster_width, raster_height);
     target_raster.set_no_data_value(raster_band->GetNoDataValue());
 

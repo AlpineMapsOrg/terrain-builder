@@ -21,7 +21,7 @@ TEST_CASE("generate_tin_dense_quadwalk meshing on artificial terrain", "[tntn]")
     raster.allocate(w, h);
     raster.set_pos_x(raster_xpos);
     raster.set_pos_y(raster_ypos);
-    raster.set_cell_size(cellsize);
+    raster.set_cell_size({cellsize, cellsize});
 
     for(int y = 0; y < h; y++)
     {

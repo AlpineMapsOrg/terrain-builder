@@ -25,7 +25,8 @@ RasterDouble raster_tools::integer_downsample_mean(const RasterDouble& src, int 
     RasterDouble dst(ws, hs);
 
     dst.copy_parameters(src);
-    dst.set_cell_size(src.get_cell_size() * win);
+    dst.set_cell_width(src.get_cell_width() * win);
+    dst.set_cell_height(src.get_cell_height() * win);
     dst.set_all(ndv);
 
     for(int rs = 0; rs < hs; rs++)

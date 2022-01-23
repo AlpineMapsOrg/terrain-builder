@@ -32,7 +32,8 @@ TEST_CASE("load_raster_file", "[tntn]")
     REQUIRE(raster.get_height() == 80);
     REQUIRE(raster.get_no_data_value() == -3.4028234663852886e+38);
 
-    REQUIRE(double_eq(raster.get_cell_size(), 3.91694, 0.00001));
+    REQUIRE(double_eq(raster.get_cell_width(), 3.91694, 0.00001));
+    REQUIRE(double_eq(raster.get_cell_height(), 3.91694, 0.00001));
     REQUIRE(double_eq(raster.get_pos_x(), -13636677.018, 0.001));
     REQUIRE(double_eq(raster.get_pos_y(), 4543905.659, 0.001));
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/fwd.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
@@ -66,7 +67,8 @@ class Raster
     Raster(Raster&& other) noexcept = default;
     explicit Raster(Image<T>&& other, const ctb::CRSBounds& srs_bounds) :
         m_width(other.width()), m_height(other.height()), m_data(std::move(other.m_data)),
-        m_cellsize(srs_bounds.getWidth() / other.width()),
+        m_cell_width_in_srs(srs_bounds.getWidth() / other.width()),
+        m_cell_height_in_srs(srs_bounds.getHeight() / other.height()),
         m_xpos(srs_bounds.getMinX()), m_ypos(srs_bounds.getMinY()) {
       ::tntn::detail::NDVDefault<T>::set(m_noDataValue);
     }
@@ -100,7 +102,8 @@ class Raster
     {
         m_xpos = raster.m_xpos;
         m_ypos = raster.m_ypos;
-        m_cellsize = raster.m_cellsize;
+        m_cell_width_in_srs = raster.m_cell_width_in_srs;
+        m_cell_height_in_srs = raster.m_cell_height_in_srs;
         m_noDataValue = raster.m_noDataValue;
     }
 
@@ -114,7 +117,8 @@ class Raster
         m_height = 0;
         m_xpos = 0;
         m_ypos = 0;
-        m_cellsize = 0;
+        m_cell_width_in_srs = 0;
+        m_cell_height_in_srs = 0;
 
         m_data.resize(0);
     }
@@ -239,10 +243,11 @@ class Raster
         dst_raster.set_all(get_no_data_value());
         dst_raster.set_no_data_value(get_no_data_value());
 
-        dst_raster.set_cell_size(get_cell_size());
+        dst_raster.set_cell_width(get_cell_width());
+        dst_raster.set_cell_height(get_cell_height());
 
-        dst_raster.set_pos_x(col2x(min_x) - 0.5 * get_cell_size());
-        dst_raster.set_pos_y(row2y(max_y - 1) - 0.5 * get_cell_size());
+        dst_raster.set_pos_x(col2x(min_x) - 0.5 * get_cell_width());
+        dst_raster.set_pos_y(row2y(max_y - 1) - 0.5 * get_cell_height());
 
         // copy pixels across
         for(int r = min_y; r < max_y; r++)
@@ -347,13 +352,17 @@ class Raster
      get width or height of pixel or cell
      @return cell size in geo coordinates
     */
-    double get_cell_size() const { return m_cellsize; }
+    glm::dvec2 get_cell_size() const { return {m_cell_width_in_srs, m_cell_height_in_srs}; }
+    double get_cell_width() const { return m_cell_width_in_srs; }
+    double get_cell_height() const { return m_cell_height_in_srs; }
 
     /**
      set width or height of pixel or cell
      @param cs cell size in geo coordinates
     */
-    void set_cell_size(const double cs) { m_cellsize = cs; }
+    void set_cell_size(const glm::dvec2& cs) { m_cell_width_in_srs = cs.x; m_cell_height_in_srs = cs.y; }
+    void set_cell_width(const double cs) { m_cell_width_in_srs = cs; }
+    void set_cell_height(const double cs) { m_cell_height_in_srs = cs; }
 
     /**
      get raw pointer to beginning of raster (top left is origin)
@@ -404,13 +413,13 @@ class Raster
      @param c column
      @return x geo coordinates
     */
-    double col2x(const unsigned int c) const { return m_xpos + (c + 0.5) * m_cellsize; }
+    double col2x(const unsigned int c) const { return m_xpos + (c + 0.5) * m_cell_width_in_srs; }
 
     int x2col(double x) const
     {
-        if(m_cellsize > 0)
+        if(m_cell_width_in_srs > 0)
         {
-            return (int)(0.5 + ((x - m_xpos - 0.5 * m_cellsize) / m_cellsize));
+            return (int)(0.5 + ((x - m_xpos - 0.5 * m_cell_width_in_srs) / m_cell_width_in_srs));
         }
         else
         {
@@ -422,10 +431,10 @@ class Raster
     {
         //y = m_xpos + (r + 0.5) * m_cellsize
 
-        if(m_cellsize > 0)
+        if(m_cell_height_in_srs > 0)
         {
 
-            int r_ll = (int)(0.5 + (y - m_ypos - 0.5 * m_cellsize) / m_cellsize);
+            int r_ll = (int)(0.5 + (y - m_ypos - 0.5 * m_cell_height_in_srs) / m_cell_height_in_srs);
             int r_tl = m_height - r_ll - 1;
 
             return r_tl;
@@ -445,7 +454,7 @@ class Raster
     double row2y(const unsigned int r_tl) const
     {
         int r_ll = m_height - 1 - r_tl;
-        return m_ypos + (r_ll + 0.5) * m_cellsize;
+        return m_ypos + (r_ll + 0.5) * m_cell_height_in_srs;
     }
 
     /**
@@ -455,7 +464,7 @@ class Raster
      @param r row from lower left
      @return y geo coordinates
     */
-    double row_ll2y(const unsigned int r_ll) const { return m_ypos + (r_ll + 0.5) * m_cellsize; }
+    double row_ll2y(const unsigned int r_ll) const { return m_ypos + (r_ll + 0.5) * m_cell_height_in_srs; }
 
     /**
      get x component of geo/world coordinates at column c
@@ -483,7 +492,8 @@ class Raster
     template<typename VertexReceiverFn>
     void to_vertices(VertexReceiverFn&& receiver_fn) const
     {
-        const double cs = get_cell_size();
+        const double cw = get_cell_width();
+        const double ch = get_cell_height();
         const double xpos = get_pos_x();
         const double ypos = get_pos_y();
         const int width = get_width();
@@ -493,11 +503,11 @@ class Raster
         //coordinate system has origin at lower left corner!
         for(int r = 0; r < height; r++)
         {
-            const double y_coordinate = ypos + (height - r - 1) * cs;
+            const double y_coordinate = ypos + (height - r - 1) * ch;
 
             for(int c = 0; c < width; c++)
             {
-                const double x_coordinate = xpos + c * cs;
+                const double x_coordinate = xpos + c * cw;
                 receiver_fn(x_coordinate, y_coordinate, p[c]);
             }
 
@@ -525,7 +535,8 @@ class Raster
     double m_xpos = 0;
     double m_ypos = 0;
 
-    double m_cellsize = 1;
+    double m_cell_width_in_srs = 1;
+    double m_cell_height_in_srs = 1;
 
     // value of data that indicates absence of data
     T m_noDataValue;
