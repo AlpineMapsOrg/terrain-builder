@@ -17,7 +17,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <bits/ranges_algo.h>
 #include <catch2/catch.hpp>
 #include <algorithm>
 
