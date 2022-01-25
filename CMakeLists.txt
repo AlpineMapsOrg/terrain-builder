@@ -59,9 +59,9 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/MetaDataGenerator.h
     terrainlib/ParallelTileGenerator.h
     terrainlib/ProgressIndicator.h
+    terrainlib/srs.h
     terrainlib/Tile.h
     terrainlib/Tiler.h
-    terrainlib/util.h
     terrainlib/ctb/Bounds.hpp
     terrainlib/ctb/Coordinate.hpp
     terrainlib/ctb/Coordinate3D.hpp
@@ -153,6 +153,7 @@ set(ATB_TERRAINLIB_SOURCES
 set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/alpine_raster_format.cpp
     unittests/catch2_helpers.h
+    unittests/cesium_terra_format.cpp
     unittests/dataset.cpp
     unittests/dataset_reading.cpp
     unittests/grid.cpp
@@ -160,9 +161,9 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/layer_json.cpp
     unittests/meta_data_generator.cpp
     unittests/parallel_tile_generator.cpp
-    unittests/cesium_terra_format.cpp
     unittests/tiler.cpp
     unittests/main.cpp
+    unittests/srs_test.cpp
     unittests/progress_indicator_test.cpp
     unittests/tntn/Delaunay_tests.cpp
     unittests/tntn/File_tests.cpp
@@ -225,6 +226,7 @@ target_include_directories(terrainlib
 )
 if (ATB_ENABLE_ASSERTS)
     target_compile_options(terrainlib PUBLIC "-U NDEBUG")
+    target_compile_options(terrainlib PUBLIC "-DTNTN_ASSERT_ACTIVE")
 endif()
 
 

@@ -72,14 +72,14 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
   SECTION("raste write") {
     const auto generator = alpine_raster::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::Yes);
-    generator.write(Tile{ctb::TilePoint(0, 0), 0, {}, 256, 257}, HeightData(257, 257));
+    generator.write(Tile{ctb::TilePoint(0, 0), 0, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257}, HeightData(257, 257));
     CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.png"));
 
-    generator.write(Tile{ctb::TilePoint(2, 3), 1, {}, 256, 257}, HeightData(257, 257));
+    generator.write(Tile{ctb::TilePoint(2, 3), 1, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257}, HeightData(257, 257));
     CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
     // check that a second write doesn't crash
-    generator.write(Tile{ctb::TilePoint(2, 3), 1, {}, 256, 257}, HeightData(257, 257));
+    generator.write(Tile{ctb::TilePoint(2, 3), 1, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257}, HeightData(257, 257));
     CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
     // in the best case, we would read back the data and check it. but that's too much work for now.

@@ -1,26 +1,30 @@
 #include "tntn/QuantizedMeshIO.h"
 
+#include "Exception.h"
 #include "tntn/OFFReader.h"
 #include "tntn/logging.h"
 #include "tntn/tntn_assert.h"
 #include "tntn/BinaryIO.h"
 
+#include <cassert>
+#include <cstdint>
 #include <iostream>
 #include <fstream>
 #include <set>
-
 #include <unordered_map>
-#include "glm/glm.hpp"
 
-#include <ogr_spatialref.h>
+#include <glm/glm.hpp>
 #include <gdal_priv.h>
+#include <ogr_spatialref.h>
+#include <vector>
+
+#include "srs.h"
+
 
 //FIXME: remove collappsed vertices/triangles after quantization of mesh
 
 namespace tntn {
-
-typedef glm::dvec3 QMVertex;
-typedef std::unordered_map<Vertex, unsigned int> VertexOrdering;
+using VertexOrdering = std::unordered_map<Vertex, unsigned int>;
 
 struct QuantizedMeshLog
 {
@@ -57,51 +61,65 @@ struct QuantizedMeshLog
     }
 };
 
-struct QuantizedMeshHeader
-{
-    // The center of the tile in Earth-centered Fixed coordinates.
-    // double CenterX;
-    // double CenterY;
-    // double CenterZ;
-
-    QMVertex center;
-
-    // The minimum and maximum heights in the area covered by this tile.
-    // The minimum may be lower and the maximum may be higher than
-    // the height of any vertex in this tile in the case that the min/max vertex
-    // was removed during mesh simplification, but these are the appropriate
-    // values to use for analysis or visualization.
-    float MinimumHeight;
-    float MaximumHeight;
-
-    // The tile’s bounding sphere.  The X,Y,Z coordinates are again expressed
-    // in Earth-centered Fixed coordinates, and the radius is in meters.
-    QMVertex bounding_sphere_center;
-    // double BoundingSphereCenterX;
-    // double BoundingSphereCenterY;
-    // double BoundingSphereCenterZ;
-    double BoundingSphereRadius;
-
-    // The horizon occlusion point, expressed in the ellipsoid-scaled Earth-centered Fixed frame.
-    // If this point is below the horizon, the entire tile is below the horizon.
-    // See http://cesiumjs.org/2013/04/25/Horizon-culling/ for more information.
-    QMVertex horizon_occlusion;
-    // double HorizonOcclusionPointX;
-    // double HorizonOcclusionPointY;
-    // double HorizonOcclusionPointZ;
-};
-
 namespace detail {
 
 uint16_t zig_zag_encode(int16_t i)
 {
-    return ((i >> 15) ^ (i << 1));
+    return uint16_t((i >> 15) ^ (i << 1));
 }
 
 int16_t zig_zag_decode(uint16_t i)
 {
     return static_cast<int16_t>(i >> 1) ^ -static_cast<int16_t>(i & 1);
 }
+
+// HORIZON OCCLUSION POINT
+// https://cesiumjs.org/2013/05/09/Computing-the-horizon-occlusion-point
+// taken from ctb (https://github.com/ahuarte47/cesium-terrain-builder) and edited
+// Apache License, Version 2.0
+
+// Constants taken from http://cesiumjs.org/2013/04/25/Horizon-culling
+constexpr double llh_ecef_radiusX = 6378137.0;
+constexpr double llh_ecef_radiusY = 6378137.0;
+constexpr double llh_ecef_radiusZ = 6356752.3142451793;
+
+constexpr double llh_ecef_rX = 1.0 / llh_ecef_radiusX;
+constexpr double llh_ecef_rY = 1.0 / llh_ecef_radiusY;
+constexpr double llh_ecef_rZ = 1.0 / llh_ecef_radiusZ;
+
+double ocp_computeMagnitude(const glm::dvec3& position, const glm::dvec3 &sphereCenter) {
+  double magnitudeSquared = glm::dot(position, position);
+  double magnitude = std::sqrt(magnitudeSquared);
+  glm::dvec3 direction = position * (1.0 / magnitude);
+
+  // For the purpose of this computation, points below the ellipsoid
+  // are considered to be on it instead.
+  magnitudeSquared = std::fmax(1.0, magnitudeSquared);
+  magnitude = std::fmax(1.0, magnitude);
+
+  double cosAlpha = glm::dot(direction, sphereCenter);
+  double sinAlpha = glm::length(cross(direction, sphereCenter));
+  double cosBeta = 1.0 / magnitude;
+  double sinBeta = std::sqrt(magnitudeSquared - 1.0) * cosBeta;
+
+  return 1.0 / (cosAlpha * cosBeta - sinAlpha * sinBeta);
+}
+glm::dvec3 ocp_fromPoints(const std::vector<glm::dvec3> &ecef_points, const glm::dvec3 &ecef_bounding_sphere_center) {
+  const double MIN = -std::numeric_limits<double>::infinity();
+  double max_magnitude = MIN;
+
+  // Bring coordinates to ellipsoid scaled coordinates
+  glm::dvec3 scaledCenter = glm::dvec3(ecef_bounding_sphere_center.x * llh_ecef_rX, ecef_bounding_sphere_center.y * llh_ecef_rY, ecef_bounding_sphere_center.z * llh_ecef_rZ);
+
+  for (const auto& point : ecef_points) {
+    glm::dvec3 scaledPoint(point.x * llh_ecef_rX, point.y * llh_ecef_rY, point.z * llh_ecef_rZ);
+
+    double magnitude = ocp_computeMagnitude(scaledPoint, scaledCenter);
+    if (magnitude > max_magnitude) max_magnitude = magnitude;
+  }
+  return scaledCenter * max_magnitude;
+}
+// HORIZON OCCLUSION POINT -- end
 
 } //namespace detail
 
@@ -111,7 +129,7 @@ constexpr int QUANTIZED_COORDINATE_SIZE = 32767;
 
 static unsigned int scale_coordinate(const double v)
 {
-    const int scaled_v = static_cast<int>(v * QUANTIZED_COORDINATE_SIZE);
+    const int scaled_v = static_cast<int>(v * QUANTIZED_COORDINATE_SIZE + 0.5);
     return scaled_v;
 }
 
@@ -256,26 +274,40 @@ bool write_mesh_as_qm(const char* filename, const Mesh& m, bool compress)
     return write_mesh_as_qm(filename, m, bbox, false, compress);
 }
 
+
+bool write_mesh_as_qm(const char* filename, const Mesh& m, const BBox3D& bbox, bool mesh_is_rescaled, bool compress)
+{
+    OGRSpatialReference webmercator;
+    webmercator.importFromEPSG(3857);
+    webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    return write_mesh_as_qm(filename, m, bbox, webmercator, mesh_is_rescaled, compress);
+}
+
 bool write_mesh_as_qm(const char* filename,
                       const Mesh& m,
                       const BBox3D& bbox,
+                      const OGRSpatialReference& mesh_srs,
                       bool mesh_is_rescaled, bool comprress)
 {
     if (comprress) {
         auto f = std::make_shared<GZipWriteFile>(filename);
-        return write_mesh_as_qm(f, m, bbox, mesh_is_rescaled);
+        return write_mesh_as_qm(f, m, bbox, mesh_srs, mesh_is_rescaled);
     }
 
     auto f = std::make_shared<File>();
     f->open(filename, File::OM_RWCF);
-    return write_mesh_as_qm(f, m, bbox, mesh_is_rescaled);
+    return write_mesh_as_qm(f, m, bbox, mesh_srs, mesh_is_rescaled);
 }
 
 bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f, const Mesh& m)
 {
+    OGRSpatialReference webmercator;
+    webmercator.importFromEPSG(3857);
+    webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
     BBox3D bbox;
     m.get_bbox(bbox);
-    return write_mesh_as_qm(f, m, bbox, false);
+    return write_mesh_as_qm(f, m, bbox, webmercator, false);
 }
 
 static void write_qmheader(BinaryIO& bio,
@@ -299,28 +331,45 @@ static void write_qmheader(BinaryIO& bio,
     bio.write_double(qmheader.horizon_occlusion.z, e);
 }
 
-bool point_to_ecef(Vertex& p)
+QuantizedMeshHeader quantised_mesh_header(const Mesh& m, const BBox3D& bbox, const OGRSpatialReference& srs, bool mesh_is_rescaled)
 {
-    OGRSpatialReference mercator;
-    OGRSpatialReference ecef;
+  const auto [bbmin, bbmax] = srs::toECEF(srs, bbox.min, bbox.max);
 
-    mercator.importFromEPSG(3857);
-    ecef.importFromEPSG(4978);
+  Vertex c = (bbmax + bbmin) / 2.0;
 
-    std::unique_ptr<OGRCoordinateTransformation> tr(
-        OGRCreateCoordinateTransformation(&mercator, &ecef));
+  QuantizedMeshHeader header;
+  header.center = c;
+  header.bounding_sphere_center = c;
+  header.BoundingSphereRadius = glm::distance(bbmin, bbmax) / 2;
 
-    if(tr == nullptr)
-    {
-        return false;
+  header.MinimumHeight = bbox.min.z;
+  header.MaximumHeight = bbox.max.z;
+
+  // https://cesium.com/blog/2013/05/09/computing-the-horizon-occlusion-point/
+  if (mesh_is_rescaled) {
+    std::vector<Vertex> srs_points;
+    srs_points.reserve(m.vertices_as_vector().size());
+    const auto scaling = bbox.max - bbox.min;
+    assert(scaling.x > 0);
+    assert(scaling.y > 0);
+    assert(scaling.z > 0);
+
+    for (const auto& p : m.vertices_as_vector()) {
+      srs_points.emplace_back(p * scaling + bbox.min);
     }
+    header.horizon_occlusion = ocp_fromPoints(srs::toECEF(srs, srs_points), c);
+  }
+  else {
+    header.horizon_occlusion = ocp_fromPoints(srs::toECEF(srs, m.vertices_as_vector()), c);
+  }
 
-    return (bool)tr->Transform(1, &p.x, &p.y, &p.z);
+  return header;
 }
 
 bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
                       const Mesh& m,
                       const BBox3D& bbox,
+                      const OGRSpatialReference& mesh_srs,
                       bool mesh_is_rescaled)
 {
     if(!m.empty() && !m.has_triangles())
@@ -333,29 +382,7 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
     BinaryIOErrorTracker e;
     QuantizedMeshLog log;
 
-    // Write QM Header
-    Vertex c = (bbox.max + bbox.min) / 2.0;
-
-    if(!point_to_ecef(c))
-    {
-        TNTN_LOG_ERROR("Conversion of tile center to ECEF coordinate system failed");
-        return false;
-    }
-
-    QuantizedMeshHeader header;
-    header.center = c;
-    header.bounding_sphere_center = c;
-    header.BoundingSphereRadius = glm::distance(xy(bbox.min), xy(bbox.max));
-
-    header.MinimumHeight = bbox.min.z;
-    header.MaximumHeight = bbox.max.z;
-
-    // FIXME: is there a better choice for a horizon occlusion point?
-    // Currently it's the center of tile elevated to bbox's max Z
-    // todo: https://cesium.com/blog/2013/05/09/computing-the-horizon-occlusion-point/
-    header.horizon_occlusion = c * (1.0 + 20.0 / 6371.0); // 20km height, definitely not universal and probably causing problems. pending a fix.
-//    header.horizon_occlusion.z = bbox.max.z;
-
+    const auto header = quantised_mesh_header(m, bbox, mesh_srs, mesh_is_rescaled);
     log.QuantizedMeshHeader_start = bio.write_pos();
     write_qmheader(bio, e, header);
     if(e.has_error())
@@ -444,9 +471,9 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
             TNTN_ASSERT(v - prev_v >= -32768 && v - prev_v <= 32767);
             TNTN_ASSERT(h - prev_h >= -32768 && h - prev_h <= 32767);
 
-            us.push_back(zig_zag_encode(u - prev_u));
-            vs.push_back(zig_zag_encode(v - prev_v));
-            hs.push_back(zig_zag_encode(h - prev_h));
+            us.push_back(zig_zag_encode(int16_t(u - prev_u)));
+            vs.push_back(zig_zag_encode(int16_t(v - prev_v)));
+            hs.push_back(zig_zag_encode(int16_t(h - prev_h)));
 
             prev_u = u;
             prev_v = v;
@@ -504,7 +531,7 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
         return false;
     }
 
-    TNTN_LOG_INFO("writer log: {}", log.to_string());
+//    TNTN_LOG_INFO("writer log: {}", log.to_string());
     return true;
 }
 

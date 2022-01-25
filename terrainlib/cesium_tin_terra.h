@@ -20,6 +20,7 @@
 #define CESIUM_TIN_TERRA_H
 
 #include "ParallelTileGenerator.h"
+#include "tntn/geometrix.h"
 
 namespace tntn {
 class Mesh;
@@ -30,8 +31,10 @@ namespace cesium_tin_terra
 class TileWriter : public ParallelTileWriterInterface {
 public:
   TileWriter(Tiler::Border border) : ParallelTileWriterInterface(border, "terrain") {}
-  static std::unique_ptr<tntn::Mesh> toMesh(const ctb::CRSBounds& srs_bounds, const HeightData& heights);
-  void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const override;
+  static tntn::BBox3D computeBbox(const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres);
+  static std::unique_ptr<tntn::Mesh> toMesh(const OGRSpatialReference& srs, const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range);
+  static std::unique_ptr<tntn::Mesh> toMesh(const OGRSpatialReference& srs, const tntn::BBox3D& srs_bbox, const HeightData& heights_in_metres, bool scale_to_unit_range);
+  void write(const std::string& file_path, const Tile& tile, const HeightData& heights_in_metres) const override;
 };
 
 [[nodiscard]] ParallelTileGenerator make_generator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border);

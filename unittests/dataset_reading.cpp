@@ -27,7 +27,7 @@
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "ctb/types.hpp"
-#include "util.h"
+#include "srs.h"
 
 
 TEST_CASE("reading") {
@@ -75,7 +75,7 @@ TEST_CASE("reading") {
       std::make_tuple(
         "tauern10m",
         tauern10m,
-        ctb::CRSBounds(12.6934117,47.0739300, 12.6944580, 47.0748649),
+        ctb::CRSBounds(12.6934117, 47.0739300, 12.6944580, 47.0748649),
         std::make_tuple(3700.0f, 3720.0f, 3790.0f, 3800.0f)), // Grossglockner, 3798m with some surroundings
     };
 
@@ -89,7 +89,7 @@ TEST_CASE("reading") {
           srs.importFromEPSG(test_srs);
           srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-          const auto srs_bounds = util::nonExactBoundsTransform(geodetic_bounds, geodetic_srs, srs);
+          const auto srs_bounds = srs::nonExactBoundsTransform(geodetic_bounds, geodetic_srs, srs);
 
           const auto reader = DatasetReader(dataset, srs, 1);
           if (ATB_UNITTESTS_DEBUG_IMAGES) {
@@ -198,7 +198,7 @@ TEST_CASE("reading") {
 
     const auto pixel_width = low_res_ds->pixelWidthIn(srs);
     const auto pixel_height = low_res_ds->pixelHeightIn(srs);
-    auto srs_bounds = util::nonExactBoundsTransform(low_res_ds->bounds(), low_res_ds->srs(), srs);
+    auto srs_bounds = srs::nonExactBoundsTransform(low_res_ds->bounds(), low_res_ds->srs(), srs);
     srs_bounds.setBounds(srs_bounds.getMinX() + border * pixel_width, srs_bounds.getMinY() + border * pixel_height, srs_bounds.getMaxX() - border * pixel_width, srs_bounds.getMaxY() - border * pixel_height);
 
     const auto t0 = std::chrono::high_resolution_clock::now();
@@ -242,7 +242,7 @@ TEST_CASE("reading") {
     const auto srs = low_res_ds->srs();
     const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
     const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-    const auto srs_bounds = util::nonExactBoundsTransform(ctb::CRSBounds(9.5, 46.4, 17.1, 49.0), geodetic_srs, srs);
+    const auto srs_bounds = srs::nonExactBoundsTransform(ctb::CRSBounds(9.5, 46.4, 17.1, 49.0), geodetic_srs, srs);
 
     const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs));
     const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs));
@@ -283,7 +283,7 @@ TEST_CASE("reading") {
     const auto srs = low_res_ds->srs();
     const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
     const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-    const auto srs_bounds = util::nonExactBoundsTransform(ctb::CRSBounds(9.5, 46.4, 17.1, 49.0), geodetic_srs, srs);
+    const auto srs_bounds = srs::nonExactBoundsTransform(ctb::CRSBounds(9.5, 46.4, 17.1, 49.0), geodetic_srs, srs);
 
 
     const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs)) / 10;

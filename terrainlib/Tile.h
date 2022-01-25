@@ -29,6 +29,7 @@ struct Tile
   ctb::TilePoint point;  // int / used to generate file name
   ctb::i_zoom zoom;
   ctb::CRSBounds srsBounds;
+  int srs_epsg;
 
   // some tiling schemes require a border (e.g. cesium heightmap https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0).
   // grid bounds does not contain that border (e.g. 64 width)

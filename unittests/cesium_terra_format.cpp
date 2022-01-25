@@ -26,7 +26,7 @@
 #include "Tile.h"
 #include "Image.h"
 #include "cesium_tin_terra.h"
-#include "util.h"
+#include "srs.h"
 #include "tntn/Mesh.h"
 
 
@@ -35,11 +35,12 @@ TEST_CASE("tin terra write") {
 
   SECTION("cesium terrain") {
     const auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
-    generator.write(Tile{ctb::TilePoint(0, 0), 0, {0, 0, 255, 255}, 256, 256}, HeightData(256, 256));
+    const auto b = 20037508.3427892;
+    generator.write(Tile{ctb::TilePoint(0, 0), 0, {-b, -b, b, b}, int(ctb::Grid::Srs::SphericalMercator), 256, 256}, HeightData(256, 256));
     CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
   }
 
-  SECTION("mesh vertex ranges") {
+  SECTION("mesh vertex ranges webmercator") {
     const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
     const auto at_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
     OGRSpatialReference webmercator;
@@ -50,21 +51,74 @@ TEST_CASE("tin terra write") {
     wgs84.importFromEPSG(4326);
     wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-    const auto at_webmercator_bounds = util::nonExactBoundsTransform(at_bounds, wgs84, webmercator);
+    const auto at_webmercator_bounds = srs::nonExactBoundsTransform(at_bounds, wgs84, webmercator);
 //    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
-    const auto reader = DatasetReader(dataset, webmercator, 1);
-    const auto heights = reader.read(at_webmercator_bounds, 512, 512);
+    const auto reader = DatasetReader(dataset, webmercator, 1, false);
+    const auto heights = reader.read(at_webmercator_bounds, 256, 256);
 
-    const auto mesh = converter.toMesh(at_webmercator_bounds, heights);
+    const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, false);
     REQUIRE(mesh->vertices().size() > 0);
-    CHECK(mesh->vertices().size() > 500);
+    CHECK(mesh->vertices().size() > 100);
+    CHECK(mesh->vertices().size() < 200);
     const auto mesh_bb = mesh->bbox();
     CHECK(mesh_bb.min.x >= at_webmercator_bounds.getMinX());
     CHECK(mesh_bb.min.y >= at_webmercator_bounds.getMinY());
+    CHECK(mesh_bb.min.z >= 50.0);
     CHECK(mesh_bb.max.x <= at_webmercator_bounds.getMaxX());
     CHECK(mesh_bb.max.y <= at_webmercator_bounds.getMaxY());
+    CHECK(mesh_bb.max.z <= 4000.0);
+  }
+
+  SECTION("mesh vertex ranges wgs84") {
+    const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+    const auto at_wgs84_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
+
+    OGRSpatialReference wgs84;
+    wgs84.importFromEPSG(4326);
+    wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, wgs84, 1, false);
+    const auto heights = reader.read(at_wgs84_bounds, 256, 256);
+
+    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, false);
+    REQUIRE(mesh->vertices().size() > 0);
+    CHECK(mesh->vertices().size() > 100);
+    CHECK(mesh->vertices().size() < 200);
+    const auto mesh_bb = mesh->bbox();
+    CHECK(mesh_bb.min.x >= at_wgs84_bounds.getMinX());
+    CHECK(mesh_bb.min.y >= at_wgs84_bounds.getMinY());
+    CHECK(mesh_bb.min.z >= 50.0);
+    CHECK(mesh_bb.max.x <= at_wgs84_bounds.getMaxX());
+    CHECK(mesh_bb.max.y <= at_wgs84_bounds.getMaxY());
+    CHECK(mesh_bb.max.z <= 4000.0);
+  }
+
+  SECTION("mesh vertex ranges unit range scale") {
+    const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+    const auto at_wgs84_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
+
+    OGRSpatialReference wgs84;
+    wgs84.importFromEPSG(4326);
+    wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, wgs84, 1, false);
+    const auto heights = reader.read(at_wgs84_bounds, 256, 256);
+
+    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, true);
+    REQUIRE(mesh->vertices().size() > 0);
+    CHECK(mesh->vertices().size() > 100);
+    CHECK(mesh->vertices().size() < 200);
+    const auto mesh_bb = mesh->bbox();
+    CHECK(mesh_bb.min.x >= 0);
+    CHECK(mesh_bb.min.y >= 0);
+    CHECK(mesh_bb.min.z >= 0);
+    CHECK(mesh_bb.max.x <= 1);
+    CHECK(mesh_bb.max.y <= 1);
+    CHECK(mesh_bb.max.z <= 1);
   }
 
   SECTION("cesium terrain correct header") {

@@ -52,6 +52,11 @@ const Tiler& ParallelTileGenerator::tiler() const
   return m_tiler;
 }
 
+const ctb::Grid& ParallelTileGenerator::grid() const
+{
+  return m_grid;
+}
+
 void ParallelTileGenerator::write(const Tile& tile, const HeightData& heights) const
 {
   const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.zoom, tile.point.x);

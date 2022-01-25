@@ -28,7 +28,7 @@
 #include <gdal_priv.h>
 
 #include "Exception.h"
-#include "util.h"
+#include "srs.h"
 #include "ctb/Grid.hpp"
 #include "tntn/logging.h"
 #include "tntn/gdal_init.h"
@@ -102,6 +102,8 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
   // this might involve warping, i.e. some of the edges can be arcs.
   // therefore we want to walk the perimiter and get min/max from there.
   // a resolution of 2000 samples per border should give a good enough approximation.
+
+  // hey, check out inline virtual int TransformBounds(const double xmin, const double ymin, const double xmax, const double ymax, double *out_xmin, double *out_ymin, double *out_xmax, double *out_ymax, const int densify_pts)
   std::vector<double> x;
   std::vector<double> y;
   auto addCoordinate = [&](double xv, double yv) { x.emplace_back(xv); y.emplace_back(yv); };
@@ -123,7 +125,7 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
   // don't wanna miss out the max/max edge vertex
   addCoordinate(eastX, northY);
 
-  const auto transformer = util::srsTransformation(srs(), targetSrs);
+  const auto transformer = srs::transformation(srs(), targetSrs);
   if (! transformer->Transform(int(x.size()), x.data(), y.data())) {
     throw std::string("Could not transform dataset bounds to target SRS");
   }
@@ -187,12 +189,12 @@ double Dataset::gridResolution(const OGRSpatialReference& target_srs) const
 double Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const
 {
   const auto b0 = bounds();
-  const auto b1 = util::nonExactBoundsTransform(b0, srs(), target_srs);
+  const auto b1 = srs::nonExactBoundsTransform(b0, srs(), target_srs);
   return b1.getWidth() / widthInPixels();
 }
 
 double Dataset::pixelHeightIn(const OGRSpatialReference& target_srs) const
 {
-  const auto b = util::nonExactBoundsTransform(bounds(), srs(), target_srs);
+  const auto b = srs::nonExactBoundsTransform(bounds(), srs(), target_srs);
   return b.getHeight() / heightInPixels();
 }

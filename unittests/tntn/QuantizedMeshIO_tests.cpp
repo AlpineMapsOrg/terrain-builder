@@ -1,7 +1,12 @@
 #include <catch2/catch.hpp>
 
+#include <glm/fwd.hpp>
 #include <random>
 
+#include "cesium_tin_terra.h"
+#include "Dataset.h"
+#include "DatasetReader.h"
+#include "srs.h"
 #include "tntn/QuantizedMeshIO.h"
 #include "tntn/MeshIO.h"
 #include "tntn/terra_meshing.h"
@@ -56,6 +61,126 @@ TEST_CASE("zig_zag_decode on reference values", "[tntn]")
     CHECK(zig_zag_decode(32767 * 2 - 1) == -32767);
 
     CHECK(zig_zag_decode(32768 * 2 - 1) == -32768);
+}
+
+TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
+{
+  // we are not checking exact here, because that would mean reimplementing the equations.
+  // right now i don't really see the point, maybe i'll regret later ^^.
+  // my hope is, that these things were implemented by ctb and tin-terrain correctly, and
+  // i'm only checking for the correct transformation (ecef / wgs84 / webmercator)
+
+  OGRSpatialReference ecef_srs;
+  ecef_srs.importFromEPSG(4978);
+  ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  // let's get a mesh of a part of austria (where we know the bounds etc)
+  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
+  OGRSpatialReference webmercator;
+  webmercator.importFromEPSG(3857);
+  webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  OGRSpatialReference wgs84;
+  wgs84.importFromEPSG(4326);
+  wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  const auto check_header = [&](const QuantizedMeshHeader& header) {
+    CHECK(header.MinimumHeight > 420);
+    CHECK(header.MinimumHeight < 460);
+    CHECK(header.MaximumHeight > 3480);
+    CHECK(header.MaximumHeight < 3530);
+    //  const auto box_a = glm::dvec3(4295537, 863174, 4620131); // at_bounds.min and min height with https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
+    //  const auto box_b = glm::dvec3(4178876, 936496, 4715449); // at_bounds.max and max height with the same tool
+    const auto box_min = glm::dvec3(4178876, 863174, 4620131); // min of the two above
+    const auto box_max = glm::dvec3(4295537, 936496, 4715449); // max of the two above; note that this isn't a bounding box anymore, but it should be about right.
+    CHECK(header.bounding_sphere_center.x > box_min.x);
+    CHECK(header.bounding_sphere_center.y > box_min.y);
+    CHECK(header.bounding_sphere_center.z > box_min.z);
+    CHECK(header.bounding_sphere_center.x < box_max.x);
+    CHECK(header.bounding_sphere_center.y < box_max.y);
+    CHECK(header.bounding_sphere_center.z < box_max.z);
+    CHECK(header.BoundingSphereRadius < glm::length(box_max - box_min));
+    CHECK(header.BoundingSphereRadius > glm::length(box_max - box_min) / 4);
+    CHECK(header.center.x > box_min.x);
+    CHECK(header.center.y > box_min.y);
+    CHECK(header.center.z > box_min.z);
+    CHECK(header.center.x < box_max.x);
+    CHECK(header.center.y < box_max.y);
+    CHECK(header.center.z < box_max.z);
+
+    CHECK(header.horizon_occlusion.x > 0);
+    CHECK(header.horizon_occlusion.y > 0);
+    CHECK(header.horizon_occlusion.z > 0);
+    CHECK(header.horizon_occlusion.x < 1.1);
+    CHECK(header.horizon_occlusion.y < 1.1);
+    CHECK(header.horizon_occlusion.z < 1.1);
+    // Constants taken from http://cesiumjs.org/2013/04/25/Horizon-culling
+    constexpr double llh_ecef_radiusX = 6378137.0;
+    constexpr double llh_ecef_radiusY = 6378137.0;
+    constexpr double llh_ecef_radiusZ = 6356752.3142451793;
+    const auto occlusion_point_in_wgs84 = srs::to(ecef_srs, wgs84, header.horizon_occlusion * glm::dvec3(llh_ecef_radiusX, llh_ecef_radiusY, llh_ecef_radiusZ));
+    CHECK(at_wgs84_bounds.getMinX() < occlusion_point_in_wgs84.x);
+    CHECK(at_wgs84_bounds.getMaxX() > occlusion_point_in_wgs84.x);
+    CHECK(at_wgs84_bounds.getMinY() < occlusion_point_in_wgs84.y);
+    CHECK(at_wgs84_bounds.getMaxY() > occlusion_point_in_wgs84.y);
+    CHECK(occlusion_point_in_wgs84.z > header.MaximumHeight);
+    CHECK(occlusion_point_in_wgs84.z < 100'000'000);
+  };
+
+  SECTION("webmercator") {
+    const auto mesh_scale_0_to_1 = false;
+    const auto at_webmercator_bounds = srs::nonExactBoundsTransform(at_wgs84_bounds, wgs84, webmercator);
+    //    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
+
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, webmercator, 1);
+    const auto heights = reader.read(at_webmercator_bounds, 512, 512);
+
+    const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, mesh_scale_0_to_1);
+    const auto bbox = converter.computeBbox(at_webmercator_bounds, heights);
+    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, webmercator, mesh_scale_0_to_1);
+    check_header(header);
+  }
+
+  SECTION("wgs84") {
+    const auto mesh_scale_0_to_1 = false;
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, wgs84, 1);
+    const auto heights = reader.read(at_wgs84_bounds, 512, 512);
+
+    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
+    const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
+    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+    check_header(header);
+  }
+
+  SECTION("webmercator, mesh scaled to unit cube") {
+    const auto mesh_scale_0_to_1 = true;
+    const auto at_webmercator_bounds = srs::nonExactBoundsTransform(at_wgs84_bounds, wgs84, webmercator);
+    //    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
+
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, webmercator, 1);
+    const auto heights = reader.read(at_webmercator_bounds, 512, 512);
+
+    const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, mesh_scale_0_to_1);
+    const auto bbox = converter.computeBbox(at_webmercator_bounds, heights);
+    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, webmercator, mesh_scale_0_to_1);
+    check_header(header);
+  }
+
+  SECTION("wgs84, mesh scaled to unit cube") {
+    const auto mesh_scale_0_to_1 = true;
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, wgs84, 1);
+    const auto heights = reader.read(at_wgs84_bounds, 512, 512);
+
+    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
+    const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
+    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+    check_header(header);
+  }
 }
 
 #if 1
@@ -122,7 +247,7 @@ TEST_CASE("quantized mesh writer/loader round trip on empty mesh", "[tntn]")
 
     auto mf = std::make_shared<MemoryFile>();
 
-    write_mesh_as_qm(mf, *mesh);
+    CHECK_THROWS(write_mesh_as_qm(mf, *mesh));
     auto loaded_mesh = load_mesh_from_qm(mf);
     REQUIRE(loaded_mesh == nullptr);
     // CHECK(loaded_mesh->semantic_equal(*mesh));

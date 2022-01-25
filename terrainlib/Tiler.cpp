@@ -72,7 +72,7 @@ std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
       ctb::i_tile grid_size = m_grid.tileSize();
       ctb::i_tile tile_size = grid_size + unsigned(m_border_south_east);
 
-      tiles.emplace_back(point, zoom_level, srs_bounds, grid_size, tile_size);
+      tiles.emplace_back(point, zoom_level, srs_bounds, m_grid.getEpsgCode(), grid_size, tile_size);
 
       if (tiles.size() >= 100'000'000)
         // think about creating an on the fly tile generator. storing so many tiles takes a lot of memory.

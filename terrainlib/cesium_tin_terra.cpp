@@ -18,19 +18,56 @@
 
 #include "cesium_tin_terra.h"
 
+#include <algorithm>
 #include <memory>
 
 #include "Image.h"
+#include "srs.h"
 #include "tntn/Raster.h"
 #include "tntn/geometrix.h"
 #include "tntn/terra_meshing.h"
 #include "tntn/QuantizedMeshIO.h"
 
+tntn::BBox3D cesium_tin_terra::TileWriter::computeBbox(const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres) {
+  const auto [min_height, max_height] = std::ranges::minmax_element(heights_in_metres);
+  tntn::BBox3D bbox;
+  bbox.min.x = srs_bounds.getMinX();
+  bbox.min.y = srs_bounds.getMinY();
+  bbox.min.z = double(*min_height);
+  bbox.max.x = srs_bounds.getMaxX();
+  bbox.max.y = srs_bounds.getMaxY();
+  bbox.max.z = double(*max_height);
+  if (std::abs(bbox.min.z - bbox.max.z) < 0.1)
+    bbox.max.z = bbox.min.z + 0.1;
+  return bbox;
+}
 
-std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const ctb::CRSBounds& srs_bounds, const HeightData& heights)
+std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range)
 {
-  const auto max_error = srs_bounds.getWidth() / heights.width();
-  auto raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights, [](auto v) { return double(v); }), srs_bounds);
+  return toMesh(srs, computeBbox(srs_bounds, heights_in_metres), heights_in_metres, scale_to_unit_range);
+}
+
+std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const tntn::BBox3D& bbox, const HeightData& heights_in_metres, bool scale_to_unit_range)
+{
+  const auto [ecef_a, ecef_b] = srs::toECEF(srs, {bbox.min.x, bbox.min.y, bbox.max.z}, bbox.max);   // we are not considering the height difference, so using bbox.max.z for min as well
+  const auto tile_size = heights_in_metres.width();
+
+  const auto diagonal_distance_in_m = distance(ecef_a, ecef_b);
+  auto max_error = 1.0 * (diagonal_distance_in_m / std::sqrt(tile_size * tile_size * 2.0));
+  assert(bbox.max.z - bbox.min.z >= 0);
+
+  std::unique_ptr<tntn::RasterDouble> raster;
+  if (scale_to_unit_range) {
+    const auto scale = std::max(bbox.max.z - bbox.min.z, 1.0);
+    const auto offset = bbox.min.z;
+    max_error = max_error / scale;
+    raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return (double(v) - offset) / scale; }), ctb::CRSBounds{0.0, 0.0, 1.0, 1.0});
+  }
+  else {
+    raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return double(v);}), ctb::CRSBounds{bbox.min.x, bbox.min.y, bbox.max.x, bbox.max.y});
+  }
+  assert(max_error > 0);
+  const auto dbg_heights = raster->asVector();
   auto mesh = tntn::generate_tin_terra(std::move(raster), max_error);
 
   mesh->generate_triangles();
@@ -39,10 +76,16 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const ctb::CRSB
 
 void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Tile& tile, const HeightData& heights) const
 {
-  const auto mesh = cesium_tin_terra::TileWriter::toMesh(tile.srsBounds, heights);
-  tntn::BBox3D bbox;
-  mesh->get_bbox(bbox);
-  tntn::write_mesh_as_qm(file_path.c_str(), *mesh, bbox, false, true);
+  const auto srs_bbox = computeBbox(tile.srsBounds, heights);
+
+
+  // need to create this per thread, as the object doesn't seem to be reentrant.
+  OGRSpatialReference srs;
+  srs.importFromEPSG(tile.srs_epsg);
+  srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  const auto mesh = cesium_tin_terra::TileWriter::toMesh(srs, srs_bbox, heights, true);
+  tntn::write_mesh_as_qm(file_path.c_str(), *mesh, srs_bbox, srs, true, true);
 }
 
 ParallelTileGenerator cesium_tin_terra::make_generator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border)
