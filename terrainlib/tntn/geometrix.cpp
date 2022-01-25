@@ -299,11 +299,6 @@ BBox3D::BBox3D() :
 {
 }
 
-BBox3D::BBox3D(glm::vec3 a, glm::vec3 b) :
-    BBox3D(glm::dvec3(a.x, a.y, a.z), glm::dvec3(b.x, b.y, b.z))
-{
-}
-
 BBox3D::BBox3D(glm::dvec3 a, glm::dvec3 b) :
     min(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)),
     max(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z))

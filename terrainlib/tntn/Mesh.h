@@ -44,6 +44,7 @@ class Mesh
     SimpleRange<const Triangle*> triangles() const;
     SimpleRange<const Face*> faces() const;
     SimpleRange<const Vertex*> vertices() const;
+    const std::vector<Vertex>& vertices_as_vector() const;
 
     void grab_triangles(std::vector<Triangle>& into);
     void grab_decomposed(std::vector<Vertex>& vertices, std::vector<Face>& faces);

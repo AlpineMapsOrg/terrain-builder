@@ -92,9 +92,9 @@ inline void compute_plane(Plane& plane, dt_ptr t, const RasterDouble& raster)
     const glm::dvec2& p2 = t->point2();
     const glm::dvec2& p3 = t->point3();
 
-    const glm::dvec3 v1(p1, raster.value(p1.y, p1.x));
-    const glm::dvec3 v2(p2, raster.value(p2.y, p2.x));
-    const glm::dvec3 v3(p3, raster.value(p3.y, p3.x));
+    const glm::dvec3 v1(p1, raster.value(unsigned(p1.y), unsigned(p1.x)));
+    const glm::dvec3 v2(p2, raster.value(unsigned(p2.y), unsigned(p2.x)));
+    const glm::dvec3 v3(p3, raster.value(unsigned(p3.y), unsigned(p3.x)));
 
     plane.init(v1, v2, v3);
 }

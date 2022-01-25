@@ -49,6 +49,7 @@ void TerraMesh::greedy_insert(double max_error)
     m_token.set_all(0);
 
     // Scan all the triangles and push all candidates into a stack
+    // these are actually only the two triangles of the quad.
     dt_ptr t = m_first_face;
     while(t)
     {
@@ -69,6 +70,7 @@ void TerraMesh::greedy_insert(double max_error)
         m_used.value(candidate.y, candidate.x) = 1;
 
         //TNTN_LOG_DEBUG("inserting point: ({}, {}, {})", candidate.x, candidate.y, candidate.z);
+        // insert will recursively call scan_triangle through a virtual function call.
         this->insert(glm::dvec2(candidate.x, candidate.y), candidate.triangle);
     }
 
@@ -129,15 +131,15 @@ void TerraMesh::scan_triangle(dt_ptr t)
     const double dx2 = (v2_x - v0_x) / (v2_y - v0_y);
     const double no_data_value = m_raster->get_no_data_value();
 
+    double x2 = v0_x;
     if(v1_y != v0_y)
     {
         const double dx1 = (v1_x - v0_x) / (v1_y - v0_y);
 
         double x1 = v0_x;
-        double x2 = v0_x;
 
-        const int starty = v0_y;
-        const int endy = v1_y;
+        const int starty = int(std::ceil(v0_y));
+        const int endy = int(std::floor(v1_y));
 
         for(int y = starty; y < endy; y++)
         {
@@ -152,10 +154,9 @@ void TerraMesh::scan_triangle(dt_ptr t)
         const double dx1 = (v2_x - v1_x) / (v2_y - v1_y);
 
         double x1 = v1_x;
-        double x2 = v0_x;
 
-        const int starty = v1_y;
-        const int endy = v2_y;
+        const int starty = int(v1_y);
+        const int endy = int(v2_y);
 
         for(int y = starty; y <= endy; y++)
         {

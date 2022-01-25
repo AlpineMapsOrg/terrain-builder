@@ -217,6 +217,11 @@ SimpleRange<const Vertex*> Mesh::vertices() const
     return {m_vertices.data(), m_vertices.data() + m_vertices.size()};
 }
 
+const std::vector<Vertex>& Mesh::vertices_as_vector() const
+{
+    return m_vertices;
+}
+
 void Mesh::grab_triangles(std::vector<Triangle>& into)
 {
     into.clear();

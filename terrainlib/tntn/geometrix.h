@@ -160,7 +160,6 @@ struct BBox3D
     static constexpr double eps = 0.000000001;
 
     BBox3D();
-    BBox3D(glm::vec3 a, glm::vec3 b);
     BBox3D(glm::dvec3 a, glm::dvec3 b);
     BBox3D(const Triangle& t);
 

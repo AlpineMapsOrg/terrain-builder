@@ -14,6 +14,7 @@
 #include "Image.h"
 #include "tntn/logging.h"
 #include "tntn/geometrix.h"
+#include "tntn/tntn_assert.h"
 
 namespace tntn {
 
@@ -394,8 +395,8 @@ class Raster
      @param c column
      @return value
     */
-    const T& value(const unsigned int r, const unsigned int c) const { return get_ptr(r)[c]; }
-    T& value(const unsigned int r, const unsigned int c) { return get_ptr(r)[c]; }
+    const T& value(const unsigned int r, const unsigned int c) const { TNTN_ASSERT(c < m_width); TNTN_ASSERT(r < m_height); return get_ptr(r)[c]; }
+    T& value(const unsigned int r, const unsigned int c) { TNTN_ASSERT(c < m_width); TNTN_ASSERT(r < m_height); return get_ptr(r)[c]; }
 
     /**
      get value at raster position (using lower left coordinate system)
@@ -525,6 +526,8 @@ class Raster
 
     auto end() const { return m_data.end(); }
     auto end() { return m_data.end(); }
+
+    const std::vector<T>& asVector() const { return m_data; }
 
   private:
     // raster width and height
