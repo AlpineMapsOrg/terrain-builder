@@ -45,18 +45,21 @@ tntn::BBox3D cesium_tin_terra::TileWriter::computeBbox(const ctb::CRSBounds& srs
   return bbox;
 }
 
-std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range)
+std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range, unsigned simple_mesh)
 {
-  return toMesh(srs, computeBbox(srs_bounds, heights_in_metres), heights_in_metres, scale_to_unit_range);
+  return toMesh(srs, computeBbox(srs_bounds, heights_in_metres), heights_in_metres, scale_to_unit_range, simple_mesh);
 }
 
 std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const tntn::BBox3D& bbox, const HeightData& heights_in_metres, bool scale_to_unit_range, unsigned simple_mesh)
 {
-  const auto [ecef_a, ecef_b] = srs::toECEF(srs, {bbox.min.x, bbox.min.y, bbox.max.z}, bbox.max);   // we are not considering the height difference, so using bbox.max.z for min as well
+  auto bbox_copy = bbox;
+  bbox_copy.min.z = bbox.max.z;
+
+  const auto ecef_bbox = srs::toECEF(srs, bbox_copy);   // we are not considering the height difference, so using bbox.max.z for min as well
   const auto tile_size = heights_in_metres.width();
 
-  const auto diagonal_distance_in_m = distance(ecef_a, ecef_b);
-  auto max_error = 1.0 * (diagonal_distance_in_m / std::sqrt(tile_size * tile_size * 2.0));
+  const auto diagonal_distance_in_m = distance(ecef_bbox.min, ecef_bbox.max);
+  auto max_error = 0.85 * (diagonal_distance_in_m / std::sqrt(tile_size * tile_size * 2.0));
   assert(bbox.max.z - bbox.min.z >= 0);
 
   std::unique_ptr<tntn::RasterDouble> raster;
@@ -86,6 +89,7 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
 
 void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Tile& tile, const HeightData& heights) const
 {
+  const auto scale_to_unit_range = false;
   const auto simple_mesh_resolution = [](ctb::i_zoom zoom) -> unsigned {
     switch (zoom) {
     case 0: return 8;
@@ -104,9 +108,9 @@ void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Til
   srs.importFromEPSG(tile.srs_epsg);
   srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-  const auto mesh = cesium_tin_terra::TileWriter::toMesh(srs, srs_bbox, heights, true, simple_mesh_resolution(tile.zoom));
+  const auto mesh = cesium_tin_terra::TileWriter::toMesh(srs, srs_bbox, heights, scale_to_unit_range, simple_mesh_resolution(tile.zoom));
   const auto& vertices = mesh->vertices_as_vector();
-  tntn::write_mesh_as_qm(file_path.c_str(), *mesh, srs_bbox, srs, true, true);
+  tntn::write_mesh_as_qm(file_path.c_str(), *mesh, srs_bbox, srs, scale_to_unit_range, true);
 }
 
 ParallelTileGenerator cesium_tin_terra::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border)

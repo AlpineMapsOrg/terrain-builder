@@ -32,7 +32,7 @@ class TileWriter : public ParallelTileWriterInterface {
 public:
   TileWriter(Tiler::Border border) : ParallelTileWriterInterface(border, "terrain") {}
   static tntn::BBox3D computeBbox(const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres);
-  static std::unique_ptr<tntn::Mesh> toMesh(const OGRSpatialReference& srs, const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range);
+  static std::unique_ptr<tntn::Mesh> toMesh(const OGRSpatialReference& srs, const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range, unsigned simple_mesh = 0);
   static std::unique_ptr<tntn::Mesh> toMesh(const OGRSpatialReference& srs, const tntn::BBox3D& srs_bbox, const HeightData& heights_in_metres, bool scale_to_unit_range, unsigned simple_mesh = false);
   void write(const std::string& file_path, const Tile& tile, const HeightData& heights_in_metres) const override;
 };
