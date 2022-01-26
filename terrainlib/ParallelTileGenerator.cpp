@@ -65,9 +65,13 @@ void ParallelTileGenerator::write(const Tile& tile, const HeightData& heights) c
   m_tile_writer->write(file_path, tile, heights);
 }
 
-void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console) const
+void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console, bool generate_world_wide_tiles) const
 {
-  const auto tiles = m_tiler.generateTiles(zoom_range);
+  auto tiler = m_tiler;
+  if (generate_world_wide_tiles)
+    tiler.setBounds(grid().getExtent());
+
+  const auto tiles = tiler.generateTiles(zoom_range);
 
   auto pi = ProgressIndicator(tiles.size());
   std::jthread monitoring_thread;

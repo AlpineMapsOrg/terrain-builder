@@ -3,6 +3,7 @@
 #include <glm/fwd.hpp>
 #include <random>
 
+#include "Image.h"
 #include "cesium_tin_terra.h"
 #include "Dataset.h"
 #include "DatasetReader.h"
@@ -125,7 +126,7 @@ TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
     CHECK(at_wgs84_bounds.getMinY() < occlusion_point_in_wgs84.y);
     CHECK(at_wgs84_bounds.getMaxY() > occlusion_point_in_wgs84.y);
     CHECK(occlusion_point_in_wgs84.z > header.MaximumHeight);
-    CHECK(occlusion_point_in_wgs84.z < 100'000'000);
+    CHECK(occlusion_point_in_wgs84.z < 10'000'000);
   };
 
   SECTION("webmercator") {
@@ -182,6 +183,107 @@ TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
     check_header(header);
   }
 }
+
+
+
+TEST_CASE("header is plausible on all globe quarters", "[tntn]")
+{
+  // we are not checking exact here, because that would mean reimplementing the equations.
+  // right now i don't really see the point, maybe i'll regret later ^^.
+  // my hope is, that these things were implemented by ctb and tin-terrain correctly, and
+  // i'm only checking for the correct transformation (ecef / wgs84 / webmercator)
+
+  OGRSpatialReference ecef_srs;
+  ecef_srs.importFromEPSG(4978);
+  ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  // let's get a mesh of a part of austria (where we know the bounds etc)
+  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const std::array at_wgs84_bounds_array = {
+                                            ctb::CRSBounds(0, 0, 90, 90),
+                                            ctb::CRSBounds(0, -90, 90, 0),
+                                            ctb::CRSBounds(90, 0, 180, 90),
+                                            ctb::CRSBounds(90, -90, 180, 0),
+
+                                            ctb::CRSBounds(-180, 0, -90, 90),
+                                            ctb::CRSBounds(-180, -90, -90, 0),
+                                            ctb::CRSBounds(-90, 0, 0, 90),
+                                            ctb::CRSBounds(-90, -90, 0, 0)};
+  OGRSpatialReference webmercator;
+  webmercator.importFromEPSG(3857);
+  webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  OGRSpatialReference wgs84;
+  wgs84.importFromEPSG(4326);
+  wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  for (const auto at_wgs84_bounds : at_wgs84_bounds_array) {
+    const auto check_header = [&](const QuantizedMeshHeader& header) {
+      CHECK(header.MinimumHeight >= 0);
+      CHECK(header.MinimumHeight < 10);
+      CHECK(header.MaximumHeight >= 0);
+      CHECK(header.MaximumHeight < 4000);
+      const auto [box_a, box_b] = srs::toECEF(wgs84, tntn::BBox3D(glm::dvec3(at_wgs84_bounds.getMinX(), at_wgs84_bounds.getMinY(), 0), glm::dvec3(at_wgs84_bounds.getMaxX(), at_wgs84_bounds.getMaxY(), 0)));
+      const auto box_min = glm::dvec3(std::min(box_a.x, box_b.x) - 1.0, std::min(box_a.y, box_b.y) - 1.0, std::min(box_a.z, box_b.z) - 1.0);
+      const auto box_max = glm::dvec3(std::max(box_a.x, box_b.x) + 1.0, std::max(box_a.y, box_b.y) + 1.0, std::max(box_a.z, box_b.z) + 1.0);
+      CHECK(header.bounding_sphere_center.x > box_min.x);
+      CHECK(header.bounding_sphere_center.y > box_min.y);
+      CHECK(header.bounding_sphere_center.z > box_min.z);
+      CHECK(header.bounding_sphere_center.x < box_max.x);
+      CHECK(header.bounding_sphere_center.y < box_max.y);
+      CHECK(header.bounding_sphere_center.z < box_max.z);
+      CHECK(header.BoundingSphereRadius < glm::length(box_max - box_min));
+      CHECK(header.BoundingSphereRadius > glm::length(box_max - box_min) / 4);
+      CHECK(header.center.x > box_min.x);
+      CHECK(header.center.y > box_min.y);
+      CHECK(header.center.z > box_min.z);
+      CHECK(header.center.x < box_max.x);
+      CHECK(header.center.y < box_max.y);
+      CHECK(header.center.z < box_max.z);
+
+      CHECK(header.horizon_occlusion.x > -1.1);
+      CHECK(header.horizon_occlusion.y > -1.1);
+      CHECK(header.horizon_occlusion.z > -1.1);
+      CHECK(header.horizon_occlusion.x < 1.1);
+      CHECK(header.horizon_occlusion.y < 1.1);
+      CHECK(header.horizon_occlusion.z < 1.1);
+      // Constants taken from http://cesiumjs.org/2013/04/25/Horizon-culling
+      constexpr double llh_ecef_radiusX = 6378137.0;
+      constexpr double llh_ecef_radiusY = 6378137.0;
+      constexpr double llh_ecef_radiusZ = 6356752.3142451793;
+      const auto occlusion_point_in_wgs84 = srs::to(ecef_srs, wgs84, header.horizon_occlusion * glm::dvec3(llh_ecef_radiusX, llh_ecef_radiusY, llh_ecef_radiusZ));
+      CHECK(at_wgs84_bounds.getMinX() < occlusion_point_in_wgs84.x);
+      CHECK(at_wgs84_bounds.getMaxX() > occlusion_point_in_wgs84.x);
+      CHECK(at_wgs84_bounds.getMinY() < occlusion_point_in_wgs84.y);
+      CHECK(at_wgs84_bounds.getMaxY() > occlusion_point_in_wgs84.y);
+      CHECK(occlusion_point_in_wgs84.z > header.MaximumHeight);
+//      CHECK(occlusion_point_in_wgs84.z < 200'000'000);
+    };
+
+    // no section, because in loop
+    /*SECTION("wgs84") */{
+      const auto mesh_scale_0_to_1 = false;
+      const auto heights = HeightData(256, 256);
+
+      const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
+      const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
+      QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+      check_header(header);
+    }
+
+    /*SECTION("wgs84, mesh scaled to unit cube") */{
+      const auto mesh_scale_0_to_1 = true;
+      const auto heights = HeightData(256, 256);
+
+      const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
+      const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
+      QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+      check_header(header);
+    }
+  }
+
+}
+
 
 #if 1
 TEST_CASE("quantized mesh writer/loader round trip on small mesh", "[tntn]")

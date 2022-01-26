@@ -333,14 +333,14 @@ static void write_qmheader(BinaryIO& bio,
 
 QuantizedMeshHeader quantised_mesh_header(const Mesh& m, const BBox3D& bbox, const OGRSpatialReference& srs, bool mesh_is_rescaled)
 {
-  const auto [bbmin, bbmax] = srs::toECEF(srs, bbox.min, bbox.max);
+  const auto ecef_bbox = srs::toECEF(srs, bbox);
 
-  Vertex c = (bbmax + bbmin) / 2.0;
+  Vertex c = (ecef_bbox.max + ecef_bbox.min) / 2.0;
 
   QuantizedMeshHeader header;
   header.center = c;
   header.bounding_sphere_center = c;
-  header.BoundingSphereRadius = glm::distance(bbmin, bbmax) / 2;
+  header.BoundingSphereRadius = glm::distance(ecef_bbox.min, ecef_bbox.max) / 2;
 
   header.MinimumHeight = bbox.min.z;
   header.MaximumHeight = bbox.max.z;

@@ -52,6 +52,16 @@ ctb::i_tile Tiler::n_y_tiles(ctb::i_zoom zoom_level) const
   return  m_grid.getTileExtent(zoom_level).getHeight();
 }
 
+const ctb::CRSBounds& Tiler::bounds() const
+{
+  return m_bounds;
+}
+
+void Tiler::setBounds(const ctb::CRSBounds& newBounds)
+{
+  m_bounds = newBounds;
+}
+
 std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
 {
 

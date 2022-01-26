@@ -30,6 +30,7 @@
 
 #include "Exception.h"
 #include "ctb/types.hpp"
+#include "tntn/geometrix.h"
 
 namespace srs {
 
@@ -86,7 +87,7 @@ inline std::vector<glm::tvec3<T>> toECEF(const OGRSpatialReference& source_srs, 
   ecef_srs.importFromEPSG(4978);
   ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
   const auto transform = transformation(source_srs, ecef_srs);
-  if (!transform->Transform(points.size(), xes.data(), ys.data(), zs.data()))
+  if (!transform->Transform(int(points.size()), xes.data(), ys.data(), zs.data()))
     throw Exception("toECEF(glm::tvec3<T>) failed");
 
   for (size_t i = 0; i < points.size(); ++i) {
@@ -124,7 +125,37 @@ template <typename T>
 inline std::array<glm::tvec3<T>, 2> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p1, const glm::tvec3<T>& p2) {
   return toECEF<T, 2>(source_srs, {p1, p2});
 }
+inline tntn::BBox3D toECEF(const OGRSpatialReference& source_srs, const tntn::BBox3D& box) {
+  constexpr auto n_samples = 100;
+  std::vector<glm::dvec3> points;
+  points.emplace_back(box.min.x, box.min.y, box.min.z);
+  points.emplace_back(box.min.x, box.min.y, box.max.z);
+  points.emplace_back(box.min.x, box.max.y, box.min.z);
+  points.emplace_back(box.min.x, box.max.y, box.max.z);
+  points.emplace_back(box.max.x, box.min.y, box.min.z);
+  points.emplace_back(box.max.x, box.min.y, box.max.z);
+  points.emplace_back(box.max.x, box.max.y, box.min.z);
+  points.emplace_back(box.max.x, box.max.y, box.max.z);
 
+  const auto dx = (box.max.x - box.min.x) / n_samples;
+  const auto dy = (box.max.y - box.min.y) / n_samples;
+  for (auto i = 0; i < n_samples; ++i) {
+    // top and bottom
+    points.emplace_back(box.min.x + i * dx, box.min.y, box.min.z);
+    points.emplace_back(box.min.x + i * dx, box.min.y, box.max.z);
+    points.emplace_back(box.min.x + i * dx, box.max.y, box.min.z);
+    points.emplace_back(box.min.x + i * dx, box.max.y, box.max.z);
+    // left and right
+    points.emplace_back(box.min.x, box.min.y + i * dy, box.min.z);
+    points.emplace_back(box.min.x, box.min.y + i * dy, box.max.z);
+    points.emplace_back(box.max.x, box.min.y + i * dy, box.min.z);
+    points.emplace_back(box.max.x, box.min.y + i * dy, box.max.z);
+  }
+  const auto ecef_points = toECEF(source_srs, points);
+  tntn::BBox3D resulting_bbox;
+  resulting_bbox.add(ecef_points.begin(), ecef_points.end());
+  return resulting_bbox;
+}
 }
 
 #endif // SRS_H

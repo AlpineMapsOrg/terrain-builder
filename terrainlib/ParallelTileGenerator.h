@@ -47,7 +47,7 @@ public:
   [[nodiscard]] const Tiler& tiler() const;
   [[nodiscard]] const ctb::Grid& grid() const;
   void write(const Tile& tile, const HeightData& heights) const;
-  void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console = false) const;
+  void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console = false, bool generate_world_wide_tiles = false) const;
 };
 
 class ParallelTileWriterInterface {

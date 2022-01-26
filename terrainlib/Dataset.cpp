@@ -103,7 +103,7 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
   // therefore we want to walk the perimiter and get min/max from there.
   // a resolution of 2000 samples per border should give a good enough approximation.
 
-  // hey, check out inline virtual int TransformBounds(const double xmin, const double ymin, const double xmax, const double ymax, double *out_xmin, double *out_ymin, double *out_xmax, double *out_ymax, const int densify_pts)
+  // hey, check out inline virtual int TransformBounds(const double xmin, const double ymin, const double xmax, const double ymax, double *out_xmin, double *out_ymin, double *out_xmax, double *out_ymax, const int densify_pts)
   std::vector<double> x;
   std::vector<double> y;
   auto addCoordinate = [&](double xv, double yv) { x.emplace_back(xv); y.emplace_back(yv); };

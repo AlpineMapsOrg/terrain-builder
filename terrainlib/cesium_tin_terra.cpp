@@ -22,10 +22,13 @@
 #include <memory>
 
 #include "Image.h"
+#include "ctb/types.hpp"
 #include "srs.h"
+#include "tntn/Mesh.h"
 #include "tntn/Raster.h"
 #include "tntn/geometrix.h"
 #include "tntn/terra_meshing.h"
+#include "tntn/simple_meshing.h"
 #include "tntn/QuantizedMeshIO.h"
 
 tntn::BBox3D cesium_tin_terra::TileWriter::computeBbox(const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres) {
@@ -47,7 +50,7 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
   return toMesh(srs, computeBbox(srs_bounds, heights_in_metres), heights_in_metres, scale_to_unit_range);
 }
 
-std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const tntn::BBox3D& bbox, const HeightData& heights_in_metres, bool scale_to_unit_range)
+std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const tntn::BBox3D& bbox, const HeightData& heights_in_metres, bool scale_to_unit_range, unsigned simple_mesh)
 {
   const auto [ecef_a, ecef_b] = srs::toECEF(srs, {bbox.min.x, bbox.min.y, bbox.max.z}, bbox.max);   // we are not considering the height difference, so using bbox.max.z for min as well
   const auto tile_size = heights_in_metres.width();
@@ -68,7 +71,14 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
   }
   assert(max_error > 0);
   const auto dbg_heights = raster->asVector();
-  auto mesh = tntn::generate_tin_terra(std::move(raster), max_error);
+  std::unique_ptr<tntn::Mesh> mesh;
+  if (simple_mesh == 0)
+    mesh = tntn::generate_tin_terra(std::move(raster), max_error);
+  else
+    mesh = tntn::generate_tin_dense_quadwalk(*raster, int(simple_mesh));
+
+  const auto poly_count = mesh->poly_count();
+  const auto vertex_count = mesh->vertices().size();
 
   mesh->generate_triangles();
   return mesh;
@@ -76,15 +86,26 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
 
 void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Tile& tile, const HeightData& heights) const
 {
+  const auto simple_mesh_resolution = [](ctb::i_zoom zoom) -> unsigned {
+    switch (zoom) {
+    case 0: return 8;
+    case 1: return 8;
+    case 2: return 16;
+    case 3: return 32;
+    case 4: return 64;
+    case 5: return 128;
+    default: return 0;
+    }
+  };
   const auto srs_bbox = computeBbox(tile.srsBounds, heights);
-
 
   // need to create this per thread, as the object doesn't seem to be reentrant.
   OGRSpatialReference srs;
   srs.importFromEPSG(tile.srs_epsg);
   srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-  const auto mesh = cesium_tin_terra::TileWriter::toMesh(srs, srs_bbox, heights, true);
+  const auto mesh = cesium_tin_terra::TileWriter::toMesh(srs, srs_bbox, heights, true, simple_mesh_resolution(tile.zoom));
+  const auto& vertices = mesh->vertices_as_vector();
   tntn::write_mesh_as_qm(file_path.c_str(), *mesh, srs_bbox, srs, true, true);
 }
 

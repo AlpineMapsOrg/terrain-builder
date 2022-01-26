@@ -50,13 +50,42 @@ TEST_CASE("parallel tile generator") {
   std::filesystem::path base_path = "./unittest_tiles/";
   auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter), base_path);
   generator.setWarnOnMissingOverviews(false);
-  generator.process({0, 7});
-  CHECK(tile_counter == 27);
-  CHECK(std::filesystem::exists(base_path / "0" / "0" / "0.empty"));
-  CHECK(std::filesystem::exists(base_path / "1" / "1" / "1.empty"));
-  CHECK(std::filesystem::exists(base_path / "2" / "2" / "2.empty"));
-  CHECK(std::filesystem::exists(base_path / "3" / "4" / "5.empty"));
-  CHECK(std::filesystem::exists(base_path / "4" / "8" / "10.empty"));
-  CHECK(std::filesystem::exists(base_path / "5" / "16" / "20.empty"));
-  CHECK(std::filesystem::exists(base_path / "7" / "70" / "84.empty"));
+  SECTION("dataset tiles only"){
+    generator.process({0, 7});
+    CHECK(tile_counter == 27);
+    CHECK(std::filesystem::exists(base_path / "0" / "0" / "0.empty"));
+    CHECK(std::filesystem::exists(base_path / "1" / "1" / "1.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "2" / "2.empty"));
+    CHECK(std::filesystem::exists(base_path / "3" / "4" / "5.empty"));
+    CHECK(std::filesystem::exists(base_path / "4" / "8" / "10.empty"));
+    CHECK(std::filesystem::exists(base_path / "5" / "16" / "20.empty"));
+    CHECK(std::filesystem::exists(base_path / "7" / "70" / "84.empty"));
+  }
+  SECTION("world wide tiles"){
+    generator.process({0, 2}, false, true);
+    CHECK(tile_counter == 21);
+    CHECK(std::filesystem::exists(base_path / "0" / "0" / "0.empty"));
+
+    CHECK(std::filesystem::exists(base_path / "1" / "0" / "0.empty"));
+    CHECK(std::filesystem::exists(base_path / "1" / "0" / "1.empty"));
+    CHECK(std::filesystem::exists(base_path / "1" / "1" / "0.empty"));
+    CHECK(std::filesystem::exists(base_path / "1" / "1" / "1.empty"));
+
+    CHECK(std::filesystem::exists(base_path / "2" / "0" / "0.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "0" / "1.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "0" / "2.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "0" / "3.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "1" / "0.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "1" / "1.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "1" / "2.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "1" / "3.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "2" / "0.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "2" / "1.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "2" / "2.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "2" / "3.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "3" / "0.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "3" / "1.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "3" / "2.empty"));
+    CHECK(std::filesystem::exists(base_path / "2" / "3" / "3.empty"));
+  }
 }

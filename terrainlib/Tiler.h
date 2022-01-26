@@ -49,12 +49,15 @@ public:
   [[nodiscard]] ctb::TileCoordinate southWestTile(ctb::i_zoom zoom_level) const;
   [[nodiscard]] ctb::TileCoordinate northEastTile(ctb::i_zoom zoom_level) const;
 
+  const ctb::CRSBounds& bounds() const;
+  void setBounds(const ctb::CRSBounds& newBounds);
+
 private:
   [[nodiscard]] ctb::TileCoordinate convertToTilerScheme(const ctb::TileCoordinate&, ctb::i_tile n_y_tiles) const;
   [[nodiscard]] ctb::i_tile n_y_tiles(ctb::i_zoom zoom_level) const;
 
   const ctb::Grid m_grid;
-  const ctb::CRSBounds m_bounds;
+  ctb::CRSBounds m_bounds;
   const Border m_border_south_east;
   const Scheme m_scheme;
 };
