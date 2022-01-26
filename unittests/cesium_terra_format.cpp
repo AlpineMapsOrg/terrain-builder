@@ -34,7 +34,7 @@ TEST_CASE("tin terra write") {
   std::filesystem::remove_all("./unittest_tiles/");
 
   SECTION("cesium terrain") {
-    const auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
+    const auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
     const auto b = 20037508.3427892;
     generator.write(Tile{ctb::TilePoint(0, 0), 0, {-b, -b, b, b}, int(ctb::Grid::Srs::SphericalMercator), 256, 256}, HeightData(256, 256));
     CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
@@ -122,7 +122,7 @@ TEST_CASE("tin terra write") {
   }
 
   SECTION("cesium terrain correct header") {
-    auto generator = cesium_tin_terra::make_generator("./unittest_tiles/", ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
+    auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
     generator.setWarnOnMissingOverviews(false);
     generator.process({4, 4});
     CHECK(std::filesystem::exists("./unittest_tiles/4/8/10.terrain"));
