@@ -17,8 +17,8 @@ void TerraMesh::greedy_insert(double max_error)
 {
     m_max_error = max_error;
     m_counter = 0;
-    int w = m_raster->get_width();
-    int h = m_raster->get_height();
+    const auto w = m_raster->get_width();
+    const auto h = m_raster->get_height();
     TNTN_ASSERT(w > 0);
     TNTN_ASSERT(h > 0);
 
@@ -36,8 +36,7 @@ void TerraMesh::greedy_insert(double max_error)
 
     // Initialize the mesh to two triangles with the height field grid corners as vertices
     TNTN_LOG_INFO("initialize the mesh with four corner points");
-    this->init_mesh(
-        glm::dvec2(0, 0), glm::dvec2(0, h - 1), glm::dvec2(w - 1, h - 1), glm::dvec2(w - 1, 0));
+    this->init_mesh(glm::dvec2(0, 0), glm::dvec2(0, h - 1), glm::dvec2(w - 1, h - 1), glm::dvec2(w - 1, 0));
 
     m_used.value(0, 0) = 1;
     m_used.value(h - 1, 0) = 1;

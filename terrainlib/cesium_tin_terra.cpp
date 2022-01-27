@@ -57,6 +57,7 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
 
   const auto ecef_bbox = srs::toECEF(srs, bbox_copy);   // we are not considering the height difference, so using bbox.max.z for min as well
   const auto tile_size = heights_in_metres.width();
+  const auto grid_size = tile_size - 1;
 
   const auto diagonal_distance_in_m = distance(ecef_bbox.min, ecef_bbox.max);
   auto max_error = 0.85 * (diagonal_distance_in_m / std::sqrt(tile_size * tile_size * 2.0));
@@ -67,10 +68,13 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
     const auto scale = std::max(bbox.max.z - bbox.min.z, 1.0);
     const auto offset = bbox.min.z;
     max_error = max_error / scale;
-    raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return (double(v) - offset) / scale; }), ctb::CRSBounds{0.0, 0.0, 1.0, 1.0});
+    const auto corrected_bounds = ctb::CRSBounds{0.0, 0.0, 1.0 + 1.0 / grid_size, 1.0 + 1.0 / grid_size};
+    raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return (double(v) - offset) / scale; }), corrected_bounds);
   }
   else {
-    raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return double(v);}), ctb::CRSBounds{bbox.min.x, bbox.min.y, bbox.max.x, bbox.max.y});
+    const auto correction = tntn::xy((bbox.max - bbox.min) * (1.0 / grid_size));
+    const auto corrected_bounds = ctb::CRSBounds{bbox.min.x, bbox.min.y, bbox.max.x + correction.x, bbox.max.y + correction.y};
+    raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return double(v);}), corrected_bounds);
   }
   assert(max_error > 0);
   const auto dbg_heights = raster->asVector();
@@ -78,7 +82,7 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
   if (simple_mesh == 0)
     mesh = tntn::generate_tin_terra(std::move(raster), max_error);
   else
-    mesh = tntn::generate_tin_dense_quadwalk(*raster, int(simple_mesh));
+    mesh = tntn::generate_tin_dense_quadwalk(*raster, simple_mesh, simple_mesh);
 
   const auto poly_count = mesh->poly_count();
   const auto vertex_count = mesh->vertices().size();
@@ -92,12 +96,12 @@ void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Til
   const auto scale_to_unit_range = false;
   const auto simple_mesh_resolution = [](ctb::i_zoom zoom) -> unsigned {
     switch (zoom) {
-    case 0: return 8;
-    case 1: return 8;
-    case 2: return 16;
-    case 3: return 32;
-    case 4: return 64;
-    case 5: return 128;
+    case 0: return 33;
+    case 1: return 33;
+    case 2: return 17;
+    case 3: return 9;
+    case 4: return 5;
+    case 5: return 3;
     default: return 0;
     }
   };

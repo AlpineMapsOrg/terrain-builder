@@ -199,8 +199,8 @@ RasterDouble Mesh2Raster::rasterise(
     raster.set_cell_width(cellWidth);
     raster.set_cell_height(cellHeight);
 
-    raster.set_pos_x(m_bb.min.x - cellWidth_original * 0.5);
-    raster.set_pos_y(m_bb.min.y - cellWidth_original * 0.5);
+    raster.set_pos_x(m_bb.min.x);
+    raster.set_pos_y(m_bb.min.y);
 
     TNTN_LOG_DEBUG("x-pos:: {}", raster.get_pos_x());
     TNTN_LOG_DEBUG("y-pos: {}", raster.get_pos_y());

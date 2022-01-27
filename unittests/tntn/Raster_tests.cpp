@@ -37,8 +37,8 @@ TEST_CASE("raster bb", "[tntn]")
 
     BBox2D rbb = raster.get_bounding_box();
 
-    double w = (raster.get_width() - 1) * raster.get_cell_width();
-    double h = (raster.get_height() - 1) * raster.get_cell_height();
+    double w = raster.get_width() * raster.get_cell_width();
+    double h = raster.get_height() * raster.get_cell_height();
 
     CHECK(std::abs((rbb.max.x - rbb.min.x) - w) < 0.001);
     CHECK(std::abs((rbb.max.y - rbb.min.y) - h) < 0.001);
@@ -76,30 +76,30 @@ TEST_CASE("mesh 2 raster", "[tntn]")
 
     Triangle t;
 
-    t[0].x = 0.5;
-    t[0].y = 0.5;
+    t[0].x = 0.0;
+    t[0].y = 0.0;
     t[0].z = 1;
 
-    t[1].x = 0.5;
-    t[1].y = 3.5;
+    t[1].x = 0.0;
+    t[1].y = 3.0;
     t[1].z = 1;
 
-    t[2].x = 3.5;
-    t[2].y = 3.5;
+    t[2].x = 3.0;
+    t[2].y = 3.0;
     t[2].z = 1;
 
     trList.push_back(t);
 
-    t[0].x = 0.5;
-    t[0].y = 0.5;
+    t[0].x = 0.0;
+    t[0].y = 0.0;
     t[0].z = -1;
 
-    t[1].x = 3.5;
-    t[1].y = 3.5;
+    t[1].x = 3.0;
+    t[1].y = 3.0;
     t[1].z = -1;
 
-    t[2].x = 3.5;
-    t[2].y = 0.5;
+    t[2].x = 3.0;
+    t[2].y = 0.0;
     t[2].z = -1;
 
     trList.push_back(t);

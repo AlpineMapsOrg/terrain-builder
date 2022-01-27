@@ -24,7 +24,6 @@
 //FIXME: remove collappsed vertices/triangles after quantization of mesh
 
 namespace tntn {
-using VertexOrdering = std::unordered_map<Vertex, unsigned int>;
 
 struct QuantizedMeshLog
 {
@@ -119,6 +118,7 @@ glm::dvec3 ocp_fromPoints(const std::vector<glm::dvec3> &ecef_points, const glm:
   }
   return scaledCenter * max_magnitude;
 }
+
 // HORIZON OCCLUSION POINT -- end
 
 } //namespace detail
@@ -202,7 +202,7 @@ static void write_faces(BinaryIO& bio,
                         BinaryIOErrorTracker& e,
                         QuantizedMeshLog& log,
                         const SimpleRange<const Triangle*>& tris,
-                        const VertexOrdering& order)
+                        const detail::VertexOrdering& order)
 {
     typedef IndexType index_t;
 
@@ -331,7 +331,7 @@ static void write_qmheader(BinaryIO& bio,
     bio.write_double(qmheader.horizon_occlusion.z, e);
 }
 
-QuantizedMeshHeader quantised_mesh_header(const Mesh& m, const BBox3D& bbox, const OGRSpatialReference& srs, bool mesh_is_rescaled)
+QuantizedMeshHeader detail::quantised_mesh_header(const Mesh& m, const BBox3D& bbox, const OGRSpatialReference& srs, bool mesh_is_rescaled)
 {
   const auto ecef_bbox = srs::toECEF(srs, bbox);
 
@@ -366,6 +366,110 @@ QuantizedMeshHeader quantised_mesh_header(const Mesh& m, const BBox3D& bbox, con
   return header;
 }
 
+
+QuantizedMeshVertexData detail::quantised_mesh_vertex_data(const Mesh& m, const BBox3D& bbox, const OGRSpatialReference& srs, bool mesh_is_rescaled)
+{
+  // Write QM vertex data
+  std::vector<uint32_t> northlings;
+  std::vector<uint32_t> eastlings;
+  std::vector<uint32_t> southlings;
+  std::vector<uint32_t> westlings;
+  VertexOrdering vertices_order;
+  std::vector<uint16_t> us;
+  std::vector<uint16_t> vs;
+  std::vector<uint16_t> hs;
+  const size_t nvertices = m.vertices().size();
+
+
+  us.reserve(nvertices);
+  vs.reserve(nvertices);
+  hs.reserve(nvertices);
+
+  int u = 0;
+  int v = 0;
+  int h = 0;
+  int prev_u = 0;
+  int prev_v = 0;
+  int prev_h = 0;
+  int vertex_index = 0;
+
+  auto triangles = m.triangles();
+
+  vertices_order.reserve(triangles.size() / 2);
+  for(auto it = triangles.begin; it != triangles.end; ++it)
+  {
+    for(int n = 0; n < 3; ++n)
+    {
+      const Vertex node = (*it)[n];
+
+      const auto vertices_order_it = vertices_order.find(node);
+      if(vertices_order_it != vertices_order.end()) continue;
+
+      vertices_order.emplace_hint(vertices_order_it, std::make_pair(node, vertex_index));
+
+      // Rescale coordinates
+      if(mesh_is_rescaled)
+      {
+        u = scale_coordinate(node.x);
+        v = scale_coordinate(node.y);
+        h = scale_coordinate(node.z);
+      }
+      else
+      {
+        u = quantize_coordinate(node.x, bbox.min.x, bbox.max.x);
+        v = quantize_coordinate(node.y, bbox.min.y, bbox.max.y);
+        h = quantize_coordinate(node.z, bbox.min.z, bbox.max.z);
+      }
+      TNTN_ASSERT(u >= 0 && u <= QUANTIZED_COORDINATE_SIZE);
+      TNTN_ASSERT(v >= 0 && v <= QUANTIZED_COORDINATE_SIZE);
+      TNTN_ASSERT(h >= 0 && h <= QUANTIZED_COORDINATE_SIZE);
+
+      if(u == 0)
+      {
+        westlings.push_back(vertex_index);
+      }
+      else if(u == QUANTIZED_COORDINATE_SIZE)
+      {
+        eastlings.push_back(vertex_index);
+      }
+
+      if(v == 0)
+      {
+        northlings.push_back(vertex_index);
+      }
+      else if(v == QUANTIZED_COORDINATE_SIZE)
+      {
+        southlings.push_back(vertex_index);
+      }
+
+      TNTN_ASSERT(u - prev_u >= -32768 && u - prev_u <= 32767);
+      TNTN_ASSERT(v - prev_v >= -32768 && v - prev_v <= 32767);
+      TNTN_ASSERT(h - prev_h >= -32768 && h - prev_h <= 32767);
+
+      us.push_back(zig_zag_encode(int16_t(u - prev_u)));
+      vs.push_back(zig_zag_encode(int16_t(v - prev_v)));
+      hs.push_back(zig_zag_encode(int16_t(h - prev_h)));
+
+      prev_u = u;
+      prev_v = v;
+      prev_h = h;
+
+      vertex_index++;
+    }
+  }
+  return {
+    northlings,
+    eastlings,
+    southlings,
+    westlings,
+    vertices_order,
+    us,
+    vs,
+    hs,
+    nvertices,
+    };
+}
+
 bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
                       const Mesh& m,
                       const BBox3D& bbox,
@@ -394,98 +498,11 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
         bio.write_pos() ==
         sizeof(QuantizedMeshHeader)); //might not be true for some platforms, mostly for debugging
 
-    // Write QM vertex data
-    std::vector<uint32_t> northlings;
-    std::vector<uint32_t> eastlings;
-    std::vector<uint32_t> southlings;
-    std::vector<uint32_t> westlings;
-    VertexOrdering vertices_order;
-    std::vector<uint16_t> us;
-    std::vector<uint16_t> vs;
-    std::vector<uint16_t> hs;
 
-    const uint32_t nvertices = m.vertices().size();
-
-    us.reserve(nvertices);
-    vs.reserve(nvertices);
-    hs.reserve(nvertices);
-
-    int u = 0;
-    int v = 0;
-    int h = 0;
-    int prev_u = 0;
-    int prev_v = 0;
-    int prev_h = 0;
-    int vertex_index = 0;
-
-    auto triangles = m.triangles();
-
-    vertices_order.reserve(triangles.size() / 2);
-    for(auto it = triangles.begin; it != triangles.end; ++it)
-    {
-        for(int n = 0; n < 3; ++n)
-        {
-            const Vertex node = (*it)[n];
-
-            const auto vertices_order_it = vertices_order.find(node);
-            if(vertices_order_it != vertices_order.end()) continue;
-
-            vertices_order.emplace_hint(vertices_order_it, std::make_pair(node, vertex_index));
-
-            // Rescale coordinates
-            if(mesh_is_rescaled)
-            {
-                u = scale_coordinate(node.x);
-                v = scale_coordinate(node.y);
-                h = scale_coordinate(node.z);
-            }
-            else
-            {
-                u = quantize_coordinate(node.x, bbox.min.x, bbox.max.x);
-                v = quantize_coordinate(node.y, bbox.min.y, bbox.max.y);
-                h = quantize_coordinate(node.z, bbox.min.z, bbox.max.z);
-            }
-            TNTN_ASSERT(u >= 0 && u <= QUANTIZED_COORDINATE_SIZE);
-            TNTN_ASSERT(v >= 0 && v <= QUANTIZED_COORDINATE_SIZE);
-            TNTN_ASSERT(h >= 0 && h <= QUANTIZED_COORDINATE_SIZE);
-
-            if(u == 0)
-            {
-                westlings.push_back(vertex_index);
-            }
-            else if(u == QUANTIZED_COORDINATE_SIZE)
-            {
-                eastlings.push_back(vertex_index);
-            }
-
-            if(v == 0)
-            {
-                northlings.push_back(vertex_index);
-            }
-            else if(v == QUANTIZED_COORDINATE_SIZE)
-            {
-                southlings.push_back(vertex_index);
-            }
-
-            TNTN_ASSERT(u - prev_u >= -32768 && u - prev_u <= 32767);
-            TNTN_ASSERT(v - prev_v >= -32768 && v - prev_v <= 32767);
-            TNTN_ASSERT(h - prev_h >= -32768 && h - prev_h <= 32767);
-
-            us.push_back(zig_zag_encode(int16_t(u - prev_u)));
-            vs.push_back(zig_zag_encode(int16_t(v - prev_v)));
-            hs.push_back(zig_zag_encode(int16_t(h - prev_h)));
-
-            prev_u = u;
-            prev_v = v;
-            prev_h = h;
-
-            vertex_index++;
-        }
-    }
-
+    const auto vdata = quantised_mesh_vertex_data(m, bbox, mesh_srs, mesh_is_rescaled);
     log.VertexData_vertexCount_start = bio.write_pos();
-    log.VertexData_vertexCount = nvertices;
-    bio.write_uint32(nvertices, e);
+    log.VertexData_vertexCount = vdata.nvertices;
+    bio.write_uint32(vdata.nvertices, e);
     if(e.has_error())
     {
         TNTN_LOG_ERROR("{} in file {}", e.to_string(), f->name());
@@ -493,13 +510,13 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
     }
 
     log.VertexData_u_start = bio.write_pos();
-    bio.write_array_uint16(us, e);
+    bio.write_array_uint16(vdata.us, e);
 
     log.VertexData_v_start = bio.write_pos();
-    bio.write_array_uint16(vs, e);
+    bio.write_array_uint16(vdata.vs, e);
 
     log.VertexData_height_start = bio.write_pos();
-    bio.write_array_uint16(hs, e);
+    bio.write_array_uint16(vdata.hs, e);
 
     if(e.has_error())
     {
@@ -508,21 +525,21 @@ bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
     }
 
     // Write triangle indices data
-    if(nvertices <= 65536)
+    if(vdata.nvertices <= 65536)
     {
-        write_faces<uint16_t>(bio, e, log, m.triangles(), vertices_order);
-        write_indices<uint16_t>(bio, e, westlings);
-        write_indices<uint16_t>(bio, e, southlings);
-        write_indices<uint16_t>(bio, e, eastlings);
-        write_indices<uint16_t>(bio, e, northlings);
+        write_faces<uint16_t>(bio, e, log, m.triangles(), vdata.vertices_order);
+        write_indices<uint16_t>(bio, e, vdata.westlings);
+        write_indices<uint16_t>(bio, e, vdata.southlings);
+        write_indices<uint16_t>(bio, e, vdata.eastlings);
+        write_indices<uint16_t>(bio, e, vdata.northlings);
     }
     else
     {
-        write_faces<uint32_t>(bio, e, log, m.triangles(), vertices_order);
-        write_indices<uint32_t>(bio, e, westlings);
-        write_indices<uint32_t>(bio, e, southlings);
-        write_indices<uint32_t>(bio, e, eastlings);
-        write_indices<uint32_t>(bio, e, northlings);
+        write_faces<uint32_t>(bio, e, log, m.triangles(), vdata.vertices_order);
+        write_indices<uint32_t>(bio, e, vdata.westlings);
+        write_indices<uint32_t>(bio, e, vdata.southlings);
+        write_indices<uint32_t>(bio, e, vdata.eastlings);
+        write_indices<uint32_t>(bio, e, vdata.northlings);
     }
 
     if(e.has_error())

@@ -247,8 +247,8 @@ class Raster
         dst_raster.set_cell_width(get_cell_width());
         dst_raster.set_cell_height(get_cell_height());
 
-        dst_raster.set_pos_x(col2x(min_x) - 0.5 * get_cell_width());
-        dst_raster.set_pos_y(row2y(max_y - 1) - 0.5 * get_cell_height());
+        dst_raster.set_pos_x(col2x(min_x));
+        dst_raster.set_pos_y(row2y(max_y - 1));
 
         // copy pixels across
         for(int r = min_y; r < max_y; r++)
@@ -297,8 +297,8 @@ class Raster
         bb.min.x = col_ll2x(0);
         bb.min.y = row_ll2y(0);
 
-        bb.max.x = col_ll2x(get_width() - 1);
-        bb.max.y = row_ll2y(get_height() - 1);
+        bb.max.x = col_ll2x(get_width());
+        bb.max.y = row_ll2y(get_height());
 
         return bb;
     }
@@ -414,13 +414,16 @@ class Raster
      @param c column
      @return x geo coordinates
     */
-    double col2x(const unsigned int c) const { return m_xpos + (c + 0.5) * m_cell_width_in_srs; }
+    double col2x(const unsigned int c) const { return m_xpos + c * m_cell_width_in_srs; }
 
     int x2col(double x) const
     {
         if(m_cell_width_in_srs > 0)
         {
-            return (int)(0.5 + ((x - m_xpos - 0.5 * m_cell_width_in_srs) / m_cell_width_in_srs));
+            const auto col = int((x - m_xpos) / m_cell_width_in_srs + 0.5);
+            TNTN_ASSERT(col >= 0);
+            TNTN_ASSERT(col < m_width);
+            return col;
         }
         else
         {
@@ -435,9 +438,10 @@ class Raster
         if(m_cell_height_in_srs > 0)
         {
 
-            int r_ll = (int)(0.5 + (y - m_ypos - 0.5 * m_cell_height_in_srs) / m_cell_height_in_srs);
+            int r_ll = int((y - m_ypos) / m_cell_height_in_srs + 0.5);
             int r_tl = m_height - r_ll - 1;
-
+            TNTN_ASSERT(r_tl >= 0);
+            TNTN_ASSERT(r_tl < m_height);
             return r_tl;
         }
         else
@@ -455,7 +459,7 @@ class Raster
     double row2y(const unsigned int r_tl) const
     {
         int r_ll = m_height - 1 - r_tl;
-        return m_ypos + (r_ll + 0.5) * m_cell_height_in_srs;
+        return m_ypos + r_ll * m_cell_height_in_srs;
     }
 
     /**
@@ -465,7 +469,7 @@ class Raster
      @param r row from lower left
      @return y geo coordinates
     */
-    double row_ll2y(const unsigned int r_ll) const { return m_ypos + (r_ll + 0.5) * m_cell_height_in_srs; }
+    double row_ll2y(const unsigned int r_ll) const { return m_ypos + r_ll * m_cell_height_in_srs; }
 
     /**
      get x component of geo/world coordinates at column c

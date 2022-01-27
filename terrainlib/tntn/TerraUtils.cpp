@@ -5,7 +5,7 @@
 namespace tntn {
 namespace terra {
 
-void TerraBaseMesh::repair_point(int px, int py)
+void TerraBaseMesh::repair_point(unsigned px, unsigned py)
 {
     double& p = m_raster->value(py, px);
     const double z = raster_tools::sample_nearest_valid_avg(*m_raster, py, px);

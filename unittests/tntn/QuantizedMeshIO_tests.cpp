@@ -140,7 +140,7 @@ TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
 
     const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, mesh_scale_0_to_1);
     const auto bbox = converter.computeBbox(at_webmercator_bounds, heights);
-    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, webmercator, mesh_scale_0_to_1);
+    QuantizedMeshHeader header = tntn::detail::quantised_mesh_header(*mesh, bbox, webmercator, mesh_scale_0_to_1);
     check_header(header);
   }
 
@@ -152,7 +152,7 @@ TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
 
     const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
     const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
-    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+    QuantizedMeshHeader header = tntn::detail::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
     check_header(header);
   }
 
@@ -167,7 +167,7 @@ TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
 
     const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, mesh_scale_0_to_1);
     const auto bbox = converter.computeBbox(at_webmercator_bounds, heights);
-    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, webmercator, mesh_scale_0_to_1);
+    QuantizedMeshHeader header = tntn::detail::quantised_mesh_header(*mesh, bbox, webmercator, mesh_scale_0_to_1);
     check_header(header);
   }
 
@@ -179,7 +179,7 @@ TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
 
     const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
     const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
-    QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+    QuantizedMeshHeader header = tntn::detail::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
     check_header(header);
   }
 }
@@ -267,7 +267,7 @@ TEST_CASE("header is plausible on all globe quarters", "[tntn]")
 
       const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
       const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
-      QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+      QuantizedMeshHeader header = tntn::detail::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
       check_header(header);
     }
 
@@ -277,9 +277,78 @@ TEST_CASE("header is plausible on all globe quarters", "[tntn]")
 
       const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, mesh_scale_0_to_1);
       const auto bbox = converter.computeBbox(at_wgs84_bounds, heights);
-      QuantizedMeshHeader header = tntn::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+      QuantizedMeshHeader header = tntn::detail::quantised_mesh_header(*mesh, bbox, wgs84, mesh_scale_0_to_1);
       check_header(header);
     }
+  }
+
+}
+TEST_CASE("edge vertices correct", "[tntn]") {
+  OGRSpatialReference ecef_srs;
+  ecef_srs.importFromEPSG(4978);
+  ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  // let's get a mesh of a part of austria (where we know the bounds etc)
+  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
+  OGRSpatialReference webmercator;
+  webmercator.importFromEPSG(3857);
+  webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  OGRSpatialReference wgs84;
+  wgs84.importFromEPSG(4326);
+  wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+
+  const auto run_test = [&](bool mesh_scale_0_to_1, const OGRSpatialReference& srs, const ctb::CRSBounds& wgs84_bounds, unsigned n_vertex_grid_cells, unsigned tile_grid_size) {
+    const auto reader = DatasetReader(dataset, srs, 1, false);
+    const auto srs_bounds = srs::nonExactBoundsTransform(wgs84_bounds, wgs84, srs);
+    const auto heights = reader.read(srs_bounds, tile_grid_size + 1, tile_grid_size + 1);
+
+    const auto mesh = converter.toMesh(srs, srs_bounds, heights, mesh_scale_0_to_1, n_vertex_grid_cells + 1);
+    const auto correct_mesh_bounds = mesh_scale_0_to_1 ? ctb::CRSBounds(0.0, 0.0, 1.0, 1.0) : srs_bounds;
+
+    CHECK(mesh->bbox().min.x == correct_mesh_bounds.getMinX());
+    CHECK(mesh->bbox().min.y == correct_mesh_bounds.getMinY());
+    CHECK(mesh->bbox().max.x == correct_mesh_bounds.getMaxX());
+    CHECK(mesh->bbox().max.y == correct_mesh_bounds.getMaxY());
+
+    unsigned nx0 = 0;
+    unsigned ny0 = 0;
+    unsigned nx1 = 0;
+    unsigned ny1 = 0;
+    for (const auto& v : mesh->vertices_as_vector()) {
+      nx0 += std::abs(v.x - correct_mesh_bounds.getMinX()) / correct_mesh_bounds.getWidth() < (1.0 / (1 << 16));
+      ny0 += std::abs(v.y - correct_mesh_bounds.getMinY()) / correct_mesh_bounds.getHeight() < (1.0 / (1 << 16));
+      nx1 += std::abs(v.x - correct_mesh_bounds.getMaxX()) / correct_mesh_bounds.getWidth() < (1.0 / (1 << 16));
+      ny1 += std::abs(v.y - correct_mesh_bounds.getMaxY()) / correct_mesh_bounds.getHeight() < (1.0 / (1 << 16));
+    }
+    CHECK(nx0 == n_vertex_grid_cells + 1);
+    CHECK(ny0 == n_vertex_grid_cells + 1);
+    CHECK(nx1 == n_vertex_grid_cells + 1);
+    CHECK(ny1 == n_vertex_grid_cells + 1);
+
+    const auto bbox = converter.computeBbox(srs_bounds, heights);
+    tntn::detail::QuantizedMeshVertexData vdata = tntn::detail::quantised_mesh_vertex_data(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+    CHECK(vdata.northlings.size() == n_vertex_grid_cells + 1);
+    CHECK(vdata.eastlings.size() == n_vertex_grid_cells + 1);
+    CHECK(vdata.southlings.size() == n_vertex_grid_cells + 1);
+    CHECK(vdata.westlings.size() == n_vertex_grid_cells + 1);
+  };
+
+
+  SECTION("wgs84") {
+    run_test(true, wgs84, at_wgs84_bounds, 16, 64);
+    run_test(false, wgs84, at_wgs84_bounds, 16, 64);
+    run_test(true, wgs84, at_wgs84_bounds, 16, 256);
+    run_test(false, wgs84, at_wgs84_bounds, 16, 256);
+    run_test(true, wgs84, at_wgs84_bounds, 16, 512);
+    run_test(false, wgs84, at_wgs84_bounds, 16, 512);
+  }
+  SECTION("webmercator") {
+    run_test(true, webmercator, at_wgs84_bounds, 16, 256);
+    run_test(false, webmercator, at_wgs84_bounds, 16, 256);
   }
 
 }

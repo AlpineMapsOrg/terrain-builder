@@ -13,6 +13,7 @@ namespace tntn {
 //exposed for testing
 namespace detail {
 using QMVertex = glm::dvec3;
+using VertexOrdering = std::unordered_map<Vertex, unsigned int>;
 
 struct QuantizedMeshHeader
 {
@@ -47,15 +48,32 @@ struct QuantizedMeshHeader
   // double HorizonOcclusionPointZ;
 };
 
+struct QuantizedMeshVertexData {
+  std::vector<uint32_t> northlings;
+  std::vector<uint32_t> eastlings;
+  std::vector<uint32_t> southlings;
+  std::vector<uint32_t> westlings;
+  VertexOrdering vertices_order;
+  std::vector<uint16_t> us;
+  std::vector<uint16_t> vs;
+  std::vector<uint16_t> hs;
+  size_t nvertices;
+};
+
 uint16_t zig_zag_encode(int16_t i);
 int16_t zig_zag_decode(uint16_t i);
 
-} //namespace detail
+QuantizedMeshHeader quantised_mesh_header(const Mesh& m,
+                                          const BBox3D& bbox,
+                                          const OGRSpatialReference& srs,
+                                          bool mesh_is_rescaled = false);
 
-detail::QuantizedMeshHeader quantised_mesh_header(const Mesh& m,
-                                                  const BBox3D& bbox,
-                                                  const OGRSpatialReference& srs,
-                                                  bool mesh_is_rescaled = false);
+QuantizedMeshVertexData quantised_mesh_vertex_data(const Mesh& m,
+                                                   const BBox3D& bbox,
+                                                   const OGRSpatialReference& srs,
+                                                   bool mesh_is_rescaled = false);
+
+} //namespace detail
 
 bool write_mesh_as_qm(const char* filename, const Mesh& m, bool compress = false);
 bool write_mesh_as_qm(const char* filename,

@@ -1,4 +1,5 @@
 #include "tntn/simple_meshing.h"
+#include "Exception.h"
 #include "tntn/RasterIO.h"
 #include "tntn/MeshIO.h"
 #include "tntn/SurfacePoints.h"
@@ -61,7 +62,7 @@ static void dense_quadwalk_make_face(const size_t this_vx_index,
 static void dense_quadwalk_make_quads_for_row(const RasterDouble& raster,
                                               const int r,
                                               const int w,
-                                              const int step,
+                                              const double step,
                                               const int vx_r,
                                               const int vertices_per_row,
                                               std::vector<Vertex>& vertices,
@@ -83,7 +84,7 @@ static void dense_quadwalk_make_quads_for_row(const RasterDouble& raster,
     //every following column, insert vertex and 2 faces
     for(int vx_c = 1; vx_c < vertices_per_row; vx_c++)
     {
-        const int c = std::min(vx_c * step, w - 1);
+        const int c = std::min(int(vx_c * step), w - 1);
 
         double z = row_ptr[c];
         if(raster.is_no_data(z) || std::isnan(z))
@@ -152,6 +153,64 @@ std::unique_ptr<Mesh> generate_tin_dense_quadwalk(const RasterDouble& raster, in
     auto mesh = std::make_unique<Mesh>();
     mesh->from_decomposed(std::move(vertices), std::move(faces));
     return mesh;
+}
+
+
+std::unique_ptr<Mesh> generate_tin_dense_quadwalk(const RasterDouble& raster, unsigned vertices_per_column, unsigned vertices_per_row)
+{
+  TNTN_ASSERT(vertices_per_column > 1);
+  TNTN_ASSERT(vertices_per_row > 1);
+  if(vertices_per_column < 2 || vertices_per_row < 2)
+  {
+    throw Exception("number of vertices must be at least 2");
+  }
+  const int h = raster.get_height();
+  const int w = raster.get_width();
+  if(h < 2 || w < 2)
+  {
+    TNTN_LOG_ERROR("raster to small, must have at least 2x2 cells");
+    return std::make_unique<Mesh>();
+  }
+  const auto step_x = (w - 1.0) / (vertices_per_column - 1.0);
+  const auto step_y = (h - 1.0) / (vertices_per_column - 1.0);
+
+  TNTN_LOG_DEBUG(
+    "generating regular mesh with {}x{} vertices...", vertices_per_row, vertices_per_column);
+  TNTN_ASSERT(vertices_per_column >= 2);
+  TNTN_ASSERT(vertices_per_row >= 2);
+
+  std::vector<Vertex> vertices;
+  vertices.reserve(vertices_per_row * vertices_per_column);
+  std::vector<Face> faces;
+  faces.reserve((vertices_per_row - 1) * (vertices_per_column - 1) * 2);
+
+  //first row, just generate vertices
+  {
+    const double* const row_ptr = raster.get_ptr(0);
+    const double y = raster.row2y(0);
+
+    for(int vx_c = 0; vx_c < vertices_per_row; vx_c++)
+    {
+      const int c = std::min(int(vx_c * step_x), w - 1);
+      double z = row_ptr[c];
+      if(raster.is_no_data(z) || std::isnan(z))
+      {
+        z = raster_tools::sample_nearest_valid_avg(raster, 0, c);
+      }
+      vertices.push_back({raster.col2x(c), y, z});
+    }
+  }
+
+  //every following row, generate vertices and faces
+  for(int vx_r = 1; vx_r < vertices_per_column; vx_r++)
+  {
+    const int r = std::min(int(vx_r * step_y), h - 1);
+    dense_quadwalk_make_quads_for_row(raster, r, w, step_x, vx_r, vertices_per_row, vertices, faces);
+  }
+
+  auto mesh = std::make_unique<Mesh>();
+  mesh->from_decomposed(std::move(vertices), std::move(faces));
+  return mesh;
 }
 
 } // namespace tntn

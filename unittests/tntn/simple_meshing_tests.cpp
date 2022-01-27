@@ -39,10 +39,10 @@ TEST_CASE("generate_tin_dense_quadwalk meshing on artificial terrain", "[tntn]")
         BBox3D bbox;
         mesh->get_bbox(bbox);
 
-        CHECK(bbox.min.x == raster_xpos + cellsize / 2.0);
-        CHECK(bbox.min.y == raster_ypos + cellsize / 2.0);
-        CHECK(bbox.max.x == raster_xpos + cellsize / 2.0 + (w - 1) * cellsize);
-        CHECK(bbox.max.y == raster_ypos + cellsize / 2.0 + (h - 1) * cellsize);
+        CHECK(bbox.min.x == raster_xpos);
+        CHECK(bbox.min.y == raster_ypos);
+        CHECK(bbox.max.x == raster_xpos + (w - 1) * cellsize);
+        CHECK(bbox.max.y == raster_ypos + (h - 1) * cellsize);
     };
 
     SECTION("with step = 1")
@@ -71,6 +71,34 @@ TEST_CASE("generate_tin_dense_quadwalk meshing on artificial terrain", "[tntn]")
         auto mesh = generate_tin_dense_quadwalk(raster, 4);
         general_checks(mesh);
         CHECK(mesh->poly_count() == (4 - 1) * (6 - 1) * 2);
+    }
+
+    SECTION("with vertex count = 2")
+    {
+      auto mesh = generate_tin_dense_quadwalk(raster, 2, 2);
+      general_checks(mesh);
+      CHECK(mesh->poly_count() == 2);
+    }
+
+    SECTION("with vertex count = 3")
+    {
+      auto mesh = generate_tin_dense_quadwalk(raster, 3, 3);
+      general_checks(mesh);
+      CHECK(mesh->poly_count() == 4 * 2);
+    }
+
+    SECTION("with vertex count = 5")
+    {
+      auto mesh = generate_tin_dense_quadwalk(raster, 5, 5);
+      general_checks(mesh);
+      CHECK(mesh->poly_count() == 16 * 2);
+    }
+
+    SECTION("with vertex count = 8")
+    {
+      auto mesh = generate_tin_dense_quadwalk(raster, 8, 8);
+      general_checks(mesh);
+      CHECK(mesh->poly_count() == 49 * 2);
     }
 }
 

@@ -110,7 +110,7 @@ class TerraBaseMesh : protected DelaunayMesh
   protected:
     std::unique_ptr<RasterDouble> m_raster;
 
-    void repair_point(int px, int py);
+    void repair_point(unsigned px, unsigned py);
 };
 
 } //namespace terra

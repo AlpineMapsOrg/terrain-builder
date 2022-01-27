@@ -36,7 +36,7 @@ TEST_CASE("tin terra write") {
   SECTION("cesium terrain") {
     const auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::No);
     const auto b = 20037508.3427892;
-    generator.write(Tile{ctb::TilePoint(0, 0), 0, {-b, -b, b, b}, int(ctb::Grid::Srs::SphericalMercator), 256, 256}, HeightData(256, 256));
+    generator.write(Tile{ctb::TilePoint(0, 0), 0, {-b, -b, b, b}, int(ctb::Grid::Srs::SphericalMercator), 256, 257}, HeightData(257, 257));
     CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
   }
 
@@ -56,18 +56,18 @@ TEST_CASE("tin terra write") {
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto reader = DatasetReader(dataset, webmercator, 1, false);
-    const auto heights = reader.read(at_webmercator_bounds, 256, 256);
+    const auto heights = reader.read(at_webmercator_bounds, 257, 257);
 
     const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, false);
     REQUIRE(mesh->vertices().size() > 0);
     CHECK(mesh->vertices().size() > 100);
     CHECK(mesh->vertices().size() < 200);
     const auto mesh_bb = mesh->bbox();
-    CHECK(mesh_bb.min.x >= at_webmercator_bounds.getMinX());
-    CHECK(mesh_bb.min.y >= at_webmercator_bounds.getMinY());
+    CHECK(mesh_bb.min.x >= at_webmercator_bounds.getMinX() * 0.99999999999999);
+    CHECK(mesh_bb.min.y >= at_webmercator_bounds.getMinY() * 0.99999999999999);
     CHECK(mesh_bb.min.z >= 50.0);
-    CHECK(mesh_bb.max.x <= at_webmercator_bounds.getMaxX());
-    CHECK(mesh_bb.max.y <= at_webmercator_bounds.getMaxY());
+    CHECK(mesh_bb.max.x <= at_webmercator_bounds.getMaxX() * 1.00000000000001);
+    CHECK(mesh_bb.max.y <= at_webmercator_bounds.getMaxY() * 1.00000000000001);
     CHECK(mesh_bb.max.z <= 4000.0);
   }
 
@@ -81,7 +81,7 @@ TEST_CASE("tin terra write") {
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto reader = DatasetReader(dataset, wgs84, 1, false);
-    const auto heights = reader.read(at_wgs84_bounds, 256, 256);
+    const auto heights = reader.read(at_wgs84_bounds, 257, 257);
 
     const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, false);
     REQUIRE(mesh->vertices().size() > 0);
@@ -106,7 +106,7 @@ TEST_CASE("tin terra write") {
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto reader = DatasetReader(dataset, wgs84, 1, false);
-    const auto heights = reader.read(at_wgs84_bounds, 256, 256);
+    const auto heights = reader.read(at_wgs84_bounds, 257, 257);
 
     const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, true);
     REQUIRE(mesh->vertices().size() > 0);
@@ -138,9 +138,9 @@ TEST_CASE("tin terra write") {
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto reader = DatasetReader(dataset, webmercator, 1, false);
-    const auto heights = reader.read(at_webmercator_bounds, 256, 256);
+    const auto heights = reader.read(at_webmercator_bounds, 257, 257);
 
-    const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, false, 16);
+    const auto mesh = converter.toMesh(webmercator, at_webmercator_bounds, heights, false, 17);
     REQUIRE(mesh->vertices().size() > 0);
     CHECK(mesh->vertices().size() == 289);
     const auto mesh_bb = mesh->bbox();
@@ -162,9 +162,9 @@ TEST_CASE("tin terra write") {
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto reader = DatasetReader(dataset, wgs84, 1, false);
-    const auto heights = reader.read(at_wgs84_bounds, 256, 256);
+    const auto heights = reader.read(at_wgs84_bounds, 257, 257);
 
-    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, false, 16);
+    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, false, 17);
     REQUIRE(mesh->vertices().size() > 0);
     CHECK(mesh->vertices().size() == 289);
     const auto mesh_bb = mesh->bbox();
@@ -186,9 +186,9 @@ TEST_CASE("tin terra write") {
 
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto reader = DatasetReader(dataset, wgs84, 1, false);
-    const auto heights = reader.read(at_wgs84_bounds, 256, 256);
+    const auto heights = reader.read(at_wgs84_bounds, 257, 257);
 
-    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, true, 16);
+    const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, true, 17);
     REQUIRE(mesh->vertices().size() > 0);
     CHECK(mesh->vertices().size() == 289);
     const auto mesh_bb = mesh->bbox();
@@ -198,6 +198,46 @@ TEST_CASE("tin terra write") {
     CHECK(mesh_bb.max.x <= 1);
     CHECK(mesh_bb.max.y <= 1);
     CHECK(mesh_bb.max.z <= 1);
+  }
+
+  SECTION("mesh edges unit range scale global") {
+    const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+    const auto at_wgs84_bounds = ctb::CRSBounds(-180, -90, 180, 90);
+
+    OGRSpatialReference wgs84;
+    wgs84.importFromEPSG(4326);
+    wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto reader = DatasetReader(dataset, wgs84, 1, false);
+    const auto heights = reader.read(at_wgs84_bounds, 257, 257);
+
+    for (unsigned nv : {2u, 3u, 5u, 9u}) {
+      const auto mesh = converter.toMesh(wgs84, at_wgs84_bounds, heights, true, nv);
+      CHECK(mesh->vertices().size() == nv * nv);
+      const auto mesh_bb = mesh->bbox();
+      CHECK(mesh_bb.min.x == 0);
+      CHECK(mesh_bb.min.y == 0);
+      CHECK(mesh_bb.min.z == 0);
+      CHECK(mesh_bb.max.x == 1);
+      CHECK(mesh_bb.max.y == 1);
+      CHECK(mesh_bb.max.z == 0);
+
+      unsigned nx0 = 0;
+      unsigned ny0 = 0;
+      unsigned nx1 = 0;
+      unsigned ny1 = 0;
+      for (const auto& v : mesh->vertices_as_vector()) {
+        nx0 += std::abs(v.x - 0) < (1.0 / (1 << 16));
+        ny0 += std::abs(v.y - 0) < (1.0 / (1 << 16));
+        nx1 += std::abs(v.x - 1) < (1.0 / (1 << 16));
+        ny1 += std::abs(v.y - 1) < (1.0 / (1 << 16));
+      }
+      CHECK(nx0 == nv);
+      CHECK(ny0 == nv);
+      CHECK(nx1 == nv);
+      CHECK(ny1 == nv);
+    }
   }
 
   SECTION("cesium terrain correct header") {
