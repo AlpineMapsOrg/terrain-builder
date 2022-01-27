@@ -22,7 +22,7 @@ void TerraMesh::greedy_insert(double max_error)
     TNTN_ASSERT(w > 0);
     TNTN_ASSERT(h > 0);
 
-    TNTN_LOG_INFO("starting greedy insertion with raster width: {}, height: {}", w, h);
+    TNTN_LOG_DEBUG("starting greedy insertion with raster width: {}, height: {}", w, h);
 
     // Initialize m_used
     m_used.allocate(w, h);
@@ -35,7 +35,7 @@ void TerraMesh::greedy_insert(double max_error)
     this->repair_point(w - 1, 0);
 
     // Initialize the mesh to two triangles with the height field grid corners as vertices
-    TNTN_LOG_INFO("initialize the mesh with four corner points");
+    TNTN_LOG_DEBUG("initialize the mesh with four corner points");
     this->init_mesh(glm::dvec2(0, 0), glm::dvec2(0, h - 1), glm::dvec2(w - 1, h - 1), glm::dvec2(w - 1, 0));
 
     m_used.value(0, 0) = 1;
@@ -73,7 +73,7 @@ void TerraMesh::greedy_insert(double max_error)
         this->insert(glm::dvec2(candidate.x, candidate.y), candidate.triangle);
     }
 
-    TNTN_LOG_INFO("finished greedy insertion");
+    TNTN_LOG_DEBUG("finished greedy insertion");
 }
 
 void TerraMesh::scan_triangle_line(const Plane& plane,
