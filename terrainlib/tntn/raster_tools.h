@@ -7,22 +7,22 @@
 
 namespace tntn {
 
-struct raster_tools //just a namespace
+namespace raster_tools
 {
-    static RasterDouble integer_downsample_mean(const RasterDouble& src, int window_size);
+RasterDouble integer_downsample_mean(const RasterDouble& src, int window_size);
 
-    static void flip_data_x(RasterDouble& r);
+void flip_data_x(RasterDouble& r);
 
-    static void flip_data_y(RasterDouble& r);
+void flip_data_y(RasterDouble& r);
 
-    static void find_minmax(const RasterDouble& raster, double& min, double& max);
+void find_minmax(const RasterDouble& raster, double& min, double& max);
 
-    static BBox3D get_bounding_box3d(const RasterDouble& raster);
+BBox3D get_bounding_box3d(const RasterDouble& raster);
 
-    static double sample_nearest_valid_avg(const RasterDouble& src,
-                                           const unsigned int row,
-                                           const unsigned int column,
-                                           int min_averaging_samples = 1);
+double sample_nearest_valid_avg(const RasterDouble& src,
+                                const unsigned int row,
+                                const unsigned int column,
+                                int min_averaging_samples = 1);
 };
 
 } // namespace tntn
