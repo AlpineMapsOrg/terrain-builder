@@ -1,4 +1,5 @@
 #include "tntn/ZemlyaMesh.h"
+#include "Exception.h"
 #include "tntn/TerraUtils.h"
 #include "tntn/logging.h"
 #include "tntn/SurfacePoints.h"
@@ -291,6 +292,7 @@ void ZemlyaMesh::scan_triangle_line(const Plane& plane,
 
 void ZemlyaMesh::scan_triangle(dt_ptr t)
 {
+    throw Exception("This scan triangle method is buggy. I fixed it already for the TerraMesh, but not yet for zemlya");
     Plane z_plane;
     terra::compute_plane(z_plane, t, m_result);
 

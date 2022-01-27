@@ -17,14 +17,14 @@ namespace terra {
 
 struct Candidate
 {
-    int x = 0;
-    int y = 0;
+    unsigned x = 0;
+    unsigned y = 0;
     double z = 0.0;
     double importance = -DBL_MAX;
     int token = 0;
     dt_ptr triangle;
 
-    void consider(int sx, int sy, double sz, double imp) noexcept
+    void consider(unsigned sx, unsigned sy, double sz, double imp) noexcept
     {
         if(imp > importance)
         {

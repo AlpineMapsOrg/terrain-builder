@@ -61,7 +61,6 @@ class Plane
     inline void init(const glm::dvec3& p, const glm::dvec3& q, const glm::dvec3& r) noexcept;
 
     double eval(double x, double y) const noexcept { return a * x + b * y + c; }
-    double eval(int x, int y) const noexcept { return a * x + b * y + c; }
 };
 
 // find the plane z=ax+by+c passing through three points p,q,r

@@ -24,7 +24,7 @@
 #include "tntn/Raster.h"
 #include "algorithms/raster_triangle_scanline.h"
 
-TEST_CASE("raster triangle goes through all pixels exactly once on full quads") {
+TEST_CASE("raster triangle goes through pixels exactly once") {
   constexpr auto width = 3;
   constexpr auto height = 3;
   tntn::Raster<int> raster(width, height);

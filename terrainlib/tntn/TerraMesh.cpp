@@ -5,6 +5,7 @@
 #include "tntn/DelaunayTriangle.h"
 #include "algorithms/raster_triangle_scanline.h"
 
+#include <glm/glm.hpp>
 #include <iostream>
 #include <fstream>
 #include <array>
@@ -77,94 +78,45 @@ void TerraMesh::greedy_insert(double max_error)
     TNTN_LOG_DEBUG("finished greedy insertion");
 }
 
-void TerraMesh::scan_triangle_line(const Plane& plane,
-                                   int y,
-                                   double x1,
-                                   double x2,
-                                   Candidate& candidate,
-                                   const double no_data_value)
-{
-    const int startx = static_cast<int>(ceil(fmin(x1, x2)));
-    const int endx = static_cast<int>(floor(fmax(x1, x2)));
-
-    if(startx > endx) return;
-
-    double z0 = plane.eval(startx, y);
-    double dz = plane.a;
-
-    for(int x = startx; x <= endx; x++)
-    {
-        if(!m_used.value(y, x))
-        {
-            const double z = m_raster->value(y, x);
-            if(!is_no_data(z, no_data_value))
-            {
-                const double diff = fabs(z - z0);
-                //TNTN_LOG_DEBUG("candidate consider: ({}, {}, {}), diff: {}", x, y, z, diff);
-                candidate.consider(x, y, z, diff);
-            }
-        }
-        z0 += dz;
-    }
-}
-
 void TerraMesh::scan_triangle(dt_ptr t)
 {
     Plane z_plane;
     compute_plane(z_plane, t, *m_raster);
 
-    std::array<Point2D, 3> by_y = {{
-        t->point1(),
-        t->point2(),
-        t->point3(),
-    }};
-    order_triangle_points(by_y);
-    const double v0_x = by_y[0].x;
-    const double v0_y = by_y[0].y;
-    const double v1_x = by_y[1].x;
-    const double v1_y = by_y[1].y;
-    const double v2_x = by_y[2].x;
-    const double v2_y = by_y[2].y;
+    // i didn't write the algorithm, but i think the triangle points should be integer always.
+    // maybe that happened during one of my refactorings, e.g., while removing +0.5 in the raster image class.
+    // leaving this to be certain / catch errors.
+    assert(std::abs(t->point1().x - std::floor(t->point1().x)) < 0.0000000000001);
+    assert(std::abs(t->point1().y - std::floor(t->point1().y)) < 0.0000000000001);
+
+    assert(std::abs(t->point2().x - std::floor(t->point2().x)) < 0.0000000000001);
+    assert(std::abs(t->point2().y - std::floor(t->point2().y)) < 0.0000000000001);
+
+    assert(std::abs(t->point3().x - std::floor(t->point3().x)) < 0.0000000000001);
+    assert(std::abs(t->point3().y - std::floor(t->point3().y)) < 0.0000000000001);
+
+    // oh, the original raster scanline algorithm was buggy, so i replaced it with a unit tested one.
+
+    glm::uvec2 p0 = glm::uvec2(t->point1());
+    glm::uvec2 p1 = glm::uvec2(t->point2());
+    glm::uvec2 p2 = glm::uvec2(t->point3());
+
 
     Candidate candidate = {0, 0, 0.0, -DBL_MAX, m_counter++, t};
-
-    const double dx2 = (v2_x - v0_x) / (v2_y - v0_y);
     const double no_data_value = m_raster->get_no_data_value();
+    const auto fun = [&](const glm::uvec2 coord, double height) {
+      m_tested.value(coord.y, coord.x)++;
+      if (m_used.value(coord.y, coord.x))
+        return;
+      if (is_no_data(height, no_data_value))
+        return;
 
-    double x2 = v0_x;
-    if(v1_y != v0_y)
-    {
-        const double dx1 = (v1_x - v0_x) / (v1_y - v0_y);
+      const auto predicted_height = z_plane.eval(coord.x, coord.y);
+      const auto error = std::abs(predicted_height - height);
+      candidate.consider(coord.x, coord.y, height, error);
+    };
 
-        double x1 = v0_x;
-
-        const int starty = int(std::ceil(v0_y));
-        const int endy = int(std::floor(v1_y));
-
-        for(int y = starty; y < endy; y++)
-        {
-            scan_triangle_line(z_plane, y, x1, x2, candidate, no_data_value);
-            x1 += dx1;
-            x2 += dx2;
-        }
-    }
-
-    if(v2_y != v1_y)
-    {
-        const double dx1 = (v2_x - v1_x) / (v2_y - v1_y);
-
-        double x1 = v1_x;
-
-        const int starty = int(v1_y);
-        const int endy = int(v2_y);
-
-        for(int y = starty; y <= endy; y++)
-        {
-            scan_triangle_line(z_plane, y, x1, x2, candidate, no_data_value);
-            x1 += dx1;
-            x2 += dx2;
-        }
-    }
+    raster::triangle_scanline(*m_raster, p0, p1, p2, fun);
 
     // We have now found the appropriate candidate point
     m_token.value(candidate.y, candidate.x) = candidate.token;

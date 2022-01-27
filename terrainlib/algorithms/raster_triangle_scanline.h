@@ -30,6 +30,8 @@ namespace raster {
 
 template <typename T, typename Lambda>
 void triangle_scanline(const tntn::Raster<T>& raster, const glm::uvec2& a, const glm::uvec2& b, const glm::uvec2& c, const Lambda& fun) {
+  assert(primitives::winding(a, b, c) == primitives::Winding::CCW);
+
   const auto min = glm::min(glm::min(a, b), c);
   const auto max = glm::max(glm::max(a, b), c);
   for (auto x = min.x; x < max.x; ++x) {
