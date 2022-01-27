@@ -132,7 +132,7 @@ void DelaunayMesh::scan_triangle(dt_ptr t)
 qe_ptr DelaunayMesh::locate(const Point2D x, qe_ptr start)
 {
     qe_ptr e = start;
-    double t = triArea(x, e->Dest(), e->Org());
+    double t = triAreaX2(x, e->Dest(), e->Org());
 
     if(t > 0)
     { // x is to the right of edge e
@@ -145,8 +145,8 @@ qe_ptr DelaunayMesh::locate(const Point2D x, qe_ptr start)
         qe_ptr eo = e->Onext();
         qe_ptr ed = e->Dprev();
 
-        double to = triArea(x, eo->Dest(), eo->Org());
-        double td = triArea(x, ed->Dest(), ed->Org());
+        double to = triAreaX2(x, eo->Dest(), eo->Org());
+        double td = triAreaX2(x, ed->Dest(), ed->Org());
 
         if(td > 0)
         { // x is below ed

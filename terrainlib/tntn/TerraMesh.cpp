@@ -3,6 +3,7 @@
 #include "tntn/logging.h"
 #include "tntn/SurfacePoints.h"
 #include "tntn/DelaunayTriangle.h"
+#include "algorithms/raster_triangle_scanline.h"
 
 #include <iostream>
 #include <fstream>

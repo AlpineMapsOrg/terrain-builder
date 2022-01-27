@@ -2,6 +2,7 @@
 
 #include "tntn/geometrix.h"
 #include "tntn/ObjPool.h"
+#include "algorithms/primitives.h"
 
 #define EPS 1e-6
 
@@ -10,36 +11,19 @@ namespace terra {
 
 typedef glm::dvec2 Point2D;
 
-// triArea returns TWICE the area of the oriented triangle ABC.
-// The area is positive when ABC is oriented counterclockwise.
-inline double triArea(const Point2D& a, const Point2D& b, const Point2D& c)
-{
-    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-}
-
-inline bool ccw(const Point2D& a, const Point2D& b, const Point2D& c)
-{
-    return triArea(a, b, c) > 0;
-}
-
-inline bool rightOf(const Point2D& x, const Point2D& org, const Point2D& dest)
-{
-    return ccw(x, dest, org);
-}
-
-inline bool leftOf(const Point2D& x, const Point2D& org, const Point2D& dest)
-{
-    return ccw(x, org, dest);
-}
+using primitives::triAreaX2;
+using primitives::ccw;
+using primitives::rightOf;
+using primitives::leftOf;
 
 // Returns True if the point d is inside the circle defined by the
 // points a, b, c. See Guibas and Stolfi (1985) p.107.
 inline bool inCircle(const Point2D& a, const Point2D& b, const Point2D& c, const Point2D& d)
 {
-    return (a[0] * a[0] + a[1] * a[1]) * triArea(b, c, d) -
-        (b[0] * b[0] + b[1] * b[1]) * triArea(a, c, d) +
-        (c[0] * c[0] + c[1] * c[1]) * triArea(a, b, d) -
-        (d[0] * d[0] + d[1] * d[1]) * triArea(a, b, c) >
+    return (a[0] * a[0] + a[1] * a[1]) * triAreaX2(b, c, d) -
+        (b[0] * b[0] + b[1] * b[1]) * triAreaX2(a, c, d) +
+        (c[0] * c[0] + c[1] * c[1]) * triAreaX2(a, b, d) -
+        (d[0] * d[0] + d[1] * d[1]) * triAreaX2(a, b, c) >
         EPS;
 }
 

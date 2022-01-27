@@ -62,6 +62,8 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/srs.h
     terrainlib/Tile.h
     terrainlib/Tiler.h
+    terrainlib/algorithms/primitives.h
+    terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/Bounds.hpp
     terrainlib/ctb/Coordinate.hpp
     terrainlib/ctb/Coordinate3D.hpp
@@ -165,6 +167,8 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/main.cpp
     unittests/srs_test.cpp
     unittests/progress_indicator_test.cpp
+    unittests/algorithms/primitives.cpp
+    unittests/algorithms/raster_triangle_scanline.cpp
     unittests/tntn/Delaunay_tests.cpp
     unittests/tntn/File_tests.cpp
     unittests/tntn/geometrix_tests.cpp
