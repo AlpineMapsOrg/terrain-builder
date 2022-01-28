@@ -34,16 +34,16 @@ void triangle_scanline(const tntn::Raster<T>& raster, const glm::uvec2& a, const
 
   const auto min = glm::min(glm::min(a, b), c);
   const auto max = glm::max(glm::max(a, b), c);
-  for (auto x = min.x; x < max.x; ++x) {
-    for (auto y = min.y; y < max.y; ++y) {
+  for (auto y = min.y; y <= max.y; ++y) {
+    for (auto x = min.x; x <= max.x; ++x) {
       const auto coord = glm::uvec2(x, y);
       if (primitives::inside(coord, a, b, c))
         fun(coord, raster.value(coord.y, coord.x)); // raster is row / column
     }
   }
   if (min.y == 0) {
-    // bottom edge of raster is not included in primitives::inside, so check for it and make an extrawurscht.
-    const auto walk_bottom_edge = [&](const glm::uvec2& a, const glm::uvec2& b) {
+    // bottom row of raster is not included in primitives::inside, so check for it and make an extrawurscht.
+    const auto walk_bottom = [&](const glm::uvec2& a, const glm::uvec2& b) {
       if ((b - a).y == 0 && a.y == 0) {
         const auto end_x = std::max(a.x, b.x);
         for (auto x = std::min(a.x, b.x); x < end_x; ++x) {
@@ -52,10 +52,48 @@ void triangle_scanline(const tntn::Raster<T>& raster, const glm::uvec2& a, const
         }
       }
     };
-    walk_bottom_edge(a, b);
-    walk_bottom_edge(b, c);
-    walk_bottom_edge(c, a);
-
+    walk_bottom(a, b);
+    walk_bottom(b, c);
+    walk_bottom(c, a);
+  }
+  const auto last_x = raster.get_width() - 1;
+  if (max.x == last_x) {
+    // similar with the rightmost column
+    const auto walk_right = [&](const glm::uvec2& a, const glm::uvec2& b) {
+      if ((b - a).x == 0 && a.x == last_x) {
+        const auto end_y = std::max(a.y, b.y);
+        for (auto y = std::min(a.y, b.y); y < end_y; ++y) {
+          const auto coord = glm::uvec2(last_x, y);
+          fun(coord, raster.value(coord.y, coord.x)); // raster is row / column
+        }
+      }
+    };
+    walk_right(a, b);
+    walk_right(b, c);
+    walk_right(c, a);
+  }
+//  if (max.x == last_x && min.y == 0) {
+//    const auto check_br = [&](const glm::uvec2& a, const glm::uvec2& b) {
+//      if ((b - a).y == 0 && a.y == 0 && b.x == last_x) {
+//        const auto coord = glm::uvec2(last_x, 0);
+//        fun(coord, raster.value(coord.y, coord.x)); // raster is row / column
+//      }
+//    };
+//    check_br(a, b);
+//    check_br(b, c);
+//    check_br(c, a);
+//  }
+  const auto last_y = raster.get_height() - 1;
+  if (max.x == last_x && max.y == last_y) {
+    const auto check_tr = [&](const glm::uvec2& a, const glm::uvec2& b) {
+      if ((b - a).x == 0 && b.y == last_y && b.x == last_x) {
+        const auto coord = glm::uvec2(last_x, last_y);
+        fun(coord, raster.value(coord.y, coord.x)); // raster is row / column
+      }
+    };
+    check_tr(a, b);
+    check_tr(b, c);
+    check_tr(c, a);
   }
 }
 }
