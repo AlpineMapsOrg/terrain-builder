@@ -105,7 +105,6 @@ void TerraMesh::scan_triangle(dt_ptr t)
     Candidate candidate = {0, 0, 0.0, -DBL_MAX, m_counter++, t};
     const double no_data_value = m_raster->get_no_data_value();
     const auto fun = [&](const glm::uvec2 coord, double height) {
-      m_tested.value(coord.y, coord.x)++;
       if (m_used.value(coord.y, coord.x))
         return;
       if (is_no_data(height, no_data_value))
