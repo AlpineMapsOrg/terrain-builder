@@ -435,11 +435,11 @@ QuantizedMeshVertexData detail::quantised_mesh_vertex_data(const Mesh& m, const 
 
       if(v == 0)
       {
-        northlings.push_back(vertex_index);
+        southlings.push_back(vertex_index);
       }
       else if(v == QUANTIZED_COORDINATE_SIZE)
       {
-        southlings.push_back(vertex_index);
+        northlings.push_back(vertex_index);
       }
 
       TNTN_ASSERT(u - prev_u >= -32768 && u - prev_u <= 32767);
@@ -457,6 +457,7 @@ QuantizedMeshVertexData detail::quantised_mesh_vertex_data(const Mesh& m, const 
       vertex_index++;
     }
   }
+
   return {
     northlings,
     eastlings,
