@@ -470,6 +470,32 @@ QuantizedMeshVertexData detail::quantised_mesh_vertex_data(const Mesh& m, const 
     };
 }
 
+std::vector<uint16_t> detail::quantized_mesh_encode(const std::vector<int16_t>& input)
+{
+  int16_t prev = 0;
+  std::vector<uint16_t> encoded_array;
+  encoded_array.reserve(input.size());
+  for (int16_t current : input) {
+    TNTN_ASSERT(current - prev == int(int16_t(current - prev)));
+    encoded_array.push_back(zig_zag_encode(int16_t(current - prev)));
+    prev = current;
+  }
+  return encoded_array;
+}
+
+std::vector<int16_t> detail::quantized_mesh_decode(const std::vector<uint16_t>& input)
+{
+  std::vector<int16_t> decoded_array;
+  decoded_array.reserve(input.size());
+  int prev = 0;
+  for (uint16_t current : input) {
+    prev += zig_zag_decode(current);
+    TNTN_ASSERT(prev == int(int16_t(prev)));
+    decoded_array.push_back(int16_t(prev));
+  }
+  return decoded_array;
+}
+
 bool write_mesh_as_qm(const std::shared_ptr<FileLike>& f,
                       const Mesh& m,
                       const BBox3D& bbox,

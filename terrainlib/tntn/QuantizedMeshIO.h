@@ -63,6 +63,9 @@ struct QuantizedMeshVertexData {
 uint16_t zig_zag_encode(int16_t i);
 int16_t zig_zag_decode(uint16_t i);
 
+std::vector<uint16_t> quantized_mesh_encode(const std::vector<int16_t>& input);
+std::vector<int16_t> quantized_mesh_decode(const std::vector<uint16_t>& input);
+
 QuantizedMeshHeader quantised_mesh_header(const Mesh& m,
                                           const BBox3D& bbox,
                                           const OGRSpatialReference& srs,

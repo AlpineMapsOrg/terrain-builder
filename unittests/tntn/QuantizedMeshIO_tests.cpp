@@ -64,6 +64,13 @@ TEST_CASE("zig_zag_decode on reference values", "[tntn]")
     CHECK(zig_zag_decode(32768 * 2 - 1) == -32768);
 }
 
+TEST_CASE("zigzag encode diecode round trip", "[tntn]") {
+  const std::vector<int16_t> input = {0, 32767, 3838, 0, 30033, 0, 1, 2, 3, 32767, 32766, 32765, 0, 32767};
+  const auto encoded = quantized_mesh_encode(input);
+  const auto decoded = quantized_mesh_decode(encoded);
+  CHECK(decoded == input);
+}
+
 TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
 {
   // we are not checking exact here, because that would mean reimplementing the equations.
@@ -283,6 +290,7 @@ TEST_CASE("header is plausible on all globe quarters", "[tntn]")
   }
 
 }
+
 TEST_CASE("edge vertices correct", "[tntn]") {
   OGRSpatialReference ecef_srs;
   ecef_srs.importFromEPSG(4978);
@@ -335,6 +343,22 @@ TEST_CASE("edge vertices correct", "[tntn]") {
     CHECK(vdata.eastlings.size() == n_vertex_grid_cells + 1);
     CHECK(vdata.southlings.size() == n_vertex_grid_cells + 1);
     CHECK(vdata.westlings.size() == n_vertex_grid_cells + 1);
+
+    const auto vs_decoded = tntn::detail::quantized_mesh_decode(vdata.vs);
+    const auto us_decoded = tntn::detail::quantized_mesh_decode(vdata.us);
+
+    for (const auto i : vdata.southlings) {
+      CHECK(vs_decoded[i] == 0);
+    }
+    for (const auto i : vdata.westlings) {
+      CHECK(us_decoded[i] == 0);
+    }
+    for (const auto i : vdata.northlings) {
+      CHECK(vs_decoded[i] == 32767);
+    }
+    for (const auto i : vdata.eastlings) {
+      CHECK(us_decoded[i] == 32767);
+    }
   };
 
 
@@ -350,9 +374,57 @@ TEST_CASE("edge vertices correct", "[tntn]") {
     run_test(true, webmercator, at_wgs84_bounds, 16, 256);
     run_test(false, webmercator, at_wgs84_bounds, 16, 256);
   }
-
 }
 
+TEST_CASE("correctly stores indexed mesh", "[tntn]") {
+  OGRSpatialReference ecef_srs;
+  ecef_srs.importFromEPSG(4978);
+  ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  // let's get a mesh of a part of austria (where we know the bounds etc)
+  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
+  OGRSpatialReference webmercator;
+  webmercator.importFromEPSG(3857);
+  webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  OGRSpatialReference wgs84;
+  wgs84.importFromEPSG(4326);
+  wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+  const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+
+  const auto run_test = [&](bool mesh_scale_0_to_1, const OGRSpatialReference& srs, const ctb::CRSBounds& wgs84_bounds, unsigned n_vertex_grid_cells, unsigned tile_grid_size) {
+    const auto reader = DatasetReader(dataset, srs, 1, false);
+    const auto srs_bounds = srs::nonExactBoundsTransform(wgs84_bounds, wgs84, srs);
+    const auto heights = reader.read(srs_bounds, tile_grid_size + 1, tile_grid_size + 1);
+
+    const auto mesh = converter.toMesh(srs, srs_bounds, heights, mesh_scale_0_to_1, n_vertex_grid_cells + 1);
+    CHECK(mesh->triangles().size() == n_vertex_grid_cells * n_vertex_grid_cells * 2);
+    CHECK(mesh->vertices().size() == (n_vertex_grid_cells + 1) * (n_vertex_grid_cells + 1));
+
+    const auto bbox = converter.computeBbox(srs_bounds, heights);
+    tntn::detail::QuantizedMeshVertexData vdata = tntn::detail::quantised_mesh_vertex_data(*mesh, bbox, wgs84, mesh_scale_0_to_1);
+    CHECK(vdata.us.size() == mesh->vertices().size());
+    CHECK(vdata.vs.size() == mesh->vertices().size());
+    CHECK(vdata.hs.size() == mesh->vertices().size());
+
+  };
+
+
+  SECTION("wgs84") {
+    run_test(true, wgs84, at_wgs84_bounds, 4, 64);
+    run_test(false, wgs84, at_wgs84_bounds, 4, 64);
+    run_test(true, wgs84, at_wgs84_bounds, 4, 256);
+    run_test(false, wgs84, at_wgs84_bounds, 4, 256);
+    run_test(true, wgs84, at_wgs84_bounds, 4, 512);
+    run_test(false, wgs84, at_wgs84_bounds, 4, 512);
+  }
+  SECTION("webmercator") {
+    run_test(true, webmercator, at_wgs84_bounds, 4, 256);
+    run_test(false, webmercator, at_wgs84_bounds, 4, 256);
+  }
+}
 
 #if 1
 TEST_CASE("quantized mesh writer/loader round trip on small mesh", "[tntn]")
