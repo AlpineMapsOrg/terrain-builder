@@ -94,14 +94,13 @@ GDALWarpOptionsPtr makeWarpOptions(const DatasetReader& reader, Dataset* dataset
     options->panSrcBands[0] = int(reader.dataset_band());
     options->panDstBands[0] = 1;
   }
-  constexpr auto use_approximation = false;
+  constexpr auto use_approximation = true;
   if (!use_approximation) {
     options->pTransformerArg = make_image_transform_args(reader, dataset, bounds, width, height).release();
     options->pfnTransformer = GDALGenImgProjTransform;
   }
   else {
-    // need tiles per second display for measuring performance.
-    const auto error_threshold = 0.125;
+    const auto error_threshold = 0.5;
     options->pTransformerArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, make_image_transform_args(reader, dataset, bounds, width, height).release(), error_threshold);
     options->pfnTransformer = GDALApproxTransform;
   }
