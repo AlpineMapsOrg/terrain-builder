@@ -25,6 +25,7 @@
 #include <ogr_spatialref.h>
 #include <gdal_priv.h>
 #include <gdalwarper.h>
+#include <utility>
 
 #include "Dataset.h"
 #include "Exception.h"
@@ -46,7 +47,8 @@ std::array<double, 6> computeGeoTransform(const ctb::CRSBounds& bounds, unsigned
           bounds.getMaxY(), 0, -bounds.getHeight() / height};
   }
 
-std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> make_image_transform_args(const DatasetReader& reader,
+using GdalImageTransformArgsPtr = std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)>;
+GdalImageTransformArgsPtr make_image_transform_args(const DatasetReader& reader,
                                                                                           Dataset* dataset,
                                                                                           const ctb::CRSBounds& bounds, unsigned width, unsigned height)
 {
@@ -55,7 +57,7 @@ std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> make_image_tr
     transformOptions.SetNameValue("SRC_SRS", reader.dataset_srs_wkt().c_str());
     transformOptions.SetNameValue("DST_SRS", reader.target_srs_wkt().c_str());
   }
-  auto args = std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)>(GDALCreateGenImgProjTransformer2(dataset->gdalDataset(), nullptr, transformOptions.List()), &GDALDestroyGenImgProjTransformer);
+  auto args = GdalImageTransformArgsPtr(GDALCreateGenImgProjTransformer2(dataset->gdalDataset(), nullptr, transformOptions.List()), &GDALDestroyGenImgProjTransformer);
   if (!args) {
     throw Exception("GDALCreateGenImgProjTransformer2 failed.");
   }
@@ -67,11 +69,12 @@ std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)> make_image_tr
   return args;
 }
 
-using GDALWarpOptionsPtr = std::unique_ptr<GDALWarpOptions, decltype (&GDALDestroyWarpOptions)>;
+using GdalWarpOptionsPtr = std::unique_ptr<GDALWarpOptions, decltype (&GDALDestroyWarpOptions)>;
+using WarpOptionData = std::pair<GdalWarpOptionsPtr, GdalImageTransformArgsPtr>;
 
-GDALWarpOptionsPtr makeWarpOptions(const DatasetReader& reader, Dataset* dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height)
+WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height)
 {
-  auto options = GDALWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
+  auto options = GdalWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
   options->hSrcDS = dataset->gdalDataset();
   options->nBandCount = 1;
   options->eResampleAlg = GDALResampleAlg::GRA_Cubic;
@@ -94,18 +97,19 @@ GDALWarpOptionsPtr makeWarpOptions(const DatasetReader& reader, Dataset* dataset
     options->panSrcBands[0] = int(reader.dataset_band());
     options->panDstBands[0] = 1;
   }
-  constexpr auto use_approximation = true;
-  if (!use_approximation) {
-    options->pTransformerArg = make_image_transform_args(reader, dataset, bounds, width, height).release();
-    options->pfnTransformer = GDALGenImgProjTransform;
-  }
-  else {
+  constexpr auto use_approximation = false;
+  if (use_approximation) {
     const auto error_threshold = 0.5;
-    options->pTransformerArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, make_image_transform_args(reader, dataset, bounds, width, height).release(), error_threshold);
+    auto image_transform_args = make_image_transform_args(reader, dataset, bounds, width, height);
+    options->pTransformerArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, image_transform_args.get(), error_threshold);
     options->pfnTransformer = GDALApproxTransform;
+    return {std::move(options), std::move(image_transform_args)};
   }
 
-  return options;
+  options->pTransformerArg = make_image_transform_args(reader, dataset, bounds, width, height).release();
+  options->pfnTransformer = GDALGenImgProjTransform;
+
+  return {std::move(options), GdalImageTransformArgsPtr(nullptr, &GDALDestroyGenImgProjTransformer)};
 }
 
 std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& dataset, void *hTransformerArg, bool warn_on_missing_overviews) {
@@ -188,7 +192,7 @@ HeightData DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_datase
 
   auto warp_options = makeWarpOptions(*this, source_dataset.get(), bounds, width, height);
   auto adfGeoTransform = computeGeoTransform(bounds, width, height);
-  auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(source_dataset->gdalDataset(), int(width), int(height), adfGeoTransform.data(), warp_options.get())));
+  auto warped_dataset = Dataset(static_cast<GDALDataset *>(GDALCreateWarpedVRT(source_dataset->gdalDataset(), int(width), int(height), adfGeoTransform.data(), warp_options.first.get())));
 
   auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1);  // non-owning pointer
   auto heights_data = HeightData(width, height);
