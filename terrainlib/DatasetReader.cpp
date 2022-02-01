@@ -97,7 +97,7 @@ WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, co
     options->panSrcBands[0] = int(reader.dataset_band());
     options->panDstBands[0] = 1;
   }
-  constexpr auto use_approximation = false;
+  constexpr auto use_approximation = true;
   if (use_approximation) {
     const auto error_threshold = 0.5;
     auto image_transform_args = make_image_transform_args(reader, dataset, bounds, width, height);
