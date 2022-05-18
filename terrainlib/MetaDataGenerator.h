@@ -37,7 +37,7 @@ public:
   [[nodiscard]] const ctb::Grid& grid() const;
   [[nodiscard]] const Tiler& tiler() const;
 
-  [[nodiscard]] std::vector<ctb::TileBounds> availableTiles() const;
+  [[nodiscard]] std::vector<ctb::TileBounds> availableTiles(unsigned max_zoom = unsigned(-1)) const;
   [[nodiscard]] const DatasetPtr& dataset() const;
 
 private:

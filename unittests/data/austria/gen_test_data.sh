@@ -1,6 +1,6 @@
 #!/bin/bash
 
-austria_dem="/home/madam/valtava/raw/Oe_2020/OeRect_01m_gt_31287.img"
+austria_dem="/home/madam/rajaton/raw/Oe_2020/OeRect_01m_gt_31287.img"
 interpolation="cubic"
 
 gdalwarp  -te_srs EPSG:4326 -te 15.661254 47.976894 17.03693 48.36381 -t_srs EPSG:4326 -ts 4931 2660 -r $interpolation -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=2 -co ZLEVEL=9 -overwrite $austria_dem vienna_20m_epsg4326.tif

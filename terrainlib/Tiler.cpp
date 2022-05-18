@@ -73,6 +73,7 @@ std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
 //  const auto schemeTyFromInternalTy = (m_scheme == Scheme::Tms) ? ([](ctb::i_tile ty) -> ctb::i_tile { return ty; }) : ([n_y_tiles](ctb::i_tile ty) -> ctb::i_tile { return n_y_tiles - ty; });
 
   std::vector<Tile> tiles;
+  tiles.reserve((ne.y - sw.y + 1) * (ne.x - sw.x + 1));
   for (auto ty = sw.y; ty <= ne.y; ++ty) {
     for (auto tx = sw.x; tx <= ne.x; ++tx) {
       const auto ty_p = (m_scheme == Scheme::Tms) ? ty : n_y_tiles - ty - 1;
@@ -84,9 +85,9 @@ std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
 
       tiles.emplace_back(point, zoom_level, srs_bounds, m_grid.getEpsgCode(), grid_size, tile_size);
 
-      if (tiles.size() >= 100'000'000)
+      if (tiles.size() >= 1'000'000'000)
         // think about creating an on the fly tile generator. storing so many tiles takes a lot of memory.
-        throw Exception("Setting the zoom level so higher is probably not a good idea. This would generate more than 100 million tiles. "
+        throw Exception("Setting the zoom level so higher is probably not a good idea. This would generate more than 1'000 million tiles. "
                         "I'm aborting. If you really need this, then that means that the future is bright. But you'll have to edit the code..\n"
                         "      .   .     \n     / \\_/ \\    \n    | O  O |   \n    | ~V~  |  _\n     ~_ _ /  // \n    /     \\ //  \n"
                         "    |  ||  |/  \n    | /  \\ |   \n    ||    ||   \n               \n");
@@ -102,6 +103,7 @@ std::vector<Tile> Tiler::generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>
   assert(zoom_range.first <= zoom_range.second);
   for (ctb::i_zoom i = zoom_range.first; i <= zoom_range.second; ++i) {
     auto zoom_level_tiles = generateTiles(i);
+    tiles.reserve(tiles.size() + zoom_level_tiles.size());
     std::move(zoom_level_tiles.begin(), zoom_level_tiles.end(), std::back_inserter(tiles));
   }
   return tiles;

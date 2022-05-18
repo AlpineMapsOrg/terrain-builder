@@ -59,10 +59,11 @@ const Tiler& MetaDataGenerator::tiler() const
   return m_tiler;
 }
 
-std::vector<ctb::TileBounds> MetaDataGenerator::availableTiles() const
+std::vector<ctb::TileBounds> MetaDataGenerator::availableTiles(unsigned max_zoom) const
 {
   std::vector<ctb::TileBounds> list;
-  const auto max_zoom = m_grid.zoomForResolution(m_dataset->gridResolution(m_grid.getSRS()));
+  if (max_zoom == unsigned(-1))
+    max_zoom = m_grid.zoomForResolution(m_dataset->gridResolution(m_grid.getSRS()));
   for (ctb::i_zoom i = 0; i < max_zoom; ++i) {
     const auto sw = m_tiler.southWestTile(i);
     const auto ne = m_tiler.northEastTile(i);

@@ -179,9 +179,10 @@ TEST_CASE("reading") {
 
 #if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
   SECTION("overview without warping") {
+    REQUIRE(std::string(ATB_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
     const auto border = 5;
     const auto low_res_ds = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_100m_mgi.tif");
-    const auto high_res_ds = Dataset::make_shared("/home/madam/valtava/raw/Oe_2020/OeRect_01m_gt_31287.img");
+    const auto high_res_ds = Dataset::make_shared(ATB_UNITTESTS_AUSTRIA_HIGHRES);
     const auto srs = low_res_ds->srs();
 
     const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
@@ -237,8 +238,9 @@ TEST_CASE("reading") {
 
 
   SECTION("overview with warping") {
+    REQUIRE(std::string(ATB_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
     const auto low_res_ds = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif");
-    const auto high_res_ds = Dataset::make_shared("/home/madam/valtava/raw/Oe_2020/OeRect_01m_gt_31287.img");
+    const auto high_res_ds = Dataset::make_shared(ATB_UNITTESTS_AUSTRIA_HIGHRES);
     const auto srs = low_res_ds->srs();
     const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
     const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
@@ -278,8 +280,9 @@ TEST_CASE("reading") {
 #endif
 
   SECTION("lowres overview with warping") {
+    REQUIRE(std::string(ATB_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
     const auto low_res_ds = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif");
-    const auto high_res_ds = Dataset::make_shared("/home/madam/valtava/raw/Oe_2020/OeRect_01m_gt_31287.img");
+    const auto high_res_ds = Dataset::make_shared(ATB_UNITTESTS_AUSTRIA_HIGHRES);
     const auto srs = low_res_ds->srs();
     const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
     const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);

@@ -37,12 +37,16 @@ ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path,
 
 }
 
-ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path)
+ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path,
+                                                  ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme,
+                                                  std::unique_ptr<ParallelTileWriterInterface> tile_writer,
+                                                  const std::string& output_data_path,
+                                                  unsigned grid_resolution)
 {
   const auto dataset = Dataset::make_shared(input_data_path);
-  ctb::Grid grid = ctb::GlobalGeodetic(256);
+  ctb::Grid grid = ctb::GlobalGeodetic(grid_resolution);
   if (srs == ctb::Grid::Srs::SphericalMercator)
-    grid = ctb::GlobalMercator(256);
+    grid = ctb::GlobalMercator(grid_resolution);
   const auto border = tile_writer->formatRequiresBorder();
   return {input_data_path, grid, Tiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path};
 }

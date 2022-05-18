@@ -30,7 +30,7 @@ class Grid;
 }
 
 namespace layer_json_writer {
-[[nodiscard]] std::string process(const MetaDataGenerator&);
+[[nodiscard]] std::string process(const MetaDataGenerator&, unsigned max_zoom = unsigned(-1));
 
 namespace internal {
 [[nodiscard]] std::string tilejson(const std::string& s);

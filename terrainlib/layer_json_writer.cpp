@@ -94,7 +94,7 @@ std::string layer_json_writer::internal::zoom_layer(const ctb::TileBounds& bound
   return fmt::format(R"([ {{ "startX": {}, "startY": {}, "endX": {}, "endY": {} }} ],)", bounds.getMinX(), bounds.getMinY(), bounds.getMaxX(), bounds.getMaxY());
 }
 
-std::string layer_json_writer::process(const MetaDataGenerator& m)
+std::string layer_json_writer::process(const MetaDataGenerator& m, unsigned max_zoom)
 {
   std::string s = "{\n";
   s += internal::tilejson("2.1.0") + "\n";
@@ -109,7 +109,7 @@ std::string layer_json_writer::process(const MetaDataGenerator& m)
   s += internal::bounds(m.grid()) + "\n";
   s += R"("available": [)";
   s += "\n";
-  for (const auto& z : m.availableTiles()) {
+  for (const auto& z : m.availableTiles(max_zoom)) {
     s += internal::zoom_layer(z) + "\n";
   }
   s += R"(]})" "\n";

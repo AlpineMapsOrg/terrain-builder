@@ -138,10 +138,15 @@ std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& data
   }
 
   double dfTargetRatio = 1.0 / adfSuggestedGeoTransform[1];
-  if( dfTargetRatio <= 1.0 ) {
-    TNTN_LOG_WARN("dfTargetRatio <= 1.0. We won't use dataset overviews!");
-    return dataset;
-  }
+//  if( dfTargetRatio <= 1.0 ) {
+//    TNTN_LOG_WARN(fmt::format("dfTargetRatio {} <= 1.0. We won't use dataset overviews!\n", dfTargetRatio));
+//    TNTN_LOG_WARN(fmt::format("Other values: nPixels={}, nLines={}, adfExtent={}/{}/{}/{}\n",
+//                              nPixels, nLines, adfExtent[0], adfExtent[1], adfExtent[2], adfExtent[3]));
+//    TNTN_LOG_WARN(fmt::format("Other values: adfSuggestedGeoTransform={}/{}/{}/{}/{}/{}\n",
+//                              adfSuggestedGeoTransform[0], adfSuggestedGeoTransform[1], adfSuggestedGeoTransform[2],
+//                              adfSuggestedGeoTransform[3], adfSuggestedGeoTransform[4], adfSuggestedGeoTransform[5]));
+//    return dataset;
+//  }
 
   int iOvr;
   for( iOvr = -1; iOvr < nOvCount-1; iOvr++ )

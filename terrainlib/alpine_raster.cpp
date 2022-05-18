@@ -38,9 +38,9 @@
 
 
 
-ParallelTileGenerator alpine_raster::make_generator(const std::string& output_data_path, const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border)
+ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border, unsigned grid_resolution)
 {
-  return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<alpine_raster::TileWriter>(border), output_data_path);
+  return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<alpine_raster::TileWriter>(border), output_data_path, grid_resolution);
 }
 
 glm::u8vec3 alpine_raster::convert(float height)

@@ -60,7 +60,7 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
   const auto grid_size = tile_size - 1;
 
   const auto diagonal_distance_in_m = distance(ecef_bbox.min, ecef_bbox.max);
-  auto max_error = 0.85 * (diagonal_distance_in_m / std::sqrt(tile_size * tile_size * 2.0));
+  auto max_error = 1.0 * (diagonal_distance_in_m / std::sqrt(tile_size * tile_size * 2.0));
   assert(bbox.max.z - bbox.min.z >= 0);
 
   std::unique_ptr<tntn::RasterDouble> raster;
