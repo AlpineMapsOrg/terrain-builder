@@ -78,7 +78,7 @@ std::unique_ptr<Mesh> load_mesh_from_obj(const char* filename)
 
 std::string make_geojson_face(const Vertex& v1, const Vertex& v2, const Vertex& v3)
 {
-    std::string format_string =
+    constexpr auto format_string =
         "{{\n \"type\" : \"Feature\" , \"properties\" : {{ \"id\" : 0 }} , \"geometry\" :\n {{ \n \"type\" :  \
                                 \"LineString\", \"coordinates\" : \n \
                                 [ \n [ {:.18f} , {:.18f} ], \n [ {:.18f}, {:.18f} ], \n [ {:.18f}, {:.18f} ],\n [ {:.18f}, {:.18f} ] \
@@ -91,7 +91,7 @@ std::string make_geojson_face(const Vertex& v1, const Vertex& v2, const Vertex& 
 
 std::string make_geojson_vertex(const Vertex& v)
 {
-    std::string format_string =
+    constexpr auto format_string =
         "{{ \n  \
         \"type\": \"Feature\",\n \
         \"properties\": {{}},\n \
