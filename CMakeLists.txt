@@ -9,6 +9,7 @@ set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian 
 option(ATB_ENABLE_ADDRESS_SANITIZER "compiles atb with address sanitizer enabled (only debug, works only on g++ and clang)" ON)
 option(ATB_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ATB_ENABLE_ASSERTS "enable asserts (do not define NDEBUG)" ON)
+option(ATB_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 option(ATB_USE_LLVM_LINKER "use lld (llvm) for linking. it's parallel and much faster, but not installed by default. if it's not installed, you'll get errors, that openmp or other stuff is not installed (hard to track down)" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -233,7 +234,9 @@ if (ATB_ENABLE_ASSERTS)
     target_compile_options(terrainlib PUBLIC "-U NDEBUG")
     target_compile_options(terrainlib PUBLIC "-DTNTN_ASSERT_ACTIVE")
 endif()
-
+if (ATB_ENABLE_OVERVIEW_READING)
+    target_compile_options(terrainlib PUBLIC "-DATB_ENABLE_OVERVIEW_READING")
+endif()
 
 add_executable(terrainbuilder
     ${ATB_TERRAINBUILDER_SOURCES}

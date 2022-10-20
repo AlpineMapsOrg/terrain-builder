@@ -112,6 +112,7 @@ WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, co
   return {std::move(options), GdalImageTransformArgsPtr(nullptr, &GDALDestroyGenImgProjTransformer)};
 }
 
+#ifdef ATB_ENABLE_OVERVIEW_READING
 std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& dataset, void *hTransformerArg, bool warn_on_missing_overviews) {
   GDALDataset* poSrcDS = dataset->gdalDataset();
   int nOvLevel = -2;
@@ -165,6 +166,7 @@ std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& data
   }
   return dataset;
 }
+#endif
 
 }
 
@@ -184,10 +186,14 @@ HeightData DatasetReader::read(const ctb::CRSBounds& bounds, unsigned width, uns
 
 HeightData DatasetReader::readWithOverviews(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const
 {
+#ifdef ATB_ENABLE_OVERVIEW_READING
   auto transformer_args = make_image_transform_args(*this, m_dataset.get(), bounds, width, height);
   auto source_dataset = getOverviewDataset(m_dataset, transformer_args.get(), m_warn_on_missing_overviews);
 
   return readFrom(source_dataset, bounds, width, height);
+#else
+    return read(bounds, width, height);
+#endif
 }
 
 HeightData DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height) const
