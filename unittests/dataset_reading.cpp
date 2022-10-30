@@ -248,8 +248,8 @@ TEST_CASE("reading") {
 
     const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs));
     const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs));
-    const auto max_abs_diff = 34.0;
-    const auto max_mse = 1.2;
+    const auto max_abs_diff = 70.0;
+    const auto max_mse = 8.0;
 
     const auto low_res_heights = low_res_reader.read(srs_bounds, render_width, render_height);
     const auto high_res_heights = high_res_reader.readWithOverviews(srs_bounds, render_width, render_height);
@@ -291,8 +291,8 @@ TEST_CASE("reading") {
 
     const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs)) / 10;
     const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs)) / 10;
-    const auto max_abs_diff = 96;
-    const auto max_mse = 105.0;
+    const auto max_abs_diff = 170;
+    const auto max_mse = 300.0;
 
     const auto low_res_heights = low_res_reader.read(srs_bounds, render_width, render_height);
     const auto high_res_heights = high_res_reader.readWithOverviews(srs_bounds, render_width, render_height);
@@ -303,12 +303,12 @@ TEST_CASE("reading") {
     REQUIRE(high_res_heights.height() == render_height);
 
     if (ATB_UNITTESTS_DEBUG_IMAGES) {
-      image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
-      image::debugOut(high_res_heights, fmt::format("./ov_with_warping_high_res_heights.png"));
+      image::debugOut(low_res_heights, fmt::format("./lowres_ov_with_warping_low_res_heights.png"));
+      image::debugOut(high_res_heights, fmt::format("./lowres_ov_with_warping_high_res_heights.png"));
 
       auto height_diffs = HeightData(render_width, render_height);
       std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a-b); });
-      image::debugOut(height_diffs, "./ov_with_warping_diff_low_res_high_res.png");
+      image::debugOut(height_diffs, "./lowres_ov_with_warping_diff_low_res_high_res.png");
     }
     auto largest_abs_diff = 0.0;
     const auto mse = std::transform_reduce(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), 0.0, std::plus<>(), [&largest_abs_diff](auto a, auto b) {
