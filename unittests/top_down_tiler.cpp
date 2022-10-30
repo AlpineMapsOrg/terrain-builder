@@ -19,9 +19,7 @@
 #include <catch2/catch.hpp>
 #include <fmt/core.h>
 
-#include "BottomUpTiler.h"
-#include "ParallelTiler.h"
-
+#include "TopDownTiler.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 
@@ -30,6 +28,7 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
     SECTION("mercator / level 0")
     {
         const auto grid = ctb::GlobalMercator();
-        const auto tiler = BottomUpTiler(grid, grid.getExtent(), Tile::Tile::Border::No, TestType::value ? Tile::Tile::Scheme::Tms : Tile::Tile::Scheme::SlippyMap);
+        const auto tiler = TopDownTiler(grid, grid.getExtent(), Tile::Tile::Border::No, TestType::value ? Tile::Tile::Scheme::Tms : Tile::Tile::Scheme::SlippyMap);
+
     }
 }

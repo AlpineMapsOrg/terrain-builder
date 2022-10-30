@@ -21,7 +21,7 @@
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
-class BottomUpTiler {
+class TopDownTiler {
 public:
-    BottomUpTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
+    TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
 };

@@ -52,7 +52,6 @@ set(ATB_INCLUDE_PATHS
 
 set(ATB_TERRAINLIB_HEADERS
     terrainlib/alpine_raster.h
-    terrainlib/BottomUpTiler.h
     terrainlib/cesium_tin_terra.h
     terrainlib/Dataset.h
     terrainlib/DatasetReader.h
@@ -61,10 +60,11 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/layer_json_writer.h
     terrainlib/MetaDataGenerator.h
     terrainlib/ParallelTileGenerator.h
+    terrainlib/ParallelTiler.h
     terrainlib/ProgressIndicator.h
     terrainlib/srs.h
     terrainlib/Tile.h
-    terrainlib/ParallelTiler.h
+    terrainlib/TopDownTiler.h
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/Bounds.hpp
@@ -114,7 +114,6 @@ set(ATB_TERRAINLIB_HEADERS
 )
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/alpine_raster.cpp
-    terrainlib/BottomUpTiler.cpp
     terrainlib/cesium_tin_terra.cpp
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
@@ -122,9 +121,10 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/layer_json_writer.cpp
     terrainlib/MetaDataGenerator.cpp
     terrainlib/ParallelTileGenerator.cpp
+    terrainlib/ParallelTiler.cpp
     terrainlib/ProgressIndicator.cpp
     terrainlib/Tile.cpp
-    terrainlib/ParallelTiler.cpp
+    terrainlib/TopDownTiler.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.cpp
     terrainlib/tntn/BinaryIO.cpp
@@ -158,7 +158,6 @@ set(ATB_TERRAINLIB_SOURCES
 
 set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/alpine_raster_format.cpp
-    unittests/bottom_up_tiler.cpp
     unittests/catch2_helpers.h
     unittests/cesium_terra_format.cpp
     unittests/dataset.cpp
@@ -169,6 +168,7 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/meta_data_generator.cpp
     unittests/parallel_tile_generator.cpp
     unittests/parallel_tiler.cpp
+    unittests/top_down_tiler.cpp
     unittests/main.cpp
     unittests/srs_test.cpp
     unittests/progress_indicator_test.cpp
