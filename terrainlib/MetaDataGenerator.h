@@ -17,8 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef METADATAGENERATOR_H
-#define METADATAGENERATOR_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -32,18 +31,16 @@
 class MetaDataGenerator
 {
 public:
-  MetaDataGenerator(const DatasetPtr& dataset, const ctb::Grid& grid, const ParallelTiler& tiler);
-  [[nodiscard]] static MetaDataGenerator make(const std::string& input_data_path, ctb::Grid::Srs srs, ParallelTiler::Scheme tiling_scheme);
-  [[nodiscard]] const ctb::Grid& grid() const;
-  [[nodiscard]] const ParallelTiler& tiler() const;
+    MetaDataGenerator(const DatasetPtr& dataset, const ctb::Grid& grid, const ParallelTiler& tiler);
+    [[nodiscard]] static MetaDataGenerator make(const std::string& input_data_path, ctb::Grid::Srs srs, Tile::Scheme tiling_scheme);
+    [[nodiscard]] const ctb::Grid& grid() const;
+    [[nodiscard]] const ParallelTiler& tiler() const;
 
-  [[nodiscard]] std::vector<ctb::TileBounds> availableTiles(unsigned max_zoom = unsigned(-1)) const;
-  [[nodiscard]] const DatasetPtr& dataset() const;
+    [[nodiscard]] std::vector<ctb::TileBounds> availableTiles(unsigned max_zoom = unsigned(-1)) const;
+    [[nodiscard]] const DatasetPtr& dataset() const;
 
 private:
-  DatasetPtr m_dataset;
-  ctb::Grid m_grid;
-  ParallelTiler m_tiler;
+    DatasetPtr m_dataset;
+    ctb::Grid m_grid;
+    ParallelTiler m_tiler;
 };
-
-#endif // METADATAGENERATOR_H

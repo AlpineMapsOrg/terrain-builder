@@ -38,7 +38,7 @@ ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path,
 }
 
 ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path,
-                                                  ctb::Grid::Srs srs, ParallelTiler::Scheme tiling_scheme,
+                                                  ctb::Grid::Srs srs, Tile::Scheme tiling_scheme,
                                                   std::unique_ptr<ParallelTileWriterInterface> tile_writer,
                                                   const std::string& output_data_path,
                                                   unsigned grid_resolution)
@@ -98,7 +98,7 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
   std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
 }
 
-ParallelTiler::Border ParallelTileWriterInterface::formatRequiresBorder() const
+Tile::Border ParallelTileWriterInterface::formatRequiresBorder() const
 {
   return m_format_requires_border;
 }

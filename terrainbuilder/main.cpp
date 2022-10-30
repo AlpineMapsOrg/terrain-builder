@@ -31,7 +31,7 @@ int main() {
     const std::string output_path = "/home/madam/valtava/tiles/alpine_png2";
     //  const auto generator = alpine_raster::make_generator("./test_tiles/", "/home/madam/valtava/raw/Oe_2020/OeRect_01m_gs_31287.img", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::SlippyMap, Tiler::Border::No);
     //  generator.process({16, 16});
-    const auto generator = alpine_raster::make_generator(input_raster, output_path, ctb::Grid::Srs::SphericalMercator, ParallelTiler::Scheme::Tms, ParallelTiler::Border::Yes, 64);
+    const auto generator = alpine_raster::make_generator(input_raster, output_path, ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::Yes, 64);
 //    generator.process({0, 5}, true, true);
     generator.process({15, 16}, true, false);
 

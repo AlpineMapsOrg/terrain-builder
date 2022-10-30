@@ -34,7 +34,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
   //  const auto bounds = ctb::CRSBounds(1'000'000, 6'000'000, 2'000'000, 6'700'000); // in m
   SECTION("mercator / level 0") {
     const auto grid = ctb::GlobalMercator();
-    const auto tiler = ParallelTiler(grid, grid.getExtent(), ParallelTiler::Border::No, TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap);
+    const auto tiler = ParallelTiler(grid, grid.getExtent(), Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
     CHECK(tiler.northEastTile(0) == ctb::TilePoint(0, 0));
     CHECK(tiler.southWestTile(0) == ctb::TilePoint(0, 0));
@@ -57,7 +57,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
   SECTION("mercator tms / level 1 and 2") {
     const auto grid = ctb::GlobalMercator();
     auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
-    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), ParallelTiler::Border::No, TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap);
+    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
     CHECK(tiler.northEastTile(1) == ctb::TilePoint(1, TestType::value ? 1 : 0));
     CHECK(tiler.southWestTile(1) == ctb::TilePoint(1, TestType::value ? 1 : 0));
@@ -99,7 +99,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
 
   SECTION("geodetic tms / level 0") {
     const auto grid = ctb::GlobalGeodetic(64);
-    const auto tiler = ParallelTiler(grid, grid.getExtent(), ParallelTiler::Border::Yes, TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap);
+    const auto tiler = ParallelTiler(grid, grid.getExtent(), Tile::Border::Yes, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
     CHECK(tiler.northEastTile(0) == ctb::TilePoint(1, 0));
     CHECK(tiler.southWestTile(0) == ctb::TilePoint(0, 0));
@@ -136,7 +136,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
   SECTION("geodetic tms / level 1 and 2") {
     const auto grid = ctb::GlobalGeodetic(64);
     auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
-    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), ParallelTiler::Border::Yes, TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap);
+    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::Yes, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
     CHECK(tiler.northEastTile(1) == ctb::TilePoint(2, TestType::value ? 1 : 0));
     CHECK(tiler.southWestTile(1) == ctb::TilePoint(2, TestType::value ? 1 : 0));
@@ -182,7 +182,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
   SECTION("mercator tms / level 1 and 2 (test with cape horn, on southern and western hemisphere)") {
     const auto grid = ctb::GlobalMercator();
     auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/capehorn/small.tif");
-    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), ParallelTiler::Border::No, TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap);
+    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
     CHECK(tiler.northEastTile(1) == ctb::TilePoint(0, TestType::value ? 0 : 1));
     CHECK(tiler.southWestTile(1) == ctb::TilePoint(0, TestType::value ? 0 : 1));
@@ -226,7 +226,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
   SECTION("geodetic tms / level 1 and 2 (test with cape horn, on southern and western hemisphere)") {
     const auto grid = ctb::GlobalGeodetic(64);
     auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/capehorn/small.tif");
-    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), ParallelTiler::Border::Yes, TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap);
+    const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::Yes, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
     CHECK(tiler.northEastTile(1) == ctb::TilePoint(1, TestType::value ? 0 : 1));
     CHECK(tiler.southWestTile(1) == ctb::TilePoint(1, TestType::value ? 0 : 1));
@@ -272,7 +272,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
 TEST_CASE("ParallelTiler returns tiles for several zoom levels") {
   const auto dataset = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
   const auto grid = ctb::GlobalMercator(256);
-  const auto tiler = ParallelTiler(grid, dataset.bounds(grid.getSRS()), ParallelTiler::Border::Yes, ParallelTiler::Scheme::Tms);
+  const auto tiler = ParallelTiler(grid, dataset.bounds(grid.getSRS()), Tile::Border::Yes, Tile::Scheme::Tms);
 
   SECTION("generate from 0 to 7") {
     const auto tiles = tiler.generateTiles({0, 7});

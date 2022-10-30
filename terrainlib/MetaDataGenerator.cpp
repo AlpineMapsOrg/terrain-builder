@@ -41,11 +41,11 @@ MetaDataGenerator::MetaDataGenerator(const DatasetPtr& dataset, const ctb::Grid&
 
 }
 
-MetaDataGenerator MetaDataGenerator::make(const std::string& input_data_path, ctb::Grid::Srs srs, ParallelTiler::Scheme tiling_scheme)
+MetaDataGenerator MetaDataGenerator::make(const std::string& input_data_path, ctb::Grid::Srs srs, Tile::Scheme tiling_scheme)
 {
   auto dataset = Dataset::make_shared(input_data_path);
   auto grid = srs2grid(srs);
-  auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), ParallelTiler::Border::No, tiling_scheme);   // border does not matter for the metadata, no or true would both work.
+  auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::No, tiling_scheme);   // border does not matter for the metadata, no or true would both work.
   return MetaDataGenerator(dataset, grid, tiler);
 }
 

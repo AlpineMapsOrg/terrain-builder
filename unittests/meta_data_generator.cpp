@@ -28,16 +28,16 @@
 #include "ctb/types.hpp"
 
 template <typename TestType>
-ParallelTiler::Scheme tilerScheme() {
-  return TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap;
+Tile::Scheme tilerScheme() {
+  return TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap;
 }
 
 template <typename TestType>
 ctb::i_tile yCoord(ctb::i_tile tmsYCoord, ctb::i_tile nYTiles) {
   switch (tilerScheme<TestType>()) {
-  case ParallelTiler::Scheme::Tms:
+  case Tile::Scheme::Tms:
     return tmsYCoord;
-  case ParallelTiler::Scheme::SlippyMap:
+  case Tile::Scheme::SlippyMap:
     return nYTiles - tmsYCoord - 1;
   }
   throw Exception("Not implemented!");

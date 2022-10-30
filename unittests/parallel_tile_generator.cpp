@@ -33,7 +33,7 @@ TEST_CASE("parallel tile generator") {
   class MockTileWriter : public ParallelTileWriterInterface {
     std::atomic<int>* m_tile_counter = nullptr;
   public:
-    MockTileWriter(std::atomic<int>* tile_counter) : ParallelTileWriterInterface(ParallelTiler::Border::No, "empty"), m_tile_counter(tile_counter) {}
+    MockTileWriter(std::atomic<int>* tile_counter) : ParallelTileWriterInterface(Tile::Border::No, "empty"), m_tile_counter(tile_counter) {}
     void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const override {
       CHECK(!file_path.empty());
       CHECK(tile.gridSize == 256);
@@ -48,7 +48,7 @@ TEST_CASE("parallel tile generator") {
   };
 
   std::filesystem::path base_path = "./unittest_tiles/";
-  auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, ParallelTiler::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter), base_path);
+  auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter), base_path);
   generator.setWarnOnMissingOverviews(false);
   SECTION("dataset tiles only"){
     generator.process({0, 7});

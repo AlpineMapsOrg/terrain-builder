@@ -23,7 +23,7 @@
 #include <functional>
 
 
-ParallelTiler::ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme) :
+ParallelTiler::ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme) :
     m_grid(grid), m_bounds(bounds),
     m_border_south_east(border),
     m_scheme(scheme)
@@ -44,7 +44,7 @@ ctb::TileCoordinate ParallelTiler::northEastTile(ctb::i_zoom zoom_level) const
 
 ctb::TileCoordinate ParallelTiler::convertToTilerScheme(const ctb::TileCoordinate& coord, ctb::i_tile n_y_tiles) const
 {
-  return {coord.zoom, coord.x, (m_scheme == Scheme::Tms) ? coord.y : n_y_tiles - coord.y - 1};
+  return {coord.zoom, coord.x, (m_scheme == Tile::Scheme::Tms) ? coord.y : n_y_tiles - coord.y - 1};
 }
 
 ctb::i_tile ParallelTiler::n_y_tiles(ctb::i_zoom zoom_level) const
@@ -76,9 +76,9 @@ std::vector<Tile> ParallelTiler::generateTiles(ctb::i_zoom zoom_level) const
   tiles.reserve((ne.y - sw.y + 1) * (ne.x - sw.x + 1));
   for (auto ty = sw.y; ty <= ne.y; ++ty) {
     for (auto tx = sw.x; tx <= ne.x; ++tx) {
-      const auto ty_p = (m_scheme == Scheme::Tms) ? ty : n_y_tiles - ty - 1;
+      const auto ty_p = (m_scheme == Tile::Scheme::Tms) ? ty : n_y_tiles - ty - 1;
       const auto point = ctb::TilePoint{tx, ty_p};
-      ctb::CRSBounds srs_bounds = m_grid.srsBounds(ctb::TileCoordinate(zoom_level, tx, ty), m_border_south_east == Border::Yes);
+      ctb::CRSBounds srs_bounds = m_grid.srsBounds(ctb::TileCoordinate(zoom_level, tx, ty), m_border_south_east == Tile::Border::Yes);
       srs_bounds.clampBy(m_grid.getExtent());
       ctb::i_tile grid_size = m_grid.tileSize();
       ctb::i_tile tile_size = grid_size + unsigned(m_border_south_east);
@@ -109,6 +109,6 @@ std::vector<Tile> ParallelTiler::generateTiles(const std::pair<ctb::i_zoom, ctb:
   return tiles;
 }
 
-ParallelTiler::Scheme ParallelTiler::scheme() const {
+Tile::Scheme ParallelTiler::scheme() const {
   return m_scheme;
 }

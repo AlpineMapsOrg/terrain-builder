@@ -40,7 +40,7 @@ namespace internal {
 [[nodiscard]] std::string format();
 
 [[nodiscard]] std::string attribution(const std::string& s);
-[[nodiscard]] std::string schema(const ParallelTiler::Scheme& version);
+[[nodiscard]] std::string schema(const Tile::Scheme& version);
 [[nodiscard]] std::string tiles();
 [[nodiscard]] std::string projection(int epsg_number);
 [[nodiscard]] std::string bounds(const ctb::Grid& grid);

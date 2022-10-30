@@ -27,26 +27,24 @@
 class ParallelTiler
 {
 public:
-  using Border = Tile::Border;
-  using Scheme = Tile::Scheme;
-  ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme);
+    ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
 
-  [[nodiscard]] std::vector<Tile> generateTiles(ctb::i_zoom zoom_level) const;
-  [[nodiscard]] std::vector<Tile> generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
-  [[nodiscard]] Scheme scheme() const;
+    [[nodiscard]] std::vector<Tile> generateTiles(ctb::i_zoom zoom_level) const;
+    [[nodiscard]] std::vector<Tile> generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
+    [[nodiscard]] Tile::Scheme scheme() const;
 
-  [[nodiscard]] ctb::TileCoordinate southWestTile(ctb::i_zoom zoom_level) const;
-  [[nodiscard]] ctb::TileCoordinate northEastTile(ctb::i_zoom zoom_level) const;
+    [[nodiscard]] ctb::TileCoordinate southWestTile(ctb::i_zoom zoom_level) const;
+    [[nodiscard]] ctb::TileCoordinate northEastTile(ctb::i_zoom zoom_level) const;
 
-  const ctb::CRSBounds& bounds() const;
-  void setBounds(const ctb::CRSBounds& newBounds);
+    const ctb::CRSBounds& bounds() const;
+    void setBounds(const ctb::CRSBounds& newBounds);
 
 private:
-  [[nodiscard]] ctb::TileCoordinate convertToTilerScheme(const ctb::TileCoordinate&, ctb::i_tile n_y_tiles) const;
-  [[nodiscard]] ctb::i_tile n_y_tiles(ctb::i_zoom zoom_level) const;
+    [[nodiscard]] ctb::TileCoordinate convertToTilerScheme(const ctb::TileCoordinate&, ctb::i_tile n_y_tiles) const;
+    [[nodiscard]] ctb::i_tile n_y_tiles(ctb::i_zoom zoom_level) const;
 
-  const ctb::Grid m_grid;
-  ctb::CRSBounds m_bounds;
-  const Border m_border_south_east;
-  const Scheme m_scheme;
+    const ctb::Grid m_grid;
+    ctb::CRSBounds m_bounds;
+    const Tile::Border m_border_south_east;
+    const Tile::Scheme m_scheme;
 };
