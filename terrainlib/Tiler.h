@@ -17,14 +17,34 @@
  *****************************************************************************/
 
 #pragma once
-#include "Tile.h"
-#include "Tiler.h"
+
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
-class TopDownTiler : public Tiler {
-public:
-    TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
+#include "Tile.h"
 
-    std::vector<Tile> generateTiles(ctb::i_zoom zoom_level, ctb::TilePoint tilepoint) const;
+class Tiler
+{
+public:
+    Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
+
+    [[nodiscard]] Tile::Scheme scheme() const;
+    [[nodiscard]] const ctb::CRSBounds& bounds() const;
+    void setBounds(const ctb::CRSBounds& newBounds);
+
+protected:
+    [[nodiscard]] const ctb::Grid& grid() const;
+    [[nodiscard]] ctb::i_tile grid_size() const;
+    [[nodiscard]] ctb::i_tile tile_size() const;
+    [[nodiscard]] Tile::Border border_south_east() const;
+    [[nodiscard]] ctb::TileCoordinate convertToTilerScheme(const ctb::TileCoordinate&, ctb::i_tile n_y_tiles) const;
+    [[nodiscard]] ctb::i_tile n_y_tiles(ctb::i_zoom zoom_level) const;
+
+private:
+
+    const ctb::Grid m_grid;
+    ctb::CRSBounds m_bounds;
+    const Tile::Border m_border_south_east;
+    const Tile::Scheme m_scheme;
 };
+

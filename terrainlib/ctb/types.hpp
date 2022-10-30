@@ -34,7 +34,7 @@ namespace ctb {
 // Simple types
 using i_pixel = unsigned int; ///< A pixel value
 using i_tile = unsigned int; ///< A tile coordinate
-using i_zoom = unsigned short int; ///< A zoom level
+using i_zoom = unsigned int; ///< A zoom level
 using i_terrain_height = uint16_t; ///< A terrain tile height
 
 // Complex types

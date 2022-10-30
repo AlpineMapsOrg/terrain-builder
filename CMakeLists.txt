@@ -64,6 +64,7 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/ProgressIndicator.h
     terrainlib/srs.h
     terrainlib/Tile.h
+    terrainlib/Tiler.h
     terrainlib/TopDownTiler.h
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
@@ -124,6 +125,7 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/ParallelTiler.cpp
     terrainlib/ProgressIndicator.cpp
     terrainlib/Tile.cpp
+    terrainlib/Tiler.cpp
     terrainlib/TopDownTiler.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.cpp

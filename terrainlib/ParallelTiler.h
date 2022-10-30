@@ -19,31 +19,15 @@
 
 #pragma once
 
-#include "ctb/Grid.hpp"
-#include "ctb/types.hpp"
+#include "Tiler.h"
 
-#include "Tile.h"
-
-class ParallelTiler {
+class ParallelTiler : public Tiler {
 public:
     ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
 
     [[nodiscard]] std::vector<Tile> generateTiles(ctb::i_zoom zoom_level) const;
     [[nodiscard]] std::vector<Tile> generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
-    [[nodiscard]] Tile::Scheme scheme() const;
 
     [[nodiscard]] ctb::TileCoordinate southWestTile(ctb::i_zoom zoom_level) const;
     [[nodiscard]] ctb::TileCoordinate northEastTile(ctb::i_zoom zoom_level) const;
-
-    const ctb::CRSBounds& bounds() const;
-    void setBounds(const ctb::CRSBounds& newBounds);
-
-private:
-    [[nodiscard]] ctb::TileCoordinate convertToTilerScheme(const ctb::TileCoordinate&, ctb::i_tile n_y_tiles) const;
-    [[nodiscard]] ctb::i_tile n_y_tiles(ctb::i_zoom zoom_level) const;
-
-    const ctb::Grid m_grid;
-    ctb::CRSBounds m_bounds;
-    const Tile::Border m_border_south_east;
-    const Tile::Scheme m_scheme;
 };
