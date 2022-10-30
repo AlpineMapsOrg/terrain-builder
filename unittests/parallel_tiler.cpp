@@ -269,7 +269,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
   }
 }
 
-TEST_CASE("tiler returns tiles for several zoom levels") {
+TEST_CASE("ParallelTiler returns tiles for several zoom levels") {
   const auto dataset = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
   const auto grid = ctb::GlobalMercator(256);
   const auto tiler = ParallelTiler(grid, dataset.bounds(grid.getSRS()), ParallelTiler::Border::Yes, ParallelTiler::Scheme::Tms);

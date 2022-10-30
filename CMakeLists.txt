@@ -52,6 +52,7 @@ set(ATB_INCLUDE_PATHS
 
 set(ATB_TERRAINLIB_HEADERS
     terrainlib/alpine_raster.h
+    terrainlib/BottomUpTiler.h
     terrainlib/cesium_tin_terra.h
     terrainlib/Dataset.h
     terrainlib/DatasetReader.h
@@ -113,6 +114,7 @@ set(ATB_TERRAINLIB_HEADERS
 )
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/alpine_raster.cpp
+    terrainlib/BottomUpTiler.cpp
     terrainlib/cesium_tin_terra.cpp
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
@@ -156,6 +158,7 @@ set(ATB_TERRAINLIB_SOURCES
 
 set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/alpine_raster_format.cpp
+    unittests/bottom_up_tiler.cpp
     unittests/catch2_helpers.h
     unittests/cesium_terra_format.cpp
     unittests/dataset.cpp
