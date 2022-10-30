@@ -1,8 +1,8 @@
 #pragma once
 
+#include "tntn/MeshMode.h"
 #include "tntn/geometrix.h"
 #include "tntn/util.h"
-#include "tntn/MeshMode.h"
 
 #include <array>
 #include <vector>
@@ -11,14 +11,13 @@
 
 namespace tntn {
 
-class Mesh
-{
-  private:
-    //disallow copy and assign, force passing by pointer or move semantics
+class Mesh {
+private:
+    // disallow copy and assign, force passing by pointer or move semantics
     Mesh(const Mesh& other) = delete;
     Mesh& operator=(const Mesh& other) = delete;
 
-  public:
+public:
     Mesh() = default;
     Mesh(Mesh&& other) = default;
     Mesh& operator=(Mesh&& other) = default;
@@ -64,7 +63,7 @@ class Mesh
     bool is_square() const;
     bool check_for_holes_in_square_mesh() const;
 
-  private:
+private:
     bool semantic_equal_tri_tri(const Mesh& other) const;
     bool semantic_equal_dec_dec(const Mesh& other) const;
     bool semantic_equal_tri_dec(const Mesh& other) const;

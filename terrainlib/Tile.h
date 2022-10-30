@@ -19,25 +19,25 @@
 
 #pragma once
 
-#include <glm/glm.hpp>
-#include "ctb/types.hpp"
 #include "ctb/TileCoordinate.hpp"
+#include "ctb/types.hpp"
+#include <glm/glm.hpp>
 
-struct Tile
-{
+struct Tile {
     enum class Border {
-        Yes = 1, No = 0
+        Yes = 1,
+        No = 0
     };
 
     // The difference between TMS and slippyMap is whether y starts counting from the bottom (south) or top (north).
     // https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#1/-16.88/79.02
     //
     enum class Scheme {
-        Tms,      // southern most tile is y = 0
+        Tms, // southern most tile is y = 0
         SlippyMap // aka Google, XYZ, webmap tiles; northern most tile is y = 0
     };
 
-    ctb::TilePoint point;  // int / used to generate file name
+    ctb::TilePoint point; // int / used to generate file name
     ctb::i_zoom zoom;
     ctb::CRSBounds srsBounds;
     int srs_epsg;

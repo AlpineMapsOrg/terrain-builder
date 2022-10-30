@@ -25,19 +25,17 @@
 #include <stdexcept>
 
 namespace ctb {
-  class CTBException;
+class CTBException;
 }
 
 /// This represents a CTB runtime error
-class ctb::CTBException:
-  public std::runtime_error
-{ 
+class ctb::CTBException : public std::runtime_error {
 public:
-  CTBException(const char *message):
-    std::runtime_error(message)
-  {
-    while(false) {}
-  }
+    CTBException(const char* message)
+        : std::runtime_error(message)
+    {
+        while (false) { }
+    }
 };
 
 #endif /* CTBEXCEPTION_HPP */

@@ -3,16 +3,16 @@
 #include "fmt/format.h"
 #include "fmt/printf.h"
 #include "tntn/logging.h"
-#include "tntn/util.h"
 #include "tntn/raster_tools.h"
+#include "tntn/util.h"
 
-#include <iostream>
 #include <fstream>
-#include <stdio.h>
 #include <iomanip>
+#include <iostream>
+#include <stdio.h>
 
-#include <ogr_spatialref.h>
 #include <gdal_priv.h>
+#include <ogr_spatialref.h>
 
 #include "tntn/gdal_init.h"
 
@@ -20,9 +20,9 @@ namespace tntn {
 
 std::string getFirstNonZero(std::vector<std::string> tokens, int start)
 {
-    for(int i = start; i < tokens.size(); i++)
-    {
-        if(tokens[i].size() > 0) return tokens[i];
+    for (int i = start; i < tokens.size(); i++) {
+        if (tokens[i].size() > 0)
+            return tokens[i];
     }
 
     return "";
@@ -47,58 +47,36 @@ RasterDouble load_raster_from_asc(const std::string& filename)
     int numPoints = 0;
 
     std::vector<std::string> tokens;
-    for(std::string line; getline(input, line);)
-    {
+    for (std::string line; getline(input, line);) {
         tokenize(line, tokens);
 
-        if(tokens.size() > 1)
-        {
-            if(count == 0)
-            {
+        if (tokens.size() > 1) {
+            if (count == 0) {
                 width = std::stoi(getFirstNonZero(tokens, 1));
-            }
-            else if(count == 1)
-            {
+            } else if (count == 1) {
                 height = std::stoi(getFirstNonZero(tokens, 1));
                 raster.allocate(width, height);
-            }
-            else if(count == 2)
-            {
+            } else if (count == 2) {
                 raster.set_pos_x(std::stod(getFirstNonZero(tokens, 1)));
-            }
-            else if(count == 3)
-            {
+            } else if (count == 3) {
                 raster.set_pos_y(std::stod(getFirstNonZero(tokens, 1)));
-            }
-            else if(count == 4)
-            {
+            } else if (count == 4) {
                 raster.set_cell_width(std::stod(getFirstNonZero(tokens, 1)));
-            }
-            else if(count == 5)
-            {
+            } else if (count == 5) {
                 raster.set_no_data_value(std::stod(getFirstNonZero(tokens, 1)));
-            }
-            else
-            {
+            } else {
 #if true
 
                 // read data
-                if(tokens.size() != raster.get_width())
-                {
+                if (tokens.size() != raster.get_width()) {
                     TNTN_LOG_ERROR("can't read data");
                     return raster;
-                }
-                else
-                {
+                } else {
                     c = 0;
-                    for(auto p : tokens)
-                    {
-                        try
-                        {
+                    for (auto p : tokens) {
+                        try {
                             raster.value(r, c) = std::stod(p);
-                        }
-                        catch(const char* msg)
-                        {
+                        } catch (const char* msg) {
                             std::cout << msg << std::endl;
                             raster.value(r, c) = raster.get_no_data_value();
                         }
@@ -107,8 +85,7 @@ RasterDouble load_raster_from_asc(const std::string& filename)
                         c++;
                     }
 
-                    if((r % (raster.get_height() / 10)) == 0)
-                    {
+                    if ((r % (raster.get_height() / 10)) == 0) {
                         float p = r / (float)raster.get_height();
                         TNTN_LOG_INFO("{} %", p * 100.0);
                     }
@@ -117,11 +94,11 @@ RasterDouble load_raster_from_asc(const std::string& filename)
                 }
 #else
                 std::stringstream stream(input);
-                while(true)
-                {
+                while (true) {
                     double v;
                     stream >> v;
-                    if(!stream) break;
+                    if (!stream)
+                        break;
                 }
 #endif
             }
@@ -140,8 +117,7 @@ RasterDouble load_raster_from_asc(const std::string& filename)
 bool write_raster_to_asc(const std::string& filename, const RasterDouble& raster)
 {
     File f;
-    if(!f.open(filename.c_str(), File::OM_RWCF))
-    {
+    if (!f.open(filename.c_str(), File::OM_RWCF)) {
         TNTN_LOG_ERROR("unable to open raster file {} for writing", filename);
         return false;
     }
@@ -162,8 +138,7 @@ bool write_raster_to_asc(FileLike& file, const RasterDouble& raster)
      ...
      row n
     */
-    if(!file.is_good())
-    {
+    if (!file.is_good()) {
         return false;
     }
     TNTN_LOG_INFO("write raster...");
@@ -172,49 +147,48 @@ bool write_raster_to_asc(FileLike& file, const RasterDouble& raster)
     line_buffer.reserve(4096);
     FileLike::position_type write_position = 0;
 
-    //file << "NCOLS "        << raster.getWidth()    << std::endl;
+    // file << "NCOLS "        << raster.getWidth()    << std::endl;
     fmt::format_to(line_buffer, "NCOLS {}\n", raster.get_width());
-    //file << "NROWS "        << raster.getHeight()   << std::endl;
+    // file << "NROWS "        << raster.getHeight()   << std::endl;
     fmt::format_to(line_buffer, "NROWS {}\n", raster.get_height());
-    //file << "XLLCORNER "    << std::setprecision(9) << raster.getXPos()        << std::endl;
+    // file << "XLLCORNER "    << std::setprecision(9) << raster.getXPos()        << std::endl;
     fmt::format_to(line_buffer, "XLLCORNER {:.9f}\n", raster.get_pos_x());
-    //file << "YLLCORNER "    << std::setprecision(9) << raster.getYPos()        << std::endl;
+    // file << "YLLCORNER "    << std::setprecision(9) << raster.getYPos()        << std::endl;
     fmt::format_to(line_buffer, "YLLCORNER {:.9f}\n", raster.get_pos_y());
-    //file << "CELLSIZE "     << std::setprecision(9) << raster.getCellsize()    << std::endl;
+    // file << "CELLSIZE "     << std::setprecision(9) << raster.getCellsize()    << std::endl;
     fmt::format_to(line_buffer, "CELLSIZE {:.9f}\n", raster.get_cell_width());
-    //file << "NODATA_VALUE " << std::setprecision(9) << raster.getNoDataValue() << std::endl;
+    // file << "NODATA_VALUE " << std::setprecision(9) << raster.getNoDataValue() << std::endl;
     fmt::format_to(line_buffer, "NODATA_VALUE {:.9f}\n", raster.get_no_data_value());
 
-    if(!file.write(write_position, line_buffer.data(), line_buffer.size())) return false;
+    if (!file.write(write_position, line_buffer.data(), line_buffer.size()))
+        return false;
     write_position += line_buffer.size();
     line_buffer.resize(0);
 
-    if(!file.is_good())
-    {
+    if (!file.is_good()) {
         return false;
     }
 
-    for(int r = 0; r < raster.get_height(); r++)
-    {
-        for(int c = 0; c < raster.get_width(); c++)
-        {
+    for (int r = 0; r < raster.get_height(); r++) {
+        for (int c = 0; c < raster.get_width(); c++) {
             fmt::format_to(line_buffer, "{} ", raster.value(r, c));
         }
 
         fmt::format_to(line_buffer, "\n");
 
-        if(!file.write(write_position, line_buffer.data(), line_buffer.size())) return false;
+        if (!file.write(write_position, line_buffer.data(), line_buffer.size()))
+            return false;
         write_position += line_buffer.size();
         line_buffer.resize(0);
 
-        if((r % (1 + raster.get_height() / 10)) == 0)
-        {
+        if ((r % (1 + raster.get_height() / 10)) == 0) {
             float p = r / (float)raster.get_height();
             TNTN_LOG_INFO("{} %", p * 100.0);
         }
     }
 
-    if(!file.write(write_position, line_buffer.data(), line_buffer.size())) return false;
+    if (!file.write(write_position, line_buffer.data(), line_buffer.size()))
+        return false;
     line_buffer.resize(0);
 
     TNTN_LOG_INFO("done");
@@ -227,10 +201,8 @@ bool write_raster_to_asc(FileLike& file, const RasterDouble& raster)
 
 typedef std::unique_ptr<GDALDataset, void (*)(GDALDataset*)> GDALDataset_ptr;
 
-struct TransformationMatrix
-{
-    union
-    {
+struct TransformationMatrix {
+    union {
         double matrix[6];
         struct
         {
@@ -246,27 +218,25 @@ struct TransformationMatrix
 
 static void GDALClose_wrapper(GDALDataset* p)
 {
-    if(p != nullptr)
-    {
+    if (p != nullptr) {
         GDALClose(p);
     }
 }
 
 static bool get_transformation_matrix(GDALDataset* dataset, TransformationMatrix& gt)
 {
-    if(dataset->GetGeoTransform(gt.matrix) != CE_None)
-    {
+    if (dataset->GetGeoTransform(gt.matrix) != CE_None) {
         TNTN_LOG_ERROR("Input raster is missing geotransformation matrix");
         return false;
     }
 
-//    if(fabs(gt.scale_x) != fabs(gt.scale_y))
-//    {
-//        TNTN_LOG_ERROR("Can not process rasters with non square pixels ({}x{})",
-//                       fabs(gt.scale_x),
-//                       fabs(gt.scale_y));
-//        return false;
-//    }
+    //    if(fabs(gt.scale_x) != fabs(gt.scale_y))
+    //    {
+    //        TNTN_LOG_ERROR("Can not process rasters with non square pixels ({}x{})",
+    //                       fabs(gt.scale_x),
+    //                       fabs(gt.scale_y));
+    //        return false;
+    //    }
 
     return true;
 }
@@ -276,8 +246,7 @@ static bool is_valid_projection(GDALDataset* dataset)
     // returned pointer should not be altered, freed or expected to last for long.
     const char* projection_wkt = dataset->GetProjectionRef();
 
-    if(projection_wkt == NULL)
-    {
+    if (projection_wkt == NULL) {
         TNTN_LOG_ERROR("Input raster file does not provide spatial reference information");
         return false;
     }
@@ -300,44 +269,36 @@ static bool is_valid_projection(GDALDataset* dataset)
 #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
     OGRErr match_projection_error = raster_srs.AutoIdentifyEPSG();
 
-    if(match_projection_error != 0)
-    {
+    if (match_projection_error != 0) {
         TNTN_LOG_ERROR("Can not match projection to EPSG:3857");
         return false;
     }
 
-    if(web_mercator.IsSame(&raster_srs))
-    {
+    if (web_mercator.IsSame(&raster_srs)) {
         matched = true;
     }
 #else
     // Matched projections must be freed with OSRFreeSRSArray()
-    OGRSpatialReferenceH* matched_projections =
-            raster_srs.FindMatches(NULL, &matches_number, NULL);
+    OGRSpatialReferenceH* matched_projections = raster_srs.FindMatches(NULL, &matches_number, NULL);
 
-    if(matched_projections == 0)
-    {
+    if (matched_projections == 0) {
         TNTN_LOG_ERROR("Can not match projection to EPSG:3857");
         return false;
     }
 
-    for(int i = 0; i < matches_number; i++)
-    {
-        if(web_mercator.IsSame(static_cast<OGRSpatialReference*>(matched_projections[i])))
-        {
+    for (int i = 0; i < matches_number; i++) {
+        if (web_mercator.IsSame(static_cast<OGRSpatialReference*>(matched_projections[i]))) {
             matched = true;
             break;
         }
     }
 
-    if(matched_projections)
-    {
+    if (matched_projections) {
         OSRFreeSRSArray(matched_projections);
     }
 #endif
 
-    if(!matched)
-    {
+    if (!matched) {
         TNTN_LOG_ERROR("Can not match projection to EPSG:3857");
     }
 
@@ -345,31 +306,28 @@ static bool is_valid_projection(GDALDataset* dataset)
 }
 
 bool load_raster_file(const std::string& file_name,
-                      RasterDouble& target_raster,
-                      bool validate_projection)
+    RasterDouble& target_raster,
+    bool validate_projection)
 {
     initialize_gdal_once();
 
     TNTN_LOG_INFO("Opening raster file {} with GDAL...", file_name);
 
     GDALDataset_ptr dataset(static_cast<GDALDataset*>(GDALOpen(file_name.c_str(), GA_ReadOnly)),
-                            &GDALClose_wrapper);
+        &GDALClose_wrapper);
 
-    if(dataset == nullptr)
-    {
+    if (dataset == nullptr) {
         TNTN_LOG_ERROR("Can't open input raster {}: ", file_name);
         return false;
     }
 
     TransformationMatrix gt;
 
-    if(!get_transformation_matrix(dataset.get(), gt))
-    {
+    if (!get_transformation_matrix(dataset.get(), gt)) {
         return false;
     }
 
-    if(validate_projection && !is_valid_projection(dataset.get()))
-    {
+    if (validate_projection && !is_valid_projection(dataset.get())) {
         fmt::print("input raster file must be in EPSG:3857 (Web Mercator) format\n");
         fmt::print("you can reproject raster terrain using GDAL\n");
         fmt::print("as follows: 'gdalwarp -t_srs EPSG:3857 input.tif output.tif'\n");
@@ -379,16 +337,13 @@ bool load_raster_file(const std::string& file_name,
 
     int bands_count = dataset->GetRasterCount();
 
-    if(bands_count == 0)
-    {
+    if (bands_count == 0) {
         TNTN_LOG_ERROR("Can't process a raster file witout raster bands");
         return false;
-    }
-    else if(bands_count > 1)
-    {
+    } else if (bands_count > 1) {
         TNTN_LOG_WARN("File {} has {} raster bands, processing with a raster band #1",
-                      file_name,
-                      bands_count);
+            file_name,
+            bands_count);
     }
 
     // TODO: Perhaps make raster band number a parameter
@@ -403,18 +358,18 @@ bool load_raster_file(const std::string& file_name,
     target_raster.set_no_data_value(raster_band->GetNoDataValue());
 
     TNTN_LOG_INFO("reading raster data...");
-    if(raster_band->RasterIO(GF_Read,
-                             0,
-                             0,
-                             raster_width,
-                             raster_height,
-                             target_raster.get_ptr(),
-                             raster_width,
-                             raster_height,
-                             GDT_Float64,
-                             0,
-                             0) != CE_None)
-    {
+    if (raster_band->RasterIO(GF_Read,
+            0,
+            0,
+            raster_width,
+            raster_height,
+            target_raster.get_ptr(),
+            raster_width,
+            raster_height,
+            GDT_Float64,
+            0,
+            0)
+        != CE_None) {
         TNTN_LOG_ERROR("Can not read raster data");
         return false;
     }
@@ -428,13 +383,11 @@ bool load_raster_file(const std::string& file_name,
     target_raster.set_pos_x(std::min(x1, x2));
     target_raster.set_pos_y(std::min(y1, y2));
 
-    if(gt.scale_x < 0)
-    {
+    if (gt.scale_x < 0) {
         raster_tools::flip_data_x(target_raster);
     }
 
-    if(gt.scale_y > 0)
-    {
+    if (gt.scale_y > 0) {
         raster_tools::flip_data_y(target_raster);
     }
 

@@ -28,15 +28,16 @@
 #include "Exception.h"
 
 class ProgressIndicator {
-  const size_t m_n_steps;
-  std::atomic<size_t> m_step = 0;
-public:
-  ProgressIndicator(size_t n_steps);
+    const size_t m_n_steps;
+    std::atomic<size_t> m_step = 0;
 
-  void taskFinished();
-  [[nodiscard]] std::jthread startMonitoring() const; // join on the returned thread after the work is done!!
-  [[nodiscard]] std::string progressBar() const;
-  [[nodiscard]] std::string xOfYDoneMessagE() const;
+public:
+    ProgressIndicator(size_t n_steps);
+
+    void taskFinished();
+    [[nodiscard]] std::jthread startMonitoring() const; // join on the returned thread after the work is done!!
+    [[nodiscard]] std::string progressBar() const;
+    [[nodiscard]] std::string xOfYDoneMessagE() const;
 };
 
 #endif // PROGRESSINDICATOR_H

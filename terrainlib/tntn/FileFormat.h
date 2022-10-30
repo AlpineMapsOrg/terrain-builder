@@ -1,16 +1,14 @@
 #pragma once
 
-#include <string>
-#include <string.h>
 #include "tntn/MeshMode.h"
+#include <string.h>
+#include <string>
 
 namespace tntn {
 
-class FileFormat
-{
-  public:
-    enum Value
-    {
+class FileFormat {
+public:
+    enum Value {
         NONE = 0,
         OFF = 1,
         OBJ = 2,
@@ -28,7 +26,10 @@ class FileFormat
     FileFormat(const FileFormat& f) = default;
     FileFormat& operator=(const FileFormat& f) = default;
 
-    FileFormat(const Value v) : m_value(v) {}
+    FileFormat(const Value v)
+        : m_value(v)
+    {
+    }
     FileFormat& operator=(const Value v) noexcept
     {
         m_value = v;
@@ -40,7 +41,7 @@ class FileFormat
     bool operator==(const FileFormat& f) const noexcept { return m_value == f.m_value; }
     bool operator!=(const FileFormat& f) const noexcept { return m_value != f.m_value; }
 
-    //for use in std::map etc.
+    // for use in std::map etc.
     bool operator<(const FileFormat& f) const noexcept
     {
         return static_cast<int>(m_value) < static_cast<int>(f.m_value);
@@ -50,19 +51,29 @@ class FileFormat
 
     const char* to_cstring() const noexcept
     {
-        switch(m_value)
-        {
-            case NONE: return "";
-            case OFF: return "off";
-            case OBJ: return "obj";
-            case ASC: return "asc";
-            case XYZ: return "xyz";
-            case TERRAINGZ: "terrain.gz";
-            case TERRAIN: return "terrain";
-            case JSON: return "json";
-            case GEOJSON: return "geojson";
-            case TIFF: return "tiff";
-            case TIF: return "tif";
+        switch (m_value) {
+        case NONE:
+            return "";
+        case OFF:
+            return "off";
+        case OBJ:
+            return "obj";
+        case ASC:
+            return "asc";
+        case XYZ:
+            return "xyz";
+        case TERRAINGZ:
+            "terrain.gz";
+        case TERRAIN:
+            return "terrain";
+        case JSON:
+            return "json";
+        case GEOJSON:
+            return "geojson";
+        case TIFF:
+            return "tiff";
+        case TIF:
+            return "tif";
         }
         return "";
     }
@@ -73,25 +84,25 @@ class FileFormat
     }
     static FileFormat from_string(const char* s) noexcept
     {
-        if(strcasecmp(s, "off") == 0)
+        if (strcasecmp(s, "off") == 0)
             return OFF;
-        else if(strcasecmp(s, "obj") == 0)
+        else if (strcasecmp(s, "obj") == 0)
             return OBJ;
-        else if(strcasecmp(s, "asc") == 0)
+        else if (strcasecmp(s, "asc") == 0)
             return ASC;
-        else if(strcasecmp(s, "xyz") == 0)
+        else if (strcasecmp(s, "xyz") == 0)
             return XYZ;
-        else if(strcasecmp(s, "terrain") == 0)
+        else if (strcasecmp(s, "terrain") == 0)
             return TERRAIN;
-        else if(strcasecmp(s, "terrain.gz") == 0)
+        else if (strcasecmp(s, "terrain.gz") == 0)
             return TERRAINGZ;
-        else if(strcasecmp(s, "json") == 0)
+        else if (strcasecmp(s, "json") == 0)
             return JSON;
-        else if(strcasecmp(s, "geojson") == 0)
+        else if (strcasecmp(s, "geojson") == 0)
             return GEOJSON;
-        else if(strcasecmp(s, "tiff") == 0)
+        else if (strcasecmp(s, "tiff") == 0)
             return TIFF;
-        else if(strcasecmp(s, "tif") == 0)
+        else if (strcasecmp(s, "tif") == 0)
             return TIF;
         else
             return NONE;
@@ -103,30 +114,31 @@ class FileFormat
     }
     static FileFormat from_fileext(const char* s) noexcept
     {
-        if(*s == '.')
-        {
+        if (*s == '.') {
             return from_string(s + 1);
-        }
-        else
-        {
+        } else {
             return from_string(s);
         }
     }
 
     MeshMode optimal_mesh_mode() const
     {
-        switch(m_value)
-        {
-            case OBJ: [[fallthrough]];
-            case OFF: [[fallthrough]];
-            case TERRAINGZ: [[fallthrough]];
-            case TERRAIN: return MeshMode::decomposed;
-            default: return MeshMode::none;
+        switch (m_value) {
+        case OBJ:
+            [[fallthrough]];
+        case OFF:
+            [[fallthrough]];
+        case TERRAINGZ:
+            [[fallthrough]];
+        case TERRAIN:
+            return MeshMode::decomposed;
+        default:
+            return MeshMode::none;
         }
     }
 
-  private:
+private:
     Value m_value = NONE;
 };
 
-} //namespace tntn
+} // namespace tntn

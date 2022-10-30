@@ -24,8 +24,7 @@
 
 #include "Tile.h"
 
-class ParallelTiler
-{
+class ParallelTiler {
 public:
     ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
 

@@ -1,13 +1,12 @@
 #pragma once
-#include <vector>
-#include <exception>
-#include <deque>
-#include <memory>
 #include <cstdint>
+#include <deque>
+#include <exception>
+#include <memory>
+#include <vector>
 
 namespace delaunator_cpp {
-struct DelaunatorPoint
-{
+struct DelaunatorPoint {
     int64_t i;
     double x;
     double y;
@@ -17,16 +16,15 @@ struct DelaunatorPoint
     bool removed;
 };
 
-class Delaunator
-{
+class Delaunator {
 
-  public:
+public:
     bool triangulate(const std::vector<double>& coords);
 
     std::vector<uint64_t> triangles;
     std::vector<int64_t> halfedges;
 
-  private:
+private:
     double m_center_x;
     double m_center_y;
     int64_t m_hash_size;
@@ -34,7 +32,7 @@ class Delaunator
     std::vector<int64_t> m_hash;
     std::vector<DelaunatorPoint> m_hull;
 
-  private:
+private:
     int64_t hash_key(double x, double y);
     void hash_edge(int64_t e);
 

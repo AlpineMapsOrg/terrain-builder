@@ -4,16 +4,16 @@
 
 #include "test_common.h"
 
-bool double_eq(double a, double b, double eps){
-	bool result = std::abs(a - b) < eps;
+bool double_eq(double a, double b, double eps)
+{
+    bool result = std::abs(a - b) < eps;
 
-	if(!result)
-	{
-		TNTN_LOG_DEBUG("DOUBLE_EQ TEST FAILED: ({} - {}) > {}",
-			a, b, eps);
-	}
+    if (!result) {
+        TNTN_LOG_DEBUG("DOUBLE_EQ TEST FAILED: ({} - {}) > {}",
+            a, b, eps);
+    }
 
-	return result;
+    return result;
 }
 
 // Takes a path relative to fixture directory and returns an absolute file path

@@ -5,19 +5,17 @@
 namespace here {
 namespace tntn {
 
-struct ZoomRange
-{
-    int min_zoom = 0;
-    int max_zoom = 0;
+    struct ZoomRange {
+        int min_zoom = 0;
+        int max_zoom = 0;
 
-    void normalize()
-    {
-        if(min_zoom > max_zoom)
+        void normalize()
         {
-            std::swap(min_zoom, max_zoom);
+            if (min_zoom > max_zoom) {
+                std::swap(min_zoom, max_zoom);
+            }
         }
-    }
-};
+    };
 
-} //namespace tntn
-} //namespace here
+} // namespace tntn
+} // namespace here

@@ -29,71 +29,80 @@
 
 using namespace std::literals;
 
-TEST_CASE("progress indicator") {
-  SECTION("throws on overflow") {
+TEST_CASE("progress indicator")
+{
+    SECTION("throws on overflow")
     {
-      auto pi = ProgressIndicator(0);
-      CHECK_THROWS(pi.taskFinished());
+        {
+            auto pi = ProgressIndicator(0);
+            CHECK_THROWS(pi.taskFinished());
+        }
+        {
+            auto pi = ProgressIndicator(1);
+            pi.taskFinished();
+            CHECK_THROWS(pi.taskFinished());
+        }
     }
+    SECTION("bar and message")
     {
-      auto pi = ProgressIndicator(1);
-      pi.taskFinished();
-      CHECK_THROWS(pi.taskFinished());
+        const std::string m5 = "-----";
+        const std::string m10 = m5 + m5;
+        const std::string m20 = m10 + m10;
+        const std::string m50 = m20 + m20 + m10;
+        const std::string b5 = "|||||";
+        const std::string b10 = b5 + b5;
+        const std::string b20 = b10 + b10;
+        const std::string b50 = b20 + b20 + b10;
+
+        auto pi = ProgressIndicator(4);
+        CHECK(pi.progressBar() == m50 + m50);
+        CHECK(pi.xOfYDoneMessagE() == "0/4");
+        pi.taskFinished();
+        CHECK(pi.progressBar() == b20 + b5 + m20 + m5 + m50);
+        CHECK(pi.xOfYDoneMessagE() == "1/4");
+        pi.taskFinished();
+        CHECK(pi.progressBar() == b50 + m50);
+        CHECK(pi.xOfYDoneMessagE() == "2/4");
+        pi.taskFinished();
+        CHECK(pi.progressBar() == b50 + b20 + b5 + m20 + m5);
+        CHECK(pi.xOfYDoneMessagE() == "3/4");
+        pi.taskFinished();
+        CHECK(pi.progressBar() == b50 + b50);
+        CHECK(pi.xOfYDoneMessagE() == "4/4");
     }
-  }
-  SECTION("bar and message") {
-    const std::string m5 = "-----";
-    const std::string m10 = m5 + m5;
-    const std::string m20 = m10 + m10;
-    const std::string m50 = m20 + m20 + m10;
-    const std::string b5 = "|||||";
-    const std::string b10 = b5 + b5;
-    const std::string b20 = b10 + b10;
-    const std::string b50 = b20 + b20 + b10;
 
-    auto pi = ProgressIndicator(4);
-    CHECK(pi.progressBar() == m50 + m50);
-    CHECK(pi.xOfYDoneMessagE() == "0/4");
-    pi.taskFinished();
-    CHECK(pi.progressBar() == b20 + b5 + m20 + m5 + m50);
-    CHECK(pi.xOfYDoneMessagE() == "1/4");
-    pi.taskFinished();
-    CHECK(pi.progressBar() == b50 + m50);
-    CHECK(pi.xOfYDoneMessagE() == "2/4");
-    pi.taskFinished();
-    CHECK(pi.progressBar() == b50 + b20 + b5 + m20 + m5);
-    CHECK(pi.xOfYDoneMessagE() == "3/4");
-    pi.taskFinished();
-    CHECK(pi.progressBar() == b50 + b50);
-    CHECK(pi.xOfYDoneMessagE() == "4/4");
-  }
+    SECTION("taskFinished is thread safe")
+    {
+        const auto tasks = std::vector<int>(1000000);
+        auto pi = ProgressIndicator(tasks.size());
+        std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { pi.taskFinished(); });
+        CHECK_THROWS(pi.taskFinished());
+    }
 
-  SECTION("taskFinished is thread safe") {
-    const auto tasks = std::vector<int>(1000000);
-    auto pi = ProgressIndicator(tasks.size());
-    std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { pi.taskFinished(); });
-    CHECK_THROWS(pi.taskFinished());
-  }
+    SECTION("thread parallel reporting")
+    {
+        // no real test, because console output can't be easily tested. but at least we are test compiling the interface.
+        const auto tasks = std::vector<int>(151);
+        auto pi = ProgressIndicator(tasks.size());
+        auto monitoring_thread = pi.startMonitoring();
+        std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { std::this_thread::sleep_for(10ms); pi.taskFinished(); });
+        monitoring_thread.join();
+        CHECK_THROWS(pi.taskFinished());
+    }
 
-  SECTION("thread parallel reporting") {
-    // no real test, because console output can't be easily tested. but at least we are test compiling the interface.
-    const auto tasks = std::vector<int>(151);
-    auto pi = ProgressIndicator(tasks.size());
-    auto monitoring_thread = pi.startMonitoring();
-    std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { std::this_thread::sleep_for(10ms); pi.taskFinished(); });
-    monitoring_thread.join();
-    CHECK_THROWS(pi.taskFinished());
-  }
+    SECTION("parallel processing interface")
+    {
+        class MockTileWriter : public ParallelTileWriterInterface {
+        public:
+            MockTileWriter()
+                : ParallelTileWriterInterface(Tile::Border::No, "empty")
+            {
+            }
+            void write(const std::string&, const Tile&, const HeightData&) const override { std::this_thread::sleep_for(1ms); }
+        };
 
-  SECTION("parallel processing interface") {
-    class MockTileWriter : public ParallelTileWriterInterface {
-    public:
-      MockTileWriter() : ParallelTileWriterInterface(Tile::Border::No, "empty") {}
-      void write(const std::string&, const Tile&, const HeightData&) const override { std::this_thread::sleep_for(1ms); }
-    };
-
-    auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, std::make_unique<MockTileWriter>(), "./unittest_tiles/");
-    generator.setWarnOnMissingOverviews(false);
-    generator.process({0, 8}, true);
-  }
+        auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, std::make_unique<MockTileWriter>(), "./unittest_tiles/");
+        generator.setWarnOnMissingOverviews(false);
+        generator.process({ 0, 8 }, true);
+    }
 }

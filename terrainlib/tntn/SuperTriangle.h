@@ -1,12 +1,11 @@
 #pragma once
 
-#include "tntn/geometrix.h"
 #include "tntn/Raster.h"
+#include "tntn/geometrix.h"
 
 namespace tntn {
-class SuperTriangle
-{
-  public:
+class SuperTriangle {
+public:
     SuperTriangle(const Vertex& v1, const Vertex& v2, const Vertex& v3);
     SuperTriangle(const Triangle& tr);
 
@@ -16,12 +15,12 @@ class SuperTriangle
     BBox2D getBB();
     Triangle getTriangle();
 
-  private:
+private:
     void init();
     void findBounds();
     void updateBounds(const Vertex& v);
 
-  private:
+private:
     Triangle m_t;
     BBox2D m_bb;
     double m_wdem;

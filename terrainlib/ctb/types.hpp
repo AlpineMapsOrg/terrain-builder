@@ -23,7 +23,7 @@
  * @brief This declares basic types used by libctb
  */
 
-#include <cstdint>              // uint16_t
+#include <cstdint> // uint16_t
 
 #include "Bounds.hpp"
 #include "Coordinate3D.hpp"
@@ -31,19 +31,19 @@
 /// All terrain related data types reside in this namespace
 namespace ctb {
 
-  // Simple types
-  using i_pixel = unsigned int;       ///< A pixel value
-  using i_tile = unsigned int;        ///< A tile coordinate
-  using i_zoom = unsigned short int;  ///< A zoom level
-  using i_terrain_height = uint16_t ;  ///< A terrain tile height
+// Simple types
+using i_pixel = unsigned int; ///< A pixel value
+using i_tile = unsigned int; ///< A tile coordinate
+using i_zoom = unsigned short int; ///< A zoom level
+using i_terrain_height = uint16_t; ///< A terrain tile height
 
-  // Complex types
-  using TileBounds = Bounds<i_tile>;      ///< Tile extents in tile coordinates
-  using PixelPoint = Coordinate<i_pixel>; ///< The location of a pixel
-  using CRSPoint = Coordinate<double>;    ///< A Coordinate Reference System coordinate
-  using CRSVertex = Coordinate3D<double>; ///< A 3D-Vertex of a mesh or tile in CRS coordinates
-  using CRSBounds = Bounds<double>;       ///< Extents in CRS coordinates
-  using TilePoint = Coordinate<i_tile>;   ///< The location of a tile
+// Complex types
+using TileBounds = Bounds<i_tile>; ///< Tile extents in tile coordinates
+using PixelPoint = Coordinate<i_pixel>; ///< The location of a pixel
+using CRSPoint = Coordinate<double>; ///< A Coordinate Reference System coordinate
+using CRSVertex = Coordinate3D<double>; ///< A 3D-Vertex of a mesh or tile in CRS coordinates
+using CRSBounds = Bounds<double>; ///< Extents in CRS coordinates
+using TilePoint = Coordinate<i_tile>; ///< The location of a tile
 
 }
 

@@ -19,7 +19,7 @@
  * @brief This defines the `GlobalMercator` class
  */
 
-#define _USE_MATH_DEFINES       // for M_PI
+#define _USE_MATH_DEFINES // for M_PI
 
 #include "GlobalMercator.hpp"
 
@@ -31,11 +31,12 @@ const double GlobalMercator::cEarthCircumference = 2 * M_PI * GlobalMercator::cS
 const double GlobalMercator::cOriginShift = GlobalMercator::cEarthCircumference / 2.0;
 
 // Set the spatial reference
-static OGRSpatialReference setSRS() {
-  OGRSpatialReference srs;
-  srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-  srs.importFromEPSG(3857);
-  return srs;
+static OGRSpatialReference setSRS()
+{
+    OGRSpatialReference srs;
+    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    srs.importFromEPSG(3857);
+    return srs;
 }
 
 const OGRSpatialReference GlobalMercator::cSRS = setSRS();

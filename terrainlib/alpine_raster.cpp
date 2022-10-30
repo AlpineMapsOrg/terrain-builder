@@ -1,6 +1,5 @@
 /*****************************************************************************
  * Alpine Terrain Builder
- * Copyright (C) 2022 alpinemaps.org
  * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -36,22 +35,20 @@
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
-
-
 ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, Tile::Scheme tiling_scheme, Tile::Border border, unsigned grid_resolution)
 {
-  return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<alpine_raster::TileWriter>(border), output_data_path, grid_resolution);
+    return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<alpine_raster::TileWriter>(border), output_data_path, grid_resolution);
 }
 
 glm::u8vec3 alpine_raster::convert(float height)
 {
-  const auto r = std::clamp(int(height / 32.0f), 0, 255);
-  const auto g = std::clamp(int(std::fmod(height, 32.0f) * 8), 0, 255);
+    const auto r = std::clamp(int(height / 32.0f), 0, 255);
+    const auto g = std::clamp(int(std::fmod(height, 32.0f) * 8), 0, 255);
 
-  return {glm::u8(r), glm::u8(g), 0};
+    return { glm::u8(r), glm::u8(g), 0 };
 }
 
 void alpine_raster::TileWriter::write(const std::string& file_path, const Tile& tile, const HeightData& heights) const
 {
-  image::saveImageAsPng(image::transformImage(heights, alpine_raster::convert), file_path);
+    image::saveImageAsPng(image::transformImage(heights, alpine_raster::convert), file_path);
 }

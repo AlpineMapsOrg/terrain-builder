@@ -1,83 +1,81 @@
 #pragma once
 
+#include <Tile.h>
+#include <algorithm>
+#include <cmath>
 #include <glm/fwd.hpp>
+#include <iostream>
+#include <map>
+#include <memory>
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
-#include <memory>
-#include <iostream>
-#include <algorithm>
-#include <map>
-#include <cmath>
-#include <Tile.h>
 
 #include "Image.h"
-#include "tntn/logging.h"
 #include "tntn/geometrix.h"
+#include "tntn/logging.h"
 #include "tntn/tntn_assert.h"
 
 namespace tntn {
 
 namespace detail {
 
-template<typename T>
-struct isnan_helper
-{
-    static bool isnan(const T&) noexcept { return false; }
-};
+    template <typename T>
+    struct isnan_helper {
+        static bool isnan(const T&) noexcept { return false; }
+    };
 
-template<>
-struct isnan_helper<double>
-{
-    static bool isnan(const double x) noexcept { return std::isnan(x); }
-};
+    template <>
+    struct isnan_helper<double> {
+        static bool isnan(const double x) noexcept { return std::isnan(x); }
+    };
 
-template<>
-struct isnan_helper<float>
-{
-    static bool isnan(const double x) noexcept { return std::isnan(x); }
-};
+    template <>
+    struct isnan_helper<float> {
+        static bool isnan(const double x) noexcept { return std::isnan(x); }
+    };
 
-template<class T>
-class NDVDefault
-{
-  public:
-    static void set(T& value) {}
-};
+    template <class T>
+    class NDVDefault {
+    public:
+        static void set(T& value) { }
+    };
 
-template<>
-class NDVDefault<double>
-{
-  public:
-    static void set(double& value) { value = std::numeric_limits<double>::max(); }
-};
+    template <>
+    class NDVDefault<double> {
+    public:
+        static void set(double& value) { value = std::numeric_limits<double>::max(); }
+    };
 
 } // namespace detail
 
 // Terrain Raster
-template<class T>
-class Raster
-{
-  private:
-    //disallow copy and assign, only move semantics allowed to avoid accidential copies
+template <class T>
+class Raster {
+private:
+    // disallow copy and assign, only move semantics allowed to avoid accidential copies
     Raster(const Raster& other) = default;
     Raster& operator=(const Raster& other) = delete;
 
-  public:
+public:
     Raster() { ::tntn::detail::NDVDefault<T>::set(m_noDataValue); }
     Raster(Raster&& other) noexcept = default;
-    explicit Raster(Image<T>&& other, const ctb::CRSBounds& srs_bounds) :
-        m_width(other.width()), m_height(other.height()), m_data(std::move(other.m_data)),
-        m_cell_width_in_srs(srs_bounds.getWidth() / other.width()),
-        m_cell_height_in_srs(srs_bounds.getHeight() / other.height()),
-        m_xpos(srs_bounds.getMinX()), m_ypos(srs_bounds.getMinY()) {
-      ::tntn::detail::NDVDefault<T>::set(m_noDataValue);
+    explicit Raster(Image<T>&& other, const ctb::CRSBounds& srs_bounds)
+        : m_width(other.width())
+        , m_height(other.height())
+        , m_data(std::move(other.m_data))
+        , m_cell_width_in_srs(srs_bounds.getWidth() / other.width())
+        , m_cell_height_in_srs(srs_bounds.getHeight() / other.height())
+        , m_xpos(srs_bounds.getMinX())
+        , m_ypos(srs_bounds.getMinY())
+    {
+        ::tntn::detail::NDVDefault<T>::set(m_noDataValue);
     }
     Raster& operator=(Raster&& other) noexcept = default;
 
     /**
      deep copy raster
-     
+
      @return copy of current raster
     */
     Raster clone() const
@@ -87,16 +85,20 @@ class Raster
 
     /**
      constructor
-     
+
      @param w width of raster
      @param h height of raster
     */
-    Raster(const unsigned int w, const unsigned int h) : Raster() { allocate(w, h); }
+    Raster(const unsigned int w, const unsigned int h)
+        : Raster()
+    {
+        allocate(w, h);
+    }
 
     /**
      copies settable parameters from parent raster
      (i.e. not width and height)
-     
+
      @param raster parent to copy parametrs from
      */
     void copy_parameters(const Raster& raster)
@@ -139,14 +141,14 @@ class Raster
 
     /**
      set all raster pixels to this value
-     
+
      @param value value to be set
     */
     void set_all(T value) { std::fill(get_ptr(), get_ptr() + m_width * m_height, value); }
 
     /**
      count all ourrences of given value
-     
+
      @param value value to count
      @return number of pixels with given value
     */
@@ -156,9 +158,9 @@ class Raster
 
         T* pData = get_ptr(0);
 
-        for(int i = 0; i < m_width * m_height; i++)
-        {
-            if(pData[i] == value) count++;
+        for (int i = 0; i < m_width * m_height; i++) {
+            if (pData[i] == value)
+                count++;
         }
 
         return count;
@@ -166,10 +168,10 @@ class Raster
 
     /**
      crop to sub raster
-     
+
      row and column index coordinates with origin at LOWER left
      automatically sets xpos and ypos as expected (using lower left coordinate system)
-     
+
      @param cx column of sub image lower left corner
      @param cy row of sub image lower left corner
      @param cw width of sub image
@@ -177,9 +179,9 @@ class Raster
      @return the sub image with updated xpos & ypos and correct cellsize parameter
     */
     Raster crop_ll(const unsigned int cx,
-                   const unsigned int cy,
-                   const unsigned int cw,
-                   const unsigned int ch) const
+        const unsigned int cy,
+        const unsigned int cw,
+        const unsigned int ch) const
     {
         int cyn = m_height - (cy + ch);
         return crop(cx, cyn, cw, ch);
@@ -187,10 +189,10 @@ class Raster
 
     /**
      crop to sub raster
-     
+
      row and column index coordinates with origin at TOP left
      automatically sets xpos and ypos as expected (using lower left coordinate system)
-     
+
      @param cx column of sub image lower left corner
      @param cy row of sub image lower left corner
      @param cw width of sub image
@@ -207,23 +209,19 @@ class Raster
         int min_x = cx;
         int min_y = cy;
 
-        if(max_x > m_width)
-        {
+        if (max_x > m_width) {
             TNTN_LOG_DEBUG("raster.crop - max x {} larger than width {}", max_x, m_width);
         }
 
-        if(max_y > m_height)
-        {
+        if (max_y > m_height) {
             TNTN_LOG_DEBUG("raster.crop - max y {} larger than height {} ", max_y, m_height);
         }
 
-        if(min_x < 0)
-        {
+        if (min_x < 0) {
             TNTN_LOG_DEBUG("raster.crop - min x {} smaller than zero", min_x);
         }
 
-        if(min_y < 0)
-        {
+        if (min_y < 0) {
             TNTN_LOG_DEBUG("raster.crop - min y {} smaller than zero ", min_y);
         }
 
@@ -234,8 +232,8 @@ class Raster
         min_x = min_x < 0 ? 0 : min_x;
         min_y = min_y < 0 ? 0 : min_y;
 
-        //const int w = m_width;
-        //const int h = m_height;
+        // const int w = m_width;
+        // const int h = m_height;
 
         const int crop_width = max_x - min_x;
         const int crop_height = max_y - min_y;
@@ -251,13 +249,11 @@ class Raster
         dst_raster.set_pos_y(row2y(max_y - 1));
 
         // copy pixels across
-        for(int r = min_y; r < max_y; r++)
-        {
+        for (int r = min_y; r < max_y; r++) {
             const T* pIn = get_ptr(r);
             T* pOut = dst_raster.get_ptr(r - min_y);
 
-            for(int c = min_x; c < max_x; c++)
-            {
+            for (int c = min_x; c < max_x; c++) {
                 pOut[c - min_x] = pIn[c];
             }
         }
@@ -265,10 +261,10 @@ class Raster
 
     /**
      crop to sub raster
-     
+
      row and column index coordinates with origin at TOP left
      automatically sets xpos and ypos as expected (using lower left coordinate system)
-     
+
      @param cx column of sub image lower left corner
      @param cy row of sub image lower left corner
      @param cw width of sub image
@@ -276,9 +272,9 @@ class Raster
      @return the sub image with updated xpos & ypos and correct cellsize parameter
     */
     Raster crop(const unsigned int cx,
-                const unsigned int cy,
-                const unsigned int cw,
-                const unsigned int ch) const
+        const unsigned int cy,
+        const unsigned int cw,
+        const unsigned int ch) const
     {
         Raster dst_raster;
         crop(cx, cy, cw, ch, dst_raster);
@@ -353,7 +349,7 @@ class Raster
      get width or height of pixel or cell
      @return cell size in geo coordinates
     */
-    glm::dvec2 get_cell_size() const { return {m_cell_width_in_srs, m_cell_height_in_srs}; }
+    glm::dvec2 get_cell_size() const { return { m_cell_width_in_srs, m_cell_height_in_srs }; }
     double get_cell_width() const { return m_cell_width_in_srs; }
     double get_cell_height() const { return m_cell_height_in_srs; }
 
@@ -361,7 +357,11 @@ class Raster
      set width or height of pixel or cell
      @param cs cell size in geo coordinates
     */
-    void set_cell_size(const glm::dvec2& cs) { m_cell_width_in_srs = cs.x; m_cell_height_in_srs = cs.y; }
+    void set_cell_size(const glm::dvec2& cs)
+    {
+        m_cell_width_in_srs = cs.x;
+        m_cell_height_in_srs = cs.y;
+    }
     void set_cell_width(const double cs) { m_cell_width_in_srs = cs; }
     void set_cell_height(const double cs) { m_cell_height_in_srs = cs; }
 
@@ -390,17 +390,27 @@ class Raster
 
     /**
      get value at raster position
-     
+
      @param r row
      @param c column
      @return value
     */
-    const T& value(const unsigned int r, const unsigned int c) const { TNTN_ASSERT(c < m_width); TNTN_ASSERT(r < m_height); return get_ptr(r)[c]; }
-    T& value(const unsigned int r, const unsigned int c) { TNTN_ASSERT(c < m_width); TNTN_ASSERT(r < m_height); return get_ptr(r)[c]; }
+    const T& value(const unsigned int r, const unsigned int c) const
+    {
+        TNTN_ASSERT(c < m_width);
+        TNTN_ASSERT(r < m_height);
+        return get_ptr(r)[c];
+    }
+    T& value(const unsigned int r, const unsigned int c)
+    {
+        TNTN_ASSERT(c < m_width);
+        TNTN_ASSERT(r < m_height);
+        return get_ptr(r)[c];
+    }
 
     /**
      get value at raster position (using lower left coordinate system)
-     
+
      @param r row
      @param c column
      @return value
@@ -410,7 +420,7 @@ class Raster
 
     /**
      get x component of geo/world coordinates at column c
-     
+
      @param c column
      @return x geo coordinates
     */
@@ -418,41 +428,35 @@ class Raster
 
     int x2col(double x) const
     {
-        if(m_cell_width_in_srs > 0)
-        {
+        if (m_cell_width_in_srs > 0) {
             const auto col = int((x - m_xpos) / m_cell_width_in_srs + 0.5);
             TNTN_ASSERT(col >= 0);
             TNTN_ASSERT(col < m_width);
             return col;
-        }
-        else
-        {
+        } else {
             return 0;
         }
     }
 
     int y2row(double y) const
     {
-        //y = m_xpos + (r + 0.5) * m_cellsize
+        // y = m_xpos + (r + 0.5) * m_cellsize
 
-        if(m_cell_height_in_srs > 0)
-        {
+        if (m_cell_height_in_srs > 0) {
 
             int r_ll = int((y - m_ypos) / m_cell_height_in_srs + 0.5);
             int r_tl = m_height - r_ll - 1;
             TNTN_ASSERT(r_tl >= 0);
             TNTN_ASSERT(r_tl < m_height);
             return r_tl;
-        }
-        else
-        {
+        } else {
             return 0;
         }
     }
 
     /**
      get x component of geo/world coordinates at column c
-     
+
      @param c column
      @return x geo coordinates
     */
@@ -465,7 +469,7 @@ class Raster
     /**
      get y component of geo/world coordinates at row r
      (row in lower left coordinate system)
-    
+
      @param r row from lower left
      @return y geo coordinates
     */
@@ -474,7 +478,7 @@ class Raster
     /**
      get x component of geo/world coordinates at column c
      (column in lower left coordinate system)
-     
+
      @param c column from lower left
      @return x geo coordinates
     */
@@ -493,8 +497,8 @@ class Raster
     // as it can easily be implemented outside this class
     // further, it seems there should be only one correct implementation of this
 
-    //signature for VertexReceiverFn must be (void)(double x, double y, T z)
-    template<typename VertexReceiverFn>
+    // signature for VertexReceiverFn must be (void)(double x, double y, T z)
+    template <typename VertexReceiverFn>
     void to_vertices(VertexReceiverFn&& receiver_fn) const
     {
         const double cw = get_cell_width();
@@ -505,13 +509,11 @@ class Raster
         const int height = get_height();
         const auto* p = get_ptr();
 
-        //coordinate system has origin at lower left corner!
-        for(int r = 0; r < height; r++)
-        {
+        // coordinate system has origin at lower left corner!
+        for (int r = 0; r < height; r++) {
             const double y_coordinate = ypos + (height - r - 1) * ch;
 
-            for(int c = 0; c < width; c++)
-            {
+            for (int c = 0; c < width; c++) {
                 const double x_coordinate = xpos + c * cw;
                 receiver_fn(x_coordinate, y_coordinate, p[c]);
             }
@@ -533,7 +535,7 @@ class Raster
 
     const std::vector<T>& asVector() const { return m_data; }
 
-  private:
+private:
     // raster width and height
     unsigned int m_width = 0;
     unsigned int m_height = 0;
@@ -552,6 +554,6 @@ class Raster
 };
 
 typedef Raster<double> RasterDouble;
-//typedef Raster<unsigned char>   RasterByte; //eg. for grey scale image
+// typedef Raster<unsigned char>   RasterByte; //eg. for grey scale image
 
 } // namespace tntn

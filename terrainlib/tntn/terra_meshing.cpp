@@ -15,7 +15,7 @@ std::unique_ptr<Mesh> generate_tin_terra(std::unique_ptr<RasterDouble> raster, d
 }
 
 std::unique_ptr<Mesh> generate_tin_terra(std::unique_ptr<SurfacePoints> surface_points,
-                                         double max_error)
+    double max_error)
 {
     auto raster = surface_points->to_raster();
     surface_points.reset();
@@ -36,4 +36,4 @@ std::unique_ptr<Mesh> generate_tin_terra(const SurfacePoints& surface_points, do
     return g.convert_to_mesh();
 }
 
-} //namespace tntn
+} // namespace tntn

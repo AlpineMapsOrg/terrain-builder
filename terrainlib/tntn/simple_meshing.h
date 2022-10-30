@@ -2,8 +2,8 @@
 
 #include <memory>
 
-#include "tntn/Raster.h"
 #include "tntn/Mesh.h"
+#include "tntn/Raster.h"
 
 namespace tntn {
 

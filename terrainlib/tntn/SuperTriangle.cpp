@@ -42,7 +42,7 @@ bool SuperTriangle::interpolate(const double x, const double y, double& z)
 
     z = (double)(v1.z * w1 + v2.z * w2 + v3.z * w3);
 
-    if(0 <= w1 && w1 <= 1 && 0 <= w2 && w2 <= 1 && 0 <= w3 && w3 <= 1)
+    if (0 <= w1 && w1 <= 1 && 0 <= w2 && w2 <= 1 && 0 <= w3 && w3 <= 1)
         return true;
     else
         return false;
@@ -60,11 +60,15 @@ void SuperTriangle::rasterise(RasterDouble& raster)
     int ce = (int)(m_bb.max.x + 1.5);
 
     // bounds check
-    rs = rs < 0 ? 0 : rs > h ? h : rs;
-    re = re < 0 ? 0 : re > h ? h : re;
+    rs = rs < 0 ? 0 : rs > h ? h
+                             : rs;
+    re = re < 0 ? 0 : re > h ? h
+                             : re;
 
-    cs = cs < 0 ? 0 : cs > w ? w : cs;
-    ce = ce < 0 ? 0 : ce > w ? w : ce;
+    cs = cs < 0 ? 0 : cs > w ? w
+                             : cs;
+    ce = ce < 0 ? 0 : ce > w ? w
+                             : ce;
 
 #if false
         double ndv = raster.getNoDataValue();
@@ -76,15 +80,12 @@ void SuperTriangle::rasterise(RasterDouble& raster)
         maxz = maxz > m_v3.z ? maxz : m_v3.z;
 #endif
 
-    for(int r = rs; r < re; r++)
-    {
+    for (int r = rs; r < re; r++) {
         double* pH = raster.get_ptr(h - r - 1);
 
-        for(int c = cs; c < ce; c++)
-        {
+        for (int c = cs; c < ce; c++) {
             double ht;
-            if(interpolate(c + 0.5, r + 0.5, ht))
-            {
+            if (interpolate(c + 0.5, r + 0.5, ht)) {
 #if false
                     if(pH[c] != ndv)
                     {
@@ -119,7 +120,7 @@ void SuperTriangle::init()
 
 void SuperTriangle::findBounds()
 {
-    for(int i = 0; i < 3; i++)
+    for (int i = 0; i < 3; i++)
         m_bb.add(m_t[i]);
 }
 } // namespace tntn

@@ -17,13 +17,11 @@
  *****************************************************************************/
 
 #pragma once
+#include "Tile.h"
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
-#include "Tile.h"
 
-class BottomUpTiler
-{
+class BottomUpTiler {
 public:
     BottomUpTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
 };
-

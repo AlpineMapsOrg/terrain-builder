@@ -1,22 +1,21 @@
 #pragma once
 
-#include <vector>
-#include <string>
+#include "tntn/Raster.h"
 #include "tntn/geometrix.h"
 #include "tntn/util.h"
-#include "tntn/Raster.h"
 #include <map>
+#include <string>
+#include <vector>
 
 namespace tntn {
 
-class SurfacePoints
-{
-  private:
-    //disallow copy and assign
+class SurfacePoints {
+private:
+    // disallow copy and assign
     SurfacePoints(const SurfacePoints& other) = delete;
     SurfacePoints& operator=(const SurfacePoints& other) = delete;
 
-  public:
+public:
     SurfacePoints() = default;
     SurfacePoints(SurfacePoints&& other) { swap(other); }
     SurfacePoints& operator=(SurfacePoints&& other)
@@ -50,14 +49,14 @@ class SurfacePoints
     std::unique_ptr<RasterDouble> to_raster() const;
     std::unique_ptr<Raster<Vertex>> to_vxraster() const;
 
-  private:
+private:
     static double find_non_zero_min_diff(const std::vector<double>& values,
-                                         double& min,
-                                         double& max);
+        double& min,
+        double& max);
 
-  private:
+private:
     std::vector<Vertex> m_points;
     BBox3D m_bbox;
 };
 
-} //namespace tntn
+} // namespace tntn

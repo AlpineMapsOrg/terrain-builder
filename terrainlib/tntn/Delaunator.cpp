@@ -1,125 +1,117 @@
 #include "tntn/Delaunator.h"
 
 #include <algorithm>
+#include <cassert>
+#include <cmath>
 #include <cstdio>
+#include <exception>
+#include <iostream>
 #include <limits>
 #include <tuple>
-#include <exception>
-#include <cmath>
-#include <iostream>
-#include <cassert>
 
 using namespace std;
 
 namespace delaunator_cpp {
 namespace {
-const double max_double = numeric_limits<double>::max();
-double dist(const double& ax, const double& ay, const double& bx, const double& by)
-{
-    const double dx = ax - bx;
-    const double dy = ay - by;
-    return dx * dx + dy * dy;
-}
-
-double circumradius(const double& ax,
-                    const double& ay,
-                    const double& bx,
-                    const double& by,
-                    const double& cx,
-                    const double& cy)
-{
-    const double dx = bx - ax;
-    const double dy = by - ay;
-    const double ex = cx - ax;
-    const double ey = cy - ay;
-
-    const double bl = dx * dx + dy * dy;
-    const double cl = ex * ex + ey * ey;
-    const double d = dx * ey - dy * ex;
-
-    const double x = (ey * bl - dy * cl) * 0.5 / d;
-    const double y = (dx * cl - ex * bl) * 0.5 / d;
-
-    if(bl && cl && d)
+    const double max_double = numeric_limits<double>::max();
+    double dist(const double& ax, const double& ay, const double& bx, const double& by)
     {
-        return x * x + y * y;
+        const double dx = ax - bx;
+        const double dy = ay - by;
+        return dx * dx + dy * dy;
     }
-    else
+
+    double circumradius(const double& ax,
+        const double& ay,
+        const double& bx,
+        const double& by,
+        const double& cx,
+        const double& cy)
     {
-        return max_double;
+        const double dx = bx - ax;
+        const double dy = by - ay;
+        const double ex = cx - ax;
+        const double ey = cy - ay;
+
+        const double bl = dx * dx + dy * dy;
+        const double cl = ex * ex + ey * ey;
+        const double d = dx * ey - dy * ex;
+
+        const double x = (ey * bl - dy * cl) * 0.5 / d;
+        const double y = (dx * cl - ex * bl) * 0.5 / d;
+
+        if (bl && cl && d) {
+            return x * x + y * y;
+        } else {
+            return max_double;
+        }
     }
-}
 
-double area(const double px,
-            const double py,
-            const double qx,
-            const double qy,
-            const double rx,
-            const double ry)
-{
-    return (qy - py) * (rx - qx) - (qx - px) * (ry - qy);
-}
-
-tuple<double, double> circumcenter(const double& ax,
-                                   const double& ay,
-                                   const double& bx,
-                                   const double& by,
-                                   const double& cx,
-                                   const double& cy)
-{
-    const double dx = bx - ax;
-    const double dy = by - ay;
-    const double ex = cx - ax;
-    const double ey = cy - ay;
-
-    const double bl = dx * dx + dy * dy;
-    const double cl = ex * ex + ey * ey;
-    const double d = dx * ey - dy * ex;
-
-    const double x = ax + (ey * bl - dy * cl) * 0.5 / d;
-    const double y = ay + (dx * cl - ex * bl) * 0.5 / d;
-
-    return make_tuple(x, y);
-}
-
-double compare(const vector<double>& coords, uint64_t i, uint64_t j, double cx, double cy)
-{
-    const double d1 = dist(coords[2 * i], coords[2 * i + 1], cx, cy);
-    const double d2 = dist(coords[2 * j], coords[2 * j + 1], cx, cy);
-    const double diff1 = d1 - d2;
-    const double diff2 = coords[2 * i] - coords[2 * j];
-    const double diff3 = coords[2 * i + 1] - coords[2 * j + 1];
-
-    if(diff1)
+    double area(const double px,
+        const double py,
+        const double qx,
+        const double qy,
+        const double rx,
+        const double ry)
     {
-        return diff1;
+        return (qy - py) * (rx - qx) - (qx - px) * (ry - qy);
     }
-    else if(diff2)
+
+    tuple<double, double> circumcenter(const double& ax,
+        const double& ay,
+        const double& bx,
+        const double& by,
+        const double& cx,
+        const double& cy)
     {
-        return diff2;
+        const double dx = bx - ax;
+        const double dy = by - ay;
+        const double ex = cx - ax;
+        const double ey = cy - ay;
+
+        const double bl = dx * dx + dy * dy;
+        const double cl = ex * ex + ey * ey;
+        const double d = dx * ey - dy * ex;
+
+        const double x = ax + (ey * bl - dy * cl) * 0.5 / d;
+        const double y = ay + (dx * cl - ex * bl) * 0.5 / d;
+
+        return make_tuple(x, y);
     }
-    else
+
+    double compare(const vector<double>& coords, uint64_t i, uint64_t j, double cx, double cy)
     {
-        return diff3;
+        const double d1 = dist(coords[2 * i], coords[2 * i + 1], cx, cy);
+        const double d2 = dist(coords[2 * j], coords[2 * j + 1], cx, cy);
+        const double diff1 = d1 - d2;
+        const double diff2 = coords[2 * i] - coords[2 * j];
+        const double diff3 = coords[2 * i + 1] - coords[2 * j + 1];
+
+        if (diff1) {
+            return diff1;
+        } else if (diff2) {
+            return diff2;
+        } else {
+            return diff3;
+        }
     }
-}
 
-bool in_circle(
-    double ax, double ay, double bx, double by, double cx, double cy, double px, double py)
-{
-    const double dx = ax - px;
-    const double dy = ay - py;
-    const double ex = bx - px;
-    const double ey = by - py;
-    const double fx = cx - px;
-    const double fy = cy - py;
+    bool in_circle(
+        double ax, double ay, double bx, double by, double cx, double cy, double px, double py)
+    {
+        const double dx = ax - px;
+        const double dy = ay - py;
+        const double ex = bx - px;
+        const double ey = by - py;
+        const double fx = cx - px;
+        const double fy = cy - py;
 
-    const double ap = dx * dx + dy * dy;
-    const double bp = ex * ex + ey * ey;
-    const double cp = fx * fx + fy * fy;
+        const double ap = dx * dx + dy * dy;
+        const double bp = ex * ex + ey * ey;
+        const double cp = fx * fx + fy * fy;
 
-    return (dx * (ey * cp - bp * fy) - dy * (ex * cp - bp * fx) + ap * (ex * fy - ey * fx)) < 0;
-}
+        return (dx * (ey * cp - bp * fy) - dy * (ex * cp - bp * fx) + ap * (ex * fy - ey * fx)) < 0;
+    }
 } // namespace
 
 bool Delaunator::triangulate(const vector<double>& coords)
@@ -133,7 +125,7 @@ bool Delaunator::triangulate(const vector<double>& coords)
     triangles.clear();
     halfedges.clear();
 
-    //coords = move(in_coords);
+    // coords = move(in_coords);
     const int64_t n = coords.size() / 2;
     double max_x = -1 * max_double;
     double max_y = -1 * max_double;
@@ -142,16 +134,19 @@ bool Delaunator::triangulate(const vector<double>& coords)
 
     std::vector<int64_t> ids;
     ids.reserve(n);
-    for(int64_t i = 0; i < n; i++)
-    {
+    for (int64_t i = 0; i < n; i++) {
         const double x = coords[2 * i];
         const double y = coords[2 * i + 1];
         // print64_tf("%f %f", x, y);
 
-        if(x < min_x) min_x = x;
-        if(y < min_y) min_y = y;
-        if(x > max_x) max_x = x;
-        if(y > max_y) max_y = y;
+        if (x < min_x)
+            min_x = x;
+        if (y < min_y)
+            min_y = y;
+        if (x > max_x)
+            max_x = x;
+        if (y > max_y)
+            max_y = y;
         // ids[i] = i;
         ids.push_back(i);
     }
@@ -163,13 +158,11 @@ bool Delaunator::triangulate(const vector<double>& coords)
     uint64_t i2 = 0;
 
     // pick a seed point64_t close to the centroid
-    for(uint64_t i = 0; i < n; i++)
-    {
+    for (uint64_t i = 0; i < n; i++) {
         assert((2 * i + 1 < coords.size()) && i >= 0);
 
         const double d = dist(cx, cy, coords[2 * i], coords[2 * i + 1]);
-        if(d < min_dist)
-        {
+        if (d < min_dist) {
             i0 = i;
             min_dist = d;
         }
@@ -178,13 +171,11 @@ bool Delaunator::triangulate(const vector<double>& coords)
     min_dist = max_double;
 
     // find the point64_t closest to the seed
-    for(uint64_t i = 0; i < n; i++)
-    {
-        if(i == i0) continue;
-        const double d =
-            dist(coords[2 * i0], coords[2 * i0 + 1], coords[2 * i], coords[2 * i + 1]);
-        if(d < min_dist && d > 0)
-        {
+    for (uint64_t i = 0; i < n; i++) {
+        if (i == i0)
+            continue;
+        const double d = dist(coords[2 * i0], coords[2 * i0 + 1], coords[2 * i], coords[2 * i + 1]);
+        if (d < min_dist && d > 0) {
             i1 = i;
             min_dist = d;
         }
@@ -193,37 +184,35 @@ bool Delaunator::triangulate(const vector<double>& coords)
     double min_radius = max_double;
 
     // find the third point64_t which forms the smallest circumcircle with the first two
-    for(uint64_t i = 0; i < n; i++)
-    {
-        if(i == i0 || i == i1) continue;
+    for (uint64_t i = 0; i < n; i++) {
+        if (i == i0 || i == i1)
+            continue;
 
         const double r = circumradius(coords[2 * i0],
-                                      coords[2 * i0 + 1],
-                                      coords[2 * i1],
-                                      coords[2 * i1 + 1],
-                                      coords[2 * i],
-                                      coords[2 * i + 1]);
+            coords[2 * i0 + 1],
+            coords[2 * i1],
+            coords[2 * i1 + 1],
+            coords[2 * i],
+            coords[2 * i + 1]);
 
-        if(r < min_radius)
-        {
+        if (r < min_radius) {
             i2 = i;
             min_radius = r;
         }
     }
 
-    if(min_radius == max_double)
-    {
+    if (min_radius == max_double) {
         return false;
-        //throw runtime_error("no triangulation: min_radius == max_double");
+        // throw runtime_error("no triangulation: min_radius == max_double");
     }
 
-    if(area(coords[2 * i0],
+    if (area(coords[2 * i0],
             coords[2 * i0 + 1],
             coords[2 * i1],
             coords[2 * i1 + 1],
             coords[2 * i2],
-            coords[2 * i2 + 1]) < 0)
-    {
+            coords[2 * i2 + 1])
+        < 0) {
         const double tmp = i1;
         i1 = i2;
         i2 = tmp;
@@ -244,7 +233,7 @@ bool Delaunator::triangulate(const vector<double>& coords)
 
     m_hash_size = ceil(sqrt(n));
     m_hash.reserve(m_hash_size);
-    for(int64_t i = 0; i < m_hash_size; i++)
+    for (int64_t i = 0; i < m_hash_size; i++)
         m_hash.push_back(-1);
 
     m_hull.reserve(coords.size());
@@ -267,44 +256,43 @@ bool Delaunator::triangulate(const vector<double>& coords)
     add_triangle(i0, i1, i2, -1, -1, -1);
     double xp = NAN;
     double yp = NAN;
-    for(int64_t k = 0; k < n; k++)
-    {
+    for (int64_t k = 0; k < n; k++) {
         const int64_t i = ids[k];
 
         assert(i >= 0 && i < coords.size() / 2);
 
         const double x = coords[2 * i];
         const double y = coords[2 * i + 1];
-        if(x == xp && y == yp) continue;
+        if (x == xp && y == yp)
+            continue;
         xp = x;
         yp = y;
-        if((x == i0x && y == i0y) || (x == i1x && y == i1y) || (x == i2x && y == i2y)) continue;
+        if ((x == i0x && y == i0y) || (x == i1x && y == i1y) || (x == i2x && y == i2y))
+            continue;
 
         const int64_t start_key = hash_key(x, y);
         int64_t key = start_key;
         int64_t start = -1;
-        do
-        {
+        do {
             assert(key >= 0 && key < m_hash.size());
             start = m_hash[key];
             key = (key + 1) % m_hash_size;
-        } while((start < 0 || m_hull[start].removed) && (key != start_key));
+        } while ((start < 0 || m_hull[start].removed) && (key != start_key));
 
         e = start;
         assert(e >= 0 && e < m_hull.size());
-        while(area(x,
+        while (area(x,
                    y,
                    m_hull[e].x,
                    m_hull[e].y,
                    m_hull[m_hull[e].next].x,
-                   m_hull[m_hull[e].next].y) >= 0)
-        {
+                   m_hull[m_hull[e].next].y)
+            >= 0) {
             e = m_hull[e].next;
             assert(e >= 0 && e < m_hull.size());
-            if(e == start)
-            {
+            if (e == start) {
                 return false;
-                //throw runtime_error("Something is wrong with the input point64_ts.");
+                // throw runtime_error("Something is wrong with the input point64_ts.");
             }
         }
 
@@ -318,51 +306,49 @@ bool Delaunator::triangulate(const vector<double>& coords)
 
         // recursively flip triangles from the point64_t until they satisfy the Delaunay condition
         m_hull[e].t = legalize(t + 2, coords);
-        if(m_hull[m_hull[m_hull[e].prev].prev].t == halfedges[t + 1])
-        {
+        if (m_hull[m_hull[m_hull[e].prev].prev].t == halfedges[t + 1]) {
             m_hull[m_hull[m_hull[e].prev].prev].t = t + 2;
         }
         // walk forward through the hull, adding more triangles and flipping recursively
         int64_t q = m_hull[e].next;
-        while(area(x,
+        while (area(x,
                    y,
                    m_hull[q].x,
                    m_hull[q].y,
                    m_hull[m_hull[q].next].x,
-                   m_hull[m_hull[q].next].y) < 0)
-        {
+                   m_hull[m_hull[q].next].y)
+            < 0) {
             t = add_triangle(m_hull[q].i,
-                             i,
-                             m_hull[m_hull[q].next].i,
-                             m_hull[m_hull[q].prev].t,
-                             -1,
-                             m_hull[q].t);
+                i,
+                m_hull[m_hull[q].next].i,
+                m_hull[m_hull[q].prev].t,
+                -1,
+                m_hull[q].t);
             m_hull[m_hull[q].prev].t = legalize(t + 2, coords);
             remove_node(q);
             q = m_hull[q].next;
 
             assert(q >= 0 && q < m_hull.size());
         }
-        if(walk_back)
-        {
+        if (walk_back) {
             // walk backward from the other side, adding more triangles and flipping
             q = m_hull[e].prev;
 
             assert(q >= 0 && q < m_hull.size());
 
-            while(area(x,
+            while (area(x,
                        y,
                        m_hull[m_hull[q].prev].x,
                        m_hull[m_hull[q].prev].y,
                        m_hull[q].x,
-                       m_hull[q].y) < 0)
-            {
+                       m_hull[q].y)
+                < 0) {
                 t = add_triangle(m_hull[m_hull[q].prev].i,
-                                 i,
-                                 m_hull[q].i,
-                                 -1,
-                                 m_hull[q].t,
-                                 m_hull[m_hull[q].prev].t);
+                    i,
+                    m_hull[q].i,
+                    -1,
+                    m_hull[q].t,
+                    m_hull[m_hull[q].prev].t);
                 legalize(t + 2, coords);
                 m_hull[m_hull[q].prev].t = t;
                 remove_node(q);
@@ -403,16 +389,15 @@ int64_t Delaunator::legalize(int64_t a, const vector<double>& coords)
     const int64_t p1 = triangles[bl];
 
     const bool illegal = in_circle(coords[2 * p0],
-                                   coords[2 * p0 + 1],
-                                   coords[2 * pr],
-                                   coords[2 * pr + 1],
-                                   coords[2 * pl],
-                                   coords[2 * pl + 1],
-                                   coords[2 * p1],
-                                   coords[2 * p1 + 1]);
+        coords[2 * p0 + 1],
+        coords[2 * pr],
+        coords[2 * pr + 1],
+        coords[2 * pl],
+        coords[2 * pl + 1],
+        coords[2 * p1],
+        coords[2 * p1 + 1]);
 
-    if(illegal)
-    {
+    if (illegal) {
         triangles[a] = p1;
         triangles[b] = p0;
         link(a, halfedges[bl]);
@@ -461,17 +446,15 @@ int64_t Delaunator::hash_key(double x, double y)
     double den = std::abs(dx) + std::abs(dy);
     double p = 0;
 
-    //potential division by zero!
-    //previously: const double p = 1 - dx / (std::abs(dx) + std::abs(dy));
-    if(den != 0)
-    {
+    // potential division by zero!
+    // previously: const double p = 1 - dx / (std::abs(dx) + std::abs(dy));
+    if (den != 0) {
         p = 1 - dx / den;
     }
 
     double nom = (2 + (dy < 0 ? -p : p));
-    int64_t key = std::floor((m_hash_size - 1) *
-                             (nom / 4.0)); // this will behave differently from js version!
-    //int64_t     key =  std::floor(  (m_hash_size) * (nom / 4.0) ); // this will behave differently from js version!
+    int64_t key = std::floor((m_hash_size - 1) * (nom / 4.0)); // this will behave differently from js version!
+    // int64_t     key =  std::floor(  (m_hash_size) * (nom / 4.0) ); // this will behave differently from js version!
 
     return key;
 }
@@ -497,31 +480,20 @@ int64_t Delaunator::add_triangle(
 void Delaunator::link(int64_t a, int64_t b)
 {
     int64_t s = halfedges.size();
-    if(a == s)
-    {
+    if (a == s) {
         halfedges.push_back(b);
-    }
-    else if(a < s)
-    {
+    } else if (a < s) {
         halfedges[a] = b;
-    }
-    else
-    {
+    } else {
         throw runtime_error("Cannot link edge");
     }
-    if(b != -1)
-    {
+    if (b != -1) {
         int64_t s = halfedges.size();
-        if(b == s)
-        {
+        if (b == s) {
             halfedges.push_back(a);
-        }
-        else if(b < s)
-        {
+        } else if (b < s) {
             halfedges[b] = a;
-        }
-        else
-        {
+        } else {
             throw runtime_error("Cannot link edge");
         }
     }

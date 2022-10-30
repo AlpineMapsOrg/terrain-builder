@@ -27,11 +27,11 @@
 
 #include "ogr_spatialref.h"
 
-#include "types.hpp"
 #include "TileCoordinate.hpp"
+#include "types.hpp"
 
 namespace ctb {
-  class Grid;
+class Grid;
 }
 
 /**
@@ -61,153 +61,165 @@ namespace ctb {
  */
 class ctb::Grid {
 public:
-  enum class Srs {
-    SphericalMercator = 3857,
-    WGS84 = 4326
-  };
-
-  /// Initialise a grid tile
-  Grid(i_tile gridSize,
-       const CRSBounds extent,
-       const OGRSpatialReference& srs,
-       int epsgCode,
-       unsigned short int rootTiles,
-       double zoomFactor):
-      mGridSize(gridSize),
-      mExtent(extent),
-      mSRS(srs),
-      mEpsgCode(epsgCode),
-      mInitialResolution((extent.getWidth() / rootTiles) / gridSize ),
-      mXOriginShift(extent.getWidth() / 2),
-      mYOriginShift(extent.getHeight() / 2),
-      mZoomFactor(zoomFactor)
-  {
-    mSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-  }
-
-  /// Override the equality operator
-  bool operator==(const Grid &other) const {
-    return mGridSize == other.mGridSize
-      && mExtent == other.mExtent
-      && mSRS.IsSame(&(other.mSRS))
-      && mInitialResolution == other.mInitialResolution
-      && mXOriginShift == other.mXOriginShift
-      && mYOriginShift == other.mYOriginShift
-      && mZoomFactor == other.mZoomFactor;
-  }
-
-  /// Get the resolution for a particular zoom level
-  [[nodiscard]] inline double resolution(i_zoom zoom) const {
-    return mInitialResolution / pow(mZoomFactor, zoom);
-  }
-
-  /**
-   * @brief Get the zoom level for a particular resolution
-   *
-   * If the resolution does not exactly match a zoom level then the zoom level
-   * is 'rounded up' to the next level.
-   */
-  [[nodiscard]] inline i_zoom zoomForResolution(double resolution) const {
-    // if mZoomFactor == 2 the following is the same as using:
-    // log2(mInitialResolution) - log2(resolution)
-    return i_zoom(ceil((std::log(mInitialResolution)/std::log(mZoomFactor)) - (std::log(resolution)/std::log(mZoomFactor))));
-  }
-
-  /// Get the tile covering a pixel location
-  [[nodiscard]] inline TilePoint pixelsToTile(const PixelPoint &pixel) const {
-    const auto tx = i_tile (pixel.x / mGridSize);
-    const auto ty = i_tile (pixel.y / mGridSize);
-
-    return {tx, ty};
-  }
-
-  /// Convert pixel coordinates at a given zoom level to CRS coordinates
-  [[nodiscard]] inline CRSPoint pixelsToCrs(const PixelPoint &pixel, i_zoom zoom) const {
-    double res = resolution(zoom);
-
-    return {
-      (pixel.x * res) - mXOriginShift,
-      (pixel.y * res) - mYOriginShift
+    enum class Srs {
+        SphericalMercator = 3857,
+        WGS84 = 4326
     };
-  }
 
-  /// Get the pixel location represented by a CRS point and zoom level
-  [[nodiscard]] inline PixelPoint crsToPixels(const CRSPoint &coord, i_zoom zoom) const {
-    const auto res = resolution(zoom);
-    const auto px = (mXOriginShift + coord.x) / res;
-    const auto py = (mYOriginShift + coord.y) / res;
+    /// Initialise a grid tile
+    Grid(i_tile gridSize,
+        const CRSBounds extent,
+        const OGRSpatialReference& srs,
+        int epsgCode,
+        unsigned short int rootTiles,
+        double zoomFactor)
+        : mGridSize(gridSize)
+        , mExtent(extent)
+        , mSRS(srs)
+        , mEpsgCode(epsgCode)
+        , mInitialResolution((extent.getWidth() / rootTiles) / gridSize)
+        , mXOriginShift(extent.getWidth() / 2)
+        , mYOriginShift(extent.getHeight() / 2)
+        , mZoomFactor(zoomFactor)
+    {
+        mSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    }
 
-    return {px, py};
-  }
+    /// Override the equality operator
+    bool operator==(const Grid& other) const
+    {
+        return mGridSize == other.mGridSize
+            && mExtent == other.mExtent
+            && mSRS.IsSame(&(other.mSRS))
+            && mInitialResolution == other.mInitialResolution
+            && mXOriginShift == other.mXOriginShift
+            && mYOriginShift == other.mYOriginShift
+            && mZoomFactor == other.mZoomFactor;
+    }
 
-  /// Get the tile coordinate in which a location falls at a specific zoom level
-  [[nodiscard]] inline TileCoordinate crsToTile(const CRSPoint &coord, i_zoom zoom) const {
-    const PixelPoint pixel = crsToPixels(coord, zoom);
-    TilePoint tile = pixelsToTile(pixel);
+    /// Get the resolution for a particular zoom level
+    [[nodiscard]] inline double resolution(i_zoom zoom) const
+    {
+        return mInitialResolution / pow(mZoomFactor, zoom);
+    }
 
-    return {zoom, tile};
-  }
+    /**
+     * @brief Get the zoom level for a particular resolution
+     *
+     * If the resolution does not exactly match a zoom level then the zoom level
+     * is 'rounded up' to the next level.
+     */
+    [[nodiscard]] inline i_zoom zoomForResolution(double resolution) const
+    {
+        // if mZoomFactor == 2 the following is the same as using:
+        // log2(mInitialResolution) - log2(resolution)
+        return i_zoom(ceil((std::log(mInitialResolution) / std::log(mZoomFactor)) - (std::log(resolution) / std::log(mZoomFactor))));
+    }
 
-  /// Get the CRS bounds of a particular tile
-  /// border_se should be true if a border should be included on the south eastern corner
-  /// e.g., for the cesium raster terrain format (https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0)
-  [[nodiscard]] inline CRSBounds srsBounds(const TileCoordinate &coord, bool border_se) const {
-    // get the pixels coordinates representing the tile bounds
-    const PixelPoint pxMinLeft(coord.x * mGridSize, coord.y * mGridSize);
-    const PixelPoint pxMaxRight((coord.x + 1) * mGridSize + border_se, (coord.y + 1) * mGridSize + border_se);
+    /// Get the tile covering a pixel location
+    [[nodiscard]] inline TilePoint pixelsToTile(const PixelPoint& pixel) const
+    {
+        const auto tx = i_tile(pixel.x / mGridSize);
+        const auto ty = i_tile(pixel.y / mGridSize);
 
-    // convert pixels to native coordinates
-    const CRSPoint minLeft = pixelsToCrs(pxMinLeft, coord.zoom);
-    const CRSPoint maxRight = pixelsToCrs(pxMaxRight, coord.zoom);
+        return { tx, ty };
+    }
 
-    return {minLeft, maxRight};
-  }
+    /// Convert pixel coordinates at a given zoom level to CRS coordinates
+    [[nodiscard]] inline CRSPoint pixelsToCrs(const PixelPoint& pixel, i_zoom zoom) const
+    {
+        double res = resolution(zoom);
 
-  /// Get the tile size associated with this grid
-  [[nodiscard]] inline i_tile tileSize() const {
-    return mGridSize;
-  }
+        return {
+            (pixel.x * res) - mXOriginShift,
+            (pixel.y * res) - mYOriginShift
+        };
+    }
 
-  /// Get the tile size associated with this grid
-  [[nodiscard]] inline const OGRSpatialReference& getSRS() const {
-    return mSRS;
-  }
+    /// Get the pixel location represented by a CRS point and zoom level
+    [[nodiscard]] inline PixelPoint crsToPixels(const CRSPoint& coord, i_zoom zoom) const
+    {
+        const auto res = resolution(zoom);
+        const auto px = (mXOriginShift + coord.x) / res;
+        const auto py = (mYOriginShift + coord.y) / res;
 
-  /// Get the extent covered by the grid in CRS coordinates
-  [[nodiscard]] inline const CRSBounds& getExtent() const {
-    return mExtent;
-  }
+        return { px, py };
+    }
 
-  /// Get the extent covered by the grid in tile coordinates for a zoom level
-  [[nodiscard]] inline TileBounds getTileExtent(i_zoom zoom) const {
-    TileCoordinate ll = crsToTile(mExtent.getLowerLeft(), zoom);
-    TileCoordinate ur = crsToTile(mExtent.getUpperRight(), zoom);
+    /// Get the tile coordinate in which a location falls at a specific zoom level
+    [[nodiscard]] inline TileCoordinate crsToTile(const CRSPoint& coord, i_zoom zoom) const
+    {
+        const PixelPoint pixel = crsToPixels(coord, zoom);
+        TilePoint tile = pixelsToTile(pixel);
 
-    return {ll, ur};
-  }
+        return { zoom, tile };
+    }
 
-  [[nodiscard]] inline int getEpsgCode() const {
-    return mEpsgCode;
-  }
+    /// Get the CRS bounds of a particular tile
+    /// border_se should be true if a border should be included on the south eastern corner
+    /// e.g., for the cesium raster terrain format (https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0)
+    [[nodiscard]] inline CRSBounds srsBounds(const TileCoordinate& coord, bool border_se) const
+    {
+        // get the pixels coordinates representing the tile bounds
+        const PixelPoint pxMinLeft(coord.x * mGridSize, coord.y * mGridSize);
+        const PixelPoint pxMaxRight((coord.x + 1) * mGridSize + border_se, (coord.y + 1) * mGridSize + border_se);
+
+        // convert pixels to native coordinates
+        const CRSPoint minLeft = pixelsToCrs(pxMinLeft, coord.zoom);
+        const CRSPoint maxRight = pixelsToCrs(pxMaxRight, coord.zoom);
+
+        return { minLeft, maxRight };
+    }
+
+    /// Get the tile size associated with this grid
+    [[nodiscard]] inline i_tile tileSize() const
+    {
+        return mGridSize;
+    }
+
+    /// Get the tile size associated with this grid
+    [[nodiscard]] inline const OGRSpatialReference& getSRS() const
+    {
+        return mSRS;
+    }
+
+    /// Get the extent covered by the grid in CRS coordinates
+    [[nodiscard]] inline const CRSBounds& getExtent() const
+    {
+        return mExtent;
+    }
+
+    /// Get the extent covered by the grid in tile coordinates for a zoom level
+    [[nodiscard]] inline TileBounds getTileExtent(i_zoom zoom) const
+    {
+        TileCoordinate ll = crsToTile(mExtent.getLowerLeft(), zoom);
+        TileCoordinate ur = crsToTile(mExtent.getUpperRight(), zoom);
+
+        return { ll, ur };
+    }
+
+    [[nodiscard]] inline int getEpsgCode() const
+    {
+        return mEpsgCode;
+    }
 
 private:
+    /// The tile size associated with this grid
+    i_tile mGridSize;
 
-  /// The tile size associated with this grid
-  i_tile mGridSize;
+    /// The area covered by the grid
+    CRSBounds mExtent;
 
-  /// The area covered by the grid
-  CRSBounds mExtent;
+    /// The spatial reference system covered by the grid
+    OGRSpatialReference mSRS;
+    int mEpsgCode = -1;
 
-  /// The spatial reference system covered by the grid
-  OGRSpatialReference mSRS;
-  int mEpsgCode = -1;
+    double mInitialResolution; ///< The initial resolution of this particular profile
+    double mXOriginShift; ///< The shift in CRS coordinates to get to the origin from minx
+    double mYOriginShift; ///< The shift in CRS coordinates to get to the origin from miny
 
-  double mInitialResolution; ///< The initial resolution of this particular profile
-  double mXOriginShift; ///< The shift in CRS coordinates to get to the origin from minx
-  double mYOriginShift; ///< The shift in CRS coordinates to get to the origin from miny
-
-  /// By what factor will the scale increase at each zoom level?
-  double mZoomFactor;
+    /// By what factor will the scale increase at each zoom level?
+    double mZoomFactor;
 };
 
 #endif /* CTBGRID_HPP */

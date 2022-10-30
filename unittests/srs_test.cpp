@@ -25,64 +25,66 @@
 
 #include "srs.h"
 
+TEST_CASE("ECEF conversinos")
+{
+    OGRSpatialReference webmercator;
+    webmercator.importFromEPSG(3857);
+    webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-TEST_CASE("ECEF conversinos") {
-  OGRSpatialReference webmercator;
-  webmercator.importFromEPSG(3857);
-  webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    OGRSpatialReference wgs84;
+    wgs84.importFromEPSG(4326);
+    wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-  OGRSpatialReference wgs84;
-  wgs84.importFromEPSG(4326);
-  wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-
-
-  SECTION("single point") {
-    // comparison against https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
-    const auto steffl_wgs84 = glm::dvec3(16.372489, 48.208814, 171.28);
-    const auto steffl_webmercator = srs::to(wgs84, webmercator, steffl_wgs84);
+    SECTION("single point")
     {
-      const auto steffl_ecef = srs::toECEF(wgs84, steffl_wgs84);
-      CHECK(steffl_ecef.x == Approx(4085862.0));
-      CHECK(steffl_ecef.y == Approx(1200403.0));
-      CHECK(steffl_ecef.z == Approx(4732509.0));
+        // comparison against https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
+        const auto steffl_wgs84 = glm::dvec3(16.372489, 48.208814, 171.28);
+        const auto steffl_webmercator = srs::to(wgs84, webmercator, steffl_wgs84);
+        {
+            const auto steffl_ecef = srs::toECEF(wgs84, steffl_wgs84);
+            CHECK(steffl_ecef.x == Approx(4085862.0));
+            CHECK(steffl_ecef.y == Approx(1200403.0));
+            CHECK(steffl_ecef.z == Approx(4732509.0));
+        }
+        {
+            const auto steffl_ecef = srs::toECEF(webmercator, steffl_webmercator);
+            CHECK(steffl_ecef.x == Approx(4085862.0));
+            CHECK(steffl_ecef.y == Approx(1200403.0));
+            CHECK(steffl_ecef.z == Approx(4732509.0));
+        }
     }
+
+    SECTION("multiple points")
     {
-      const auto steffl_ecef = srs::toECEF(webmercator, steffl_webmercator);
-      CHECK(steffl_ecef.x == Approx(4085862.0));
-      CHECK(steffl_ecef.y == Approx(1200403.0));
-      CHECK(steffl_ecef.z == Approx(4732509.0));
+        // comparison against https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
+        const auto steffl_wgs84 = glm::dvec3(16.372489, 48.208814, 171.28);
+        const auto grossglockner_wgs84 = glm::dvec3(12.694504, 47.073913, 3798.0);
+
+        const auto [steffl_ecef, grossglockner_ecef] = srs::toECEF(wgs84, steffl_wgs84, grossglockner_wgs84);
+        {
+            CHECK(steffl_ecef.x == Approx(4085862.0));
+            CHECK(steffl_ecef.y == Approx(1200403.0));
+            CHECK(steffl_ecef.z == Approx(4732509.0));
+        }
+        {
+            CHECK(grossglockner_ecef.x == Approx(4247824.0));
+            CHECK(grossglockner_ecef.y == Approx(956860.0));
+            CHECK(grossglockner_ecef.z == Approx(4650146.0));
+        }
     }
-  }
 
-  SECTION("multiple points") {
-    // comparison against https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
-    const auto steffl_wgs84 = glm::dvec3(16.372489, 48.208814, 171.28);
-    const auto grossglockner_wgs84 = glm::dvec3(12.694504, 47.073913, 3798.0);
-
-    const auto [steffl_ecef, grossglockner_ecef] = srs::toECEF(wgs84, steffl_wgs84, grossglockner_wgs84);
+    SECTION("point array")
     {
-      CHECK(steffl_ecef.x == Approx(4085862.0));
-      CHECK(steffl_ecef.y == Approx(1200403.0));
-      CHECK(steffl_ecef.z == Approx(4732509.0));
-    }
-    {
-      CHECK(grossglockner_ecef.x == Approx(4247824.0));
-      CHECK(grossglockner_ecef.y == Approx(956860.0));
-      CHECK(grossglockner_ecef.z == Approx(4650146.0));
-    }
-  }
+        // comparison against https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
+        const std::vector points = { glm::dvec3(16.372489, 48.208814, 171.28),
+            glm::dvec3(12.694504, 47.073913, 3798.0) };
+        const auto ecef_points = srs::toECEF(wgs84, points);
+        CHECK(ecef_points[0].x == Approx(4085862.0));
+        CHECK(ecef_points[0].y == Approx(1200403.0));
+        CHECK(ecef_points[0].z == Approx(4732509.0));
 
-  SECTION("point array") {
-    // comparison against https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
-    const std::vector points = {glm::dvec3(16.372489, 48.208814, 171.28),
-                                glm::dvec3(12.694504, 47.073913, 3798.0)};
-    const auto ecef_points = srs::toECEF(wgs84, points);
-    CHECK(ecef_points[0].x == Approx(4085862.0));
-    CHECK(ecef_points[0].y == Approx(1200403.0));
-    CHECK(ecef_points[0].z == Approx(4732509.0));
-
-    CHECK(ecef_points[1].x == Approx(4247824.0));
-    CHECK(ecef_points[1].y == Approx(956860.0));
-    CHECK(ecef_points[1].z == Approx(4650146.0));
-  }
+        CHECK(ecef_points[1].x == Approx(4247824.0));
+        CHECK(ecef_points[1].y == Approx(956860.0));
+        CHECK(ecef_points[1].z == Approx(4650146.0));
+    }
 }

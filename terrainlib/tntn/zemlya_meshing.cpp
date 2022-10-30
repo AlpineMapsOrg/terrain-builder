@@ -13,7 +13,7 @@ std::unique_ptr<Mesh> generate_tin_zemlya(std::unique_ptr<RasterDouble> raster, 
 }
 
 std::unique_ptr<Mesh> generate_tin_zemlya(std::unique_ptr<SurfacePoints> surface_points,
-                                          double max_error)
+    double max_error)
 {
     auto raster = surface_points->to_raster();
     surface_points.reset();
@@ -27,4 +27,4 @@ std::unique_ptr<Mesh> generate_tin_zemlya(const SurfacePoints& surface_points, d
     return generate_tin_zemlya(std::move(raster), max_error);
 }
 
-} //namespace tntn
+} // namespace tntn

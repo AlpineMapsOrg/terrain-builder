@@ -1,8 +1,8 @@
 #pragma once
 
-#include "tntn/Mesh.h"
-#include "tntn/FileFormat.h"
 #include "tntn/File.h"
+#include "tntn/FileFormat.h"
+#include "tntn/Mesh.h"
 #include <memory>
 
 namespace tntn {
@@ -22,4 +22,4 @@ bool write_mesh_as_off(const char* filename, const Mesh& m);
 bool write_mesh_as_geojson(const char* filename, const Mesh& m);
 bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m);
 
-} //namespace tntn
+} // namespace tntn

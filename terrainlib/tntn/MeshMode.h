@@ -2,11 +2,10 @@
 
 namespace tntn {
 
-enum class MeshMode
-{
+enum class MeshMode {
     none,
     decomposed,
     triangles
 };
 
-} //namespace tntn
+} // namespace tntn

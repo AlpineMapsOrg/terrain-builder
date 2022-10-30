@@ -27,19 +27,20 @@
 
 #include "Image.h"
 #include "ParallelTileGenerator.h"
-#include "Tile.h"
 #include "ParallelTiler.h"
+#include "Tile.h"
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
-
-namespace alpine_raster
-{
+namespace alpine_raster {
 
 class TileWriter : public ParallelTileWriterInterface {
 public:
-  TileWriter(Tile::Border border) : ParallelTileWriterInterface(border, "png") {}
-  void write(const std::string& base_path, const Tile& tile, const HeightData& heights) const override;
+    TileWriter(Tile::Border border)
+        : ParallelTileWriterInterface(border, "png")
+    {
+    }
+    void write(const std::string& base_path, const Tile& tile, const HeightData& heights) const override;
 };
 [[nodiscard]] ParallelTileGenerator make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, Tile::Scheme tiling_scheme, Tile::Border border, unsigned grid_resolution = 256);
 

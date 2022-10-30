@@ -1,19 +1,17 @@
 #pragma once
 
-#include "tntn/endianness.h"
 #include "tntn/File.h"
+#include "tntn/endianness.h"
 
-#include <memory>
 #include <cstdint>
-#include <vector>
+#include <memory>
 #include <string>
+#include <vector>
 
 namespace tntn {
 
-struct BinaryIOError
-{
-    enum InOrOut
-    {
+struct BinaryIOError {
+    enum InOrOut {
         NONE,
         READ,
         WRITE
@@ -32,20 +30,18 @@ struct BinaryIOError
     bool operator!=(const BinaryIOError& other) const { return !(*this == other); }
 };
 
-struct BinaryIOErrorTracker
-{
+struct BinaryIOErrorTracker {
     BinaryIOError first_error;
     BinaryIOError last_error;
     bool has_error() const { return first_error.is_error(); }
     std::string to_string() const;
 };
 
-class BinaryIO
-{
-  public:
-    BinaryIO(std::shared_ptr<FileLike> f, Endianness target_endianness) :
-        m_f(f),
-        m_target_endianness(target_endianness)
+class BinaryIO {
+public:
+    BinaryIO(std::shared_ptr<FileLike> f, Endianness target_endianness)
+        : m_f(f)
+        , m_target_endianness(target_endianness)
     {
     }
 
@@ -88,7 +84,7 @@ class BinaryIO
     void read_float(float& o, BinaryIOErrorTracker& e) { read_impl(&o, 4, 1, "float", e); }
     void read_double(double& o, BinaryIOErrorTracker& e) { read_impl(&o, 8, 1, "double", e); }
 
-    template<typename T>
+    template <typename T>
     void read_array(std::vector<T>& o, size_t count, BinaryIOErrorTracker& e);
 
     void write_byte(const uint8_t v, BinaryIOErrorTracker& e)
@@ -133,24 +129,24 @@ class BinaryIO
         write_impl(&v, 8, 1, "double", e);
     }
 
-    template<typename T>
+    template <typename T>
     void write(const T& v, BinaryIOErrorTracker& e);
 
-    template<typename T>
+    template <typename T>
     void write_array(const std::vector<T>& v, BinaryIOErrorTracker& e);
 
-  private:
-    //returns successfully read element count
+private:
+    // returns successfully read element count
     size_t read_impl(void* const dest,
-                     size_t dest_elem_size,
-                     size_t dest_count,
-                     const char* const elem_type,
-                     BinaryIOErrorTracker& e);
+        size_t dest_elem_size,
+        size_t dest_count,
+        const char* const elem_type,
+        BinaryIOErrorTracker& e);
     void write_impl(const void* const src,
-                    size_t src_elem_size,
-                    size_t src_count,
-                    const char* const elem_type,
-                    BinaryIOErrorTracker& e);
+        size_t src_elem_size,
+        size_t src_count,
+        const char* const elem_type,
+        BinaryIOErrorTracker& e);
 
     const std::shared_ptr<FileLike> m_f;
     const Endianness m_target_endianness;
@@ -158,75 +154,75 @@ class BinaryIO
     File::position_type m_write_pos = 0;
 };
 
-template<>
+template <>
 inline void BinaryIO::read_array<int16_t>(std::vector<int16_t>& o,
-                                          size_t count,
-                                          BinaryIOErrorTracker& e)
+    size_t count,
+    BinaryIOErrorTracker& e)
 {
     return read_array_int16(o, count, e);
 }
-template<>
+template <>
 inline void BinaryIO::read_array<uint16_t>(std::vector<uint16_t>& o,
-                                           size_t count,
-                                           BinaryIOErrorTracker& e)
+    size_t count,
+    BinaryIOErrorTracker& e)
 {
     return read_array_uint16(o, count, e);
 }
-template<>
+template <>
 inline void BinaryIO::read_array<int32_t>(std::vector<int32_t>& o,
-                                          size_t count,
-                                          BinaryIOErrorTracker& e)
+    size_t count,
+    BinaryIOErrorTracker& e)
 {
     return read_array_int32(o, count, e);
 }
-template<>
+template <>
 inline void BinaryIO::read_array<uint32_t>(std::vector<uint32_t>& o,
-                                           size_t count,
-                                           BinaryIOErrorTracker& e)
+    size_t count,
+    BinaryIOErrorTracker& e)
 {
     return read_array_uint32(o, count, e);
 }
 
-template<>
+template <>
 inline void BinaryIO::write_array<int16_t>(const std::vector<int16_t>& v, BinaryIOErrorTracker& e)
 {
     return write_array_int16(v, e);
 }
-template<>
+template <>
 inline void BinaryIO::write_array<uint16_t>(const std::vector<uint16_t>& v,
-                                            BinaryIOErrorTracker& e)
+    BinaryIOErrorTracker& e)
 {
     return write_array_uint16(v, e);
 }
 
-template<>
+template <>
 inline void BinaryIO::write_array<int32_t>(const std::vector<int32_t>& v, BinaryIOErrorTracker& e)
 {
     return write_array_int32(v, e);
 }
-template<>
+template <>
 inline void BinaryIO::write_array<uint32_t>(const std::vector<uint32_t>& v,
-                                            BinaryIOErrorTracker& e)
+    BinaryIOErrorTracker& e)
 {
     return write_array_uint32(v, e);
 }
 
-template<>
+template <>
 inline void BinaryIO::write(const int16_t& v, BinaryIOErrorTracker& e)
 {
     return write_int16(v, e);
 }
-template<>
+template <>
 inline void BinaryIO::write(const uint16_t& v, BinaryIOErrorTracker& e)
 {
     return write_uint16(v, e);
 }
-template<>
+template <>
 inline void BinaryIO::write(const int32_t& v, BinaryIOErrorTracker& e)
 {
     return write_int32(v, e);
 }
-template<>
+template <>
 inline void BinaryIO::write(const uint32_t& v, BinaryIOErrorTracker& e)
 {
     return write_uint32(v, e);

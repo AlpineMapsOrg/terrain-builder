@@ -31,26 +31,27 @@ void Mesh2Raster::rasterise_triangle(RasterDouble& raster, SuperTriangle& tri)
 
     // conform to raster bounds
 #if true
-    rs = rs < 0 ? 0 : rs > h ? h : rs;
-    re = re < 0 ? 0 : re > h ? h : re;
+    rs = rs < 0 ? 0 : rs > h ? h
+                             : rs;
+    re = re < 0 ? 0 : re > h ? h
+                             : re;
 
-    cs = cs < 0 ? 0 : cs > w ? w : cs;
-    ce = ce < 0 ? 0 : ce > w ? w : ce;
+    cs = cs < 0 ? 0 : cs > w ? w
+                             : cs;
+    ce = ce < 0 ? 0 : ce > w ? w
+                             : ce;
 #endif
 
     // cycle through raster
-    for(int r = rs; r < re; r++)
-    {
-        //double* pH = raster.getPtr(h-r-1);
+    for (int r = rs; r < re; r++) {
+        // double* pH = raster.getPtr(h-r-1);
         double* pH = raster.get_ptr(r);
 
-        for(int c = cs; c < ce; c++)
-        {
+        for (int c = cs; c < ce; c++) {
             double terrain_height = 0;
 
-            //if(tri.interpolate(raster.col2x(c),raster.rowLL2y(r),terrain_height))
-            if(tri.interpolate(c, r, terrain_height))
-            {
+            // if(tri.interpolate(raster.col2x(c),raster.rowLL2y(r),terrain_height))
+            if (tri.interpolate(c, r, terrain_height)) {
                 visited = true;
 #if false
                     if(pH[c] != ndv)
@@ -71,31 +72,26 @@ void Mesh2Raster::rasterise_triangle(RasterDouble& raster, SuperTriangle& tri)
         }
     }
 
-    if(!visited)
-    {
+    if (!visited) {
         TNTN_LOG_WARN("triangle NOT rendered X min: {} max: {} Y min: {} max: {}",
-                      tri.getBB().min.x,
-                      tri.getBB().max.x,
-                      tri.getBB().min.y,
-                      tri.getBB().max.y);
+            tri.getBB().min.x,
+            tri.getBB().max.x,
+            tri.getBB().min.y,
+            tri.getBB().max.y);
         TNTN_LOG_WARN("rs: {} re: {}", rs, re);
         TNTN_LOG_WARN("cs: {} ce: {}", cs, ce);
 
         auto t = tri.getTriangle();
 
-        for(int i = 0; i < 3; i++)
-        {
+        for (int i = 0; i < 3; i++) {
             std::vector<Vertex> plist;
-            for(int j = 0; j < 3; j++)
-            {
-                if(i != j)
-                {
+            for (int j = 0; j < 3; j++) {
+                if (i != j) {
                     plist.push_back(t[j]);
                 }
             }
 
-            if(plist.size() == 2)
-            {
+            if (plist.size() == 2) {
 
                 double dx = plist[0].x - plist[1].x;
                 double dy = plist[0].y - plist[1].y;
@@ -123,12 +119,12 @@ void Mesh2Raster::rasterise_triangle(RasterDouble& raster, SuperTriangle& tri)
      it's therefore necessary to know the source raster dimensions
      and it's important that the mesh algorithm sets vertices at the edges
      of the raster otherwise the re-rasterisation will be scaled.
-     
+
      we assume that vertex positions where derived from raster positions (row, col)
      by adding cellSize/2. i.e
      x = (col+0.5) * cellSize + xpos and y = (height - row - 1 + 0.5) * cellsize + ypos
      this is the accepted way to derive coordianates
-     
+
      in this case the x coordinate in a mesh derived for an image of original size w is in the range:
      min.x = x_start = (0+0.5) * cellSize + xpos
      max.x = x_end   = (w-1+0.5) * cellSize + xpos
@@ -151,14 +147,15 @@ RasterDouble Mesh2Raster::rasterise(
     double mesh_h = m_bb.max.y - m_bb.min.y;
 
     RasterDouble raster;
-    if(mesh_w <= 0 || mesh_h <= 0)
-    {
+    if (mesh_w <= 0 || mesh_h <= 0) {
         TNTN_LOG_ERROR("mesh dimensions zero");
         return raster;
     }
 
-    if(original_width == -1) original_width = out_width;
-    if(original_height == -1) original_height = out_height;
+    if (original_width == -1)
+        original_width = out_width;
+    if (original_height == -1)
+        original_height = out_height;
 
     double cellWidth_original = mesh_w / double(original_width - 1);
     double cellWidth = (mesh_w + cellWidth_original) / double(out_width);
@@ -209,14 +206,12 @@ RasterDouble Mesh2Raster::rasterise(
     auto trange = mesh.triangles();
 
     int tcount = 0;
-    for(auto ptr = trange.begin; ptr != trange.end; ptr++)
-    {
+    for (auto ptr = trange.begin; ptr != trange.end; ptr++) {
         SuperTriangle super_triangle(scaleTriangle(*ptr, raster));
-        //SuperTriangle super_triangle(*ptr);
+        // SuperTriangle super_triangle(*ptr);
         rasterise_triangle(raster, super_triangle);
 
-        if((tcount % (1 + trange.size() / 10)) == 0)
-        {
+        if ((tcount % (1 + trange.size() / 10)) == 0) {
             float p = tcount / (float)trange.size();
             TNTN_LOG_INFO("{} %", p * 100.0);
         }
@@ -228,27 +223,22 @@ RasterDouble Mesh2Raster::rasterise(
     // i.e. where rendere hasn't been able to add height
     int countempty = 0;
     double ndv = raster.get_no_data_value();
-    for(int r = 2; r < raster.get_height() - 2; r++)
-    {
+    for (int r = 2; r < raster.get_height() - 2; r++) {
         double* pH = raster.get_ptr(r);
 
-        for(int c = 2; c < raster.get_width() - 2; c++)
-        {
-            if(pH[c] == ndv)
-            {
+        for (int c = 2; c < raster.get_width() - 2; c++) {
+            if (pH[c] == ndv) {
                 countempty++;
             }
         }
     }
 
-    if(countempty > 0)
-    {
+    if (countempty > 0) {
         TNTN_LOG_WARN("{} empty pixel ", countempty);
     }
 #endif
 
-    if(oversample != 1)
-    {
+    if (oversample != 1) {
         raster = raster_tools::integer_downsample_mean(raster, oversample);
     }
 
@@ -259,20 +249,18 @@ RasterDouble Mesh2Raster::rasterise(
 // errorMap is the difference for that pixels position
 // maxError is the maximum abs difference between any two pixel values
 double Mesh2Raster::findRMSError(const RasterDouble& r1,
-                                 const RasterDouble& r2,
-                                 RasterDouble& errorMap,
-                                 double& maxError)
+    const RasterDouble& r2,
+    RasterDouble& errorMap,
+    double& maxError)
 {
     int w = r1.get_width();
     int h = r1.get_height();
 
-    if(h != r2.get_height())
-    {
+    if (h != r2.get_height()) {
         return 0;
     }
 
-    if(w != r2.get_width())
-    {
+    if (w != r2.get_width()) {
         return 0;
     }
 
@@ -297,20 +285,19 @@ double Mesh2Raster::findRMSError(const RasterDouble& r1,
 
     // ignore 2 pixel boundary around raster
     // in each direction
-    for(int r = 2; r < h - 2; r++)
-    {
+    for (int r = 2; r < h - 2; r++) {
         double* pE = errorMap.get_ptr(r);
         const double* pH1 = r1.get_ptr(r);
         const double* pH2 = r2.get_ptr(r);
 
-        for(int c = 2; c < w - 2; c++)
-        {
-            if(pH1[c] == r1ndv) count_r1_nd++;
-            if(pH2[c] == r2ndv) count_r2_nd++;
+        for (int c = 2; c < w - 2; c++) {
+            if (pH1[c] == r1ndv)
+                count_r1_nd++;
+            if (pH2[c] == r2ndv)
+                count_r2_nd++;
 
             // only perform comparison for non-empty pixels
-            if((pH1[c] != r1ndv) && (pH2[c] != r2ndv))
-            {
+            if ((pH1[c] != r1ndv) && (pH2[c] != r2ndv)) {
                 double d = std::abs(pH1[c] - pH2[c]);
 
                 double dd = d * d;
@@ -319,20 +306,17 @@ double Mesh2Raster::findRMSError(const RasterDouble& r1,
                 pE[c] = d;
 
                 // max error
-                if(d > maxError)
-                {
+                if (d > maxError) {
                     maxError = d;
                 }
 
                 // rms error
                 sum += dd;
                 count++;
-            }
-            else
-            {
+            } else {
                 count_er_nd++;
                 pE[c] = 0;
-                //pE[c] = errorMap.getNoDataValue();
+                // pE[c] = errorMap.getNoDataValue();
             }
         }
     }
@@ -343,8 +327,7 @@ double Mesh2Raster::findRMSError(const RasterDouble& r1,
     TNTN_LOG_DEBUG("error map : {}", count_er_nd);
 
     // compute standard deviation
-    if(count > 0)
-    {
+    if (count > 0) {
         sum = sum / (long double)count;
         sum = sqrt(sum);
     }
@@ -353,10 +336,10 @@ double Mesh2Raster::findRMSError(const RasterDouble& r1,
 }
 
 RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
-                                       const RasterDouble& r2,
-                                       double& out_mean,
-                                       double& out_std,
-                                       double& out_max_abs_error)
+    const RasterDouble& r2,
+    double& out_mean,
+    double& out_std,
+    double& out_max_abs_error)
 {
     int w = r1.get_width();
     int h = r1.get_height();
@@ -368,8 +351,7 @@ RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
 
     RasterDouble errorMap;
 
-    if(h != r2.get_height() || w != r2.get_width() || r1.empty() || r2.empty())
-    {
+    if (h != r2.get_height() || w != r2.get_width() || r1.empty() || r2.empty()) {
         return errorMap;
     }
 
@@ -389,15 +371,15 @@ RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
 
     /*
          using single pass to compute variance and mean
-         
+
          use method that preserves numerical accuracy:
          http://jonisalonen.com/2013/deriving-welfords-method-for-computing-variance/
-         
+
          variance(samples):
-         
+
          M := 0
          S := 0
-         
+
          for k from 1 to N:
              x := samples[k]
              oldM := M
@@ -413,32 +395,31 @@ RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
     long int count = 0;
 
     // ignore 2 pixel boundary around raster
-    for(int r = 2; r < h - 2; r++)
-    {
+    for (int r = 2; r < h - 2; r++) {
         double* pE = errorMap.get_ptr(r); // output error map
         const double* pH1 = r1.get_ptr(r); // raster 1
         const double* pH2 = r2.get_ptr(r); // raster 2
 
-        for(int c = 2; c < w - 2; c++)
-        {
+        for (int c = 2; c < w - 2; c++) {
             // for debug reasons count empty pixels
-            if(pH1[c] == r1ndv) count_r1_nd++;
-            if(pH2[c] == r2ndv) count_r2_nd++;
+            if (pH1[c] == r1ndv)
+                count_r1_nd++;
+            if (pH2[c] == r2ndv)
+                count_r2_nd++;
 
             // only perform comparison for
             // non-empty pixels in both rasters
-            if((pH1[c] != r1ndv) && (pH2[c] != r2ndv))
-            {
+            if ((pH1[c] != r1ndv) && (pH2[c] != r2ndv)) {
                 // the error we want to measure
                 long double d = pH1[c] - pH2[c];
 
-                //oldM := M
+                // oldM := M
                 long double old_m = m_sum;
 
-                //M := M + (x-M)/k
+                // M := M + (x-M)/k
                 m_sum = m_sum + (d - m_sum) / (long double)(count + 1);
 
-                //S := S + (x-M)*(x-oldM)
+                // S := S + (x-M)*(x-oldM)
                 s_sum = s_sum + (d - m_sum) * (d - old_m);
 
                 // computing mean
@@ -448,8 +429,7 @@ RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
                 double d_abs = std::abs(d);
 
                 // max error
-                if(d_abs > max_abs_error)
-                {
+                if (d_abs > max_abs_error) {
                     max_abs_error = d_abs;
                 }
 
@@ -459,9 +439,7 @@ RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
                 // increment count
                 // as not all pixels will be included
                 count++;
-            }
-            else
-            {
+            } else {
                 // count ocurrance
                 count_er_nd++;
 
@@ -478,8 +456,7 @@ RasterDouble Mesh2Raster::measureError(const RasterDouble& r1,
     TNTN_LOG_DEBUG("error map : {}", count_er_nd);
 
     // compute standard deviation
-    if(count > 0)
-    {
+    if (count > 0) {
         double variance = (double)(s_sum / (long double)(count));
 
         // mean and variance
@@ -498,8 +475,7 @@ BBox2D Mesh2Raster::findBoundingBox(Mesh& mesh)
 {
     BBox2D bb;
     auto vrange = mesh.vertices();
-    for(auto ptr = vrange.begin; ptr != vrange.end; ptr++)
-    {
+    for (auto ptr = vrange.begin; ptr != vrange.end; ptr++) {
         bb.add(*ptr);
     }
 
@@ -509,8 +485,7 @@ BBox2D Mesh2Raster::findBoundingBox(Mesh& mesh)
 Triangle Mesh2Raster::scaleTriangle(const Triangle& t, float w, float h)
 {
     Triangle nt;
-    for(int i = 0; i < 3; i++)
-    {
+    for (int i = 0; i < 3; i++) {
         nt[i] = scaleVertex(t[i], w, h);
     }
     return nt;
@@ -519,8 +494,7 @@ Triangle Mesh2Raster::scaleTriangle(const Triangle& t, float w, float h)
 Triangle Mesh2Raster::scaleTriangle(const Triangle& t, RasterDouble& raster)
 {
     Triangle nt;
-    for(int i = 0; i < 3; i++)
-    {
+    for (int i = 0; i < 3; i++) {
         nt[i] = scaleVertex(t[i], raster);
     }
     return nt;
@@ -533,8 +507,8 @@ Vertex Mesh2Raster::scaleVertex(const Vertex& v, float w, float h)
     vs.x = (w - 1) * (double)(v.x - m_bb.min.x) / (double)(m_bb.max.x - m_bb.min.x);
     vs.y = (h - 1) * (double)(v.y - m_bb.min.y) / (double)(m_bb.max.y - m_bb.min.y);
 
-    //vs.x = w * (double)(v.x - m_bb.min.x) / (double)(m_bb.max.x - m_bb.min.x);
-    //vs.y = h * (double)(v.y - m_bb.min.y) / (double)(m_bb.max.y - m_bb.min.y);
+    // vs.x = w * (double)(v.x - m_bb.min.x) / (double)(m_bb.max.x - m_bb.min.x);
+    // vs.y = h * (double)(v.y - m_bb.min.y) / (double)(m_bb.max.y - m_bb.min.y);
 
     vs.z = v.z;
     vs.z = v.z;

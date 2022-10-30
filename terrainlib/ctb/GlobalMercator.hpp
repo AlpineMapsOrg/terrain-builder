@@ -25,7 +25,7 @@
 #include "Grid.hpp"
 
 namespace ctb {
-  class GlobalMercator;
+class GlobalMercator;
 }
 
 /**
@@ -34,33 +34,31 @@ namespace ctb {
  * This class models the [Tile Mapping Service Global Mercator
  * Profile](http://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-mercator).
  */
-class ctb::GlobalMercator :
-  public Grid {
+class ctb::GlobalMercator : public Grid {
 public:
-
-  GlobalMercator(i_tile tileSize = 256) :
-      Grid(tileSize,
-           CRSBounds(-cOriginShift, -cOriginShift, cOriginShift, cOriginShift),
-           cSRS,
-           3857,
-           1,
-           2)
-  {}
+    GlobalMercator(i_tile tileSize = 256)
+        : Grid(tileSize,
+            CRSBounds(-cOriginShift, -cOriginShift, cOriginShift, cOriginShift),
+            cSRS,
+            3857,
+            1,
+            2)
+    {
+    }
 
 protected:
+    /// The semi major axis of the WGS84 ellipsoid (the radius of the earth in
+    /// meters)
+    static const unsigned int cSemiMajorAxis;
 
-  /// The semi major axis of the WGS84 ellipsoid (the radius of the earth in
-  /// meters)
-  static const unsigned int cSemiMajorAxis;
+    /// The circumference of the earth in meters
+    static const double cEarthCircumference;
 
-  /// The circumference of the earth in meters
-  static const double cEarthCircumference;
+    /// The coordinate origin (the middle of the grid extent)
+    static const double cOriginShift;
 
-  /// The coordinate origin (the middle of the grid extent)
-  static const double cOriginShift;
-
-  /// The EPSG:3785 spatial reference system
-  static const OGRSpatialReference cSRS;
+    /// The EPSG:3785 spatial reference system
+    static const OGRSpatialReference cSRS;
 };
 
 #endif /* GLOBALMERCATOR_HPP */

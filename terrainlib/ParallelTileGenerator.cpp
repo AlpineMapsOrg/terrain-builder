@@ -31,79 +31,82 @@
 #include <DatasetReader.h>
 #include <thread>
 
-ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const ParallelTiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path) :
-    m_output_data_path(output_data_path), m_input_data_path(input_data_path), m_grid(grid), m_tiler(tiler), m_tile_writer(std::move(tile_writer))
+ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const ParallelTiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path)
+    : m_output_data_path(output_data_path)
+    , m_input_data_path(input_data_path)
+    , m_grid(grid)
+    , m_tiler(tiler)
+    , m_tile_writer(std::move(tile_writer))
 {
-
 }
 
 ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path,
-                                                  ctb::Grid::Srs srs, Tile::Scheme tiling_scheme,
-                                                  std::unique_ptr<ParallelTileWriterInterface> tile_writer,
-                                                  const std::string& output_data_path,
-                                                  unsigned grid_resolution)
+    ctb::Grid::Srs srs, Tile::Scheme tiling_scheme,
+    std::unique_ptr<ParallelTileWriterInterface> tile_writer,
+    const std::string& output_data_path,
+    unsigned grid_resolution)
 {
-  const auto dataset = Dataset::make_shared(input_data_path);
-  ctb::Grid grid = ctb::GlobalGeodetic(grid_resolution);
-  if (srs == ctb::Grid::Srs::SphericalMercator)
-    grid = ctb::GlobalMercator(grid_resolution);
-  const auto border = tile_writer->formatRequiresBorder();
-  return {input_data_path, grid, ParallelTiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path};
+    const auto dataset = Dataset::make_shared(input_data_path);
+    ctb::Grid grid = ctb::GlobalGeodetic(grid_resolution);
+    if (srs == ctb::Grid::Srs::SphericalMercator)
+        grid = ctb::GlobalMercator(grid_resolution);
+    const auto border = tile_writer->formatRequiresBorder();
+    return { input_data_path, grid, ParallelTiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path };
 }
 
 const ParallelTiler& ParallelTileGenerator::tiler() const
 {
-  return m_tiler;
+    return m_tiler;
 }
 
 const ctb::Grid& ParallelTileGenerator::grid() const
 {
-  return m_grid;
+    return m_grid;
 }
 
 void ParallelTileGenerator::write(const Tile& tile, const HeightData& heights) const
 {
-  const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.zoom, tile.point.x);
-  const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.point.y, m_tile_writer->formatFileEnding());
-  std::filesystem::create_directories(dir_path);
-  m_tile_writer->write(file_path, tile, heights);
+    const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.zoom, tile.point.x);
+    const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.point.y, m_tile_writer->formatFileEnding());
+    std::filesystem::create_directories(dir_path);
+    m_tile_writer->write(file_path, tile, heights);
 }
 
 void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console, bool generate_world_wide_tiles) const
 {
-  auto tiler = m_tiler;
-  if (generate_world_wide_tiles)
-    tiler.setBounds(grid().getExtent());
+    auto tiler = m_tiler;
+    if (generate_world_wide_tiles)
+        tiler.setBounds(grid().getExtent());
 
-  const auto tiles = tiler.generateTiles(zoom_range);
+    const auto tiles = tiler.generateTiles(zoom_range);
 
-  auto pi = ProgressIndicator(tiles.size());
-  std::jthread monitoring_thread;
+    auto pi = ProgressIndicator(tiles.size());
+    std::jthread monitoring_thread;
 
-  if (progress_bar_on_console)
-    monitoring_thread = pi.startMonitoring(); // destructor will join.
-
-  const auto fun = [&pi, progress_bar_on_console, this](const Tile& tile) {
-    // Recreating Dataset for every tile. This was the easiest fix for multithreading,
-    // and it takes only 0.5% of the time (half a percent).
-    // most of the cpu time is used in 'readWithOverviews' (specificly 'RasterIO', and
-    // 'VRTWarpedRasterBand::IReadBlock') and a bit in 'write' (specifically 'FreeImage_Save').
-    const auto dataset = Dataset::make_shared(m_input_data_path);
-    DatasetReader reader(dataset, m_grid.getSRS(), 1, m_warn_on_missing_overviews);
-    const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
-    write(tile, heights);
     if (progress_bar_on_console)
-      pi.taskFinished();
-  };
-  std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
+        monitoring_thread = pi.startMonitoring(); // destructor will join.
+
+    const auto fun = [&pi, progress_bar_on_console, this](const Tile& tile) {
+        // Recreating Dataset for every tile. This was the easiest fix for multithreading,
+        // and it takes only 0.5% of the time (half a percent).
+        // most of the cpu time is used in 'readWithOverviews' (specificly 'RasterIO', and
+        // 'VRTWarpedRasterBand::IReadBlock') and a bit in 'write' (specifically 'FreeImage_Save').
+        const auto dataset = Dataset::make_shared(m_input_data_path);
+        DatasetReader reader(dataset, m_grid.getSRS(), 1, m_warn_on_missing_overviews);
+        const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
+        write(tile, heights);
+        if (progress_bar_on_console)
+            pi.taskFinished();
+    };
+    std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
 }
 
 Tile::Border ParallelTileWriterInterface::formatRequiresBorder() const
 {
-  return m_format_requires_border;
+    return m_format_requires_border;
 }
 
 const std::string& ParallelTileWriterInterface::formatFileEnding() const
 {
-  return m_file_ending;
+    return m_file_ending;
 }

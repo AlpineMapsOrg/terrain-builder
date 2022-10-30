@@ -34,127 +34,135 @@
 
 namespace srs {
 
-inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source, const OGRSpatialReference& targetSrs) {
-  const auto data_srs = source;
-  auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&data_srs, &targetSrs));
-  if (!transformer)
-    throw Exception("Couldn't create SRS transformation");
-  return transformer;
+inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source, const OGRSpatialReference& targetSrs)
+{
+    const auto data_srs = source;
+    auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&data_srs, &targetSrs));
+    if (!transformer)
+        throw Exception("Couldn't create SRS transformation");
+    return transformer;
 }
 
 // this transform is non exact, because we are only transforming the corner vertices. however, due to projection warping, a rectangle can become an trapezoid with curved edges.
-inline ctb::CRSBounds nonExactBoundsTransform(const ctb::CRSBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs) {
-  const auto transform = transformation(sourceSrs, targetSrs);
-  std::array xes = {bounds.getMinX(), bounds.getMaxX()};
-  std::array yes = {bounds.getMinY(), bounds.getMaxY()};
-  if (!transform->Transform(2, xes.data(), yes.data()))
-    throw Exception("nonExactBoundsTransform failed");
-  return {ctb::CRSPoint(xes[0], yes[0]), ctb::CRSPoint(xes[1], yes[1])};
+inline ctb::CRSBounds nonExactBoundsTransform(const ctb::CRSBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs)
+{
+    const auto transform = transformation(sourceSrs, targetSrs);
+    std::array xes = { bounds.getMinX(), bounds.getMaxX() };
+    std::array yes = { bounds.getMinY(), bounds.getMaxY() };
+    if (!transform->Transform(2, xes.data(), yes.data()))
+        throw Exception("nonExactBoundsTransform failed");
+    return { ctb::CRSPoint(xes[0], yes[0]), ctb::CRSPoint(xes[1], yes[1]) };
 }
 
 template <typename T>
-inline glm::tvec3<T> to(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, glm::tvec3<T> p) {
-  const auto transform = transformation(source_srs, target_srs);
-  if (!transform->Transform(1, &p.x, &p.y, &p.z))
-    throw Exception("srs::to(glm::tvec3<T>) failed");
-  return p;
+inline glm::tvec3<T> to(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, glm::tvec3<T> p)
+{
+    const auto transform = transformation(source_srs, target_srs);
+    if (!transform->Transform(1, &p.x, &p.y, &p.z))
+        throw Exception("srs::to(glm::tvec3<T>) failed");
+    return p;
 }
 
 template <typename T>
-inline glm::tvec3<T> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p) {
-  OGRSpatialReference ecef_srs;
-  ecef_srs.importFromEPSG(4978);
-  ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-  return to(source_srs, ecef_srs, p);
+inline glm::tvec3<T> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p)
+{
+    OGRSpatialReference ecef_srs;
+    ecef_srs.importFromEPSG(4978);
+    ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    return to(source_srs, ecef_srs, p);
 }
 
 template <typename T>
-inline std::vector<glm::tvec3<T>> toECEF(const OGRSpatialReference& source_srs, std::vector<glm::tvec3<T>> points) {
-  std::vector<T> xes;
-  std::vector<T> ys;
-  std::vector<T> zs;
-  xes.reserve(points.size());
-  ys.reserve(points.size());
-  zs.reserve(points.size());
+inline std::vector<glm::tvec3<T>> toECEF(const OGRSpatialReference& source_srs, std::vector<glm::tvec3<T>> points)
+{
+    std::vector<T> xes;
+    std::vector<T> ys;
+    std::vector<T> zs;
+    xes.reserve(points.size());
+    ys.reserve(points.size());
+    zs.reserve(points.size());
 
-  for(const auto& p : points) {
-    xes.push_back(p.x);
-    ys.push_back(p.y);
-    zs.push_back(p.z);
-  }
+    for (const auto& p : points) {
+        xes.push_back(p.x);
+        ys.push_back(p.y);
+        zs.push_back(p.z);
+    }
 
-  OGRSpatialReference ecef_srs;
-  ecef_srs.importFromEPSG(4978);
-  ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-  const auto transform = transformation(source_srs, ecef_srs);
-  if (!transform->Transform(int(points.size()), xes.data(), ys.data(), zs.data()))
-    throw Exception("toECEF(glm::tvec3<T>) failed");
+    OGRSpatialReference ecef_srs;
+    ecef_srs.importFromEPSG(4978);
+    ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    const auto transform = transformation(source_srs, ecef_srs);
+    if (!transform->Transform(int(points.size()), xes.data(), ys.data(), zs.data()))
+        throw Exception("toECEF(glm::tvec3<T>) failed");
 
-  for (size_t i = 0; i < points.size(); ++i) {
-    points[i] = {xes[i], ys[i], zs[i]};
-  }
-  return points;
+    for (size_t i = 0; i < points.size(); ++i) {
+        points[i] = { xes[i], ys[i], zs[i] };
+    }
+    return points;
 }
 
 template <typename T, std::size_t n>
-inline std::array<glm::tvec3<T>, n> toECEF(const OGRSpatialReference& source_srs, std::array<glm::tvec3<T>, n> points) {
-  std::array<T, n> xes;
-  std::array<T, n> ys;
-  std::array<T, n> zs;
+inline std::array<glm::tvec3<T>, n> toECEF(const OGRSpatialReference& source_srs, std::array<glm::tvec3<T>, n> points)
+{
+    std::array<T, n> xes;
+    std::array<T, n> ys;
+    std::array<T, n> zs;
 
-  for (size_t i = 0; i < points.size(); ++i) {
-    xes[i] = points[i].x;
-    ys[i] = points[i].y;
-    zs[i] = points[i].z;
-  }
+    for (size_t i = 0; i < points.size(); ++i) {
+        xes[i] = points[i].x;
+        ys[i] = points[i].y;
+        zs[i] = points[i].z;
+    }
 
-  OGRSpatialReference ecef_srs;
-  ecef_srs.importFromEPSG(4978);
-  ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-  const auto transform = transformation(source_srs, ecef_srs);
-  if (!transform->Transform(points.size(), xes.data(), ys.data(), zs.data()))
-    throw Exception("toECEF(glm::tvec3<T>) failed");
+    OGRSpatialReference ecef_srs;
+    ecef_srs.importFromEPSG(4978);
+    ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    const auto transform = transformation(source_srs, ecef_srs);
+    if (!transform->Transform(points.size(), xes.data(), ys.data(), zs.data()))
+        throw Exception("toECEF(glm::tvec3<T>) failed");
 
-  for (size_t i = 0; i < points.size(); ++i) {
-    points[i] = {xes[i], ys[i], zs[i]};
-  }
-  return points;
+    for (size_t i = 0; i < points.size(); ++i) {
+        points[i] = { xes[i], ys[i], zs[i] };
+    }
+    return points;
 }
 
 template <typename T>
-inline std::array<glm::tvec3<T>, 2> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p1, const glm::tvec3<T>& p2) {
-  return toECEF<T, 2>(source_srs, {p1, p2});
+inline std::array<glm::tvec3<T>, 2> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p1, const glm::tvec3<T>& p2)
+{
+    return toECEF<T, 2>(source_srs, { p1, p2 });
 }
-inline tntn::BBox3D toECEF(const OGRSpatialReference& source_srs, const tntn::BBox3D& box) {
-  constexpr auto n_samples = 100;
-  std::vector<glm::dvec3> points;
-  points.emplace_back(box.min.x, box.min.y, box.min.z);
-  points.emplace_back(box.min.x, box.min.y, box.max.z);
-  points.emplace_back(box.min.x, box.max.y, box.min.z);
-  points.emplace_back(box.min.x, box.max.y, box.max.z);
-  points.emplace_back(box.max.x, box.min.y, box.min.z);
-  points.emplace_back(box.max.x, box.min.y, box.max.z);
-  points.emplace_back(box.max.x, box.max.y, box.min.z);
-  points.emplace_back(box.max.x, box.max.y, box.max.z);
+inline tntn::BBox3D toECEF(const OGRSpatialReference& source_srs, const tntn::BBox3D& box)
+{
+    constexpr auto n_samples = 100;
+    std::vector<glm::dvec3> points;
+    points.emplace_back(box.min.x, box.min.y, box.min.z);
+    points.emplace_back(box.min.x, box.min.y, box.max.z);
+    points.emplace_back(box.min.x, box.max.y, box.min.z);
+    points.emplace_back(box.min.x, box.max.y, box.max.z);
+    points.emplace_back(box.max.x, box.min.y, box.min.z);
+    points.emplace_back(box.max.x, box.min.y, box.max.z);
+    points.emplace_back(box.max.x, box.max.y, box.min.z);
+    points.emplace_back(box.max.x, box.max.y, box.max.z);
 
-  const auto dx = (box.max.x - box.min.x) / n_samples;
-  const auto dy = (box.max.y - box.min.y) / n_samples;
-  for (auto i = 0; i < n_samples; ++i) {
-    // top and bottom
-    points.emplace_back(box.min.x + i * dx, box.min.y, box.min.z);
-    points.emplace_back(box.min.x + i * dx, box.min.y, box.max.z);
-    points.emplace_back(box.min.x + i * dx, box.max.y, box.min.z);
-    points.emplace_back(box.min.x + i * dx, box.max.y, box.max.z);
-    // left and right
-    points.emplace_back(box.min.x, box.min.y + i * dy, box.min.z);
-    points.emplace_back(box.min.x, box.min.y + i * dy, box.max.z);
-    points.emplace_back(box.max.x, box.min.y + i * dy, box.min.z);
-    points.emplace_back(box.max.x, box.min.y + i * dy, box.max.z);
-  }
-  const auto ecef_points = toECEF(source_srs, points);
-  tntn::BBox3D resulting_bbox;
-  resulting_bbox.add(ecef_points.begin(), ecef_points.end());
-  return resulting_bbox;
+    const auto dx = (box.max.x - box.min.x) / n_samples;
+    const auto dy = (box.max.y - box.min.y) / n_samples;
+    for (auto i = 0; i < n_samples; ++i) {
+        // top and bottom
+        points.emplace_back(box.min.x + i * dx, box.min.y, box.min.z);
+        points.emplace_back(box.min.x + i * dx, box.min.y, box.max.z);
+        points.emplace_back(box.min.x + i * dx, box.max.y, box.min.z);
+        points.emplace_back(box.min.x + i * dx, box.max.y, box.max.z);
+        // left and right
+        points.emplace_back(box.min.x, box.min.y + i * dy, box.min.z);
+        points.emplace_back(box.min.x, box.min.y + i * dy, box.max.z);
+        points.emplace_back(box.max.x, box.min.y + i * dy, box.min.z);
+        points.emplace_back(box.max.x, box.min.y + i * dy, box.max.z);
+    }
+    const auto ecef_points = toECEF(source_srs, points);
+    tntn::BBox3D resulting_bbox;
+    resulting_bbox.add(ecef_points.begin(), ecef_points.end());
+    return resulting_bbox;
 }
 }
 

@@ -23,13 +23,11 @@
 #include <vector>
 
 #include "Dataset.h"
-#include "ctb/Grid.hpp"
 #include "ParallelTiler.h"
+#include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
-
-class MetaDataGenerator
-{
+class MetaDataGenerator {
 public:
     MetaDataGenerator(const DatasetPtr& dataset, const ctb::Grid& grid, const ParallelTiler& tiler);
     [[nodiscard]] static MetaDataGenerator make(const std::string& input_data_path, ctb::Grid::Srs srs, Tile::Scheme tiling_scheme);

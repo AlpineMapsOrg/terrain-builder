@@ -1,6 +1,6 @@
 #include "tntn/MeshWriter.h"
-#include "tntn/QuantizedMeshIO.h"
 #include "tntn/MeshIO.h"
+#include "tntn/QuantizedMeshIO.h"
 
 namespace tntn {
 

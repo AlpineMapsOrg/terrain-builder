@@ -33,24 +33,22 @@ namespace ctb {
  * This class models the [Tile Mapping Service Global Geodetic
  * Profile](http://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic).
  */
-class GlobalGeodetic :
-  public Grid {
+class GlobalGeodetic : public Grid {
 public:
-
-  /// Initialise the profile with a specific tile size
-  GlobalGeodetic(i_tile tileSize, bool tmsCompatible = true):
-      Grid(tileSize,
-           CRSBounds(-180, -90, 180, 90),
-           cSRS,
-           4326,
-           (tmsCompatible) ? 2 : 1,
-           2)
-  {}
+    /// Initialise the profile with a specific tile size
+    GlobalGeodetic(i_tile tileSize, bool tmsCompatible = true)
+        : Grid(tileSize,
+            CRSBounds(-180, -90, 180, 90),
+            cSRS,
+            4326,
+            (tmsCompatible) ? 2 : 1,
+            2)
+    {
+    }
 
 protected:
-
-  /// The EPSG:4326 spatial reference system
-  static const OGRSpatialReference cSRS;
+    /// The EPSG:4326 spatial reference system
+    static const OGRSpatialReference cSRS;
 };
 
 }

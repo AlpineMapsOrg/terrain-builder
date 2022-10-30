@@ -1,24 +1,27 @@
 #pragma once
 
-#include <vector>
-#include <utility>
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "tntn/tntn_assert.h"
 #include "tntn/util.h"
 
 namespace tntn {
 
-//forward declare ObjPool for use in pool_ptr
-template<typename T>
+// forward declare ObjPool for use in pool_ptr
+template <typename T>
 class ObjPool;
 
-template<typename T>
-class pool_ptr
-{
-  public:
+template <typename T>
+class pool_ptr {
+public:
     pool_ptr() = default;
-    pool_ptr(ObjPool<T>* pool, size_t index) : m_pool(pool), m_index(index) {}
+    pool_ptr(ObjPool<T>* pool, size_t index)
+        : m_pool(pool)
+        , m_index(index)
+    {
+    }
 
     pool_ptr(const pool_ptr& other) = default;
     pool_ptr& operator=(const pool_ptr& other) = default;
@@ -38,8 +41,7 @@ class pool_ptr
 
     void recycle()
     {
-        if(m_pool)
-        {
+        if (m_pool) {
             m_pool->recycle(*this);
             clear();
         }
@@ -54,44 +56,45 @@ class pool_ptr
         return m_pool == other.m_pool && m_index == other.m_index;
     }
     bool operator!=(const pool_ptr& other) const noexcept { return !(*this == other); }
-    //for use in std::map/std::set
+    // for use in std::map/std::set
     bool operator<(const pool_ptr& other) const noexcept
     {
-        if(m_pool < other.m_pool) return true;
-        if(m_pool > other.m_pool) return false;
-        if(m_index < other.m_index) return true;
+        if (m_pool < other.m_pool)
+            return true;
+        if (m_pool > other.m_pool)
+            return false;
+        if (m_index < other.m_index)
+            return true;
         return false;
     }
 
-  private:
+private:
     static constexpr size_t invalid_index = ~(static_cast<size_t>(0));
     friend class ObjPool<T>;
     ObjPool<T>* m_pool = nullptr;
     size_t m_index = invalid_index;
 };
 
-template<typename T>
-class ObjPool
-{
-  private:
-    //disallow copy, assign and move
+template <typename T>
+class ObjPool {
+private:
+    // disallow copy, assign and move
     ObjPool(const ObjPool& other) = delete;
     ObjPool(ObjPool&& other) = delete;
     ObjPool& operator=(const ObjPool& other) = delete;
     ObjPool& operator=(ObjPool&& other) = delete;
 
-    //private ctor, use create() static method
+    // private ctor, use create() static method
     ObjPool() = delete;
-    struct private_tag
-    {
+    struct private_tag {
     };
 
-  public:
+public:
     static std::shared_ptr<ObjPool> create() { return std::make_shared<ObjPool>(private_tag()); }
 
     void reserve(size_t capacity) { m_pool.reserve(capacity); }
 
-    template<typename... Args>
+    template <typename... Args>
     pool_ptr<T> spawn(Args&&... args)
     {
         m_pool.emplace_back(std::forward<Args>(args)...);
@@ -100,7 +103,7 @@ class ObjPool
 
     void recycle(const pool_ptr<T>& p)
     {
-        //noop until now - should be implemented with some kind of garbage collection and erase/remove-idiom
+        // noop until now - should be implemented with some kind of garbage collection and erase/remove-idiom
     }
 
     bool contains(const pool_ptr<T>& p) const noexcept
@@ -108,10 +111,10 @@ class ObjPool
         return p.m_pool == this && p.m_index < m_pool.size();
     }
 
-    //do not use this ctor, it's a workaround to make std::make_shared work
-    explicit ObjPool(const private_tag) {}
+    // do not use this ctor, it's a workaround to make std::make_shared work
+    explicit ObjPool(const private_tag) { }
 
-  private:
+private:
     friend class pool_ptr<T>;
     friend class pool_ptr<const T>;
 
@@ -124,30 +127,29 @@ class ObjPool
     std::vector<T> m_pool;
 };
 
-template<typename T>
+template <typename T>
 inline T* pool_ptr<T>::get() const
 {
     return m_pool->get_addr(m_index);
 }
 
-template<typename T>
+template <typename T>
 inline T& pool_ptr<T>::operator*() const
 {
     return *(get());
 }
 
-template<typename T>
+template <typename T>
 inline T* pool_ptr<T>::operator->() const
 {
     return get();
 }
 
-} //namespace tntn
+} // namespace tntn
 
 namespace std {
-template<typename T>
-struct hash<::tntn::pool_ptr<T>>
-{
+template <typename T>
+struct hash<::tntn::pool_ptr<T>> {
     std::size_t operator()(const ::tntn::pool_ptr<T>& p) const noexcept
     {
         size_t seed = 0;
@@ -156,4 +158,4 @@ struct hash<::tntn::pool_ptr<T>>
         return seed;
     }
 };
-} //namespace std
+} // namespace std

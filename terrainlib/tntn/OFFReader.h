@@ -1,19 +1,18 @@
 #pragma once
 
-#include "tntn/geometrix.h"
-#include "tntn/Mesh.h"
 #include "tntn/File.h"
+#include "tntn/Mesh.h"
+#include "tntn/geometrix.h"
 
-#include <vector>
-#include <string>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace tntn {
 
-class OFFReader
-{
-  public:
-    OFFReader() {}
+class OFFReader {
+public:
+    OFFReader() { }
 
     void clear()
     {
@@ -38,13 +37,13 @@ class OFFReader
 
     void findXYBounds(double& xmin, double& ymin, double& xmax, double& ymax);
 
-  private:
+private:
     void readDimensions(std::string line, std::vector<std::string>& tokens);
     bool readVertex(std::string line, Vertex& v, std::vector<std::string>& tokens);
     bool readFacade(std::string line, Face& f, std::vector<std::string>& tokens);
     bool parse(FileLike& f);
 
-  private:
+private:
     int m_num_vertices = 0;
     int m_num_faces = 0;
     int m_ne = 0;
@@ -53,4 +52,4 @@ class OFFReader
     std::vector<Face> m_facades;
 };
 
-} //namespace tntn
+} // namespace tntn
