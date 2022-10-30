@@ -17,13 +17,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "Tiler.h"
+#include "ParallelTiler.h"
 
 #include "Exception.h"
 #include <functional>
 
 
-Tiler::Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme) :
+ParallelTiler::ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme) :
     m_grid(grid), m_bounds(bounds),
     m_border_south_east(border),
     m_scheme(scheme)
@@ -31,38 +31,38 @@ Tiler::Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border,
 
 }
 
-ctb::TileCoordinate Tiler::southWestTile(ctb::i_zoom zoom_level) const
+ctb::TileCoordinate ParallelTiler::southWestTile(ctb::i_zoom zoom_level) const
 {
   return convertToTilerScheme(m_grid.crsToTile(m_bounds.getLowerLeft(), zoom_level), n_y_tiles(zoom_level));
 }
 
-ctb::TileCoordinate Tiler::northEastTile(ctb::i_zoom zoom_level) const
+ctb::TileCoordinate ParallelTiler::northEastTile(ctb::i_zoom zoom_level) const
 {
   const auto epsilon = m_grid.resolution(zoom_level) / 100;
   return convertToTilerScheme(m_grid.crsToTile(m_bounds.getUpperRight() - epsilon, zoom_level), n_y_tiles(zoom_level));
 }
 
-ctb::TileCoordinate Tiler::convertToTilerScheme(const ctb::TileCoordinate& coord, ctb::i_tile n_y_tiles) const
+ctb::TileCoordinate ParallelTiler::convertToTilerScheme(const ctb::TileCoordinate& coord, ctb::i_tile n_y_tiles) const
 {
   return {coord.zoom, coord.x, (m_scheme == Scheme::Tms) ? coord.y : n_y_tiles - coord.y - 1};
 }
 
-ctb::i_tile Tiler::n_y_tiles(ctb::i_zoom zoom_level) const
+ctb::i_tile ParallelTiler::n_y_tiles(ctb::i_zoom zoom_level) const
 {
   return  m_grid.getTileExtent(zoom_level).getHeight();
 }
 
-const ctb::CRSBounds& Tiler::bounds() const
+const ctb::CRSBounds& ParallelTiler::bounds() const
 {
   return m_bounds;
 }
 
-void Tiler::setBounds(const ctb::CRSBounds& newBounds)
+void ParallelTiler::setBounds(const ctb::CRSBounds& newBounds)
 {
   m_bounds = newBounds;
 }
 
-std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
+std::vector<Tile> ParallelTiler::generateTiles(ctb::i_zoom zoom_level) const
 {
 
   const auto sw = m_grid.crsToTile(m_bounds.getLowerLeft(), zoom_level);
@@ -97,7 +97,7 @@ std::vector<Tile> Tiler::generateTiles(ctb::i_zoom zoom_level) const
   return tiles;
 }
 
-std::vector<Tile> Tiler::generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
+std::vector<Tile> ParallelTiler::generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
 {
   std::vector<Tile> tiles;
   assert(zoom_range.first <= zoom_range.second);
@@ -109,6 +109,6 @@ std::vector<Tile> Tiler::generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>
   return tiles;
 }
 
-Tiler::Scheme Tiler::scheme() const {
+ParallelTiler::Scheme ParallelTiler::scheme() const {
   return m_scheme;
 }

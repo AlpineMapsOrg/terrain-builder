@@ -28,7 +28,7 @@
 #include "Image.h"
 #include "ParallelTileGenerator.h"
 #include "Tile.h"
-#include "Tiler.h"
+#include "ParallelTiler.h"
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
@@ -38,10 +38,10 @@ namespace alpine_raster
 
 class TileWriter : public ParallelTileWriterInterface {
 public:
-  TileWriter(Tiler::Border border) : ParallelTileWriterInterface(border, "png") {}
+  TileWriter(ParallelTiler::Border border) : ParallelTileWriterInterface(border, "png") {}
   void write(const std::string& base_path, const Tile& tile, const HeightData& heights) const override;
 };
-[[nodiscard]] ParallelTileGenerator make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme, Tiler::Border border, unsigned grid_resolution = 256);
+[[nodiscard]] ParallelTileGenerator make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, ParallelTiler::Scheme tiling_scheme, ParallelTiler::Border border, unsigned grid_resolution = 256);
 
 [[nodiscard]] glm::u8vec3 convert(float height);
 };

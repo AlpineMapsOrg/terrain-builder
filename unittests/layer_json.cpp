@@ -25,7 +25,7 @@
 #include "ctb/types.hpp"
 #include "layer_json_writer.h"
 #include "MetaDataGenerator.h"
-#include "Tiler.h"
+#include "ParallelTiler.h"
 #include "ctb/Grid.hpp"
 
 namespace {
@@ -45,8 +45,8 @@ TEST_CASE("layer.json writer") {
     CHECK(layer_json_writer::internal::format() == R"("format": "quantized-mesh-1.0",)");
 
     CHECK(layer_json_writer::internal::attribution("bleh") == R"("attribution": "bleh",)");
-    CHECK(layer_json_writer::internal::schema(Tiler::Scheme::Tms) == R"("schema": "tms",)");
-    CHECK(layer_json_writer::internal::schema(Tiler::Scheme::SlippyMap) == R"("schema": "slippyMap",)");
+    CHECK(layer_json_writer::internal::schema(ParallelTiler::Scheme::Tms) == R"("schema": "tms",)");
+    CHECK(layer_json_writer::internal::schema(ParallelTiler::Scheme::SlippyMap) == R"("schema": "slippyMap",)");
     CHECK(layer_json_writer::internal::tiles() == R"("tiles": [ "{z}/{x}/{y}.terrain?v={version}" ],)");
     CHECK(layer_json_writer::internal::projection(3857) == R"("projection": "EPSG:3857",)");
     CHECK(layer_json_writer::internal::bounds(ctb::GlobalMercator()) == R"("bounds": [-20037508.34, -20037508.34, 20037508.34, 20037508.34],)");
@@ -56,7 +56,7 @@ TEST_CASE("layer.json writer") {
   }
 
   SECTION("austria webmercator tms") {
-    const auto metadata = MetaDataGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms);
+    const auto metadata = MetaDataGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, ParallelTiler::Scheme::Tms);
     CHECK(clean(layer_json_writer::process(metadata)) == clean(R"({
             "tilejson": "2.1.0",
             "name": "at_mgi",

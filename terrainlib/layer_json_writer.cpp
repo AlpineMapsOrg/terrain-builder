@@ -62,12 +62,12 @@ std::string layer_json_writer::internal::attribution(const std::string& s)
   return produce_string_attribute("attribution", s);
 }
 
-std::string layer_json_writer::internal::schema(const Tiler::Scheme& version)
+std::string layer_json_writer::internal::schema(const ParallelTiler::Scheme& version)
 {
   switch (version) {
-  case Tiler::Scheme::SlippyMap:
+  case ParallelTiler::Scheme::SlippyMap:
     return produce_string_attribute("schema", "slippyMap");
-  case Tiler::Scheme::Tms:
+  case ParallelTiler::Scheme::Tms:
     return produce_string_attribute("schema", "tms");
   }
   throw Exception("Not implemented!");

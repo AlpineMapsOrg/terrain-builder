@@ -25,7 +25,7 @@
 #include "alpine_raster.h"
 #include "Dataset.h"
 #include "Image.h"
-#include "Tiler.h"
+#include "ParallelTiler.h"
 #include "catch2_helpers.h"
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
@@ -63,15 +63,15 @@ TEST_CASE("alpine raster format conversion math") {
   CHECK(alpine_raster::convert(141 * one_red + 1 * one_green + eps) == glm::u8vec3(141, 1, 0));
 }
 
-Tiler::Border testTypeValue2Border(bool v) {
-  return v ? Tiler::Border::Yes : Tiler::Border::No;
+ParallelTiler::Border testTypeValue2Border(bool v) {
+  return v ? ParallelTiler::Border::Yes : ParallelTiler::Border::No;
 }
 
 TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::false_type) {
   std::filesystem::remove_all("./unittest_tiles/");
 
   SECTION("raste write") {
-    const auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, Tiler::Border::Yes);
+    const auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, ParallelTiler::Scheme::Tms, ParallelTiler::Border::Yes);
     generator.write(Tile{ctb::TilePoint(0, 0), 0, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257}, HeightData(257, 257));
     CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.png"));
 
@@ -87,7 +87,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
   }
 
   SECTION("process all tiles") {
-    auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, ParallelTiler::Scheme::Tms, testTypeValue2Border(TestType::value));
     generator.setWarnOnMissingOverviews(false);
     generator.process({0, 7});
     const auto tiles = generator.tiler().generateTiles({0, 7});
@@ -99,7 +99,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
   }
 #if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
   SECTION("process all tiles with max zoom") {
-    auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::Tms, testTypeValue2Border(TestType::value));
+    auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, ParallelTiler::Scheme::Tms, testTypeValue2Border(TestType::value));
     generator.setWarnOnMissingOverviews(false);
     generator.process({4, 8});
     const auto tiles = generator.tiler().generateTiles({4, 8});

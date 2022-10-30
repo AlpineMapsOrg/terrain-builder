@@ -36,16 +36,16 @@ ctb::Grid srs2grid(ctb::Grid::Srs srs) {
 }
 }
 
-MetaDataGenerator::MetaDataGenerator(const DatasetPtr& dataset, const ctb::Grid& grid, const Tiler& tiler) : m_dataset(dataset), m_grid(grid), m_tiler(tiler)
+MetaDataGenerator::MetaDataGenerator(const DatasetPtr& dataset, const ctb::Grid& grid, const ParallelTiler& tiler) : m_dataset(dataset), m_grid(grid), m_tiler(tiler)
 {
 
 }
 
-MetaDataGenerator MetaDataGenerator::make(const std::string& input_data_path, ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme)
+MetaDataGenerator MetaDataGenerator::make(const std::string& input_data_path, ctb::Grid::Srs srs, ParallelTiler::Scheme tiling_scheme)
 {
   auto dataset = Dataset::make_shared(input_data_path);
   auto grid = srs2grid(srs);
-  auto tiler = Tiler(grid, dataset->bounds(grid.getSRS()), Tiler::Border::No, tiling_scheme);   // border does not matter for the metadata, no or true would both work.
+  auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), ParallelTiler::Border::No, tiling_scheme);   // border does not matter for the metadata, no or true would both work.
   return MetaDataGenerator(dataset, grid, tiler);
 }
 
@@ -54,7 +54,7 @@ const ctb::Grid& MetaDataGenerator::grid() const
   return m_grid;
 }
 
-const Tiler& MetaDataGenerator::tiler() const
+const ParallelTiler& MetaDataGenerator::tiler() const
 {
   return m_tiler;
 }

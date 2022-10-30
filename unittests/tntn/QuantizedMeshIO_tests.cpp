@@ -83,7 +83,7 @@ TEST_CASE("header is plausible with webmercator mesh", "[tntn]")
   ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
   // let's get a mesh of a part of austria (where we know the bounds etc)
-  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const auto converter = cesium_tin_terra::TileWriter(ParallelTiler::Border::No);
   const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
   OGRSpatialReference webmercator;
   webmercator.importFromEPSG(3857);
@@ -205,7 +205,7 @@ TEST_CASE("header is plausible on all globe quarters", "[tntn]")
   ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
   // let's get a mesh of a part of austria (where we know the bounds etc)
-  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const auto converter = cesium_tin_terra::TileWriter(ParallelTiler::Border::No);
   const std::array at_wgs84_bounds_array = {
                                             ctb::CRSBounds(0, 0, 90, 90),
                                             ctb::CRSBounds(0, -90, 90, 0),
@@ -297,7 +297,7 @@ TEST_CASE("edge vertices correct", "[tntn]") {
   ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
   // let's get a mesh of a part of austria (where we know the bounds etc)
-  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const auto converter = cesium_tin_terra::TileWriter(ParallelTiler::Border::No);
   const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
   OGRSpatialReference webmercator;
   webmercator.importFromEPSG(3857);
@@ -382,7 +382,7 @@ TEST_CASE("correctly stores indexed mesh", "[tntn]") {
   ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
   // let's get a mesh of a part of austria (where we know the bounds etc)
-  const auto converter = cesium_tin_terra::TileWriter(Tiler::Border::No);
+  const auto converter = cesium_tin_terra::TileWriter(ParallelTiler::Border::No);
   const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
   OGRSpatialReference webmercator;
   webmercator.importFromEPSG(3857);

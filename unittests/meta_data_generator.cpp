@@ -23,21 +23,21 @@
 #include "catch2_helpers.h"
 #include "Exception.h"
 #include "MetaDataGenerator.h"
-#include "Tiler.h"
+#include "ParallelTiler.h"
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
 template <typename TestType>
-Tiler::Scheme tilerScheme() {
-  return TestType::value ? Tiler::Scheme::Tms : Tiler::Scheme::SlippyMap;
+ParallelTiler::Scheme tilerScheme() {
+  return TestType::value ? ParallelTiler::Scheme::Tms : ParallelTiler::Scheme::SlippyMap;
 }
 
 template <typename TestType>
 ctb::i_tile yCoord(ctb::i_tile tmsYCoord, ctb::i_tile nYTiles) {
   switch (tilerScheme<TestType>()) {
-  case Tiler::Scheme::Tms:
+  case ParallelTiler::Scheme::Tms:
     return tmsYCoord;
-  case Tiler::Scheme::SlippyMap:
+  case ParallelTiler::Scheme::SlippyMap:
     return nYTiles - tmsYCoord - 1;
   }
   throw Exception("Not implemented!");

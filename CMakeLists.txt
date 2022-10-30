@@ -63,7 +63,7 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/ProgressIndicator.h
     terrainlib/srs.h
     terrainlib/Tile.h
-    terrainlib/Tiler.h
+    terrainlib/ParallelTiler.h
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/Bounds.hpp
@@ -122,7 +122,7 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/ParallelTileGenerator.cpp
     terrainlib/ProgressIndicator.cpp
     terrainlib/Tile.cpp
-    terrainlib/Tiler.cpp
+    terrainlib/ParallelTiler.cpp
     terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.cpp
     terrainlib/tntn/BinaryIO.cpp
@@ -165,7 +165,7 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/layer_json.cpp
     unittests/meta_data_generator.cpp
     unittests/parallel_tile_generator.cpp
-    unittests/tiler.cpp
+    unittests/parallel_tiler.cpp
     unittests/main.cpp
     unittests/srs_test.cpp
     unittests/progress_indicator_test.cpp

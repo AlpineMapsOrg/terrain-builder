@@ -17,15 +17,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef TILER_H
-#define TILER_H
+#ifndef PARALLELTILER_H
+#define PARALLELTILER_H
 
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
 
 #include "Tile.h"
 
-class Tiler
+class ParallelTiler
 {
 public:
   enum class Border {
@@ -40,7 +40,7 @@ public:
     SlippyMap // aka Google, XYZ, webmap tiles; northern most tile is y = 0
   };
 
-  Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme);
+  ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Border border, Scheme scheme);
 
   [[nodiscard]] std::vector<Tile> generateTiles(ctb::i_zoom zoom_level) const;
   [[nodiscard]] std::vector<Tile> generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
@@ -62,4 +62,4 @@ private:
   const Scheme m_scheme;
 };
 
-#endif // TILER_H
+#endif // PARALLELTILER_H

@@ -31,14 +31,14 @@
 #include <DatasetReader.h>
 #include <thread>
 
-ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const Tiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path) :
+ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const ParallelTiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path) :
     m_output_data_path(output_data_path), m_input_data_path(input_data_path), m_grid(grid), m_tiler(tiler), m_tile_writer(std::move(tile_writer))
 {
 
 }
 
 ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path,
-                                                  ctb::Grid::Srs srs, Tiler::Scheme tiling_scheme,
+                                                  ctb::Grid::Srs srs, ParallelTiler::Scheme tiling_scheme,
                                                   std::unique_ptr<ParallelTileWriterInterface> tile_writer,
                                                   const std::string& output_data_path,
                                                   unsigned grid_resolution)
@@ -48,10 +48,10 @@ ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_
   if (srs == ctb::Grid::Srs::SphericalMercator)
     grid = ctb::GlobalMercator(grid_resolution);
   const auto border = tile_writer->formatRequiresBorder();
-  return {input_data_path, grid, Tiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path};
+  return {input_data_path, grid, ParallelTiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path};
 }
 
-const Tiler& ParallelTileGenerator::tiler() const
+const ParallelTiler& ParallelTileGenerator::tiler() const
 {
   return m_tiler;
 }
@@ -98,7 +98,7 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
   std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
 }
 
-Tiler::Border ParallelTileWriterInterface::formatRequiresBorder() const
+ParallelTiler::Border ParallelTileWriterInterface::formatRequiresBorder() const
 {
   return m_format_requires_border;
 }
