@@ -18,8 +18,10 @@
 
 #include "Tiler.h"
 
-Tiler::Tiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme)
-    : m_grid(grid)
+#include <utility>
+
+Tiler::Tiler(ctb::Grid  grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme)
+    : m_grid(std::move(grid))
     , m_bounds(bounds)
     , m_border_south_east(border)
     , m_scheme(scheme)
@@ -62,12 +64,3 @@ void Tiler::setBounds(const ctb::CRSBounds& newBounds)
     m_bounds = newBounds;
 }
 
-ctb::TileCoordinate Tiler::convertToTilerScheme(const ctb::TileCoordinate& coord, ctb::i_tile n_y_tiles) const
-{
-    return { coord.zoom, coord.x, (m_scheme == Tile::Scheme::Tms) ? coord.y : n_y_tiles - coord.y - 1 };
-}
-
-ctb::i_tile Tiler::n_y_tiles(ctb::i_zoom zoom_level) const
-{
-    return 1 << zoom_level;
-}
