@@ -55,6 +55,7 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/cesium_tin_terra.h
     terrainlib/Dataset.h
     terrainlib/DatasetReader.h
+    terrainlib/depth_first_tile_traverser.h
     terrainlib/Exception.h
     terrainlib/Image.h
     terrainlib/ParallelTileGenerator.h
@@ -158,6 +159,7 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/cesium_terra_format.cpp
     unittests/dataset.cpp
     unittests/dataset_reading.cpp
+    unittests/depth_first_tile_traverser.cpp
     unittests/grid.cpp
     unittests/image.cpp
     unittests/parallel_tile_generator.cpp
