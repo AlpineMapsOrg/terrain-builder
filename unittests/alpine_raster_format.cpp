@@ -22,13 +22,9 @@
 #include <catch2/catch.hpp>
 #include <fmt/core.h>
 
-#include "Dataset.h"
 #include "Image.h"
-#include "ParallelTiler.h"
 #include "alpine_raster.h"
-#include "catch2_helpers.h"
 #include "ctb/Grid.hpp"
-#include "ctb/types.hpp"
 
 TEST_CASE("alpine raster format conversion math")
 {
