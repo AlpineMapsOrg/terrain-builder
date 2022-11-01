@@ -37,7 +37,7 @@ TEST_CASE("tin terra write")
     {
         const auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::No);
         const auto b = 20037508.3427892;
-        generator.write(Tile { ctb::TilePoint(0, 0), 0, { -b, -b, b, b }, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(Tile { {0, ctb::TilePoint(0, 0)}, { -b, -b, b, b }, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
     }
 

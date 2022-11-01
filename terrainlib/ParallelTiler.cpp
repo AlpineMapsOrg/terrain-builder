@@ -51,12 +51,13 @@ std::vector<Tile> ParallelTiler::generateTiles(ctb::i_zoom zoom_level) const
     tiles.reserve((ne.y - sw.y + 1) * (ne.x - sw.x + 1));
     for (auto ty = sw.y; ty <= ne.y; ++ty) {
         for (auto tx = sw.x; tx <= ne.x; ++tx) {
-            const auto ty_p = (scheme() == Tile::Scheme::Tms) ? ty : n_y_tiles - ty - 1;
-            const auto point = ctb::TilePoint { tx, ty_p };
-            ctb::CRSBounds srs_bounds = grid().srsBounds(ctb::TileCoordinate(zoom_level, tx, ty), border_south_east() == Tile::Border::Yes);
+            // at the moment of writing, the grid works with tms only (only exception is when it talks with Tile::Id).
+            // therefore ty is in tms -> generated tile is in tms -> we need to convert it
+            const auto tile_id = Tile::Id { zoom_level, { tx, ty }, Tile::Scheme::Tms }.to(scheme());
+            ctb::CRSBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == Tile::Border::Yes);
             srs_bounds.clampBy(grid().getExtent());
 
-            tiles.emplace_back(point, zoom_level, srs_bounds, grid().getEpsgCode(), grid_size(), tile_size());
+            tiles.emplace_back(tile_id, srs_bounds, grid().getEpsgCode(), grid_size(), tile_size());
             if (tiles.size() >= 1'000'000'000)
                 // think about creating an on the fly tile generator. storing so many tiles takes a lot of memory.
                 throw Exception("Setting the zoom level so higher is probably not a good idea. This would generate more than 1'000 million tiles. "

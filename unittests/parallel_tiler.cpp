@@ -43,8 +43,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         const auto l0_tiles = tiler.generateTiles(0);
         REQUIRE(l0_tiles.size() == 1);
         const auto t = l0_tiles.front();
-        CHECK(t.zoom == 0);
-        CHECK(t.point == ctb::TilePoint(0, 0));
+        CHECK(t.tile_id.zoom_level == 0);
+        CHECK(t.tile_id.coords == ctb::TilePoint(0, 0));
         CHECK(t.gridSize == 256);
         CHECK(t.tileSize == 256);
 
@@ -73,8 +73,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l1_tiles = tiler.generateTiles(1);
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
-            CHECK(t.zoom == 1);
-            CHECK(t.point == ctb::TilePoint(1, TestType::value ? 1 : 0));
+            CHECK(t.tile_id.zoom_level == 1);
+            CHECK(t.tile_id.coords == ctb::TilePoint(1, TestType::value ? 1 : 0));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -87,8 +87,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l2_tiles = tiler.generateTiles(2);
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
-            CHECK(t.zoom == 2);
-            CHECK(t.point == ctb::TilePoint(2, TestType::value ? 2 : 1));
+            CHECK(t.tile_id.zoom_level == 2);
+            CHECK(t.tile_id.coords == ctb::TilePoint(2, TestType::value ? 2 : 1));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -110,8 +110,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         const auto l0_tiles = tiler.generateTiles(0);
         REQUIRE(l0_tiles.size() == 2);
         const auto t0 = l0_tiles[0];
-        CHECK(t0.zoom == 0);
-        CHECK(t0.point == ctb::TilePoint(0, 0));
+        CHECK(t0.tile_id.zoom_level == 0);
+        CHECK(t0.tile_id.coords == ctb::TilePoint(0, 0));
         CHECK(t0.gridSize == 64);
         CHECK(t0.tileSize == 65);
         // north, south and west are equal to the extents (no overflow)
@@ -122,8 +122,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         CHECK(t0.srsBounds.getMaxX() == Approx(180.0 / 64));
 
         const auto t1 = l0_tiles[1];
-        CHECK(t1.zoom == 0);
-        CHECK(t1.point == ctb::TilePoint(1, 0));
+        CHECK(t1.tile_id.zoom_level == 0);
+        CHECK(t1.tile_id.coords == ctb::TilePoint(1, 0));
         CHECK(t1.gridSize == 64);
         CHECK(t1.tileSize == 65);
         // north and south are equal to the extent (no overflow)
@@ -152,8 +152,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l1_tiles = tiler.generateTiles(1);
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
-            CHECK(t.zoom == 1);
-            CHECK(t.point == ctb::TilePoint(2, TestType::value ? 1 : 0));
+            CHECK(t.tile_id.zoom_level == 1);
+            CHECK(t.tile_id.coords == ctb::TilePoint(2, TestType::value ? 1 : 0));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
@@ -167,8 +167,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l2_tiles = tiler.generateTiles(2);
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
-            CHECK(t.zoom == 2);
-            CHECK(t.point == ctb::TilePoint(4, TestType::value ? 3 : 0));
+            CHECK(t.tile_id.zoom_level == 2);
+            CHECK(t.tile_id.coords == ctb::TilePoint(4, TestType::value ? 3 : 0));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
@@ -199,8 +199,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l1_tiles = tiler.generateTiles(1);
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
-            CHECK(t.zoom == 1);
-            CHECK(t.point == ctb::TilePoint(0, TestType::value ? 0 : 1));
+            CHECK(t.tile_id.zoom_level == 1);
+            CHECK(t.tile_id.coords == ctb::TilePoint(0, TestType::value ? 0 : 1));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -213,8 +213,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l2_tiles = tiler.generateTiles(2);
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
-            CHECK(t.zoom == 2);
-            CHECK(t.point == ctb::TilePoint(1, TestType::value ? 1 : 2));
+            CHECK(t.tile_id.zoom_level == 2);
+            CHECK(t.tile_id.coords == ctb::TilePoint(1, TestType::value ? 1 : 2));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -241,8 +241,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l1_tiles = tiler.generateTiles(1);
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
-            CHECK(t.zoom == 1);
-            CHECK(t.point == ctb::TilePoint(1, TestType::value ? 0 : 1));
+            CHECK(t.tile_id.zoom_level == 1);
+            CHECK(t.tile_id.coords == ctb::TilePoint(1, TestType::value ? 0 : 1));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
@@ -257,8 +257,8 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             const auto l2_tiles = tiler.generateTiles(2);
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
-            CHECK(t.zoom == 2);
-            CHECK(t.point == ctb::TilePoint(2, TestType::value ? 0 : 3));
+            CHECK(t.tile_id.zoom_level == 2);
+            CHECK(t.tile_id.coords == ctb::TilePoint(2, TestType::value ? 0 : 3));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
@@ -284,7 +284,7 @@ TEST_CASE("ParallelTiler returns tiles for several zoom levels")
         CHECK(!tiles.empty());
         std::map<ctb::i_zoom, unsigned> n_tiles;
         for (const auto& t : tiles) {
-            n_tiles[t.zoom]++;
+            n_tiles[t.tile_id.zoom_level]++;
         }
         REQUIRE(n_tiles.size() == 8);
         CHECK(n_tiles[0] == 1);
@@ -308,7 +308,7 @@ TEST_CASE("ParallelTiler returns tiles for several zoom levels")
         CHECK(!tiles.empty());
         std::map<ctb::i_zoom, unsigned> n_tiles;
         for (const auto& t : tiles) {
-            n_tiles[t.zoom]++;
+            n_tiles[t.tile_id.zoom_level]++;
         }
         REQUIRE(n_tiles.size() == 3);
         CHECK(n_tiles[4] == 1);

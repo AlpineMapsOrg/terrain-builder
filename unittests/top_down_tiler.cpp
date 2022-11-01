@@ -31,14 +31,8 @@ void compare_tile_lists(const std::vector<Tile>& a_tiles, std::vector<Tile> b_ti
     CHECK(a_tiles.size() == b_tiles.size());
 
     for (const auto& tile : a_tiles) {
-        CHECK(tile.zoom == 1);
-        REQUIRE(tile.point.x >= 0);
-        REQUIRE(tile.point.x < 4);
-        REQUIRE(tile.point.y >= 0);
-        REQUIRE(tile.point.y < 4);
-
         const auto matching_tile_iter = std::find_if(b_tiles.begin(), b_tiles.end(), [&](const Tile& t) {
-            return t.point == tile.point;
+            return t.tile_id == tile.tile_id;
         });
         REQUIRE(matching_tile_iter != b_tiles.end());
 

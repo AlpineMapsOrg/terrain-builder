@@ -75,14 +75,14 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
     SECTION("raste write")
     {
         const auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::Yes);
-        generator.write(Tile { ctb::TilePoint(0, 0), 0, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(Tile { {0, ctb::TilePoint(0, 0)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.png"));
 
-        generator.write(Tile { ctb::TilePoint(2, 3), 1, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(Tile { {1, ctb::TilePoint(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
         // check that a second write doesn't crash
-        generator.write(Tile { ctb::TilePoint(2, 3), 1, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(Tile { {1, ctb::TilePoint(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
         // in the best case, we would read back the data and check it. but that's too much work for now.
@@ -97,7 +97,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
         const auto tiles = generator.tiler().generateTiles({ 0, 7 });
 
         const auto check = [](const Tile& t) {
-            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.zoom, t.point.x, t.point.y));
+            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.tile_id.zoom_level, t.tile_id.coords.x, t.tile_id.coords.y));
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
     }
@@ -110,7 +110,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
         const auto tiles = generator.tiler().generateTiles({ 4, 8 });
 
         const auto check = [](const Tile& t) {
-            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.zoom, t.point.x, t.point.y));
+            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.tile_id.zoom_level, t.tile_id.coords.x, t.tile_id.coords.y));
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
     }

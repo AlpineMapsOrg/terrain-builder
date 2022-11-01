@@ -57,8 +57,8 @@ struct Tile {
         };
     };
 
-    ctb::TilePoint point; // int / used to generate file name
-    ctb::i_zoom zoom;
+    // used to generate file name
+    Id tile_id;
 
     // srsBounds are the bounds of the tile including the border pixel.
     ctb::CRSBounds srsBounds;
