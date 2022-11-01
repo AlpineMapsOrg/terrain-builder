@@ -23,6 +23,7 @@
  * @brief This defines and declares the `Grid` class
  */
 
+#include <Tile.h>
 #include <cmath>
 
 #include "ogr_spatialref.h"
@@ -167,6 +168,22 @@ public:
         // convert pixels to native coordinates
         const CRSPoint minLeft = pixelsToCrs(pxMinLeft, coord.zoom);
         const CRSPoint maxRight = pixelsToCrs(pxMaxRight, coord.zoom);
+
+        return { minLeft, maxRight };
+    }
+    /// Get the CRS bounds of a particular tile
+    /// border_se should be true if a border should be included on the south eastern corner
+    /// e.g., for the cesium raster terrain format (https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0)
+    [[nodiscard]] inline CRSBounds srsBounds(const Tile::Id& tile_id, bool border_se) const
+    {
+        const auto tms_tile_id = tile_id.to(Tile::Scheme::Tms);
+        // get the pixels coordinates representing the tile bounds
+        const PixelPoint pxMinLeft(tms_tile_id.coords.x * mGridSize, tms_tile_id.coords.y * mGridSize);
+        const PixelPoint pxMaxRight((tms_tile_id.coords.x + 1) * mGridSize + border_se, (tms_tile_id.coords.y + 1) * mGridSize + border_se);
+
+             // convert pixels to native coordinates
+        const CRSPoint minLeft = pixelsToCrs(pxMinLeft, tms_tile_id.zoom_level);
+        const CRSPoint maxRight = pixelsToCrs(pxMaxRight, tms_tile_id.zoom_level);
 
         return { minLeft, maxRight };
     }

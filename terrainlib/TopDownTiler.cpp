@@ -45,8 +45,7 @@ std::vector<Tile> TopDownTiler::generateTiles(const Tile::Id& parent_id) const
         t.point = tile_id.coords;
         t.tileSize = tile_size();
         t.gridSize = grid_size();
-        const auto tms_tile_id = tile_id.to(Tile::Scheme::Tms);
-        ctb::CRSBounds srs_bounds = grid().srsBounds(ctb::TileCoordinate(tms_tile_id.zoom_level, tms_tile_id.coords.x, tms_tile_id.coords.y), border_south_east() == Tile::Border::Yes);
+        ctb::CRSBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == Tile::Border::Yes);
         t.srsBounds = srs_bounds;
         t.srs_epsg = grid().getEpsgCode();
         if (bounds().overlaps(srs_bounds))
