@@ -18,25 +18,18 @@
 
 #include "TopDownTiler.h"
 
-struct TileId {
-    unsigned zoom_level = unsigned(-1);
-    glm::uvec2 coords;
-    friend bool operator==(const TileId&, const TileId&) = default;
-};
-
-// from alpine terrain renderer (srs.cpp), and therefore already tested
-std::array<TileId, 4> subtiles(const TileId& tile)
-{
-    return {
-        TileId{tile.zoom_level + 1, tile.coords * 2u + glm::uvec2(0, 0)},
-        TileId{tile.zoom_level + 1, tile.coords * 2u + glm::uvec2(1, 0)},
-        TileId{tile.zoom_level + 1, tile.coords * 2u + glm::uvec2(0, 1)},
-        TileId{tile.zoom_level + 1, tile.coords * 2u + glm::uvec2(1, 1)}};
-}
-
 TopDownTiler::TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme)
     : Tiler(grid, bounds, border, scheme)
 {
+}
+
+std::array<ctb::TileCoordinate, 4> TopDownTiler::subtiles(const ctb::TileCoordinate& tile_id) const
+{
+    return {
+        ctb::TileCoordinate{tile_id.zoom + 1, ctb::TilePoint(tile_id) * 2u + glm::uvec2(0, scheme() != Tile::Scheme::Tms)},
+        ctb::TileCoordinate{tile_id.zoom + 1, ctb::TilePoint(tile_id) * 2u + glm::uvec2(1, scheme() != Tile::Scheme::Tms)},
+        ctb::TileCoordinate{tile_id.zoom + 1, ctb::TilePoint(tile_id) * 2u + glm::uvec2(0, scheme() == Tile::Scheme::Tms)},
+        ctb::TileCoordinate{tile_id.zoom + 1, ctb::TilePoint(tile_id) * 2u + glm::uvec2(1, scheme() == Tile::Scheme::Tms)}};
 }
 
 std::vector<Tile> TopDownTiler::generateTiles(ctb::i_zoom zoom_level, ctb::TilePoint tilepoint) const
@@ -45,11 +38,16 @@ std::vector<Tile> TopDownTiler::generateTiles(ctb::i_zoom zoom_level, ctb::TileP
     std::vector<Tile> tiles;
     for (const auto& tile_id : tile_ids) {
         Tile t;
-        t.zoom = tile_id.zoom_level;
-        t.point = tile_id.coords;
+        t.zoom = tile_id.zoom;
+        t.point = tile_id;
+        const auto tms_y = (scheme() == Tile::Scheme::Tms) ? t.point.y : n_y_tiles(t.zoom) - t.point.y - 1;
         t.tileSize = tile_size();
         t.gridSize = grid_size();
-        tiles.push_back(std::move(t));
+        ctb::CRSBounds srs_bounds = grid().srsBounds(ctb::TileCoordinate(tile_id.zoom, tile_id.x, tms_y), border_south_east() == Tile::Border::Yes);
+        t.srsBounds = srs_bounds;
+        t.srs_epsg = grid().getEpsgCode();
+        if (bounds().overlaps(srs_bounds))
+            tiles.push_back(std::move(t));
     }
 
     return tiles;

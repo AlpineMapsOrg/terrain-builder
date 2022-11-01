@@ -211,18 +211,11 @@ public:
 
     /// Do these bounds overlap with another?
     inline bool
-    overlaps(const Bounds<T>* other) const
-    {
-        return overlaps(*other);
-    }
-
-    /// Do these bounds overlap with another?
-    inline bool
     overlaps(const Bounds<T>& other) const
     {
         // see
         // <http://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other>
-        return getMinX() < other.getMaxX() && other.getMinX() < getMaxX() && getMinY() < other.getMaxY() && other.getMinY() < getMaxY();
+        return getMinX() <= other.getMaxX() && other.getMinX() <= getMaxX() && getMinY() <= other.getMaxY() && other.getMinY() <= getMaxY();
     }
 
     void clampBy(const Bounds<T>& other)

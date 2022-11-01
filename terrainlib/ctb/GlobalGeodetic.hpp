@@ -36,12 +36,12 @@ namespace ctb {
 class GlobalGeodetic : public Grid {
 public:
     /// Initialise the profile with a specific tile size
-    GlobalGeodetic(i_tile tileSize, bool tmsCompatible = true)
+    GlobalGeodetic(i_tile tileSize = 256)
         : Grid(tileSize,
             CRSBounds(-180, -90, 180, 90),
             cSRS,
             4326,
-            (tmsCompatible) ? 2 : 1,
+            2,
             2)
     {
     }
