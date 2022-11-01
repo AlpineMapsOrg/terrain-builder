@@ -57,8 +57,6 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/DatasetReader.h
     terrainlib/Exception.h
     terrainlib/Image.h
-    terrainlib/layer_json_writer.h
-    terrainlib/MetaDataGenerator.h
     terrainlib/ParallelTileGenerator.h
     terrainlib/ParallelTiler.h
     terrainlib/ProgressIndicator.h
@@ -119,8 +117,6 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/Dataset.cpp
     terrainlib/DatasetReader.cpp
     terrainlib/Image.cpp
-    terrainlib/layer_json_writer.cpp
-    terrainlib/MetaDataGenerator.cpp
     terrainlib/ParallelTileGenerator.cpp
     terrainlib/ParallelTiler.cpp
     terrainlib/ProgressIndicator.cpp
@@ -166,8 +162,6 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/dataset_reading.cpp
     unittests/grid.cpp
     unittests/image.cpp
-    unittests/layer_json.cpp
-    unittests/meta_data_generator.cpp
     unittests/parallel_tile_generator.cpp
     unittests/parallel_tiler.cpp
     unittests/tile.cpp
