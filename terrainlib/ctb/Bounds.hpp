@@ -23,9 +23,9 @@
  * @brief This declares and defines the `Bounds` class
  */
 #include <array>
+#include <glm/glm.hpp>
 
 #include "CTBException.hpp"
-#include "Coordinate.hpp"
 
 namespace ctb {
 
@@ -46,7 +46,7 @@ public:
     }
 
     /// Create bounds represented by lower left and upper right coordinates
-    Bounds(const Coordinate<T>& lowerLeft, const Coordinate<T>& upperRight)
+    Bounds(const glm::tvec2<T>& lowerLeft, const glm::tvec2<T>& upperRight)
     {
         setBounds(lowerLeft, upperRight);
     }
@@ -66,7 +66,7 @@ public:
 
     /// Set the bounds from lower left and upper right coordinates
     inline void
-    setBounds(const Coordinate<T>& lowerLeft, const Coordinate<T>& upperRight)
+    setBounds(const glm::tvec2<T>& lowerLeft, const glm::tvec2<T>& upperRight)
     {
         setBounds(lowerLeft.x, lowerLeft.y, upperRight.x, upperRight.y);
     }
@@ -128,31 +128,31 @@ public:
     }
 
     /// Get the lower left corner
-    inline Coordinate<T>
+    inline glm::tvec2<T>
     getLowerLeft() const
     {
-        return Coordinate<T>(getMinX(), getMinY());
+        return glm::tvec2<T>(getMinX(), getMinY());
     }
 
     /// Get the lower right corner
-    inline Coordinate<T>
+    inline glm::tvec2<T>
     getLowerRight() const
     {
-        return Coordinate<T>(getMaxX(), getMinY());
+        return glm::tvec2<T>(getMaxX(), getMinY());
     }
 
     /// Get the upper right corner
-    inline Coordinate<T>
+    inline glm::tvec2<T>
     getUpperRight() const
     {
-        return Coordinate<T>(getMaxX(), getMaxY());
+        return glm::tvec2<T>(getMaxX(), getMaxY());
     }
 
     /// Get the upper left corner
-    inline Coordinate<T>
+    inline glm::tvec2<T>
     getUpperLeft() const
     {
-        return Coordinate<T>(getMinX(), getMaxY());
+        return glm::tvec2<T>(getMinX(), getMaxY());
     }
 
     /// Get the width

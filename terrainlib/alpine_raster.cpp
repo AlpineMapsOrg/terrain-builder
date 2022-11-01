@@ -25,15 +25,9 @@
 #include <fmt/core.h>
 #include <memory>
 
-#include "Dataset.h"
-#include "DatasetReader.h"
-#include "Exception.h"
 #include "Image.h"
 #include "ParallelTileGenerator.h"
-#include "ctb/GlobalGeodetic.hpp"
-#include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
-#include "ctb/types.hpp"
 
 ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, Tile::Scheme tiling_scheme, Tile::Border border, unsigned grid_resolution)
 {

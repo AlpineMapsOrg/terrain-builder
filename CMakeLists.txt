@@ -67,8 +67,6 @@ set(ATB_TERRAINLIB_HEADERS
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/Bounds.hpp
-    terrainlib/ctb/Coordinate.hpp
-    terrainlib/ctb/Coordinate3D.hpp
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp
     terrainlib/ctb/GlobalMercator.hpp
