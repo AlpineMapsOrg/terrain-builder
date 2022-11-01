@@ -52,7 +52,6 @@ Tile::Border Tiler::border_south_east() const
 Tile Tiler::tile_for(const Tile::Id& tile_id) const
 {
     ctb::CRSBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == Tile::Border::Yes);
-    srs_bounds.clampBy(grid().getExtent());
     return {tile_id, srs_bounds, grid().getEpsgCode(), grid_size(), tile_size()};
 }
 
