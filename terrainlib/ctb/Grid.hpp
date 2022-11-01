@@ -148,12 +148,12 @@ public:
     }
 
     /// Get the tile coordinate in which a location falls at a specific zoom level
-    [[nodiscard]] inline TileCoordinate crsToTile(const CRSPoint& coord, i_zoom zoom) const
+    [[nodiscard]] inline Tile::Id crsToTile(const CRSPoint& coord, i_zoom zoom) const
     {
         const PixelPoint pixel = crsToPixels(coord, zoom);
         TilePoint tile = pixelsToTile(pixel);
 
-        return { zoom, tile };
+        return { zoom, tile, Tile::Scheme::Tms };
     }
 
     /// Get the CRS bounds of a particular tile
@@ -209,10 +209,10 @@ public:
     /// Get the extent covered by the grid in tile coordinates for a zoom level
     [[nodiscard]] inline TileBounds getTileExtent(i_zoom zoom) const
     {
-        TileCoordinate ll = crsToTile(mExtent.getLowerLeft(), zoom);
-        TileCoordinate ur = crsToTile(mExtent.getUpperRight(), zoom);
+        const auto ll = crsToTile(mExtent.getLowerLeft(), zoom);
+        const auto ur = crsToTile(mExtent.getUpperRight(), zoom);
 
-        return { ll, ur };
+        return { ll.coords, ur.coords };
     }
 
     [[nodiscard]] inline int getEpsgCode() const

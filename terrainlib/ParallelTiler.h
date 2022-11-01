@@ -25,9 +25,9 @@ class ParallelTiler : public Tiler {
 public:
     ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
 
-    [[nodiscard]] std::vector<Tile> generateTiles(ctb::i_zoom zoom_level) const;
-    [[nodiscard]] std::vector<Tile> generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const;
+    [[nodiscard]] std::vector<Tile> generateTiles(unsigned zoom_level) const;
+    [[nodiscard]] std::vector<Tile> generateTiles(const std::pair<unsigned, unsigned>& zoom_range) const;
 
-    [[nodiscard]] ctb::TileCoordinate southWestTile(ctb::i_zoom zoom_level) const;
-    [[nodiscard]] ctb::TileCoordinate northEastTile(ctb::i_zoom zoom_level) const;
+    [[nodiscard]] Tile::Id southWestTile(unsigned zoom_level) const;
+    [[nodiscard]] Tile::Id northEastTile(unsigned zoom_level) const;
 };

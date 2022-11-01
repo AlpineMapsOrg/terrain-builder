@@ -68,8 +68,8 @@ std::vector<ctb::TileBounds> MetaDataGenerator::availableTiles(unsigned max_zoom
     if (max_zoom == unsigned(-1))
         max_zoom = m_grid.zoomForResolution(m_dataset->gridResolution(m_grid.getSRS()));
     for (ctb::i_zoom i = 0; i < max_zoom; ++i) {
-        const auto sw = m_tiler.southWestTile(i);
-        const auto ne = m_tiler.northEastTile(i);
+        const auto sw = m_tiler.southWestTile(i).coords;
+        const auto ne = m_tiler.northEastTile(i).coords;
         list.emplace_back(sw, ne);
     }
     return list;

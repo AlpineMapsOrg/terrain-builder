@@ -26,33 +26,27 @@ ParallelTiler::ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds
 {
 }
 
-ctb::TileCoordinate ParallelTiler::southWestTile(ctb::i_zoom zoom_level) const
+Tile::Id ParallelTiler::southWestTile(unsigned zoom_level) const
 {
-    return convertToTilerScheme(grid().crsToTile(bounds().getLowerLeft(), zoom_level), n_y_tiles(zoom_level));
+    return grid().crsToTile(bounds().getLowerLeft(), zoom_level).to(scheme());
 }
 
-ctb::TileCoordinate ParallelTiler::northEastTile(ctb::i_zoom zoom_level) const
+Tile::Id ParallelTiler::northEastTile(unsigned zoom_level) const
 {
     const auto epsilon = grid().resolution(zoom_level) / 100;
-    return convertToTilerScheme(grid().crsToTile(bounds().getUpperRight() - epsilon, zoom_level), n_y_tiles(zoom_level));
+    return grid().crsToTile(bounds().getUpperRight() - epsilon, zoom_level).to(scheme());
 }
 
-std::vector<Tile> ParallelTiler::generateTiles(ctb::i_zoom zoom_level) const
+std::vector<Tile> ParallelTiler::generateTiles(unsigned zoom_level) const
 {
-
-    const auto sw = grid().crsToTile(bounds().getLowerLeft(), zoom_level);
-    const auto epsilon = grid().resolution(zoom_level) / 100;
-    const auto ne = grid().crsToTile(bounds().getUpperRight() - epsilon, zoom_level);
-
-    const ctb::i_tile n_y_tiles = this->n_y_tiles(zoom_level);
-    //  const auto schemeTyFromInternalTy = (m_scheme == Scheme::Tms) ? ([](ctb::i_tile ty) -> ctb::i_tile { return ty; }) : ([n_y_tiles](ctb::i_tile ty) -> ctb::i_tile { return n_y_tiles - ty; });
+    // in the tms scheme south west corresponds to the smaller numbers. hence we can iterate from sw to ne
+    const auto sw = southWestTile(zoom_level).to(Tile::Scheme::Tms).coords;
+    const auto ne = northEastTile(zoom_level).to(Tile::Scheme::Tms).coords;
 
     std::vector<Tile> tiles;
     tiles.reserve((ne.y - sw.y + 1) * (ne.x - sw.x + 1));
     for (auto ty = sw.y; ty <= ne.y; ++ty) {
         for (auto tx = sw.x; tx <= ne.x; ++tx) {
-            // at the moment of writing, the grid works with tms only (only exception is when it talks with Tile::Id).
-            // therefore ty is in tms -> generated tile is in tms -> we need to convert it
             const auto tile_id = Tile::Id { zoom_level, { tx, ty }, Tile::Scheme::Tms }.to(scheme());
             ctb::CRSBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == Tile::Border::Yes);
             srs_bounds.clampBy(grid().getExtent());
@@ -70,7 +64,7 @@ std::vector<Tile> ParallelTiler::generateTiles(ctb::i_zoom zoom_level) const
     return tiles;
 }
 
-std::vector<Tile> ParallelTiler::generateTiles(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range) const
+std::vector<Tile> ParallelTiler::generateTiles(const std::pair<unsigned, unsigned>& zoom_range) const
 {
     std::vector<Tile> tiles;
     assert(zoom_range.first <= zoom_range.second);

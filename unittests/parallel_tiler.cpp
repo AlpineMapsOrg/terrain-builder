@@ -37,14 +37,14 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         const auto grid = ctb::GlobalMercator();
         const auto tiler = ParallelTiler(grid, grid.getExtent(), Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
-        CHECK(tiler.northEastTile(0) == ctb::TilePoint(0, 0));
-        CHECK(tiler.southWestTile(0) == ctb::TilePoint(0, 0));
+        CHECK(tiler.northEastTile(0).coords == glm::uvec2(0, 0));
+        CHECK(tiler.southWestTile(0).coords == glm::uvec2(0, 0));
 
         const auto l0_tiles = tiler.generateTiles(0);
         REQUIRE(l0_tiles.size() == 1);
         const auto t = l0_tiles.front();
         CHECK(t.tile_id.zoom_level == 0);
-        CHECK(t.tile_id.coords == ctb::TilePoint(0, 0));
+        CHECK(t.tile_id.coords == glm::uvec2(0, 0));
         CHECK(t.gridSize == 256);
         CHECK(t.tileSize == 256);
 
@@ -61,11 +61,11 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
-        CHECK(tiler.northEastTile(1) == ctb::TilePoint(1, TestType::value ? 1 : 0));
-        CHECK(tiler.southWestTile(1) == ctb::TilePoint(1, TestType::value ? 1 : 0));
+        CHECK(tiler.northEastTile(1).coords == glm::uvec2(1, TestType::value ? 1 : 0));
+        CHECK(tiler.southWestTile(1).coords == glm::uvec2(1, TestType::value ? 1 : 0));
 
-        CHECK(tiler.northEastTile(2) == ctb::TilePoint(2, TestType::value ? 2 : 1));
-        CHECK(tiler.southWestTile(2) == ctb::TilePoint(2, TestType::value ? 2 : 1));
+        CHECK(tiler.northEastTile(2).coords == glm::uvec2(2, TestType::value ? 2 : 1));
+        CHECK(tiler.southWestTile(2).coords == glm::uvec2(2, TestType::value ? 2 : 1));
 
         {
             // https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#1/-5.80/62.29
@@ -74,7 +74,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
             CHECK(t.tile_id.zoom_level == 1);
-            CHECK(t.tile_id.coords == ctb::TilePoint(1, TestType::value ? 1 : 0));
+            CHECK(t.tile_id.coords == glm::uvec2(1, TestType::value ? 1 : 0));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -88,7 +88,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
             CHECK(t.tile_id.zoom_level == 2);
-            CHECK(t.tile_id.coords == ctb::TilePoint(2, TestType::value ? 2 : 1));
+            CHECK(t.tile_id.coords == glm::uvec2(2, TestType::value ? 2 : 1));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -104,14 +104,14 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         const auto grid = ctb::GlobalGeodetic(64);
         const auto tiler = ParallelTiler(grid, grid.getExtent(), Tile::Border::Yes, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
-        CHECK(tiler.northEastTile(0) == ctb::TilePoint(1, 0));
-        CHECK(tiler.southWestTile(0) == ctb::TilePoint(0, 0));
+        CHECK(tiler.northEastTile(0).coords == glm::uvec2(1, 0));
+        CHECK(tiler.southWestTile(0).coords == glm::uvec2(0, 0));
 
         const auto l0_tiles = tiler.generateTiles(0);
         REQUIRE(l0_tiles.size() == 2);
         const auto t0 = l0_tiles[0];
         CHECK(t0.tile_id.zoom_level == 0);
-        CHECK(t0.tile_id.coords == ctb::TilePoint(0, 0));
+        CHECK(t0.tile_id.coords == glm::uvec2(0, 0));
         CHECK(t0.gridSize == 64);
         CHECK(t0.tileSize == 65);
         // north, south and west are equal to the extents (no overflow)
@@ -123,7 +123,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
 
         const auto t1 = l0_tiles[1];
         CHECK(t1.tile_id.zoom_level == 0);
-        CHECK(t1.tile_id.coords == ctb::TilePoint(1, 0));
+        CHECK(t1.tile_id.coords == glm::uvec2(1, 0));
         CHECK(t1.gridSize == 64);
         CHECK(t1.tileSize == 65);
         // north and south are equal to the extent (no overflow)
@@ -142,18 +142,18 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::Yes, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
-        CHECK(tiler.northEastTile(1) == ctb::TilePoint(2, TestType::value ? 1 : 0));
-        CHECK(tiler.southWestTile(1) == ctb::TilePoint(2, TestType::value ? 1 : 0));
+        CHECK(tiler.northEastTile(1).coords == glm::uvec2(2, TestType::value ? 1 : 0));
+        CHECK(tiler.southWestTile(1).coords == glm::uvec2(2, TestType::value ? 1 : 0));
 
-        CHECK(tiler.northEastTile(2) == ctb::TilePoint(4, TestType::value ? 3 : 0));
-        CHECK(tiler.southWestTile(2) == ctb::TilePoint(4, TestType::value ? 3 : 0));
+        CHECK(tiler.northEastTile(2).coords == glm::uvec2(4, TestType::value ? 3 : 0));
+        CHECK(tiler.southWestTile(2).coords == glm::uvec2(4, TestType::value ? 3 : 0));
 
         {
             const auto l1_tiles = tiler.generateTiles(1);
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
             CHECK(t.tile_id.zoom_level == 1);
-            CHECK(t.tile_id.coords == ctb::TilePoint(2, TestType::value ? 1 : 0));
+            CHECK(t.tile_id.coords == glm::uvec2(2, TestType::value ? 1 : 0));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
@@ -168,7 +168,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
             CHECK(t.tile_id.zoom_level == 2);
-            CHECK(t.tile_id.coords == ctb::TilePoint(4, TestType::value ? 3 : 0));
+            CHECK(t.tile_id.coords == glm::uvec2(4, TestType::value ? 3 : 0));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
@@ -187,11 +187,11 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/capehorn/small.tif");
         const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
-        CHECK(tiler.northEastTile(1) == ctb::TilePoint(0, TestType::value ? 0 : 1));
-        CHECK(tiler.southWestTile(1) == ctb::TilePoint(0, TestType::value ? 0 : 1));
+        CHECK(tiler.northEastTile(1).coords == glm::uvec2(0, TestType::value ? 0 : 1));
+        CHECK(tiler.southWestTile(1).coords == glm::uvec2(0, TestType::value ? 0 : 1));
 
-        CHECK(tiler.northEastTile(2) == ctb::TilePoint(1, TestType::value ? 1 : 2));
-        CHECK(tiler.southWestTile(2) == ctb::TilePoint(1, TestType::value ? 1 : 2));
+        CHECK(tiler.northEastTile(2).coords == glm::uvec2(1, TestType::value ? 1 : 2));
+        CHECK(tiler.southWestTile(2).coords == glm::uvec2(1, TestType::value ? 1 : 2));
 
         {
             // https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#1/-5.80/62.29
@@ -200,7 +200,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
             CHECK(t.tile_id.zoom_level == 1);
-            CHECK(t.tile_id.coords == ctb::TilePoint(0, TestType::value ? 0 : 1));
+            CHECK(t.tile_id.coords == glm::uvec2(0, TestType::value ? 0 : 1));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -214,7 +214,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
             CHECK(t.tile_id.zoom_level == 2);
-            CHECK(t.tile_id.coords == ctb::TilePoint(1, TestType::value ? 1 : 2));
+            CHECK(t.tile_id.coords == glm::uvec2(1, TestType::value ? 1 : 2));
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
@@ -231,18 +231,18 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/capehorn/small.tif");
         const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), Tile::Border::Yes, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
 
-        CHECK(tiler.northEastTile(1) == ctb::TilePoint(1, TestType::value ? 0 : 1));
-        CHECK(tiler.southWestTile(1) == ctb::TilePoint(1, TestType::value ? 0 : 1));
+        CHECK(tiler.northEastTile(1).coords == glm::uvec2(1, TestType::value ? 0 : 1));
+        CHECK(tiler.southWestTile(1).coords == glm::uvec2(1, TestType::value ? 0 : 1));
 
-        CHECK(tiler.northEastTile(2) == ctb::TilePoint(2, TestType::value ? 0 : 3));
-        CHECK(tiler.southWestTile(2) == ctb::TilePoint(2, TestType::value ? 0 : 3));
+        CHECK(tiler.northEastTile(2).coords == glm::uvec2(2, TestType::value ? 0 : 3));
+        CHECK(tiler.southWestTile(2).coords == glm::uvec2(2, TestType::value ? 0 : 3));
 
         {
             const auto l1_tiles = tiler.generateTiles(1);
             REQUIRE(l1_tiles.size() == 1);
             const auto t = l1_tiles.front();
             CHECK(t.tile_id.zoom_level == 1);
-            CHECK(t.tile_id.coords == ctb::TilePoint(1, TestType::value ? 0 : 1));
+            CHECK(t.tile_id.coords == glm::uvec2(1, TestType::value ? 0 : 1));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
@@ -258,7 +258,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             REQUIRE(l2_tiles.size() == 1);
             const auto t = l2_tiles.front();
             CHECK(t.tile_id.zoom_level == 2);
-            CHECK(t.tile_id.coords == ctb::TilePoint(2, TestType::value ? 0 : 3));
+            CHECK(t.tile_id.coords == glm::uvec2(2, TestType::value ? 0 : 3));
             CHECK(t.gridSize == 64);
             CHECK(t.tileSize == 65);
 
