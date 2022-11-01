@@ -27,6 +27,6 @@ class TopDownTiler : public Tiler {
 public:
     TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
 
-    std::array<ctb::TileCoordinate, 4> subtiles(const ctb::TileCoordinate& tile_id) const;
-    std::vector<Tile> generateTiles(ctb::i_zoom zoom_level, ctb::TilePoint tilepoint) const;
+    [[nodiscard]] std::array<Tile::Id, 4> subtiles(const Tile::Id& tile_id) const;
+    [[nodiscard]] std::vector<Tile> generateTiles(const Tile::Id& parent_id) const;
 };

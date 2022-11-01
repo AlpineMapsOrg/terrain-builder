@@ -170,6 +170,7 @@ set(ATB_UNITTESTS_HEADERS_AND_SOURCES
     unittests/meta_data_generator.cpp
     unittests/parallel_tile_generator.cpp
     unittests/parallel_tiler.cpp
+    unittests/tile.cpp
     unittests/top_down_tiler.cpp
     unittests/main.cpp
     unittests/srs_test.cpp

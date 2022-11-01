@@ -19,9 +19,9 @@
 
 #pragma once
 
-#include "ctb/TileCoordinate.hpp"
 #include "ctb/types.hpp"
 #include <glm/glm.hpp>
+
 
 struct Tile {
     enum class Border {
@@ -35,6 +35,26 @@ struct Tile {
     enum class Scheme {
         Tms, // southern most tile is y = 0
         SlippyMap // aka Google, XYZ, webmap tiles; northern most tile is y = 0
+    };
+
+    struct Id {
+        unsigned zoom_level = unsigned(-1);
+        glm::uvec2 coords;
+        Scheme scheme = Scheme::Tms;
+
+        [[nodiscard]] Id to(Scheme new_scheme) const
+        {
+            if (scheme == new_scheme)
+                return *this;
+
+            const auto n_y_tiles = (1u << zoom_level);
+            const auto coord_y = n_y_tiles - coords.y - 1;
+            return { zoom_level, { coords.x, coord_y }, new_scheme };
+        }
+        bool operator==(const Id& other) const
+        {
+            return other.coords == coords && other.scheme == scheme && other.zoom_level == zoom_level;
+        };
     };
 
     ctb::TilePoint point; // int / used to generate file name

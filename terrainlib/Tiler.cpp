@@ -69,5 +69,5 @@ ctb::TileCoordinate Tiler::convertToTilerScheme(const ctb::TileCoordinate& coord
 
 ctb::i_tile Tiler::n_y_tiles(ctb::i_zoom zoom_level) const
 {
-    return grid().getTileExtent(zoom_level).getHeight();
+    return 1 << zoom_level;
 }

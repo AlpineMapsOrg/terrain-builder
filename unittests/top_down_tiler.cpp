@@ -63,35 +63,21 @@ TEST_CASE("BottomUpTiler, subtile function") {
             const auto tiles = tiler.subtiles({0, {0, 0}});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 1);
-            CHECK(tiles[0].x == 0);
-            CHECK(tiles[0].y == 0);
-
-            CHECK(tiles[1].x == 1);
-            CHECK(tiles[1].y == 0);
-
-            CHECK(tiles[2].x == 0);
-            CHECK(tiles[2].y == 1);
-
-            CHECK(tiles[3].x == 1);
-            CHECK(tiles[3].y == 1);
+                CHECK(tid.zoom_level == 1);
+            CHECK(tiles[0].coords == glm::uvec2 { 0, 0 });
+            CHECK(tiles[1].coords == glm::uvec2 { 1, 0 });
+            CHECK(tiles[2].coords == glm::uvec2 { 0, 1 });
+            CHECK(tiles[3].coords == glm::uvec2 { 1, 1 });
         }
         {
             const auto tiles = tiler.subtiles({1, {1, 1}});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 2);
-            CHECK(tiles[0].x == 2);
-            CHECK(tiles[0].y == 2);
-
-            CHECK(tiles[1].x == 3);
-            CHECK(tiles[1].y == 2);
-
-            CHECK(tiles[2].x == 2);
-            CHECK(tiles[2].y == 3);
-
-            CHECK(tiles[3].x == 3);
-            CHECK(tiles[3].y == 3);
+                CHECK(tid.zoom_level == 2);
+            CHECK(tiles[0].coords == glm::uvec2 { 2, 2 });
+            CHECK(tiles[1].coords == glm::uvec2 { 3, 2 });
+            CHECK(tiles[2].coords == glm::uvec2 { 2, 3 });
+            CHECK(tiles[3].coords == glm::uvec2 { 3, 3 });
         }
     }
     SECTION("subtiles mercator SlippyMap (y points down)")
@@ -99,38 +85,24 @@ TEST_CASE("BottomUpTiler, subtile function") {
         const auto grid = ctb::GlobalMercator();
         const auto tiler = TopDownTiler(grid, grid.getExtent(), Tile::Tile::Border::No, Tile::Tile::Scheme::SlippyMap);
         {
-            const auto tiles = tiler.subtiles({0, {0, 0}});
+            const auto tiles = tiler.subtiles({0, {0, 0}, Tile::Tile::Scheme::SlippyMap});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 1);
-            CHECK(tiles[0].x == 0);
-            CHECK(tiles[0].y == 1);
-
-            CHECK(tiles[1].x == 1);
-            CHECK(tiles[1].y == 1);
-
-            CHECK(tiles[2].x == 0);
-            CHECK(tiles[2].y == 0);
-
-            CHECK(tiles[3].x == 1);
-            CHECK(tiles[3].y == 0);
+                CHECK(tid.zoom_level == 1);
+            CHECK(tiles[0].coords == glm::uvec2 { 0, 1 });
+            CHECK(tiles[1].coords == glm::uvec2 { 1, 1 });
+            CHECK(tiles[2].coords == glm::uvec2 { 0, 0 });
+            CHECK(tiles[3].coords == glm::uvec2 { 1, 0 });
         }
         {
-            const auto tiles = tiler.subtiles({1, {1, 0}});
+            const auto tiles = tiler.subtiles({1, {1, 0}, Tile::Tile::Scheme::SlippyMap});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 2);
-            CHECK(tiles[0].x == 2);
-            CHECK(tiles[0].y == 1);
-
-            CHECK(tiles[1].x == 3);
-            CHECK(tiles[1].y == 1);
-
-            CHECK(tiles[2].x == 2);
-            CHECK(tiles[2].y == 0);
-
-            CHECK(tiles[3].x == 3);
-            CHECK(tiles[3].y == 0);
+                CHECK(tid.zoom_level == 2);
+            CHECK(tiles[0].coords == glm::uvec2 { 2, 1 });
+            CHECK(tiles[1].coords == glm::uvec2 { 3, 1 });
+            CHECK(tiles[2].coords == glm::uvec2 { 2, 0 });
+            CHECK(tiles[3].coords == glm::uvec2 { 3, 0 });
         }
     }
 
@@ -142,69 +114,41 @@ TEST_CASE("BottomUpTiler, subtile function") {
             const auto tiles = tiler.subtiles({0, {0, 0}});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 1);
-            CHECK(tiles[0].x == 0);
-            CHECK(tiles[0].y == 0);
-
-            CHECK(tiles[1].x == 1);
-            CHECK(tiles[1].y == 0);
-
-            CHECK(tiles[2].x == 0);
-            CHECK(tiles[2].y == 1);
-
-            CHECK(tiles[3].x == 1);
-            CHECK(tiles[3].y == 1);
+                CHECK(tid.zoom_level == 1);
+            CHECK(tiles[0].coords == glm::uvec2 { 0, 0 });
+            CHECK(tiles[1].coords == glm::uvec2 { 1, 0 });
+            CHECK(tiles[2].coords == glm::uvec2 { 0, 1 });
+            CHECK(tiles[3].coords == glm::uvec2 { 1, 1 });
         }
         {
             const auto tiles = tiler.subtiles({0, {1, 0}});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 1);
-            CHECK(tiles[0].x == 2);
-            CHECK(tiles[0].y == 0);
-
-            CHECK(tiles[1].x == 3);
-            CHECK(tiles[1].y == 0);
-
-            CHECK(tiles[2].x == 2);
-            CHECK(tiles[2].y == 1);
-
-            CHECK(tiles[3].x == 3);
-            CHECK(tiles[3].y == 1);
+                CHECK(tid.zoom_level == 1);
+            CHECK(tiles[0].coords == glm::uvec2 { 2, 0 });
+            CHECK(tiles[1].coords == glm::uvec2 { 3, 0 });
+            CHECK(tiles[2].coords == glm::uvec2 { 2, 1 });
+            CHECK(tiles[3].coords == glm::uvec2 { 3, 1 });
         }
         {
             const auto tiles = tiler.subtiles({1, {1, 1}});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 2);
-            CHECK(tiles[0].x == 2);
-            CHECK(tiles[0].y == 2);
-
-            CHECK(tiles[1].x == 3);
-            CHECK(tiles[1].y == 2);
-
-            CHECK(tiles[2].x == 2);
-            CHECK(tiles[2].y == 3);
-
-            CHECK(tiles[3].x == 3);
-            CHECK(tiles[3].y == 3);
+                CHECK(tid.zoom_level == 2);
+            CHECK(tiles[0].coords == glm::uvec2 { 2, 2 });
+            CHECK(tiles[1].coords == glm::uvec2 { 3, 2 });
+            CHECK(tiles[2].coords == glm::uvec2 { 2, 3 });
+            CHECK(tiles[3].coords == glm::uvec2 { 3, 3 });
         }
         {
             const auto tiles = tiler.subtiles({1, {3, 0}});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 2);
-            CHECK(tiles[0].x == 6);
-            CHECK(tiles[0].y == 0);
-
-            CHECK(tiles[1].x == 7);
-            CHECK(tiles[1].y == 0);
-
-            CHECK(tiles[2].x == 6);
-            CHECK(tiles[2].y == 1);
-
-            CHECK(tiles[3].x == 7);
-            CHECK(tiles[3].y == 1);
+                CHECK(tid.zoom_level == 2);
+            CHECK(tiles[0].coords == glm::uvec2 { 6, 0 });
+            CHECK(tiles[1].coords == glm::uvec2 { 7, 0 });
+            CHECK(tiles[2].coords == glm::uvec2 { 6, 1 });
+            CHECK(tiles[3].coords == glm::uvec2 { 7, 1 });
         }
     }
 
@@ -213,72 +157,44 @@ TEST_CASE("BottomUpTiler, subtile function") {
         const auto grid = ctb::GlobalGeodetic();
         const auto tiler = TopDownTiler(grid, grid.getExtent(), Tile::Tile::Border::No, Tile::Tile::Scheme::SlippyMap);
         {
-            const auto tiles = tiler.subtiles({0, {0, 0}});
+            const auto tiles = tiler.subtiles({0, {0, 0}, Tile::Tile::Scheme::SlippyMap});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 1);
-            CHECK(tiles[0].x == 0);
-            CHECK(tiles[0].y == 1);
-
-            CHECK(tiles[1].x == 1);
-            CHECK(tiles[1].y == 1);
-
-            CHECK(tiles[2].x == 0);
-            CHECK(tiles[2].y == 0);
-
-            CHECK(tiles[3].x == 1);
-            CHECK(tiles[3].y == 0);
+                CHECK(tid.zoom_level == 1);
+            CHECK(tiles[0].coords == glm::uvec2 { 0, 1 });
+            CHECK(tiles[1].coords == glm::uvec2 { 1, 1 });
+            CHECK(tiles[2].coords == glm::uvec2 { 0, 0 });
+            CHECK(tiles[3].coords == glm::uvec2 { 1, 0 });
         }
         {
-            const auto tiles = tiler.subtiles({0, {1, 0}});
+            const auto tiles = tiler.subtiles({0, {1, 0}, Tile::Tile::Scheme::SlippyMap});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 1);
-            CHECK(tiles[0].x == 2);
-            CHECK(tiles[0].y == 1);
-
-            CHECK(tiles[1].x == 3);
-            CHECK(tiles[1].y == 1);
-
-            CHECK(tiles[2].x == 2);
-            CHECK(tiles[2].y == 0);
-
-            CHECK(tiles[3].x == 3);
-            CHECK(tiles[3].y == 0);
+                CHECK(tid.zoom_level == 1);
+            CHECK(tiles[0].coords == glm::uvec2 { 2, 1 });
+            CHECK(tiles[1].coords == glm::uvec2 { 3, 1 });
+            CHECK(tiles[2].coords == glm::uvec2 { 2, 0 });
+            CHECK(tiles[3].coords == glm::uvec2 { 3, 0 });
         }
         {
-            const auto tiles = tiler.subtiles({1, {1, 0}});
+            const auto tiles = tiler.subtiles({1, {1, 0}, Tile::Tile::Scheme::SlippyMap});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 2);
-            CHECK(tiles[0].x == 2);
-            CHECK(tiles[0].y == 1);
-
-            CHECK(tiles[1].x == 3);
-            CHECK(tiles[1].y == 1);
-
-            CHECK(tiles[2].x == 2);
-            CHECK(tiles[2].y == 0);
-
-            CHECK(tiles[3].x == 3);
-            CHECK(tiles[3].y == 0);
+                CHECK(tid.zoom_level == 2);
+            CHECK(tiles[0].coords == glm::uvec2 { 2, 1 });
+            CHECK(tiles[1].coords == glm::uvec2 { 3, 1 });
+            CHECK(tiles[2].coords == glm::uvec2 { 2, 0 });
+            CHECK(tiles[3].coords == glm::uvec2 { 3, 0 });
         }
         {
-            const auto tiles = tiler.subtiles({1, {3, 1}});
+            const auto tiles = tiler.subtiles({1, {3, 1}, Tile::Tile::Scheme::SlippyMap});
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
-                CHECK(tid.zoom == 2);
-            CHECK(tiles[0].x == 6);
-            CHECK(tiles[0].y == 3);
-
-            CHECK(tiles[1].x == 7);
-            CHECK(tiles[1].y == 3);
-
-            CHECK(tiles[2].x == 6);
-            CHECK(tiles[2].y == 2);
-
-            CHECK(tiles[3].x == 7);
-            CHECK(tiles[3].y == 2);
+                CHECK(tid.zoom_level == 2);
+            CHECK(tiles[0].coords == glm::uvec2 { 6, 3 });
+            CHECK(tiles[1].coords == glm::uvec2 { 7, 3 });
+            CHECK(tiles[2].coords == glm::uvec2 { 6, 2 });
+            CHECK(tiles[3].coords == glm::uvec2 { 7, 2 });
         }
     }
 
@@ -286,15 +202,16 @@ TEST_CASE("BottomUpTiler, subtile function") {
 
 TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::false_type)
 {
+    const auto scheme = TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap;
 
     SECTION("mercator / level 0 all")
     {
         const auto grid = ctb::GlobalMercator();
-        const auto tiler = TopDownTiler(grid, grid.getExtent(), Tile::Tile::Border::No, TestType::value ? Tile::Tile::Scheme::Tms : Tile::Tile::Scheme::SlippyMap);
+        const auto tiler = TopDownTiler(grid, grid.getExtent(), Tile::Tile::Border::No, scheme);
 
-        const auto tiles = tiler.generateTiles(0, { 0, 0 });
+        const auto tiles = tiler.generateTiles({0, { 0, 0 }, scheme});
         REQUIRE(tiles.size() == 4);
-        const auto parallel_tiler = ParallelTiler(grid, grid.getExtent(), Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
+        const auto parallel_tiler = ParallelTiler(grid, grid.getExtent(), Tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 
@@ -303,22 +220,22 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
         const auto grid = ctb::GlobalMercator();
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto bounds = dataset->bounds(grid.getSRS());
-        const auto tiler = TopDownTiler(grid, bounds, Tile::Tile::Border::No, TestType::value ? Tile::Tile::Scheme::Tms : Tile::Tile::Scheme::SlippyMap);
+        const auto tiler = TopDownTiler(grid, bounds, Tile::Tile::Border::No, scheme);
 
-        const auto tiles = tiler.generateTiles(0, { 0, 0 });
+        const auto tiles = tiler.generateTiles({0, { 0, 0 }, scheme});
         REQUIRE(tiles.size() == 1);
-        const auto parallel_tiler = ParallelTiler(grid, bounds, Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
+        const auto parallel_tiler = ParallelTiler(grid, bounds, Tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 
     SECTION("geodetic / level 0 east half")
     {
         const auto grid = ctb::GlobalGeodetic();
-        const auto tiler = TopDownTiler(grid, grid.getExtent(), Tile::Tile::Border::No, TestType::value ? Tile::Tile::Scheme::Tms : Tile::Tile::Scheme::SlippyMap);
+        const auto tiler = TopDownTiler(grid, grid.getExtent(), Tile::Tile::Border::No, scheme);
 
-        const auto tiles = tiler.generateTiles(0, { 1, 0 });
+        const auto tiles = tiler.generateTiles({0, { 1, 0 }, scheme});
         REQUIRE(tiles.size() == 4);
-        const auto parallel_tiler = ParallelTiler(grid, {0, -90, 180, 90}, Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
+        const auto parallel_tiler = ParallelTiler(grid, {0, -90, 180, 90}, Tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 
@@ -327,11 +244,11 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
         const auto grid = ctb::GlobalGeodetic();
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto bounds = dataset->bounds(grid.getSRS());
-        const auto tiler = TopDownTiler(grid, bounds, Tile::Tile::Border::No, TestType::value ? Tile::Tile::Scheme::Tms : Tile::Tile::Scheme::SlippyMap);
+        const auto tiler = TopDownTiler(grid, bounds, Tile::Tile::Border::No, scheme);
 
-        const auto tiles = tiler.generateTiles(0, { 1, 0 });
+        const auto tiles = tiler.generateTiles({0, { 1, 0 }, scheme});
         REQUIRE(tiles.size() == 1);
-        const auto parallel_tiler = ParallelTiler(grid, bounds, Tile::Border::No, TestType::value ? Tile::Scheme::Tms : Tile::Scheme::SlippyMap);
+        const auto parallel_tiler = ParallelTiler(grid, bounds, Tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 }
