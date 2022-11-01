@@ -21,8 +21,10 @@
 
 #include "ctb/types.hpp"
 #include <glm/glm.hpp>
+#include <glm/vector_relational.hpp>
+#include <tuple>
 
-
+// rename to TileDescriptor or TileMetaInfo or something
 struct Tile {
     enum class Border {
         Yes = 1,
@@ -54,6 +56,10 @@ struct Tile {
         bool operator==(const Id& other) const
         {
             return other.coords == coords && other.scheme == scheme && other.zoom_level == zoom_level;
+        };
+        bool operator<(const Id& other) const
+        {
+            return std::tie(zoom_level, coords.x, coords.y, scheme) < std::tie(other.zoom_level, other.coords.x, other.coords.y, other.scheme);
         };
     };
 

@@ -39,15 +39,8 @@ std::vector<Tile> TopDownTiler::generateTiles(const Tile::Id& parent_id) const
     const auto tile_ids = subtiles(parent_id.to(scheme()));
     std::vector<Tile> tiles;
     for (const auto& tile_id : tile_ids) {
-        Tile t;
-//        t.id = { tile_id.zoom, tile_id, scheme() };
-        t.tile_id = tile_id;
-        t.tileSize = tile_size();
-        t.gridSize = grid_size();
-        ctb::CRSBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == Tile::Border::Yes);
-        t.srsBounds = srs_bounds;
-        t.srs_epsg = grid().getEpsgCode();
-        if (bounds().overlaps(srs_bounds))
+        Tile t = tile_for(tile_id);
+        if (bounds().overlaps(t.srsBounds))
             tiles.push_back(std::move(t));
     }
 

@@ -48,10 +48,7 @@ std::vector<Tile> ParallelTiler::generateTiles(unsigned zoom_level) const
     for (auto ty = sw.y; ty <= ne.y; ++ty) {
         for (auto tx = sw.x; tx <= ne.x; ++tx) {
             const auto tile_id = Tile::Id { zoom_level, { tx, ty }, Tile::Scheme::Tms }.to(scheme());
-            ctb::CRSBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == Tile::Border::Yes);
-            srs_bounds.clampBy(grid().getExtent());
-
-            tiles.emplace_back(tile_id, srs_bounds, grid().getEpsgCode(), grid_size(), tile_size());
+            tiles.emplace_back(tile_for(tile_id));
             if (tiles.size() >= 1'000'000'000)
                 // think about creating an on the fly tile generator. storing so many tiles takes a lot of memory.
                 throw Exception("Setting the zoom level so higher is probably not a good idea. This would generate more than 1'000 million tiles. "

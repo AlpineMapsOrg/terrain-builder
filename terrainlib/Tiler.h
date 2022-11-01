@@ -31,6 +31,7 @@ public:
     [[nodiscard]] Tile::Scheme scheme() const;
     [[nodiscard]] const ctb::CRSBounds& bounds() const;
     void setBounds(const ctb::CRSBounds& newBounds);
+    [[nodiscard]] Tile tile_for(const Tile::Id& tile_id) const;
 
 protected:
     [[nodiscard]] const ctb::Grid& grid() const;

@@ -17,3 +17,22 @@
  *****************************************************************************/
 
 #pragma once
+
+#include "TopDownTiler.h"
+
+template <typename ReadFunction, typename AggregateFunction>
+auto traverse_depth_first_and_aggregate(const TopDownTiler& tiler, ReadFunction read, AggregateFunction aggregate, const Tile::Id& root_tile_id, unsigned max_zoom_level)
+    -> decltype(read(tiler.tile_for(root_tile_id)))
+{
+    using Data = decltype(read(tiler.tile_for(root_tile_id)));
+    if (root_tile_id.zoom_level == max_zoom_level) {
+        return read(tiler.tile_for(root_tile_id));
+    }
+    const auto subtiles = tiler.generateTiles(root_tile_id);
+    std::vector<Data> unaggregated_data;
+    for (const auto& tile : subtiles) {
+        auto tile_data = traverse_depth_first_and_aggregate(tiler, read, aggregate, tile.tile_id, max_zoom_level);
+        unaggregated_data.emplace_back(std::move(tile_data));
+    }
+    return aggregate(unaggregated_data);
+}
