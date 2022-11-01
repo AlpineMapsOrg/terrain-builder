@@ -48,112 +48,67 @@ set(ATB_INCLUDE_PATHS
 
 )
 
-
-
-set(ATB_TERRAINLIB_HEADERS
-    terrainlib/alpine_raster.h
-    terrainlib/cesium_tin_terra.h
-    terrainlib/Dataset.h
-    terrainlib/DatasetReader.h
+set(ATB_TERRAINLIB_SOURCES
+    terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
+    terrainlib/cesium_tin_terra.h terrainlib/cesium_tin_terra.cpp
+    terrainlib/Dataset.h terrainlib/Dataset.cpp
+    terrainlib/DatasetReader.h terrainlib/DatasetReader.cpp
     terrainlib/depth_first_tile_traverser.h
     terrainlib/Exception.h
-    terrainlib/Image.h
-    terrainlib/ParallelTileGenerator.h
-    terrainlib/ParallelTiler.h
-    terrainlib/ProgressIndicator.h
+    terrainlib/Image.h terrainlib/Image.cpp
+    terrainlib/ParallelTileGenerator.h terrainlib/ParallelTileGenerator.cpp
+    terrainlib/ParallelTiler.h terrainlib/ParallelTiler.cpp
+    terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
     terrainlib/srs.h
-    terrainlib/Tile.h
-    terrainlib/Tiler.h
-    terrainlib/TopDownTiler.h
+    terrainlib/Tile.h terrainlib/Tile.cpp
+    terrainlib/Tiler.h terrainlib/Tiler.cpp
+    terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/Bounds.hpp
     terrainlib/ctb/CTBException.hpp
-    terrainlib/ctb/GlobalGeodetic.hpp
-    terrainlib/ctb/GlobalMercator.hpp
+    terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
+    terrainlib/ctb/GlobalMercator.hpp terrainlib/ctb/GlobalMercator.cpp
     terrainlib/ctb/Grid.hpp
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
-    terrainlib/tntn/BinaryIO.h
-    terrainlib/tntn/Delaunator.h
-    terrainlib/tntn/DelaunayMesh.h
-    terrainlib/tntn/DelaunayTriangle.h
+    terrainlib/tntn/BinaryIO.h terrainlib/tntn/BinaryIO.cpp
+    terrainlib/tntn/Delaunator.h terrainlib/tntn/Delaunator.cpp
+    terrainlib/tntn/DelaunayMesh.h terrainlib/tntn/DelaunayMesh.cpp
+    terrainlib/tntn/DelaunayTriangle.h terrainlib/tntn/DelaunayTriangle.cpp
     terrainlib/tntn/endianness.h
     terrainlib/tntn/FileFormat.h
-    terrainlib/tntn/File.h
-    terrainlib/tntn/gdal_init.h
-    terrainlib/tntn/geometrix.h
-    terrainlib/tntn/logging.h
-    terrainlib/tntn/Mesh2Raster.h
-    terrainlib/tntn/Mesh.h
-    terrainlib/tntn/MeshIO.h
+    terrainlib/tntn/File.h terrainlib/tntn/File.cpp
+    terrainlib/tntn/gdal_init.h terrainlib/tntn/gdal_init.cpp
+    terrainlib/tntn/geometrix.h terrainlib/tntn/geometrix.cpp
+    terrainlib/tntn/logging.h terrainlib/tntn/logging.cpp
+    terrainlib/tntn/Mesh2Raster.h terrainlib/tntn/Mesh2Raster.cpp
+    terrainlib/tntn/Mesh.h terrainlib/tntn/Mesh.cpp
+    terrainlib/tntn/MeshIO.h terrainlib/tntn/MeshIO.cpp
     terrainlib/tntn/MeshMode.h
-    terrainlib/tntn/MeshWriter.h
+    terrainlib/tntn/MeshWriter.h terrainlib/tntn/MeshWriter.cpp
     terrainlib/tntn/ObjPool.h
-    terrainlib/tntn/OFFReader.h
-    terrainlib/tntn/Points2Mesh.h
-    terrainlib/tntn/QuadEdge.h
-    terrainlib/tntn/QuantizedMeshIO.h
+    terrainlib/tntn/OFFReader.h terrainlib/tntn/OFFReader.cpp
+    terrainlib/tntn/Points2Mesh.h terrainlib/tntn/Points2Mesh.cpp
+    terrainlib/tntn/QuadEdge.h terrainlib/tntn/QuadEdge.cpp
+    terrainlib/tntn/QuantizedMeshIO.h terrainlib/tntn/QuantizedMeshIO.cpp
     terrainlib/tntn/Raster.h
-    terrainlib/tntn/RasterIO.h
-    terrainlib/tntn/raster_tools.h
-    terrainlib/tntn/simple_meshing.h
-    terrainlib/tntn/SuperTriangle.h
-    terrainlib/tntn/SurfacePoints.h
-    terrainlib/tntn/TerraMesh.h
-    terrainlib/tntn/terra_meshing.h
-    terrainlib/tntn/TerraUtils.h
+    terrainlib/tntn/RasterIO.h terrainlib/tntn/RasterIO.cpp
+    terrainlib/tntn/raster_tools.h terrainlib/tntn/raster_tools.cpp
+    terrainlib/tntn/simple_meshing.h terrainlib/tntn/simple_meshing.cpp
+    terrainlib/tntn/SuperTriangle.h terrainlib/tntn/SuperTriangle.cpp
+    terrainlib/tntn/SurfacePoints.h terrainlib/tntn/SurfacePoints.cpp
+    terrainlib/tntn/TerraMesh.h terrainlib/tntn/TerraMesh.cpp
+    terrainlib/tntn/terra_meshing.h terrainlib/tntn/terra_meshing.cpp
+    terrainlib/tntn/TerraUtils.h terrainlib/tntn/TerraUtils.cpp
     terrainlib/tntn/tntn_assert.h
-    terrainlib/tntn/util.h
-    terrainlib/tntn/ZemlyaMesh.h
-    terrainlib/tntn/zemlya_meshing.h
+    terrainlib/tntn/util.h terrainlib/tntn/util.cpp
+    terrainlib/tntn/ZemlyaMesh.h terrainlib/tntn/ZemlyaMesh.cpp
+    terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
     terrainlib/tntn/ZoomRange.h
-
-)
-set(ATB_TERRAINLIB_SOURCES
-    terrainlib/alpine_raster.cpp
-    terrainlib/cesium_tin_terra.cpp
-    terrainlib/Dataset.cpp
-    terrainlib/DatasetReader.cpp
-    terrainlib/Image.cpp
-    terrainlib/ParallelTileGenerator.cpp
-    terrainlib/ParallelTiler.cpp
-    terrainlib/ProgressIndicator.cpp
-    terrainlib/Tile.cpp
-    terrainlib/Tiler.cpp
-    terrainlib/TopDownTiler.cpp
-    terrainlib/ctb/GlobalGeodetic.cpp
-    terrainlib/ctb/GlobalMercator.cpp
-    terrainlib/tntn/BinaryIO.cpp
-    terrainlib/tntn/Delaunator.cpp
-    terrainlib/tntn/DelaunayMesh.cpp
-    terrainlib/tntn/DelaunayTriangle.cpp
-    terrainlib/tntn/File.cpp
-    terrainlib/tntn/gdal_init.cpp
-    terrainlib/tntn/geometrix.cpp
-    terrainlib/tntn/logging.cpp
-    terrainlib/tntn/Mesh2Raster.cpp
-    terrainlib/tntn/Mesh.cpp
-    terrainlib/tntn/MeshIO.cpp
-    terrainlib/tntn/MeshWriter.cpp
-    terrainlib/tntn/OFFReader.cpp
-    terrainlib/tntn/Points2Mesh.cpp
-    terrainlib/tntn/QuadEdge.cpp
-    terrainlib/tntn/QuantizedMeshIO.cpp
-    terrainlib/tntn/RasterIO.cpp
-    terrainlib/tntn/raster_tools.cpp
-    terrainlib/tntn/simple_meshing.cpp
-    terrainlib/tntn/SuperTriangle.cpp
-    terrainlib/tntn/SurfacePoints.cpp
-    terrainlib/tntn/TerraMesh.cpp
-    terrainlib/tntn/terra_meshing.cpp
-    terrainlib/tntn/TerraUtils.cpp
-    terrainlib/tntn/util.cpp
-    terrainlib/tntn/ZemlyaMesh.cpp
-    terrainlib/tntn/zemlya_meshing.cpp
 )
 
-set(ATB_UNITTESTS_HEADERS_AND_SOURCES
+set(ATB_UNITTESTS_SOURCES
     unittests/alpine_raster_format.cpp
     unittests/catch2_helpers.h
     unittests/cesium_terra_format.cpp
@@ -220,7 +175,6 @@ endif()
 
 
 add_library(terrainlib STATIC
-    ${ATB_TERRAINLIB_HEADERS}
     ${ATB_TERRAINLIB_SOURCES}
 )
 target_compile_definitions(terrainlib PUBLIC GLM_FORCE_SWIZZLE GLM_ENABLE_EXPERIMENTAL GLM_FORCE_XYZW_ONLY)
@@ -244,7 +198,7 @@ add_executable(terrainbuilder
 target_link_libraries(terrainbuilder PUBLIC terrainlib)
 
 if (ATB_UNITTESTS)
-    add_executable(unittests ${ATB_UNITTESTS_HEADERS_AND_SOURCES})
+    add_executable(unittests ${ATB_UNITTESTS_SOURCES})
     target_compile_definitions(unittests PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
     target_compile_definitions(unittests PUBLIC "ATB_UNITTESTS_AUSTRIA_HIGHRES=\"${ATB_UNITTESTS_AUSTRIA_HIGHRES}\"")
     if (ATB_UNITTESTS_EXTENDED)
