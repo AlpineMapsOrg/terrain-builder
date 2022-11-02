@@ -62,6 +62,7 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/srs.h
     terrainlib/Tile.h terrainlib/Tile.cpp
     terrainlib/TileHeights.h terrainlib/TileHeights.cpp
+    terrainlib/TileHeightsGenerator.h terrainlib/TileHeightsGenerator.cpp
     terrainlib/Tiler.h terrainlib/Tiler.cpp
     terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
     terrainlib/algorithms/hasher.h
@@ -126,6 +127,7 @@ set(ATB_UNITTESTS_SOURCES
     unittests/srs_test.cpp
     unittests/tile.cpp
     unittests/tile_heights.cpp
+    unittests/tile_heights_generator.cpp
     unittests/top_down_tiler.cpp
     unittests/algorithms/primitives.cpp
     unittests/algorithms/raster_triangle_scanline.cpp
