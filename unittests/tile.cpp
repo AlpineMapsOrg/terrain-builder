@@ -20,7 +20,7 @@
 
 #include "Tile.h"
 
-TEST_CASE("Tile scheme conversion")
+TEST_CASE("Tile::Id scheme conversion")
 {
     SECTION("tms -> slippy map")
     {
@@ -54,6 +54,14 @@ TEST_CASE("Tile scheme conversion")
         CHECK(Tile::Id{ 2, { 2, 3 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 2, { 2, 3 }, Tile::Scheme::SlippyMap });
         CHECK(Tile::Id{ 2, { 3, 1 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 2, { 3, 1 }, Tile::Scheme::SlippyMap });
     }
+}
 
+
+TEST_CASE("Tile::Id parent")
+{
+    CHECK(Tile::Id { 1, { 0, 1 } }.parent() == Tile::Id { 0, { 0, 0 } });
+    CHECK(Tile::Id { 2, { 2, 1 } }.parent() == Tile::Id { 1, { 1, 0 } });
+    CHECK(Tile::Id { 2, { 0, 0 } }.parent() == Tile::Id { 1, { 0, 0 } });
+    CHECK(Tile::Id { 2, { 3, 3 } }.parent() == Tile::Id { 1, { 1, 1 } });
 
 }

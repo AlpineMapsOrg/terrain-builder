@@ -61,8 +61,10 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
     terrainlib/srs.h
     terrainlib/Tile.h terrainlib/Tile.cpp
+    terrainlib/TileHeights.h terrainlib/TileHeights.cpp
     terrainlib/Tiler.h terrainlib/Tiler.cpp
     terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
+    terrainlib/algorithms/hasher.h
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/Bounds.hpp
@@ -117,13 +119,14 @@ set(ATB_UNITTESTS_SOURCES
     unittests/depth_first_tile_traverser.cpp
     unittests/grid.cpp
     unittests/image.cpp
+    unittests/main.cpp
     unittests/parallel_tile_generator.cpp
     unittests/parallel_tiler.cpp
-    unittests/tile.cpp
-    unittests/top_down_tiler.cpp
-    unittests/main.cpp
-    unittests/srs_test.cpp
     unittests/progress_indicator_test.cpp
+    unittests/srs_test.cpp
+    unittests/tile.cpp
+    unittests/tile_heights.cpp
+    unittests/top_down_tiler.cpp
     unittests/algorithms/primitives.cpp
     unittests/algorithms/raster_triangle_scanline.cpp
     unittests/tntn/Delaunay_tests.cpp

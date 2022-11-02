@@ -59,6 +59,6 @@ TEST_CASE("image")
                 v_init++;
             }
         }
-        image::saveImageAsPng(image, "/home/madam/Documents/work/tuw/alpinemaps/tmp/test.png");
+//        image::saveImageAsPng(image, "/home/madam/Documents/work/tuw/alpinemaps/tmp/test.png");
     }
 }

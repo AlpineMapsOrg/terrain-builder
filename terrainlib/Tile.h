@@ -53,14 +53,9 @@ struct Tile {
             const auto coord_y = n_y_tiles - coords.y - 1;
             return { zoom_level, { coords.x, coord_y }, new_scheme };
         }
-        bool operator==(const Id& other) const
-        {
-            return other.coords == coords && other.scheme == scheme && other.zoom_level == zoom_level;
-        };
-        bool operator<(const Id& other) const
-        {
-            return std::tie(zoom_level, coords.x, coords.y, scheme) < std::tie(other.zoom_level, other.coords.x, other.coords.y, other.scheme);
-        };
+        [[nodiscard]] Id parent() const { return { zoom_level - 1, coords / 2u, scheme }; }
+        bool operator==(const Id& other) const { return other.coords == coords && other.scheme == scheme && other.zoom_level == zoom_level; };
+        bool operator<(const Id& other) const { return std::tie(zoom_level, coords.x, coords.y, scheme) < std::tie(other.zoom_level, other.coords.x, other.coords.y, other.scheme); };
     };
 
     // used to generate file name
