@@ -49,14 +49,13 @@ void TileHeightsGenerator::run(unsigned max_zoom_level) const
     ctb::Grid grid = ctb::GlobalGeodetic(64);
     if (m_srs == ctb::Grid::Srs::SphericalMercator)
         grid = ctb::GlobalMercator(64);
-    const Tile::Id root_id = { 0, { 0, 0 }, m_scheme };
     const auto bounds = dataset->bounds(grid.getSRS());
     const auto tile_reader = DatasetReader(dataset, grid.getSRS(), 1, false);
     const auto tiler = TopDownTiler(grid, bounds, m_border, m_scheme);
     auto tile_heights = TileHeights();
 
     const auto read_function = [&](const Tile& tile) -> MinMaxData {
-        const auto tile_data = tile_reader.read(tile.srsBounds, tile.tileSize, tile.tileSize);
+        const auto tile_data = tile_reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
         auto [min, max] = std::ranges::minmax(tile_data);
         tile_heights.emplace(tile.tile_id, std::make_pair(min, max));
         return { tile.tile_id, std::make_pair(min, max) };
@@ -75,7 +74,11 @@ void TileHeightsGenerator::run(unsigned max_zoom_level) const
     };
 
 
-    traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, max_zoom_level);
+    traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, { 0, { 0, 0 }, m_scheme }, max_zoom_level);
+    if (m_srs == ctb::Grid::Srs::WGS84) {
+        // two root tiles
+        traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, { 0, { 1, 0 }, m_scheme }, max_zoom_level);
+    }
     tile_heights.write_to(m_output_path);
 
 }

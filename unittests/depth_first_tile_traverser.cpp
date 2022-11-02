@@ -24,6 +24,7 @@
 #include "DatasetReader.h"
 #include "Tile.h"
 #include "TopDownTiler.h"
+#include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include "depth_first_tile_traverser.h"
 
@@ -113,8 +114,6 @@ TEST_CASE("depth_first_tile_traverser basics")
 
 TEST_CASE("depth_first_tile_traverser austrian heights")
 {
-
-
     const auto grid = ctb::GlobalMercator();
     const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_100m_mgi.tif");
     //    const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
@@ -173,5 +172,30 @@ TEST_CASE("depth_first_tile_traverser austrian heights")
         CHECK(result.first <= 500);
         CHECK(result.second >= 2000);
         CHECK(result.second <= 4000);
+    }
+}
+TEST_CASE("depth_first_tile_traverser aggregate is not called with an empty vector")
+{
+    SECTION("web mercator")
+    {
+        const auto grid = ctb::GlobalMercator();
+        //    const auto bounds = ctb::CRSBounds{ -180, -90, 0, 90 };
+        auto bounds = grid.getExtent();
+
+        // this provokes the following situation:
+        // parent tile is produced, because its border overlaps the extents
+        // child tiles have smaller pixels -> their border does not overlap the extents any more.
+        bounds.setMinX((bounds.getWidth() / 256) / 4);
+        const auto tiler = TopDownTiler(grid, bounds, Tile::Tile::Border::Yes, Tile::Tile::Scheme::Tms);
+        const Tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
+
+        const auto read_function = [&](const Tile&) -> int {
+            return 0;
+        };
+        const auto aggregate_function = [&](const std::vector<int>& data) -> int {
+            REQUIRE(!data.empty());
+            return 0;
+        };
+        traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, 2);
     }
 }

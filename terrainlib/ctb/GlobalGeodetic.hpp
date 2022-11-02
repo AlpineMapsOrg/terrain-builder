@@ -41,7 +41,7 @@ public:
             CRSBounds(-180, -90, 180, 90),
             cSRS,
             4326,
-            2,
+            2,  // according to this global geodetic has 2 root tiles: https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic
             2)
     {
     }

@@ -58,7 +58,7 @@ class Grid;
  *            - tms webmercator has tile coordinates with y=0 being southern most.
  *
  *         Effectively, ctb::Grid is always positive pointing north. Support for google webmercator /
- *         slippyMap is done in Tiler.h
+ *         slippyMap is done in Tile.h
  */
 class ctb::Grid {
 public:

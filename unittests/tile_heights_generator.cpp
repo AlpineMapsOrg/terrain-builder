@@ -29,21 +29,43 @@ TEST_CASE("TileHeightsGenerator")
 
     constexpr auto file_name = "height_data.atb";
 
-    const auto generator = TileHeightsGenerator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::Yes, base_path / file_name);
-    generator.run(8);
+    SECTION("mercator") {
+        const auto generator = TileHeightsGenerator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::Yes, base_path / file_name);
+        generator.run(8);
 
-    const auto heights = TileHeights::read_from(base_path / file_name);
-    {
-        auto [min, max] = heights.query({ 0, { 0, 0 } });
-        CHECK(min == 0);
-        CHECK(max > 2500);
+        const auto heights = TileHeights::read_from(base_path / file_name);
+        {
+            auto [min, max] = heights.query({ 0, { 0, 0 } });
+            CHECK(min == 0);
+            CHECK(max > 2500);
+        }
+
+        {
+            auto [min, max] = heights.query({ 8, { 138, 166 } }); // part of styria, lower and upper austria (https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#8/15.69/47.75)
+            CHECK(min > 300);
+            CHECK(min < 400);
+            CHECK(max > 1500);
+            CHECK(max < 2500);
+        }
     }
 
-    {
-        auto [min, max] = heights.query({ 8, { 138, 166 } }); // part of styria, lower and upper austria
-        CHECK(min > 300);
-        CHECK(min < 400);
-        CHECK(max > 1500);
-        CHECK(max < 2500);
+    SECTION("geodetic") {
+        const auto generator = TileHeightsGenerator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::WGS84, Tile::Scheme::Tms, Tile::Border::Yes, base_path / file_name);
+        generator.run(8);
+
+        const auto heights = TileHeights::read_from(base_path / file_name);
+        {
+            auto [min, max] = heights.query({ 0, { 1, 0 } });
+            CHECK(min == 0);
+            CHECK(max > 2500);
+        }
+
+        {
+            auto [min, max] = heights.query({ 8, { 270, 194 } }); // can't check the address easily, because there is no web service showing geodetic tile names.
+            CHECK(min > 500);
+            CHECK(min < 700);
+            CHECK(max > 3600);
+            CHECK(max < 3800);
+        }
     }
 }
