@@ -67,7 +67,7 @@ std::string Dataset::name() const
 
 Dataset::~Dataset() = default;
 
-ctb::CRSBounds Dataset::bounds() const
+tile::SrsBounds Dataset::bounds() const
 {
     std::array<double, 6> adfGeoTransform = {};
     if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None)
@@ -87,10 +87,10 @@ ctb::CRSBounds Dataset::bounds() const
 
     const double eastX = adfGeoTransform[0] + (widthInPixels() * adfGeoTransform[1]);
     const double northY = adfGeoTransform[3];
-    return { westX, southY, eastX, northY };
+    return { {westX, southY}, {eastX, northY} };
 }
 
-ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
+tile::SrsBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
 {
     const auto l_bounds = bounds();
     const auto west = l_bounds.min.x;
@@ -141,7 +141,7 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
     const double target_maxX = *std::max_element(x.begin(), x.end());
     const double target_minY = *std::min_element(y.begin(), y.end());
     const double target_maxY = *std::max_element(y.begin(), y.end());
-    return { target_minX, target_minY, target_maxX, target_maxY };
+    return { {target_minX, target_minY}, {target_maxX, target_maxY} };
 }
 
 OGRSpatialReference Dataset::srs() const
@@ -154,24 +154,24 @@ OGRSpatialReference Dataset::srs() const
     return srs;
 }
 
-ctb::i_pixel Dataset::widthInPixels() const
+unsigned Dataset::widthInPixels() const
 {
     return ctb::i_pixel(m_gdal_dataset->GetRasterXSize());
 }
 
-ctb::i_pixel Dataset::heightInPixels() const
+unsigned Dataset::heightInPixels() const
 {
     return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
 }
 
-double Dataset::widthInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const
+double Dataset::widthInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
 {
-    return bounds.getWidth() / pixelWidthIn(bounds_srs);
+    return bounds.width() / pixelWidthIn(bounds_srs);
 }
 
-double Dataset::heightInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const
+double Dataset::heightInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
 {
-    return bounds.getHeight() / pixelHeightIn(bounds_srs);
+    return bounds.height() / pixelHeightIn(bounds_srs);
 }
 
 unsigned Dataset::n_bands() const
@@ -195,11 +195,11 @@ double Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const
 {
     const auto b0 = bounds();
     const auto b1 = srs::nonExactBoundsTransform(b0, srs(), target_srs);
-    return b1.getWidth() / widthInPixels();
+    return b1.width() / widthInPixels();
 }
 
 double Dataset::pixelHeightIn(const OGRSpatialReference& target_srs) const
 {
     const auto b = srs::nonExactBoundsTransform(bounds(), srs(), target_srs);
-    return b.getHeight() / heightInPixels();
+    return b.height() / heightInPixels();
 }

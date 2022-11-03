@@ -68,7 +68,6 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/algorithms/hasher.h
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
-    terrainlib/ctb/Bounds.hpp
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.hpp terrainlib/ctb/GlobalMercator.cpp

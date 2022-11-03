@@ -69,18 +69,18 @@ TEST_CASE("reading")
             std::make_tuple(
                 "at100m",
                 at100m,
-                ctb::CRSBounds(9.5, 46.4, 17.1, 49.0),
+                tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}},
                 std::make_tuple(100.0f, 120.0f, 3000.0f, 3800.0f)), // Austria is between 115 and 3798m
             std::make_tuple(
                 "vienna20m",
                 vienna20m,
-                ctb::CRSBounds(16.17, 48.14, 16.59, 48.33),
+                tile::SrsBounds{{16.17, 48.14}, {16.59, 48.33}},
                 std::make_tuple(140.0f, 180.0f, 500.0f, 560.0f)), // vienna, between 151 and 542m
 #endif
             std::make_tuple(
                 "tauern10m",
                 tauern10m,
-                ctb::CRSBounds(12.6934117, 47.0739300, 12.6944580, 47.0748649),
+                tile::SrsBounds{{12.6934117, 47.0739300}, {12.6944580, 47.0748649}},
                 std::make_tuple(3700.0f, 3720.0f, 3790.0f, 3800.0f)), // Grossglockner, 3798m with some surroundings
         };
 
@@ -126,19 +126,19 @@ TEST_CASE("reading")
             std::make_tuple(
                 "at100m",
                 at100m,
-                ctb::CRSBounds(9.5, 46.4, 17.1, 49.0),
+                tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}},
                 620U, 350U, 42.0, 22.0),
 #endif
             std::make_tuple(
                 "pizbuin1m",
                 pizbuin1m,
-                ctb::CRSBounds(10.105646780, 46.839864531, 10.129815588, 46.847626067),
+                tile::SrsBounds{{10.105646780, 46.839864531}, {10.129815588, 46.847626067}},
                 740U, 315U, 3.01, 0.006),
 #if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
             std::make_tuple(
                 "pizbuin1m_highres",
                 pizbuin1m,
-                ctb::CRSBounds(10.105646780, 46.839864531, 10.129815588, 46.847626067),
+                tile::SrsBounds{{10.105646780, 46.839864531}, {10.129815588, 46.847626067}},
                 2000U, 850U, 10.0, 0.008),
 #endif
         };
@@ -205,7 +205,8 @@ TEST_CASE("reading")
         const auto pixel_width = low_res_ds->pixelWidthIn(srs);
         const auto pixel_height = low_res_ds->pixelHeightIn(srs);
         auto srs_bounds = srs::nonExactBoundsTransform(low_res_ds->bounds(), low_res_ds->srs(), srs);
-        srs_bounds.setBounds(srs_bounds.getMinX() + border * pixel_width, srs_bounds.getMinY() + border * pixel_height, srs_bounds.getMaxX() - border * pixel_width, srs_bounds.getMaxY() - border * pixel_height);
+        srs_bounds.min = { srs_bounds.min.x + border * pixel_width, srs_bounds.min.y + border * pixel_height };
+        srs_bounds.max = { srs_bounds.max.x - border * pixel_width, srs_bounds.max.y - border * pixel_height };
 
         const auto t0 = std::chrono::high_resolution_clock::now();
         const auto low_res_heights = low_res_reader.read(srs_bounds, render_width, render_height);
@@ -249,7 +250,7 @@ TEST_CASE("reading")
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-        const auto srs_bounds = srs::nonExactBoundsTransform(ctb::CRSBounds(9.5, 46.4, 17.1, 49.0), geodetic_srs, srs);
+        const auto srs_bounds = srs::nonExactBoundsTransform(tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs);
 
         const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs));
         const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs));
@@ -292,7 +293,7 @@ TEST_CASE("reading")
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-        const auto srs_bounds = srs::nonExactBoundsTransform(ctb::CRSBounds(9.5, 46.4, 17.1, 49.0), geodetic_srs, srs);
+        const auto srs_bounds = srs::nonExactBoundsTransform(tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs);
 
         const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs)) / 10;
         const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs)) / 10;

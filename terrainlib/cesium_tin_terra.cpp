@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
-
 #include "cesium_tin_terra.h"
 
 #include <algorithm>
@@ -31,22 +30,22 @@
 #include "tntn/simple_meshing.h"
 #include "tntn/terra_meshing.h"
 
-tntn::BBox3D cesium_tin_terra::TileWriter::computeBbox(const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres)
+tntn::BBox3D cesium_tin_terra::TileWriter::computeBbox(const tile::SrsBounds& srs_bounds, const HeightData& heights_in_metres)
 {
     const auto [min_height, max_height] = std::ranges::minmax_element(heights_in_metres);
     tntn::BBox3D bbox;
-    bbox.min.x = srs_bounds.getMinX();
-    bbox.min.y = srs_bounds.getMinY();
+    bbox.min.x = srs_bounds.min.x;
+    bbox.min.y = srs_bounds.min.y;
     bbox.min.z = double(*min_height);
-    bbox.max.x = srs_bounds.getMaxX();
-    bbox.max.y = srs_bounds.getMaxY();
+    bbox.max.x = srs_bounds.max.x;
+    bbox.max.y = srs_bounds.max.y;
     bbox.max.z = double(*max_height);
     if (std::abs(bbox.min.z - bbox.max.z) < 0.1)
         bbox.max.z = bbox.min.z + 0.1;
     return bbox;
 }
 
-std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const ctb::CRSBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range, unsigned simple_mesh)
+std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatialReference& srs, const tile::SrsBounds& srs_bounds, const HeightData& heights_in_metres, bool scale_to_unit_range, unsigned simple_mesh)
 {
     return toMesh(srs, computeBbox(srs_bounds, heights_in_metres), heights_in_metres, scale_to_unit_range, simple_mesh);
 }
@@ -69,11 +68,11 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
         const auto scale = std::max(bbox.max.z - bbox.min.z, 1.0);
         const auto offset = bbox.min.z;
         max_error = max_error / scale;
-        const auto corrected_bounds = ctb::CRSBounds { 0.0, 0.0, 1.0 + 1.0 / grid_size, 1.0 + 1.0 / grid_size };
+        const auto corrected_bounds = tile::SrsBounds { { 0.0, 0.0 }, { 1.0 + 1.0 / grid_size, 1.0 + 1.0 / grid_size } };
         raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return (double(v) - offset) / scale; }), corrected_bounds);
     } else {
         const auto correction = tntn::xy((bbox.max - bbox.min) * (1.0 / grid_size));
-        const auto corrected_bounds = ctb::CRSBounds { bbox.min.x, bbox.min.y, bbox.max.x + correction.x, bbox.max.y + correction.y };
+        const auto corrected_bounds = tile::SrsBounds { bbox.min, glm::dvec2(bbox.max) + correction };
         raster = std::make_unique<tntn::RasterDouble>(image::transformImage(heights_in_metres, [=](auto v) { return double(v); }), corrected_bounds);
     }
     assert(max_error > 0);

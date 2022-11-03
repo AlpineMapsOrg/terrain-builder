@@ -38,7 +38,7 @@ class ctb::GlobalMercator : public Grid {
 public:
     GlobalMercator(i_tile tileSize = 256)
         : Grid(tileSize,
-            CRSBounds(-cOriginShift, -cOriginShift, cOriginShift, cOriginShift),
+            tile::SrsBounds{{-cOriginShift, -cOriginShift}, {cOriginShift, cOriginShift}},
             cSRS,
             3857,
             1,

@@ -23,7 +23,7 @@
 #include <memory>
 #include <string>
 
-#include "ctb/types.hpp"
+#include "Tile.h"
 
 class GDALDataset;
 class OGRSpatialReference;
@@ -45,13 +45,13 @@ public:
 
     [[nodiscard]] std::string name() const;
 
-    [[nodiscard]] ctb::CRSBounds bounds() const;
-    [[nodiscard]] ctb::CRSBounds bounds(const OGRSpatialReference& targetSrs) const;
+    [[nodiscard]] tile::SrsBounds bounds() const;
+    [[nodiscard]] tile::SrsBounds bounds(const OGRSpatialReference& targetSrs) const;
     [[nodiscard]] OGRSpatialReference srs() const;
-    [[nodiscard]] ctb::i_pixel widthInPixels() const;
-    [[nodiscard]] ctb::i_pixel heightInPixels() const;
-    [[nodiscard]] double widthInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
-    [[nodiscard]] double heightInPixels(const ctb::CRSBounds& bounds, const OGRSpatialReference& bounds_srs) const;
+    [[nodiscard]] unsigned widthInPixels() const;
+    [[nodiscard]] unsigned heightInPixels() const;
+    [[nodiscard]] double widthInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
+    [[nodiscard]] double heightInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
     [[nodiscard]] unsigned n_bands() const;
     [[nodiscard]] GDALDataset* gdalDataset();
 

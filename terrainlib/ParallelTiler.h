@@ -23,7 +23,7 @@
 
 class ParallelTiler : public Tiler {
 public:
-    ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, tile::Border border, tile::Scheme scheme);
+    ParallelTiler(const ctb::Grid& grid, const tile::SrsBounds& bounds, tile::Border border, tile::Scheme scheme);
 
     [[nodiscard]] std::vector<tile::Descriptor> generateTiles(unsigned zoom_level) const;
     [[nodiscard]] std::vector<tile::Descriptor> generateTiles(const std::pair<unsigned, unsigned>& zoom_range) const;

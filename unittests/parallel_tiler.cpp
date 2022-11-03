@@ -31,7 +31,7 @@
 
 TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::false_type)
 {
-    //  const auto bounds = ctb::CRSBounds(1'000'000, 6'000'000, 2'000'000, 6'700'000); // in m
+    //  const auto bounds = tile::SrsBounds(1'000'000, 6'000'000, 2'000'000, 6'700'000); // in m
     SECTION("mercator / level 0")
     {
         const auto grid = ctb::GlobalMercator();
@@ -49,10 +49,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         CHECK(t.tileSize == 256);
 
         // all extents are equal, because we have only one tile and no border
-        CHECK(t.srsBounds.getMinX() == Approx(grid.getExtent().getMinX()));
-        CHECK(t.srsBounds.getMaxY() == Approx(grid.getExtent().getMaxY()));
-        CHECK(t.srsBounds.getMinY() == Approx(grid.getExtent().getMinY()));
-        CHECK(t.srsBounds.getMaxX() == Approx(grid.getExtent().getMaxX()));
+        CHECK(t.srsBounds.min.x == Approx(grid.getExtent().min.x));
+        CHECK(t.srsBounds.max.y == Approx(grid.getExtent().max.y));
+        CHECK(t.srsBounds.min.y == Approx(grid.getExtent().min.y));
+        CHECK(t.srsBounds.max.x == Approx(grid.getExtent().max.x));
     }
 
     SECTION("mercator tms / level 1 and 2")
@@ -78,10 +78,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
-            CHECK(t.srsBounds.getMinX() == Approx(0));
-            CHECK(t.srsBounds.getMinY() == Approx(0));
-            CHECK(t.srsBounds.getMaxY() == Approx(grid.getExtent().getMaxY()));
-            CHECK(t.srsBounds.getMaxX() == Approx(grid.getExtent().getMaxX()));
+            CHECK(t.srsBounds.min.x == Approx(0));
+            CHECK(t.srsBounds.min.y == Approx(0));
+            CHECK(t.srsBounds.max.y == Approx(grid.getExtent().max.y));
+            CHECK(t.srsBounds.max.x == Approx(grid.getExtent().max.x));
         }
         {
             const auto l2_tiles = tiler.generateTiles(2);
@@ -92,10 +92,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
-            CHECK(t.srsBounds.getMinX() == Approx(0));
-            CHECK(t.srsBounds.getMinY() == Approx(0));
-            CHECK(t.srsBounds.getMaxY() == Approx(grid.getExtent().getMaxY() / 2));
-            CHECK(t.srsBounds.getMaxX() == Approx(grid.getExtent().getMaxX() / 2));
+            CHECK(t.srsBounds.min.x == Approx(0));
+            CHECK(t.srsBounds.min.y == Approx(0));
+            CHECK(t.srsBounds.max.y == Approx(grid.getExtent().max.y / 2));
+            CHECK(t.srsBounds.max.x == Approx(grid.getExtent().max.x / 2));
         }
     }
 
@@ -115,11 +115,11 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         CHECK(t0.gridSize == 64);
         CHECK(t0.tileSize == 65);
         // north, south and west are equal to the extents (no overflow)
-        CHECK(t0.srsBounds.getMinY() == Approx(grid.getExtent().getMinY()));
-        CHECK(t0.srsBounds.getMaxY() == Approx(grid.getExtent().getMaxY() + grid.getExtent().getHeight() / 64));
-        CHECK(t0.srsBounds.getMinX() == Approx(grid.getExtent().getMinX()));
+        CHECK(t0.srsBounds.min.y == Approx(grid.getExtent().min.y));
+        CHECK(t0.srsBounds.max.y == Approx(grid.getExtent().max.y + grid.getExtent().height() / 64));
+        CHECK(t0.srsBounds.min.x == Approx(grid.getExtent().min.x));
         // east should be somewher close to the 0 meridian, 1 pixel east of it to be exact)
-        CHECK(t0.srsBounds.getMaxX() == Approx(180.0 / 64));
+        CHECK(t0.srsBounds.max.x == Approx(180.0 / 64));
 
         const auto t1 = l0_tiles[1];
         CHECK(t1.id.zoom_level == 0);
@@ -127,13 +127,13 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
         CHECK(t1.gridSize == 64);
         CHECK(t1.tileSize == 65);
         // north and south are equal to the extent (no overflow)
-        CHECK(t1.srsBounds.getMinY() == Approx(grid.getExtent().getMinY()));
-        CHECK(t1.srsBounds.getMaxY() == Approx(grid.getExtent().getMaxY() + grid.getExtent().getHeight() / 64));
+        CHECK(t1.srsBounds.min.y == Approx(grid.getExtent().min.y));
+        CHECK(t1.srsBounds.max.y == Approx(grid.getExtent().max.y + grid.getExtent().height() / 64));
         // west is the 0 meriaidan
-        CHECK(t1.srsBounds.getMinX() == Approx(0));
+        CHECK(t1.srsBounds.min.x == Approx(0));
         // east should be wrapped around. but lets make things easier for now, and clamp it.
         // it goes mostly through the pacific anyways, and I wonder whether gdal even supports wrapping around the back..
-        CHECK(t1.srsBounds.getMaxX() == Approx(grid.getExtent().getMaxX() + grid.resolution(0)));
+        CHECK(t1.srsBounds.max.x == Approx(grid.getExtent().max.x + grid.resolution(0)));
     }
 
     SECTION("geodetic tms / level 1 and 2")
@@ -159,10 +159,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
 
             constexpr auto tileSizeX = 360 / 4.0;
             constexpr auto tileSizeY = 180 / 2.0;
-            CHECK(t.srsBounds.getMinX() == Approx(0));
-            CHECK(t.srsBounds.getMinY() == Approx(0));
-            CHECK(t.srsBounds.getMaxX() == Approx(tileSizeX + tileSizeX / t.gridSize));
-            CHECK(t.srsBounds.getMaxY() == Approx(90 + tileSizeY / t.gridSize));
+            CHECK(t.srsBounds.min.x == Approx(0));
+            CHECK(t.srsBounds.min.y == Approx(0));
+            CHECK(t.srsBounds.max.x == Approx(tileSizeX + tileSizeX / t.gridSize));
+            CHECK(t.srsBounds.max.y == Approx(90 + tileSizeY / t.gridSize));
         }
         {
             const auto l2_tiles = tiler.generateTiles(2);
@@ -175,10 +175,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
 
             constexpr auto tileSizeX = 360 / 8.0;
             constexpr auto tileSizeY = 180 / 4.0;
-            CHECK(t.srsBounds.getMinX() == Approx(0));
-            CHECK(t.srsBounds.getMinY() == Approx(tileSizeY));
-            CHECK(t.srsBounds.getMaxX() == Approx(tileSizeX + tileSizeX / t.gridSize));
-            CHECK(t.srsBounds.getMaxY() == Approx(90 + tileSizeY / t.gridSize));
+            CHECK(t.srsBounds.min.x == Approx(0));
+            CHECK(t.srsBounds.min.y == Approx(tileSizeY));
+            CHECK(t.srsBounds.max.x == Approx(tileSizeX + tileSizeX / t.gridSize));
+            CHECK(t.srsBounds.max.y == Approx(90 + tileSizeY / t.gridSize));
         }
     }
 
@@ -205,10 +205,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
-            CHECK(t.srsBounds.getMinX() == Approx(grid.getExtent().getMinX()));
-            CHECK(t.srsBounds.getMinY() == Approx(grid.getExtent().getMinY()));
-            CHECK(t.srsBounds.getMaxX() == Approx(0));
-            CHECK(t.srsBounds.getMaxY() == Approx(0));
+            CHECK(t.srsBounds.min.x == Approx(grid.getExtent().min.x));
+            CHECK(t.srsBounds.min.y == Approx(grid.getExtent().min.y));
+            CHECK(t.srsBounds.max.x == Approx(0));
+            CHECK(t.srsBounds.max.y == Approx(0));
         }
         {
             const auto l2_tiles = tiler.generateTiles(2);
@@ -219,10 +219,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
             CHECK(t.gridSize == 256);
             CHECK(t.tileSize == 256);
 
-            CHECK(t.srsBounds.getMinX() == Approx(grid.getExtent().getMinX() + grid.getExtent().getWidth() / 4.0));
-            CHECK(t.srsBounds.getMinY() == Approx(grid.getExtent().getMinY() + grid.getExtent().getHeight() / 4.0));
-            CHECK(t.srsBounds.getMaxX() == Approx(0));
-            CHECK(t.srsBounds.getMaxY() == Approx(0));
+            CHECK(t.srsBounds.min.x == Approx(grid.getExtent().min.x + grid.getExtent().width() / 4.0));
+            CHECK(t.srsBounds.min.y == Approx(grid.getExtent().min.y + grid.getExtent().height() / 4.0));
+            CHECK(t.srsBounds.max.x == Approx(0));
+            CHECK(t.srsBounds.max.y == Approx(0));
         }
     }
 
@@ -249,10 +249,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
 
             constexpr auto tileSizeX = 360 / 4.0;
             constexpr auto tileSizeY = 180 / 2.0;
-            CHECK(t.srsBounds.getMinX() == Approx(-tileSizeX));
-            CHECK(t.srsBounds.getMinY() == Approx(-tileSizeY));
-            CHECK(t.srsBounds.getMaxX() == Approx(tileSizeX / 64.0));
-            CHECK(t.srsBounds.getMaxY() == Approx(tileSizeX / 64.0));
+            CHECK(t.srsBounds.min.x == Approx(-tileSizeX));
+            CHECK(t.srsBounds.min.y == Approx(-tileSizeY));
+            CHECK(t.srsBounds.max.x == Approx(tileSizeX / 64.0));
+            CHECK(t.srsBounds.max.y == Approx(tileSizeX / 64.0));
         }
         {
             const auto l2_tiles = tiler.generateTiles(2);
@@ -265,10 +265,10 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
 
             constexpr auto tileSizeX = 360 / 8.0;
             constexpr auto tileSizeY = 180 / 4.0;
-            CHECK(t.srsBounds.getMinX() == Approx(-2 * tileSizeX));
-            CHECK(t.srsBounds.getMinY() == Approx(-90));
-            CHECK(t.srsBounds.getMaxX() == Approx(-tileSizeX + tileSizeX / 64.0));
-            CHECK(t.srsBounds.getMaxY() == Approx(-90 + tileSizeY + tileSizeX / 64.0));
+            CHECK(t.srsBounds.min.x == Approx(-2 * tileSizeX));
+            CHECK(t.srsBounds.min.y == Approx(-90));
+            CHECK(t.srsBounds.max.x == Approx(-tileSizeX + tileSizeX / 64.0));
+            CHECK(t.srsBounds.max.y == Approx(-90 + tileSizeY + tileSizeX / 64.0));
         }
     }
 }

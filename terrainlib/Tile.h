@@ -19,12 +19,43 @@
 
 #pragma once
 
-#include "ctb/types.hpp"
 #include <glm/glm.hpp>
 #include <glm/vector_relational.hpp>
 #include <tuple>
 
 namespace tile {
+/// A representation of an extent
+template <class T>
+class Aabb {
+public:
+    glm::tvec2<T> min = {};
+    glm::tvec2<T> max = {};
+
+    bool operator==(const Aabb<T>& other) const = default;
+
+    T width() const { return max.x - min.x; }
+    T height() const { return max.y - min.y; }
+};
+using SrsBounds = Aabb<double>;
+
+template <typename T>
+bool intersect(const Aabb<T>& a, const Aabb<T>& b)
+{
+    // http://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+    return a.min.x <= b.max.x && b.min.x <= a.max.x && a.min.y <= b.max.y && b.min.y <= a.max.y;
+}
+
+template <typename T>
+Aabb<T> intersection(const Aabb<T>& a, const Aabb<T>& b)
+{
+    Aabb<T> r;
+    r.min.x = std::max(a.min.x, b.min.x);
+    r.min.y = std::max(a.min.y, b.min.y);
+    r.max.x = std::min(a.max.x, b.max.x);
+    r.max.y = std::min(a.max.y, b.max.y);
+    return r;
+}
+
 enum class Border {
     Yes = 1,
     No = 0
@@ -67,20 +98,17 @@ struct Id {
 };
 
 struct Descriptor {
-
-
-         // used to generate file name
+    // used to generate file name
     tile::Id id;
 
-         // srsBounds are the bounds of the tile including the border pixel.
-    ctb::CRSBounds srsBounds;
+    // srsBounds are the bounds of the tile including the border pixel.
+    SrsBounds srsBounds;
     int srs_epsg;
 
-         // some tiling schemes require a border (e.g. cesium heightmap https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0).
-         // grid bounds does not contain that border (e.g. 64 width)
-         // tile bounds contains that border (e.g. 65 width)
-    ctb::i_tile gridSize;
-    ctb::i_tile tileSize;
+    // some tiling schemes require a border (e.g. cesium heightmap https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0).
+    // grid bounds does not contain that border (e.g. 64 width)
+    // tile bounds contains that border (e.g. 65 width)
+    unsigned gridSize;
+    unsigned tileSize;
 };
-
 }

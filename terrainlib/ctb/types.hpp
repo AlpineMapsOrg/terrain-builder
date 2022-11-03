@@ -24,8 +24,7 @@
  */
 
 #include <cstdint> // uint16_t
-
-#include "Bounds.hpp"
+#include <glm/glm.hpp>
 
 /// All terrain related data types reside in this namespace
 namespace ctb {
@@ -37,10 +36,8 @@ using i_zoom = unsigned int; ///< A zoom level
 using i_terrain_height = uint16_t; ///< A terrain tile height
 
 // Complex types
-using TileBounds = Bounds<i_tile>; ///< Tile extents in tile coordinates
 using PixelPoint = glm::tvec2<i_pixel>; ///< The location of a pixel
 using CRSPoint = glm::tvec2<double>; ///< A Coordinate Reference System coordinate
-using CRSBounds = Bounds<double>; ///< Extents in CRS coordinates
 using TilePoint = glm::tvec2<i_tile>; ///< The location of a tile
 
 }

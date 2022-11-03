@@ -37,14 +37,14 @@ TEST_CASE("tin terra write")
     {
         const auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, tile::Border::No);
         const auto b = 20037508.3427892;
-        generator.write(tile::Descriptor { {0, glm::uvec2(0, 0)}, { -b, -b, b, b }, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(tile::Descriptor { tile::Id{0, glm::uvec2(0, 0)}, tile::SrsBounds{ {-b, -b}, {b, b} }, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
     }
 
     SECTION("mesh vertex ranges webmercator")
     {
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
+        const auto at_bounds = tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}};
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
         webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -54,7 +54,7 @@ TEST_CASE("tin terra write")
         wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
         const auto at_webmercator_bounds = srs::nonExactBoundsTransform(at_bounds, wgs84, webmercator);
-        //    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
+        //    const auto at_webmercator_bounds = tile::SrsBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
 
         const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto reader = DatasetReader(dataset, webmercator, 1, false);
@@ -65,18 +65,18 @@ TEST_CASE("tin terra write")
         CHECK(mesh->vertices().size() > 100);
         CHECK(mesh->vertices().size() < 200);
         const auto mesh_bb = mesh->bbox();
-        CHECK(mesh_bb.min.x >= at_webmercator_bounds.getMinX() * 0.99999999999999);
-        CHECK(mesh_bb.min.y >= at_webmercator_bounds.getMinY() * 0.99999999999999);
+        CHECK(mesh_bb.min.x >= at_webmercator_bounds.min.x * 0.99999999999999);
+        CHECK(mesh_bb.min.y >= at_webmercator_bounds.min.y * 0.99999999999999);
         CHECK(mesh_bb.min.z >= 50.0);
-        CHECK(mesh_bb.max.x <= at_webmercator_bounds.getMaxX() * 1.00000000000001);
-        CHECK(mesh_bb.max.y <= at_webmercator_bounds.getMaxY() * 1.00000000000001);
+        CHECK(mesh_bb.max.x <= at_webmercator_bounds.max.x * 1.00000000000001);
+        CHECK(mesh_bb.max.y <= at_webmercator_bounds.max.y * 1.00000000000001);
         CHECK(mesh_bb.max.z <= 4000.0);
     }
 
     SECTION("mesh vertex ranges wgs84")
     {
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
+        const auto at_wgs84_bounds = tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}};
 
         OGRSpatialReference wgs84;
         wgs84.importFromEPSG(4326);
@@ -91,18 +91,18 @@ TEST_CASE("tin terra write")
         CHECK(mesh->vertices().size() > 100);
         CHECK(mesh->vertices().size() < 200);
         const auto mesh_bb = mesh->bbox();
-        CHECK(mesh_bb.min.x >= at_wgs84_bounds.getMinX());
-        CHECK(mesh_bb.min.y >= at_wgs84_bounds.getMinY());
+        CHECK(mesh_bb.min.x >= at_wgs84_bounds.min.x);
+        CHECK(mesh_bb.min.y >= at_wgs84_bounds.min.y);
         CHECK(mesh_bb.min.z >= 50.0);
-        CHECK(mesh_bb.max.x <= at_wgs84_bounds.getMaxX());
-        CHECK(mesh_bb.max.y <= at_wgs84_bounds.getMaxY());
+        CHECK(mesh_bb.max.x <= at_wgs84_bounds.max.x);
+        CHECK(mesh_bb.max.y <= at_wgs84_bounds.max.y);
         CHECK(mesh_bb.max.z <= 4000.0);
     }
 
     SECTION("mesh vertex ranges unit range scale")
     {
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
+        const auto at_wgs84_bounds = tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}};
 
         OGRSpatialReference wgs84;
         wgs84.importFromEPSG(4326);
@@ -128,7 +128,7 @@ TEST_CASE("tin terra write")
     SECTION("mesh vertex ranges webmercator global")
     {
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_bounds = ctb::CRSBounds(-180, -80, 180, 80);
+        const auto at_bounds = tile::SrsBounds{{-180, -80}, {180, 80}};
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
         webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -138,7 +138,7 @@ TEST_CASE("tin terra write")
         wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
         const auto at_webmercator_bounds = srs::nonExactBoundsTransform(at_bounds, wgs84, webmercator);
-        //    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
+        //    const auto at_webmercator_bounds = tile::SrsBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
 
         const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto reader = DatasetReader(dataset, webmercator, 1, false);
@@ -148,18 +148,18 @@ TEST_CASE("tin terra write")
         REQUIRE(mesh->vertices().size() > 0);
         CHECK(mesh->vertices().size() == 289);
         const auto mesh_bb = mesh->bbox();
-        CHECK(mesh_bb.min.x >= at_webmercator_bounds.getMinX());
-        CHECK(mesh_bb.min.y >= at_webmercator_bounds.getMinY());
+        CHECK(mesh_bb.min.x >= at_webmercator_bounds.min.x);
+        CHECK(mesh_bb.min.y >= at_webmercator_bounds.min.y);
         CHECK(mesh_bb.min.z >= 0);
-        CHECK(mesh_bb.max.x <= at_webmercator_bounds.getMaxX());
-        CHECK(mesh_bb.max.y <= at_webmercator_bounds.getMaxY());
+        CHECK(mesh_bb.max.x <= at_webmercator_bounds.max.x);
+        CHECK(mesh_bb.max.y <= at_webmercator_bounds.max.y);
         CHECK(mesh_bb.max.z <= 4000.0);
     }
 
     SECTION("mesh vertex ranges wgs84 global")
     {
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(-180, -90, 180, 90);
+        const auto at_wgs84_bounds = tile::SrsBounds{{-180, -90}, {180, 90}};
 
         OGRSpatialReference wgs84;
         wgs84.importFromEPSG(4326);
@@ -173,18 +173,18 @@ TEST_CASE("tin terra write")
         REQUIRE(mesh->vertices().size() > 0);
         CHECK(mesh->vertices().size() == 289);
         const auto mesh_bb = mesh->bbox();
-        CHECK(mesh_bb.min.x >= at_wgs84_bounds.getMinX());
-        CHECK(mesh_bb.min.y >= at_wgs84_bounds.getMinY());
+        CHECK(mesh_bb.min.x >= at_wgs84_bounds.min.x);
+        CHECK(mesh_bb.min.y >= at_wgs84_bounds.min.y);
         CHECK(mesh_bb.min.z >= 0);
-        CHECK(mesh_bb.max.x <= at_wgs84_bounds.getMaxX());
-        CHECK(mesh_bb.max.y <= at_wgs84_bounds.getMaxY());
+        CHECK(mesh_bb.max.x <= at_wgs84_bounds.max.x);
+        CHECK(mesh_bb.max.y <= at_wgs84_bounds.max.y);
         CHECK(mesh_bb.max.z <= 4000.0);
     }
 
     SECTION("mesh vertex ranges unit range scale global")
     {
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(-180, -90, 180, 90);
+        const auto at_wgs84_bounds = tile::SrsBounds{{-180, -90}, {180, 90}};
 
         OGRSpatialReference wgs84;
         wgs84.importFromEPSG(4326);
@@ -209,7 +209,7 @@ TEST_CASE("tin terra write")
     SECTION("mesh edges unit range scale global")
     {
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(-180, -90, 180, 90);
+        const auto at_wgs84_bounds = tile::SrsBounds{{-180, -90}, {180, 90}};
 
         OGRSpatialReference wgs84;
         wgs84.importFromEPSG(4326);

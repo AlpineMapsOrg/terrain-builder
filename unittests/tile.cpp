@@ -19,7 +19,6 @@
 #include <catch2/catch.hpp>
 
 #include "Tile.h"
-#include "ctb/Bounds.hpp"
 
 TEST_CASE("tile::Id scheme conversion")
 {
@@ -166,18 +165,18 @@ TEST_CASE("tile::Id, children") {
 
 TEST_CASE("tile::Bounds intersect")
 {
-    CHECK(intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{0, 0}, {1, 1}}));
-    CHECK(intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{-1, -1}, {2, 2}}));
-    CHECK(intersect(ctb::CRSBounds{{-1, -1}, {2, 2}}, ctb::CRSBounds{{0, 0}, {1, 1}}));
-    CHECK(intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{-1, 0.5}, {2, 0.8}}));
-    CHECK(intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{-0.5, 0.5}, {2, 0.8}}));
-    CHECK(intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{0.5, -0.5}, {2, 0.8}}));
-    CHECK(intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{-0.5, -0.5}, {2.5, 0.5}}));
-    CHECK(intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{-0.5, -0.5}, {0.5, 2.0}}));
+    CHECK(intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{0, 0}, {1, 1}}));
+    CHECK(intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{-1, -1}, {2, 2}}));
+    CHECK(intersect(tile::SrsBounds{{-1, -1}, {2, 2}}, tile::SrsBounds{{0, 0}, {1, 1}}));
+    CHECK(intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{-1, 0.5}, {2, 0.8}}));
+    CHECK(intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{-0.5, 0.5}, {2, 0.8}}));
+    CHECK(intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{0.5, -0.5}, {2, 0.8}}));
+    CHECK(intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{-0.5, -0.5}, {2.5, 0.5}}));
+    CHECK(intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{-0.5, -0.5}, {0.5, 2.0}}));
 
 
-    CHECK(!intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{-0.5, -0.5}, {-0.2, 0.2}}));
-    CHECK(!intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{-0.5, -0.5}, {0.2, -0.2}}));
-    CHECK(!intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{1.5, 0.5}, {1.7, 0.8}}));
-    CHECK(!intersect(ctb::CRSBounds{{0, 0}, {1, 1}}, ctb::CRSBounds{{0.5, 1.5}, {0.7, 1.8}}));
+    CHECK(!intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{-0.5, -0.5}, {-0.2, 0.2}}));
+    CHECK(!intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{-0.5, -0.5}, {0.2, -0.2}}));
+    CHECK(!intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{1.5, 0.5}, {1.7, 0.8}}));
+    CHECK(!intersect(tile::SrsBounds{{0, 0}, {1, 1}}, tile::SrsBounds{{0.5, 1.5}, {0.7, 1.8}}));
 }

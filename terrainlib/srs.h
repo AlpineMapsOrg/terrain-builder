@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "Exception.h"
-#include "ctb/types.hpp"
+#include "Tile.h"
 #include "tntn/geometrix.h"
 
 namespace srs {
@@ -44,14 +44,14 @@ inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpat
 }
 
 // this transform is non exact, because we are only transforming the corner vertices. however, due to projection warping, a rectangle can become an trapezoid with curved edges.
-inline ctb::CRSBounds nonExactBoundsTransform(const ctb::CRSBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs)
+inline tile::SrsBounds nonExactBoundsTransform(const tile::SrsBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs)
 {
     const auto transform = transformation(sourceSrs, targetSrs);
-    std::array xes = { bounds.getMinX(), bounds.getMaxX() };
-    std::array yes = { bounds.getMinY(), bounds.getMaxY() };
+    std::array xes = { bounds.min.x, bounds.max.x };
+    std::array yes = { bounds.min.y, bounds.max.y };
     if (!transform->Transform(2, xes.data(), yes.data()))
         throw Exception("nonExactBoundsTransform failed");
-    return { ctb::CRSPoint(xes[0], yes[0]), ctb::CRSPoint(xes[1], yes[1]) };
+    return { {xes[0], yes[0]}, {xes[1], yes[1]} };
 }
 
 template <typename T>

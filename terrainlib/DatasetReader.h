@@ -24,7 +24,7 @@
 #include <string>
 
 #include "Image.h"
-#include "ctb/types.hpp"
+#include "Tile.h"
 
 class Dataset;
 class OGRSpatialReference;
@@ -33,8 +33,8 @@ class DatasetReader {
 public:
     DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band, bool warn_on_missing_overviews = true);
 
-    HeightData read(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
-    HeightData readWithOverviews(const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
+    HeightData read(const tile::SrsBounds& bounds, unsigned width, unsigned height) const;
+    HeightData readWithOverviews(const tile::SrsBounds& bounds, unsigned width, unsigned height) const;
 
     unsigned dataset_band() const { return m_band; }
     bool isReprojecting() const { return m_requires_reprojection; }
@@ -42,7 +42,7 @@ public:
     std::string target_srs_wkt() const { return m_target_srs_wkt; }
 
 protected:
-    HeightData readFrom(const std::shared_ptr<Dataset>& dataset, const ctb::CRSBounds& bounds, unsigned width, unsigned height) const;
+    HeightData readFrom(const std::shared_ptr<Dataset>& dataset, const tile::SrsBounds& bounds, unsigned width, unsigned height) const;
 
 private:
     std::shared_ptr<Dataset> m_dataset;

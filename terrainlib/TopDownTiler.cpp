@@ -18,7 +18,7 @@
 
 #include "TopDownTiler.h"
 
-TopDownTiler::TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, tile::Border border, tile::Scheme scheme)
+TopDownTiler::TopDownTiler(const ctb::Grid& grid, const tile::SrsBounds& bounds, tile::Border border, tile::Scheme scheme)
     : Tiler(grid, bounds, border, scheme)
 {
 }

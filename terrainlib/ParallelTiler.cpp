@@ -22,19 +22,19 @@
 #include "Exception.h"
 #include <functional>
 
-ParallelTiler::ParallelTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, tile::Border border, tile::Scheme scheme) : Tiler(grid, bounds, border, scheme)
+ParallelTiler::ParallelTiler(const ctb::Grid& grid, const tile::SrsBounds& bounds, tile::Border border, tile::Scheme scheme) : Tiler(grid, bounds, border, scheme)
 {
 }
 
 tile::Id ParallelTiler::southWestTile(unsigned zoom_level) const
 {
-    return grid().crsToTile(bounds().getLowerLeft(), zoom_level).to(scheme());
+    return grid().crsToTile(bounds().min, zoom_level).to(scheme());
 }
 
 tile::Id ParallelTiler::northEastTile(unsigned zoom_level) const
 {
     const auto epsilon = grid().resolution(zoom_level) / 100;
-    return grid().crsToTile(bounds().getUpperRight() - epsilon, zoom_level).to(scheme());
+    return grid().crsToTile(bounds().max - epsilon, zoom_level).to(scheme());
 }
 
 std::vector<tile::Descriptor> ParallelTiler::generateTiles(unsigned zoom_level) const

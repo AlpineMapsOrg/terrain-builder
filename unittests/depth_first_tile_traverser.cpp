@@ -179,13 +179,13 @@ TEST_CASE("depth_first_tile_traverser aggregate is not called with an empty vect
     SECTION("web mercator")
     {
         const auto grid = ctb::GlobalMercator();
-        //    const auto bounds = ctb::CRSBounds{ -180, -90, 0, 90 };
+        //    const auto bounds = tile::SrsBounds{ -180, -90, 0, 90 };
         auto bounds = grid.getExtent();
 
         // this provokes the following situation:
         // parent tile is produced, because its border overlaps the extents
         // child tiles have smaller pixels -> their border does not overlap the extents any more.
-        bounds.setMinX((bounds.getWidth() / 256) / 4);
+        bounds.min.x = (bounds.width() / 256) / 4;
         const auto tiler = TopDownTiler(grid, bounds, tile::Border::Yes, tile::Scheme::Tms);
         const tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
 

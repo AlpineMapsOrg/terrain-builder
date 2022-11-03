@@ -25,15 +25,15 @@
 #include "ctb/types.hpp"
 #include "srs.h"
 
-void checkBounds(const ctb::CRSBounds& a, const ctb::CRSBounds& b)
+void checkBounds(const tile::SrsBounds& a, const tile::SrsBounds& b)
 {
-    REQUIRE(a.getHeight() > 0);
-    REQUIRE(a.getWidth() > 0);
-    REQUIRE(b.getHeight() > 0);
-    REQUIRE(b.getWidth() > 0);
+    REQUIRE(a.height() > 0);
+    REQUIRE(a.width() > 0);
+    REQUIRE(b.height() > 0);
+    REQUIRE(b.width() > 0);
 
-    const auto heightErrorIn = std::abs(a.getHeight() - b.getHeight()) / a.getHeight();
-    const auto widthErrorIn = std::abs(a.getWidth() - b.getWidth()) / a.getWidth();
+    const auto heightErrorIn = std::abs(a.height() - b.height()) / a.height();
+    const auto widthErrorIn = std::abs(a.width() - b.width()) / a.width();
     //  fmt::print("height error = {}, width error = {}\n", heightErrorIn, widthErrorIn);
     REQUIRE(heightErrorIn < 0.001);
     REQUIRE(widthErrorIn < 0.001);
@@ -122,12 +122,10 @@ TEST_CASE("bbox width pixels")
     REQUIRE(d_mgi.heightInPixels(srs::nonExactBoundsTransform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(350.0));
 
     auto adjust_bounds = [](auto bounds) {
-        const auto unadjusted_width = bounds.getWidth();
-        const auto unadjusted_height = bounds.getHeight();
-        bounds.setMinX(bounds.getMinX() + unadjusted_width * 0.2);
-        bounds.setMinY(bounds.getMinY() + unadjusted_height * 0.3);
-        bounds.setMaxX(bounds.getMaxX() - unadjusted_width * 0.1);
-        bounds.setMaxY(bounds.getMaxY() - unadjusted_height * 0.2);
+        const auto unadjusted_width = bounds.width();
+        const auto unadjusted_height = bounds.height();
+        bounds.min += glm::dvec2{ unadjusted_width * 0.2, unadjusted_height * 0.3 };
+        bounds.max -= glm::dvec2{ unadjusted_width * 0.1, unadjusted_height * 0.2 };
         return bounds;
     };
 

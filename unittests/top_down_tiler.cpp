@@ -83,7 +83,7 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
 
         const auto tiles = tiler.generateTiles({0, { 1, 0 }, scheme});
         REQUIRE(tiles.size() == 4);
-        const auto parallel_tiler = ParallelTiler(grid, {0, -90, 180, 90}, tile::Border::No, scheme);
+        const auto parallel_tiler = ParallelTiler(grid, {{0, -90}, {180, 90}}, tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 

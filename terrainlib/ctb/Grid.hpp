@@ -69,7 +69,7 @@ public:
 
     /// Initialise a grid tile
     Grid(i_tile gridSize,
-        const CRSBounds extent,
+        const tile::SrsBounds extent,
         const OGRSpatialReference& srs,
         int epsgCode,
         unsigned short int rootTiles,
@@ -78,9 +78,9 @@ public:
         , mExtent(extent)
         , mSRS(srs)
         , mEpsgCode(epsgCode)
-        , mInitialResolution((extent.getWidth() / rootTiles) / gridSize)
-        , mXOriginShift(extent.getWidth() / 2)
-        , mYOriginShift(extent.getHeight() / 2)
+        , mInitialResolution((extent.width() / rootTiles) / gridSize)
+        , mXOriginShift(extent.width() / 2)
+        , mYOriginShift(extent.height() / 2)
         , mZoomFactor(zoomFactor)
     {
         mSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -159,7 +159,7 @@ public:
     /// Get the CRS bounds of a particular tile
     /// border_se should be true if a border should be included on the south eastern corner
     /// e.g., for the cesium raster terrain format (https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0)
-    [[nodiscard]] inline CRSBounds srsBounds(const tile::Id& tile_id, bool border_se) const
+    [[nodiscard]] inline tile::SrsBounds srsBounds(const tile::Id& tile_id, bool border_se) const
     {
         const auto tms_tile_id = tile_id.to(tile::Scheme::Tms);
         // get the pixels coordinates representing the tile bounds
@@ -186,16 +186,16 @@ public:
     }
 
     /// Get the extent covered by the grid in CRS coordinates
-    [[nodiscard]] inline const CRSBounds& getExtent() const
+    [[nodiscard]] inline const tile::SrsBounds& getExtent() const
     {
         return mExtent;
     }
 
     /// Get the extent covered by the grid in tile coordinates for a zoom level
-    [[nodiscard]] inline TileBounds getTileExtent(i_zoom zoom) const
+    [[nodiscard]] inline tile::Aabb<unsigned> getTileExtent(i_zoom zoom) const
     {
-        const auto ll = crsToTile(mExtent.getLowerLeft(), zoom);
-        const auto ur = crsToTile(mExtent.getUpperRight(), zoom);
+        const auto ll = crsToTile(mExtent.min, zoom);
+        const auto ur = crsToTile(mExtent.max, zoom);
 
         return { ll.coords, ur.coords };
     }
@@ -210,7 +210,7 @@ private:
     i_tile mGridSize;
 
     /// The area covered by the grid
-    CRSBounds mExtent;
+    tile::SrsBounds mExtent;
 
     /// The spatial reference system covered by the grid
     OGRSpatialReference mSRS;
