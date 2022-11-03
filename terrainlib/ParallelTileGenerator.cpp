@@ -66,8 +66,8 @@ const ctb::Grid& ParallelTileGenerator::grid() const
 
 void ParallelTileGenerator::write(const Tile& tile, const HeightData& heights) const
 {
-    const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.tile_id.zoom_level, tile.tile_id.coords.x);
-    const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.tile_id.coords.y, m_tile_writer->formatFileEnding());
+    const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.id.zoom_level, tile.id.coords.x);
+    const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.id.coords.y, m_tile_writer->formatFileEnding());
     std::filesystem::create_directories(dir_path);
     m_tile_writer->write(file_path, tile, heights);
 }

@@ -32,7 +32,7 @@ void compare_tile_lists(const std::vector<Tile>& a_tiles, std::vector<Tile> b_ti
 
     for (const auto& tile : a_tiles) {
         const auto matching_tile_iter = std::find_if(b_tiles.begin(), b_tiles.end(), [&](const Tile& t) {
-            return t.tile_id == tile.tile_id;
+            return t.id == tile.id;
         });
         REQUIRE(matching_tile_iter != b_tiles.end());
 

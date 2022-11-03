@@ -33,7 +33,7 @@ auto traverse_depth_first_and_aggregate(const TopDownTiler& tiler, ReadFunction 
 
     std::vector<DataType> unaggregated_data;
     for (const auto& tile : subtiles) {
-        auto tile_data = traverse_depth_first_and_aggregate(tiler, read, aggregate, tile.tile_id, max_zoom_level);
+        auto tile_data = traverse_depth_first_and_aggregate(tiler, read, aggregate, tile.id, max_zoom_level);
         unaggregated_data.emplace_back(std::move(tile_data));
     }
 

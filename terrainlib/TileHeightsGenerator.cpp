@@ -57,8 +57,8 @@ void TileHeightsGenerator::run(unsigned max_zoom_level) const
     const auto read_function = [&](const Tile& tile) -> MinMaxData {
         const auto tile_data = tile_reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
         auto [min, max] = std::ranges::minmax(tile_data);
-        tile_heights.emplace(tile.tile_id, std::make_pair(min, max));
-        return { tile.tile_id, std::make_pair(min, max) };
+        tile_heights.emplace(tile.id, std::make_pair(min, max));
+        return { tile.id, std::make_pair(min, max) };
     };
 
     std::vector<std::vector<std::pair<float, float>>> aggregate_calls;

@@ -119,7 +119,7 @@ void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Til
     srs.importFromEPSG(tile.srs_epsg);
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-    const auto mesh = cesium_tin_terra::TileWriter::toMesh(srs, srs_bbox, heights, scale_to_unit_range, simple_mesh_resolution(tile.tile_id.zoom_level));
+    const auto mesh = cesium_tin_terra::TileWriter::toMesh(srs, srs_bbox, heights, scale_to_unit_range, simple_mesh_resolution(tile.id.zoom_level));
     const auto& vertices = mesh->vertices_as_vector();
     tntn::write_mesh_as_qm(file_path.c_str(), *mesh, srs_bbox, srs, scale_to_unit_range, true);
 }

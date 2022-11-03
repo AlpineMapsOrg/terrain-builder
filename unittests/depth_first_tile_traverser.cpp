@@ -50,8 +50,8 @@ TEST_CASE("depth_first_tile_traverser basics")
     };
     std::set<Tile::Id> read_tiles;
     const auto read_function = [&](const Tile& tile) {
-        read_tiles.insert(tile.tile_id);
-        return ReadType {tile.tile_id.coords};
+        read_tiles.insert(tile.id);
+        return ReadType {tile.id.coords};
     };
 
     std::vector<std::vector<ReadType>> aggregate_calls;
@@ -123,7 +123,7 @@ TEST_CASE("depth_first_tile_traverser austrian heights")
     //    const auto dataset_reader = DatasetReader()
     std::set<Tile::Id> read_tiles;
     const auto read_function = [&](const Tile& tile) -> std::pair<float, float> {
-        read_tiles.insert(tile.tile_id);
+        read_tiles.insert(tile.id);
         const auto tile_data = tile_reader.read(tile.srsBounds, tile.tileSize, tile.tileSize);
         auto [min, max] = std::ranges::minmax(tile_data);
         return std::make_pair(min, max);

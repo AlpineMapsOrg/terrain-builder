@@ -68,7 +68,7 @@ struct Tile {
     };
 
     // used to generate file name
-    Id tile_id;
+    Id id;
 
     // srsBounds are the bounds of the tile including the border pixel.
     ctb::CRSBounds srsBounds;

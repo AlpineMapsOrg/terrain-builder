@@ -93,7 +93,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
         const auto tiles = generator.tiler().generateTiles({ 0, 7 });
 
         const auto check = [](const Tile& t) {
-            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.tile_id.zoom_level, t.tile_id.coords.x, t.tile_id.coords.y));
+            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.id.zoom_level, t.id.coords.x, t.id.coords.y));
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
     }
@@ -106,7 +106,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
         const auto tiles = generator.tiler().generateTiles({ 4, 8 });
 
         const auto check = [](const Tile& t) {
-            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.tile_id.zoom_level, t.tile_id.coords.x, t.tile_id.coords.y));
+            return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.id.zoom_level, t.id.coords.x, t.id.coords.y));
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
     }
