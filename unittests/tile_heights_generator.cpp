@@ -19,8 +19,7 @@
 #include <catch2/catch.hpp>
 
 #include "TileHeightsGenerator.h"
-#include "TileHeights.h"
-
+#include "sherpa/TileHeights.h"
 
 TEST_CASE("TileHeightsGenerator")
 {

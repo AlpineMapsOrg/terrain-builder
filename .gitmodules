@@ -1,0 +1,3 @@
+[submodule "sherpa"]
+	path = sherpa
+	url = git@github.com:AlpineMapsOrg/sherpa.git

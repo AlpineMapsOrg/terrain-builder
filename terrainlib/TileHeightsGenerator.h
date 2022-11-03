@@ -21,8 +21,8 @@
 #include <filesystem>
 #include <string>
 
-#include "Tile.h"
 #include "ctb/Grid.hpp"
+#include "sherpa/tile.h"
 
 
 class TileHeightsGenerator

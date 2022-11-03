@@ -23,12 +23,11 @@
  * @brief This defines and declares the `Grid` class
  */
 
-#include <Tile.h>
 #include <cmath>
 
 #include "ogr_spatialref.h"
 
-#include "TileCoordinate.hpp"
+#include "sherpa/tile.h"
 #include "types.hpp"
 
 namespace ctb {

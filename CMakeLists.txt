@@ -30,15 +30,6 @@ if(SYSTEM_GDAL_VERSION VERSION_LESS "3.3")
     message(FATAL_ERROR "GDAL version \"${SYSTEM_GDAL_VERSION}\" is too old, at least 3.2 is required")
 endif()
 
-# Boost
-#set(Boost_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
-#set(Boost_USE_STATIC_LIBS ON)
-#find_package(Boost REQUIRED COMPONENTS
-    #program_options
-    #filesystem
-    #system
-#)
-
 find_package(ZLIB REQUIRED)
 find_package(fmt REQUIRED)
 if (ATB_UNITTESTS)
@@ -47,6 +38,8 @@ endif()
 set(ATB_INCLUDE_PATHS
 
 )
+
+add_subdirectory(sherpa)
 
 set(ATB_TERRAINLIB_SOURCES
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
@@ -60,12 +53,9 @@ set(ATB_TERRAINLIB_SOURCES
     terrainlib/ParallelTiler.h terrainlib/ParallelTiler.cpp
     terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
     terrainlib/srs.h
-    terrainlib/Tile.h terrainlib/Tile.cpp
-    terrainlib/TileHeights.h terrainlib/TileHeights.cpp
     terrainlib/TileHeightsGenerator.h terrainlib/TileHeightsGenerator.cpp
     terrainlib/Tiler.h terrainlib/Tiler.cpp
     terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
-    terrainlib/algorithms/hasher.h
     terrainlib/algorithms/primitives.h
     terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/CTBException.hpp
@@ -124,8 +114,6 @@ set(ATB_UNITTESTS_SOURCES
     unittests/parallel_tiler.cpp
     unittests/progress_indicator_test.cpp
     unittests/srs_test.cpp
-    unittests/tile.cpp
-    unittests/tile_heights.cpp
     unittests/tile_heights_generator.cpp
     unittests/top_down_tiler.cpp
     unittests/algorithms/primitives.cpp
@@ -182,9 +170,9 @@ add_library(terrainlib STATIC
     ${ATB_TERRAINLIB_SOURCES}
 )
 target_compile_definitions(terrainlib PUBLIC GLM_FORCE_SWIZZLE GLM_ENABLE_EXPERIMENTAL GLM_FORCE_XYZW_ONLY)
-target_link_libraries(terrainlib PUBLIC ZLIB::ZLIB GDAL::GDAL fmt freeimage TBB::tbb)
+target_link_libraries(terrainlib PUBLIC sherpa ZLIB::ZLIB GDAL::GDAL fmt freeimage TBB::tbb)
 target_include_directories(terrainlib
-    PUBLIC terrainlib
+    PUBLIC terrainlib .
     SYSTEM PUBLIC
     ${ATB_INCLUDE_PATHS}
 )

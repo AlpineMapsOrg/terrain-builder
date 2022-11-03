@@ -1,17 +1,18 @@
 #pragma once
 
-#include <Tile.h>
+
 #include <algorithm>
 #include <cmath>
 #include <glm/fwd.hpp>
 #include <iostream>
 #include <map>
 #include <memory>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 #include "Image.h"
+#include "sherpa/tile.h"
 #include "tntn/geometrix.h"
 #include "tntn/logging.h"
 #include "tntn/tntn_assert.h"

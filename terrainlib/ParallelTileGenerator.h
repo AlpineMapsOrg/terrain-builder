@@ -24,9 +24,9 @@
 
 #include "Image.h"
 #include "ParallelTiler.h"
-#include "Tile.h"
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
+#include "sherpa/tile.h"
 
 class ParallelTileWriterInterface;
 

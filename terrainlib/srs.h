@@ -29,8 +29,8 @@
 #include <vector>
 
 #include "Exception.h"
-#include "Tile.h"
 #include "tntn/geometrix.h"
+#include "sherpa/tile.h"
 
 namespace srs {
 

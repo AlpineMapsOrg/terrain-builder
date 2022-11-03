@@ -24,7 +24,7 @@
 #include <string>
 
 #include "Image.h"
-#include "Tile.h"
+#include "sherpa/tile.h"
 
 class Dataset;
 class OGRSpatialReference;

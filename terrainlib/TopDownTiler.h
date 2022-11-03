@@ -18,10 +18,9 @@
 
 #pragma once
 #include <array>
-#include "Tile.h"
 #include "Tiler.h"
 #include "ctb/Grid.hpp"
-#include "ctb/types.hpp"
+#include "sherpa/tile.h"
 
 class TopDownTiler : public Tiler {
 public:

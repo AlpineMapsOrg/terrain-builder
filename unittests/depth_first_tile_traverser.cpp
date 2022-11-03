@@ -22,11 +22,10 @@
 
 #include "Dataset.h"
 #include "DatasetReader.h"
-#include "Tile.h"
 #include "TopDownTiler.h"
-#include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include "depth_first_tile_traverser.h"
+#include "sherpa/tile.h"
 
 TEST_CASE("depth_first_tile_traverser interface")
 {

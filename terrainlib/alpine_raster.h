@@ -27,10 +27,8 @@
 
 #include "Image.h"
 #include "ParallelTileGenerator.h"
-#include "ParallelTiler.h"
-#include "Tile.h"
+#include "sherpa/tile.h"
 #include "ctb/Grid.hpp"
-#include "ctb/types.hpp"
 
 namespace alpine_raster {
 

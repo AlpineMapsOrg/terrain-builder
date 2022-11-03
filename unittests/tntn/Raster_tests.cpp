@@ -1,6 +1,6 @@
 #include <catch2/catch.hpp>
 
-#include "Tile.h"
+#include "sherpa/tile.h"
 #include "tntn/Mesh.h"
 #include "tntn/Mesh2Raster.h"
 #include "tntn/Raster.h"

@@ -23,7 +23,7 @@
 #include <memory>
 #include <string>
 
-#include "Tile.h"
+#include "sherpa/tile.h"
 
 class GDALDataset;
 class OGRSpatialReference;

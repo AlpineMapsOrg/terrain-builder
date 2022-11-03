@@ -24,8 +24,8 @@
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "Image.h"
-#include "Tile.h"
 #include "cesium_tin_terra.h"
+#include "sherpa/tile.h"
 #include "srs.h"
 #include "tntn/Mesh.h"
 
