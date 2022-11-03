@@ -99,18 +99,16 @@ bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m)
     auto faces_range = m.faces();
     auto vertices_range = m.vertices();
 
-    fmt::memory_buffer line_buffer;
+    std::string line_buffer;
     line_buffer.reserve(1000);
 
     File::position_type write_pos = 0;
 
     line_buffer.resize(0);
-    fmt::format_to(line_buffer, "{{\n");
-    fmt::format_to(line_buffer, "\"type\": \"FeatureCollection\",\n");
-    fmt::format_to(
-        line_buffer,
-        "\"crs\": {{ \"type\": \"name\", \"properties\": {{ \"name\": \"urn:ogc:def:crs:OGC:1.3:CRS84\" }} }},\n");
-    fmt::format_to(line_buffer, "\"features\": [\n");
+    line_buffer += fmt::format("{{\n");
+    line_buffer += fmt::format("\"type\": \"FeatureCollection\",\n");
+    line_buffer += fmt::format("\"crs\": {{ \"type\": \"name\", \"properties\": {{ \"name\": \"urn:ogc:def:crs:OGC:1.3:CRS84\" }} }},\n");
+    line_buffer += fmt::format("\"features\": [\n");
     if (!out_file.write(write_pos, line_buffer.data(), line_buffer.size()))
         return false;
     write_pos += line_buffer.size();
@@ -128,7 +126,7 @@ bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m)
 
         std::string vertex_string = make_geojson_vertex(v);
 
-        fmt::format_to(line_buffer, "{},", vertex_string);
+        line_buffer += fmt::format("{},", vertex_string);
 
         if (!out_file.write(write_pos, line_buffer.data(), line_buffer.size()))
             return false;
@@ -153,9 +151,9 @@ bool write_mesh_as_geojson(FileLike& out_file, const Mesh& m)
 
         if (i == faces_range.size() - 1) {
             TNTN_LOG_DEBUG("write end seg v2-v3");
-            fmt::format_to(line_buffer, "{} \n ] \n }}", face_string);
+            line_buffer += fmt::format("{} \n ] \n }}", face_string);
         } else {
-            fmt::format_to(line_buffer, "{},", face_string);
+            line_buffer += fmt::format("{},", face_string);
         }
 
         if (!out_file.write(write_pos, line_buffer.data(), line_buffer.size()))
@@ -202,13 +200,13 @@ bool write_mesh_as_obj(FileLike& out_file, const Mesh& m)
     auto faces_range = m.faces();
     auto vertices_range = m.vertices();
 
-    fmt::memory_buffer line_buffer;
+    std::string line_buffer;
     line_buffer.reserve(128);
 
     File::position_type write_pos = 0;
     for (const Vertex* v = vertices_range.begin; v != vertices_range.end; v++) {
         line_buffer.resize(0);
-        fmt::format_to(line_buffer, "v {:.18f} {:.18f} {:.18f}\n", v->x, v->y, v->z);
+        line_buffer += fmt::format("v {:.18f} {:.18f} {:.18f}\n", v->x, v->y, v->z);
         if (!out_file.write(write_pos, line_buffer.data(), line_buffer.size())) {
             return false;
         }
@@ -217,7 +215,7 @@ bool write_mesh_as_obj(FileLike& out_file, const Mesh& m)
 
     for (const Face* f = faces_range.begin; f != faces_range.end; f++) {
         line_buffer.resize(0);
-        fmt::format_to(line_buffer, "f {} {} {}\n", (*f)[0] + 1, (*f)[1] + 1, (*f)[2] + 1);
+        line_buffer += fmt::format("f {} {} {}\n", (*f)[0] + 1, (*f)[1] + 1, (*f)[2] + 1);
         if (!out_file.write(write_pos, line_buffer.data(), line_buffer.size())) {
             return false;
         }
@@ -320,7 +318,7 @@ bool write_mesh_as_off(FileLike& out_file, const Mesh& m)
     auto faces_range = m.faces();
     auto vertices_range = m.vertices();
 
-    fmt::memory_buffer line_buffer;
+    std::string line_buffer;
     line_buffer.reserve(128);
 
     FileLike::position_type write_offset = 0;
@@ -331,21 +329,18 @@ bool write_mesh_as_off(FileLike& out_file, const Mesh& m)
     const size_t num_faces = faces_range.size();
     const size_t num_edges = calculate_num_edges(faces_range);
 
-    line_buffer.resize(0);
-    fmt::format_to(line_buffer, "{} {} {}\n", num_vertices, num_faces, num_edges);
+    line_buffer = fmt::format("{} {} {}\n", num_vertices, num_faces, num_edges);
     out_file.write(write_offset, line_buffer.data(), line_buffer.size());
     write_offset += line_buffer.size();
 
     for (const Vertex* v = vertices_range.begin; v != vertices_range.end; v++) {
-        line_buffer.resize(0);
-        fmt::format_to(line_buffer, "{:.18f} {:.18f} {:.18f}\n", v->x, v->y, v->z);
+        line_buffer = fmt::format("{:.18f} {:.18f} {:.18f}\n", v->x, v->y, v->z);
         out_file.write(write_offset, line_buffer.data(), line_buffer.size());
         write_offset += line_buffer.size();
     }
 
     for (const Face* f = faces_range.begin; f != faces_range.end; f++) {
-        line_buffer.resize(0);
-        fmt::format_to(line_buffer, "3 {} {} {}\n", (*f)[0], (*f)[1], (*f)[2]);
+        line_buffer = fmt::format("3 {} {} {}\n", (*f)[0], (*f)[1], (*f)[2]);
         out_file.write(write_offset, line_buffer.data(), line_buffer.size());
         write_offset += line_buffer.size();
     }

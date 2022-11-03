@@ -60,14 +60,14 @@ private:
 public:
     Raster() { ::tntn::detail::NDVDefault<T>::set(m_noDataValue); }
     Raster(Raster&& other) noexcept = default;
-    explicit Raster(Image<T>&& other, const ctb::CRSBounds& srs_bounds)
+    explicit Raster(Image<T>&& other, const tile::SrsBounds& srs_bounds)
         : m_width(other.width())
         , m_height(other.height())
         , m_data(std::move(other.m_data))
-        , m_cell_width_in_srs(srs_bounds.getWidth() / other.width())
-        , m_cell_height_in_srs(srs_bounds.getHeight() / other.height())
-        , m_xpos(srs_bounds.getMinX())
-        , m_ypos(srs_bounds.getMinY())
+        , m_cell_width_in_srs(srs_bounds.width() / other.width())
+        , m_cell_height_in_srs(srs_bounds.height() / other.height())
+        , m_xpos(srs_bounds.min.x)
+        , m_ypos(srs_bounds.min.y)
     {
         ::tntn::detail::NDVDefault<T>::set(m_noDataValue);
     }

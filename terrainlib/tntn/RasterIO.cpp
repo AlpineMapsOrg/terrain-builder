@@ -143,22 +143,22 @@ bool write_raster_to_asc(FileLike& file, const RasterDouble& raster)
     }
     TNTN_LOG_INFO("write raster...");
 
-    fmt::memory_buffer line_buffer;
+    std::string line_buffer;
     line_buffer.reserve(4096);
     FileLike::position_type write_position = 0;
 
     // file << "NCOLS "        << raster.getWidth()    << std::endl;
-    fmt::format_to(line_buffer, "NCOLS {}\n", raster.get_width());
+    line_buffer += fmt::format("NCOLS {}\n", raster.get_width());
     // file << "NROWS "        << raster.getHeight()   << std::endl;
-    fmt::format_to(line_buffer, "NROWS {}\n", raster.get_height());
+    line_buffer += fmt::format("NROWS {}\n", raster.get_height());
     // file << "XLLCORNER "    << std::setprecision(9) << raster.getXPos()        << std::endl;
-    fmt::format_to(line_buffer, "XLLCORNER {:.9f}\n", raster.get_pos_x());
+    line_buffer += fmt::format("XLLCORNER {:.9f}\n", raster.get_pos_x());
     // file << "YLLCORNER "    << std::setprecision(9) << raster.getYPos()        << std::endl;
-    fmt::format_to(line_buffer, "YLLCORNER {:.9f}\n", raster.get_pos_y());
+    line_buffer += fmt::format("YLLCORNER {:.9f}\n", raster.get_pos_y());
     // file << "CELLSIZE "     << std::setprecision(9) << raster.getCellsize()    << std::endl;
-    fmt::format_to(line_buffer, "CELLSIZE {:.9f}\n", raster.get_cell_width());
+    line_buffer += fmt::format("CELLSIZE {:.9f}\n", raster.get_cell_width());
     // file << "NODATA_VALUE " << std::setprecision(9) << raster.getNoDataValue() << std::endl;
-    fmt::format_to(line_buffer, "NODATA_VALUE {:.9f}\n", raster.get_no_data_value());
+    line_buffer += fmt::format("NODATA_VALUE {:.9f}\n", raster.get_no_data_value());
 
     if (!file.write(write_position, line_buffer.data(), line_buffer.size()))
         return false;
@@ -171,10 +171,10 @@ bool write_raster_to_asc(FileLike& file, const RasterDouble& raster)
 
     for (int r = 0; r < raster.get_height(); r++) {
         for (int c = 0; c < raster.get_width(); c++) {
-            fmt::format_to(line_buffer, "{} ", raster.value(r, c));
+            line_buffer += fmt::format("{} ", raster.value(r, c));
         }
 
-        fmt::format_to(line_buffer, "\n");
+        line_buffer += fmt::format("\n");
 
         if (!file.write(write_position, line_buffer.data(), line_buffer.size()))
             return false;

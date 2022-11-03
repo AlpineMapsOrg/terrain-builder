@@ -85,7 +85,7 @@ namespace unittests {
 
         // let's get a mesh of a part of austria (where we know the bounds etc)
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
+        const auto at_wgs84_bounds = tile::SrsBounds{{11.362082472, 46.711274137}, {12.631425730, 47.945935885}};
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
         webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -129,10 +129,10 @@ namespace unittests {
             constexpr double llh_ecef_radiusY = 6378137.0;
             constexpr double llh_ecef_radiusZ = 6356752.3142451793;
             const auto occlusion_point_in_wgs84 = srs::to(ecef_srs, wgs84, header.horizon_occlusion * glm::dvec3(llh_ecef_radiusX, llh_ecef_radiusY, llh_ecef_radiusZ));
-            CHECK(at_wgs84_bounds.getMinX() < occlusion_point_in_wgs84.x);
-            CHECK(at_wgs84_bounds.getMaxX() > occlusion_point_in_wgs84.x);
-            CHECK(at_wgs84_bounds.getMinY() < occlusion_point_in_wgs84.y);
-            CHECK(at_wgs84_bounds.getMaxY() > occlusion_point_in_wgs84.y);
+            CHECK(at_wgs84_bounds.min.x < occlusion_point_in_wgs84.x);
+            CHECK(at_wgs84_bounds.max.x > occlusion_point_in_wgs84.x);
+            CHECK(at_wgs84_bounds.min.y < occlusion_point_in_wgs84.y);
+            CHECK(at_wgs84_bounds.max.y > occlusion_point_in_wgs84.y);
             CHECK(occlusion_point_in_wgs84.z > header.MaximumHeight);
             CHECK(occlusion_point_in_wgs84.z < 10'000'000);
         };
@@ -141,7 +141,7 @@ namespace unittests {
         {
             const auto mesh_scale_0_to_1 = false;
             const auto at_webmercator_bounds = srs::nonExactBoundsTransform(at_wgs84_bounds, wgs84, webmercator);
-            //    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
+            //    const auto at_webmercator_bounds = tile::SrsBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
 
             const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
             const auto reader = DatasetReader(dataset, webmercator, 1);
@@ -170,7 +170,7 @@ namespace unittests {
         {
             const auto mesh_scale_0_to_1 = true;
             const auto at_webmercator_bounds = srs::nonExactBoundsTransform(at_wgs84_bounds, wgs84, webmercator);
-            //    const auto at_webmercator_bounds = ctb::CRSBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
+            //    const auto at_webmercator_bounds = tile::SrsBounds(1100000.0, 5900000.0, 1800000.0, 6200000.0);
 
             const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
             const auto reader = DatasetReader(dataset, webmercator, 1);
@@ -210,15 +210,15 @@ namespace unittests {
         // let's get a mesh of a part of austria (where we know the bounds etc)
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const std::array at_wgs84_bounds_array = {
-            ctb::CRSBounds(0, 0, 90, 90),
-            ctb::CRSBounds(0, -90, 90, 0),
-            ctb::CRSBounds(90, 0, 180, 90),
-            ctb::CRSBounds(90, -90, 180, 0),
+            tile::SrsBounds{{0, 0}, {90, 90}},
+            tile::SrsBounds{{0, -90}, {90, 0}},
+            tile::SrsBounds{{90, 0}, {180, 90}},
+            tile::SrsBounds{{90, -90}, {180, 0}},
 
-            ctb::CRSBounds(-180, 0, -90, 90),
-            ctb::CRSBounds(-180, -90, -90, 0),
-            ctb::CRSBounds(-90, 0, 0, 90),
-            ctb::CRSBounds(-90, -90, 0, 0)
+            tile::SrsBounds{{-180, 0}, {-90, 90}},
+            tile::SrsBounds{{-180, -90}, {-90, 0}},
+            tile::SrsBounds{{-90, 0}, {0, 90}},
+            tile::SrsBounds{{-90, -90}, {0, 0}},
         };
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
@@ -234,7 +234,7 @@ namespace unittests {
                 CHECK(header.MinimumHeight < 10);
                 CHECK(header.MaximumHeight >= 0);
                 CHECK(header.MaximumHeight < 4000);
-                const auto [box_a, box_b] = srs::toECEF(wgs84, tntn::BBox3D(glm::dvec3(at_wgs84_bounds.getMinX(), at_wgs84_bounds.getMinY(), 0), glm::dvec3(at_wgs84_bounds.getMaxX(), at_wgs84_bounds.getMaxY(), 0)));
+                const auto [box_a, box_b] = srs::toECEF(wgs84, tntn::BBox3D(glm::dvec3(at_wgs84_bounds.min.x, at_wgs84_bounds.min.y, 0), glm::dvec3(at_wgs84_bounds.max.x, at_wgs84_bounds.max.y, 0)));
                 const auto box_min = glm::dvec3(std::min(box_a.x, box_b.x) - 1.0, std::min(box_a.y, box_b.y) - 1.0, std::min(box_a.z, box_b.z) - 1.0);
                 const auto box_max = glm::dvec3(std::max(box_a.x, box_b.x) + 1.0, std::max(box_a.y, box_b.y) + 1.0, std::max(box_a.z, box_b.z) + 1.0);
                 CHECK(header.bounding_sphere_center.x > box_min.x);
@@ -263,10 +263,10 @@ namespace unittests {
                 constexpr double llh_ecef_radiusY = 6378137.0;
                 constexpr double llh_ecef_radiusZ = 6356752.3142451793;
                 const auto occlusion_point_in_wgs84 = srs::to(ecef_srs, wgs84, header.horizon_occlusion * glm::dvec3(llh_ecef_radiusX, llh_ecef_radiusY, llh_ecef_radiusZ));
-                CHECK(at_wgs84_bounds.getMinX() < occlusion_point_in_wgs84.x);
-                CHECK(at_wgs84_bounds.getMaxX() > occlusion_point_in_wgs84.x);
-                CHECK(at_wgs84_bounds.getMinY() < occlusion_point_in_wgs84.y);
-                CHECK(at_wgs84_bounds.getMaxY() > occlusion_point_in_wgs84.y);
+                CHECK(at_wgs84_bounds.min.x < occlusion_point_in_wgs84.x);
+                CHECK(at_wgs84_bounds.max.x > occlusion_point_in_wgs84.x);
+                CHECK(at_wgs84_bounds.min.y < occlusion_point_in_wgs84.y);
+                CHECK(at_wgs84_bounds.max.y > occlusion_point_in_wgs84.y);
                 CHECK(occlusion_point_in_wgs84.z > header.MaximumHeight);
                 //      CHECK(occlusion_point_in_wgs84.z < 200'000'000);
             };
@@ -302,7 +302,7 @@ namespace unittests {
 
         // let's get a mesh of a part of austria (where we know the bounds etc)
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
+        const auto at_wgs84_bounds = tile::SrsBounds{{11.362082472, 46.711274137}, {12.631425730, 47.945935885}};
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
         webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -313,28 +313,28 @@ namespace unittests {
 
         const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
 
-        const auto run_test = [&](bool mesh_scale_0_to_1, const OGRSpatialReference& srs, const ctb::CRSBounds& wgs84_bounds, unsigned n_vertex_grid_cells, unsigned tile_grid_size) {
+        const auto run_test = [&](bool mesh_scale_0_to_1, const OGRSpatialReference& srs, const tile::SrsBounds& wgs84_bounds, unsigned n_vertex_grid_cells, unsigned tile_grid_size) {
             const auto reader = DatasetReader(dataset, srs, 1, false);
             const auto srs_bounds = srs::nonExactBoundsTransform(wgs84_bounds, wgs84, srs);
             const auto heights = reader.read(srs_bounds, tile_grid_size + 1, tile_grid_size + 1);
 
             const auto mesh = converter.toMesh(srs, srs_bounds, heights, mesh_scale_0_to_1, n_vertex_grid_cells + 1);
-            const auto correct_mesh_bounds = mesh_scale_0_to_1 ? ctb::CRSBounds(0.0, 0.0, 1.0, 1.0) : srs_bounds;
+            const auto correct_mesh_bounds = mesh_scale_0_to_1 ? tile::SrsBounds { { 0.0, 0.0 }, { 1.0, 1.0 } } : srs_bounds;
 
-            CHECK(mesh->bbox().min.x == correct_mesh_bounds.getMinX());
-            CHECK(mesh->bbox().min.y == correct_mesh_bounds.getMinY());
-            CHECK(mesh->bbox().max.x == correct_mesh_bounds.getMaxX());
-            CHECK(mesh->bbox().max.y == correct_mesh_bounds.getMaxY());
+            CHECK(mesh->bbox().min.x == correct_mesh_bounds.min.x);
+            CHECK(mesh->bbox().min.y == correct_mesh_bounds.min.y);
+            CHECK(mesh->bbox().max.x == correct_mesh_bounds.max.x);
+            CHECK(mesh->bbox().max.y == correct_mesh_bounds.max.y);
 
             unsigned nx0 = 0;
             unsigned ny0 = 0;
             unsigned nx1 = 0;
             unsigned ny1 = 0;
             for (const auto& v : mesh->vertices_as_vector()) {
-                nx0 += std::abs(v.x - correct_mesh_bounds.getMinX()) / correct_mesh_bounds.getWidth() < (1.0 / (1 << 16));
-                ny0 += std::abs(v.y - correct_mesh_bounds.getMinY()) / correct_mesh_bounds.getHeight() < (1.0 / (1 << 16));
-                nx1 += std::abs(v.x - correct_mesh_bounds.getMaxX()) / correct_mesh_bounds.getWidth() < (1.0 / (1 << 16));
-                ny1 += std::abs(v.y - correct_mesh_bounds.getMaxY()) / correct_mesh_bounds.getHeight() < (1.0 / (1 << 16));
+                nx0 += std::abs(v.x - correct_mesh_bounds.min.x) / correct_mesh_bounds.width() < (1.0 / (1 << 16));
+                ny0 += std::abs(v.y - correct_mesh_bounds.min.y) / correct_mesh_bounds.height() < (1.0 / (1 << 16));
+                nx1 += std::abs(v.x - correct_mesh_bounds.max.x) / correct_mesh_bounds.width() < (1.0 / (1 << 16));
+                ny1 += std::abs(v.y - correct_mesh_bounds.max.y) / correct_mesh_bounds.height() < (1.0 / (1 << 16));
             }
             CHECK(nx0 == n_vertex_grid_cells + 1);
             CHECK(ny0 == n_vertex_grid_cells + 1);
@@ -389,7 +389,7 @@ namespace unittests {
 
         // let's get a mesh of a part of austria (where we know the bounds etc)
         const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
-        const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
+        const auto at_wgs84_bounds = tile::SrsBounds{{11.362082472, 46.711274137}, {12.631425730, 47.945935885}};
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
         webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -400,7 +400,7 @@ namespace unittests {
 
         const auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
 
-        const auto run_test = [&](bool mesh_scale_0_to_1, const OGRSpatialReference& srs, const ctb::CRSBounds& wgs84_bounds, unsigned n_vertex_grid_cells, unsigned tile_grid_size) {
+        const auto run_test = [&](bool mesh_scale_0_to_1, const OGRSpatialReference& srs, const tile::SrsBounds& wgs84_bounds, unsigned n_vertex_grid_cells, unsigned tile_grid_size) {
             const auto reader = DatasetReader(dataset, srs, 1, false);
             const auto srs_bounds = srs::nonExactBoundsTransform(wgs84_bounds, wgs84, srs);
             const auto heights = reader.read(srs_bounds, tile_grid_size + 1, tile_grid_size + 1);
