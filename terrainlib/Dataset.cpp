@@ -92,11 +92,16 @@ ctb::CRSBounds Dataset::bounds() const
 
 ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
 {
+    const auto l_bounds = bounds();
+    const auto west = l_bounds.min.x;
+    const auto east = l_bounds.max.x;
+    const auto north = l_bounds.max.y;
+    const auto south = l_bounds.min.y;
 
-    auto [westX, southY, eastX, northY] = bounds().data();
+
     const auto data_srs = srs();
     if (targetSrs.IsSame(&data_srs))
-        return { westX, southY, eastX, northY };
+        return l_bounds;
 
     // We need to transform the bounds to the target SRS
     // this might involve warping, i.e. some of the edges can be arcs.
@@ -108,22 +113,22 @@ ctb::CRSBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
     std::vector<double> y;
     auto addCoordinate = [&](double xv, double yv) { x.emplace_back(xv); y.emplace_back(yv); };
 
-    const auto deltaX = (eastX - westX) / 2000.0;
+    const auto deltaX = l_bounds.width() / 2000.0;
     if (deltaX <= 0.0)
         throw Exception("west coordinate > east coordinate. This is not supported.");
-    for (double s = westX; s < eastX; s += deltaX) {
-        addCoordinate(s, southY);
-        addCoordinate(s, northY);
+    for (double s = west; s < east; s += deltaX) {
+        addCoordinate(s, south);
+        addCoordinate(s, north);
     }
-    const auto deltaY = (northY - southY) / 2000.0;
+    const auto deltaY = (north - south) / 2000.0;
     if (deltaY <= 0.0)
         throw Exception("south coordinate > north coordinate. This is not supported.");
-    for (double s = southY; s < northY; s += deltaY) {
-        addCoordinate(westX, s);
-        addCoordinate(eastX, s);
+    for (double s = south; s < north; s += deltaY) {
+        addCoordinate(west, s);
+        addCoordinate(east, s);
     }
     // don't wanna miss out the max/max edge vertex
-    addCoordinate(eastX, northY);
+    addCoordinate(east, north);
 
     const auto transformer = srs::transformation(srs(), targetSrs);
     if (!transformer->Transform(int(x.size()), x.data(), y.data())) {

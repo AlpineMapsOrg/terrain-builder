@@ -30,7 +30,7 @@ std::vector<tile::Descriptor> TopDownTiler::generateTiles(const tile::Id& parent
     std::vector<tile::Descriptor> tiles;
     for (const auto& tile_id : tile_ids) {
         tile::Descriptor t = tile_for(tile_id);
-        if (bounds().overlaps(t.srsBounds))
+        if (intersect(bounds(), t.srsBounds))
             tiles.push_back(std::move(t));
     }
 

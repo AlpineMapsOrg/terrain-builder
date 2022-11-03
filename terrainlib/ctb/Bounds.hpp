@@ -33,6 +33,8 @@ namespace ctb {
 template <class T>
 class Bounds {
 public:
+    glm::tvec2<T> min = {};
+    glm::tvec2<T> max = {};
     /// Create an empty bounds
     Bounds()
     {
@@ -58,6 +60,10 @@ public:
     inline void
     setBounds(T minx, T miny, T maxx, T maxy)
     {
+        min.x = minx;
+        min.y = miny;
+        max.x = maxx;
+        max.y = maxy;
         bounds[0] = minx;
         bounds[1] = miny;
         bounds[2] = maxx;
@@ -169,72 +175,31 @@ public:
         return getMaxY() - getMinY();
     }
 
-    /// Get the lower left quarter of the extents
-    inline Bounds<T>
-    getSW() const
-    {
-        return Bounds<T>(getMinX(),
-            getMinY(),
-            getMinX() + (getWidth() / 2),
-            getMinY() + (getHeight() / 2));
-    }
-
-    /// Get the upper left quarter of the extents
-    inline Bounds<T>
-    getNW() const
-    {
-        return Bounds<T>(getMinX(),
-            getMaxY() - (getHeight() / 2),
-            getMinX() + (getWidth() / 2),
-            getMaxY());
-    }
-
-    /// Get the upper right quarter of the extents
-    inline Bounds<T>
-    getNE() const
-    {
-        return Bounds<T>(getMaxX() - (getWidth() / 2),
-            getMaxY() - (getHeight() / 2),
-            getMaxX(),
-            getMaxY());
-    }
-
-    /// Get the lower right quarter of the extents
-    inline Bounds<T>
-    getSE() const
-    {
-        return Bounds<T>(getMaxX() - (getWidth() / 2),
-            getMinY(),
-            getMaxX(),
-            getMinY() + (getHeight() / 2));
-    }
-
-    /// Do these bounds overlap with another?
-    inline bool
-    overlaps(const Bounds<T>& other) const
-    {
-        // see
-        // <http://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other>
-        return getMinX() <= other.getMaxX() && other.getMinX() <= getMaxX() && getMinY() <= other.getMaxY() && other.getMinY() <= getMaxY();
-    }
-
-    void clampBy(const Bounds<T>& other)
-    {
-        bounds[0] = std::max(bounds[0], other.bounds[0]); // min x
-        bounds[1] = std::max(bounds[1], other.bounds[1]); // min y;
-        bounds[2] = std::min(bounds[2], other.bounds[2]); // max x;
-        bounds[3] = std::min(bounds[3], other.bounds[3]); // max y;
-    }
-
-    std::array<T, 4> data() const
-    {
-        return bounds;
-    }
+    T width() const { return max.x - min.x; }
+    T height() { return max.y - min.y; }
 
 private:
     /// The extents themselves as { minx, miny, maxx, maxy }
     std::array<T, 4> bounds;
 };
+
+template <typename T>
+bool intersect(const Bounds<T>& a, const Bounds<T>& b)
+{
+    // http://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+    return a.min.x <= b.max.x && b.min.x <= a.max.x && a.min.y <= b.max.y && b.min.y <= a.max.y;
+}
+
+template <typename T>
+Bounds<T> intersection(const Bounds<T>& a, const Bounds<T>& b)
+{
+    Bounds<T> r;
+    r.min.x = std::max(a.min.x, b.min.x);
+    r.min.y = std::max(a.min.y, b.min.y);
+    r.max.x = std::min(a.max.x, b.max.x);
+    r.max.y = std::min(a.max.y, b.max.y);
+    return r;
+}
 
 }
 #endif /* BOUNDS_HPP */
