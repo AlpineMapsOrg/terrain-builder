@@ -91,7 +91,7 @@ std::unique_ptr<tntn::Mesh> cesium_tin_terra::TileWriter::toMesh(const OGRSpatia
     return mesh;
 }
 
-void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Tile& tile, const HeightData& heights) const
+void cesium_tin_terra::TileWriter::write(const std::string& file_path, const tile::Descriptor& tile, const HeightData& heights) const
 {
     const auto scale_to_unit_range = false;
     const auto simple_mesh_resolution = [](ctb::i_zoom zoom) -> unsigned {
@@ -124,7 +124,7 @@ void cesium_tin_terra::TileWriter::write(const std::string& file_path, const Til
     tntn::write_mesh_as_qm(file_path.c_str(), *mesh, srs_bbox, srs, scale_to_unit_range, true);
 }
 
-ParallelTileGenerator cesium_tin_terra::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, Tile::Scheme tiling_scheme, Tile::Border border)
+ParallelTileGenerator cesium_tin_terra::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, tile::Scheme tiling_scheme, tile::Border border)
 {
     return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<cesium_tin_terra::TileWriter>(border), output_data_path);
 }

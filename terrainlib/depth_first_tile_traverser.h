@@ -21,7 +21,7 @@
 #include "TopDownTiler.h"
 
 template <typename ReadFunction, typename AggregateFunction>
-auto traverse_depth_first_and_aggregate(const TopDownTiler& tiler, ReadFunction read, AggregateFunction aggregate, const Tile::Id& root_tile_id, unsigned max_zoom_level)
+auto traverse_depth_first_and_aggregate(const TopDownTiler& tiler, ReadFunction read, AggregateFunction aggregate, const tile::Id& root_tile_id, unsigned max_zoom_level)
     -> decltype(read(tiler.tile_for(root_tile_id)))
 {
     using DataType = decltype(read(tiler.tile_for(root_tile_id)));

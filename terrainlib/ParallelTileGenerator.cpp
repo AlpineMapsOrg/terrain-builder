@@ -41,7 +41,7 @@ ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path,
 }
 
 ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path,
-    ctb::Grid::Srs srs, Tile::Scheme tiling_scheme,
+    ctb::Grid::Srs srs, tile::Scheme tiling_scheme,
     std::unique_ptr<ParallelTileWriterInterface> tile_writer,
     const std::string& output_data_path,
     unsigned grid_resolution)
@@ -64,7 +64,7 @@ const ctb::Grid& ParallelTileGenerator::grid() const
     return m_grid;
 }
 
-void ParallelTileGenerator::write(const Tile& tile, const HeightData& heights) const
+void ParallelTileGenerator::write(const tile::Descriptor& tile, const HeightData& heights) const
 {
     const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.id.zoom_level, tile.id.coords.x);
     const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.id.coords.y, m_tile_writer->formatFileEnding());
@@ -86,7 +86,7 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
     if (progress_bar_on_console)
         monitoring_thread = pi.startMonitoring(); // destructor will join.
 
-    const auto fun = [&pi, progress_bar_on_console, this](const Tile& tile) {
+    const auto fun = [&pi, progress_bar_on_console, this](const tile::Descriptor& tile) {
         // Recreating Dataset for every tile. This was the easiest fix for multithreading,
         // and it takes only 0.5% of the time (half a percent).
         // most of the cpu time is used in 'readWithOverviews' (specificly 'RasterIO', and
@@ -101,7 +101,7 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
     std::for_each(std::execution::par, tiles.begin(), tiles.end(), fun);
 }
 
-Tile::Border ParallelTileWriterInterface::formatRequiresBorder() const
+tile::Border ParallelTileWriterInterface::formatRequiresBorder() const
 {
     return m_format_requires_border;
 }

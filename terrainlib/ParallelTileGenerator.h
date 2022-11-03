@@ -41,7 +41,7 @@ class ParallelTileGenerator {
 public:
     ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const ParallelTiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path);
     [[nodiscard]] static ParallelTileGenerator make(const std::string& input_data_path,
-        ctb::Grid::Srs srs, Tile::Scheme tiling_scheme,
+        ctb::Grid::Srs srs, tile::Scheme tiling_scheme,
         std::unique_ptr<ParallelTileWriterInterface> tile_writer,
         const std::string& output_data_path,
         unsigned grid_resolution = 256);
@@ -49,16 +49,16 @@ public:
     void setWarnOnMissingOverviews(bool flag) { m_warn_on_missing_overviews = flag; }
     [[nodiscard]] const ParallelTiler& tiler() const;
     [[nodiscard]] const ctb::Grid& grid() const;
-    void write(const Tile& tile, const HeightData& heights) const;
+    void write(const tile::Descriptor& tile, const HeightData& heights) const;
     void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console = false, bool generate_world_wide_tiles = false) const;
 };
 
 class ParallelTileWriterInterface {
-    Tile::Border m_format_requires_border;
+    tile::Border m_format_requires_border;
     std::string m_file_ending;
 
 public:
-    ParallelTileWriterInterface(Tile::Border format_requires_border, const std::string& file_ending)
+    ParallelTileWriterInterface(tile::Border format_requires_border, const std::string& file_ending)
         : m_format_requires_border(format_requires_border)
         , m_file_ending(file_ending)
     {
@@ -68,8 +68,8 @@ public:
     virtual ~ParallelTileWriterInterface() = default;
     ParallelTileWriterInterface& operator=(const ParallelTileWriterInterface&) = default;
     ParallelTileWriterInterface& operator=(ParallelTileWriterInterface&&) = default;
-    virtual void write(const std::string& file_path, const Tile& tile, const HeightData& heights) const = 0;
-    [[nodiscard]] Tile::Border formatRequiresBorder() const;
+    virtual void write(const std::string& file_path, const tile::Descriptor& tile, const HeightData& heights) const = 0;
+    [[nodiscard]] tile::Border formatRequiresBorder() const;
     [[nodiscard]] const std::string& formatFileEnding() const;
 };
 

@@ -30,8 +30,8 @@ class TileHeights {
     std::unordered_map<KeyType, ValueType, hasher::for_tuple<unsigned, unsigned, unsigned>> m_data;
 public:
     TileHeights();
-    void emplace(const Tile::Id& tile_id, const std::pair<float, float>& min_max);
-    [[nodiscard]] ValueType query(Tile::Id tile_id) const;
+    void emplace(const tile::Id& tile_id, const std::pair<float, float>& min_max);
+    [[nodiscard]] ValueType query(tile::Id tile_id) const;
     void write_to(const std::filesystem::path& path) const;
     static TileHeights read_from(const std::filesystem::path& path);
 };

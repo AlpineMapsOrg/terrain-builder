@@ -24,7 +24,7 @@ int main()
     const std::string output_path = "/home/madam/valtava/tiles/alpine_png2";
     //  const auto generator = alpine_raster::make_generator("./test_tiles/", "/home/madam/valtava/raw/Oe_2020/OeRect_01m_gs_31287.img", ctb::Grid::Srs::SphericalMercator, Tiler::Scheme::SlippyMap, Tiler::Border::No);
     //  generator.process({16, 16});
-    const auto generator = alpine_raster::make_generator(input_raster, output_path, ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::Yes, 64);
+    const auto generator = alpine_raster::make_generator(input_raster, output_path, ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, tile::Border::Yes, 64);
     //    generator.process({0, 5}, true, true);
     generator.process({ 15, 16 }, true, false);
 
@@ -34,7 +34,7 @@ int main()
     //// generate height data (min and max) for tiles up to level 13
 //    const auto base_path = std::filesystem::path(output_path);
 //    constexpr auto file_name = "height_data.atb";
-//    const auto generator = TileHeightsGenerator(input_raster, ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::Yes, base_path / file_name);
+//    const auto generator = TileHeightsGenerator(input_raster, ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, tile::Border::Yes, base_path / file_name);
 //    generator.run(13);
 
     return 0;

@@ -36,18 +36,18 @@ namespace alpine_raster {
 
 class TileWriter : public ParallelTileWriterInterface {
 public:
-    TileWriter(Tile::Border border)
+    TileWriter(tile::Border border)
         : ParallelTileWriterInterface(border, "png")
     {
     }
-    void write(const std::string& base_path, const Tile& tile, const HeightData& heights) const override;
+    void write(const std::string& base_path, const tile::Descriptor& tile, const HeightData& heights) const override;
 };
 [[nodiscard]] ParallelTileGenerator make_generator(
     const std::string& input_data_path,
     const std::string& output_data_path,
     ctb::Grid::Srs srs,
-    Tile::Scheme tiling_scheme,
-    Tile::Border border,
+    tile::Scheme tiling_scheme,
+    tile::Border border,
     unsigned grid_resolution = 256);
 
 [[nodiscard]] glm::u8vec3 convert(float height);

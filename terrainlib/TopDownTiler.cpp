@@ -18,18 +18,18 @@
 
 #include "TopDownTiler.h"
 
-TopDownTiler::TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme)
+TopDownTiler::TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, tile::Border border, tile::Scheme scheme)
     : Tiler(grid, bounds, border, scheme)
 {
 }
 
-std::vector<Tile> TopDownTiler::generateTiles(const Tile::Id& parent_id) const
+std::vector<tile::Descriptor> TopDownTiler::generateTiles(const tile::Id& parent_id) const
 {
     assert(parent_id.scheme == scheme());
     const auto tile_ids = parent_id.to(scheme()).children();
-    std::vector<Tile> tiles;
+    std::vector<tile::Descriptor> tiles;
     for (const auto& tile_id : tile_ids) {
-        Tile t = tile_for(tile_id);
+        tile::Descriptor t = tile_for(tile_id);
         if (bounds().overlaps(t.srsBounds))
             tiles.push_back(std::move(t));
     }

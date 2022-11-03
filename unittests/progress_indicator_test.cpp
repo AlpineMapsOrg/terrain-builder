@@ -95,13 +95,13 @@ TEST_CASE("progress indicator")
         class MockTileWriter : public ParallelTileWriterInterface {
         public:
             MockTileWriter()
-                : ParallelTileWriterInterface(Tile::Border::No, "empty")
+                : ParallelTileWriterInterface(tile::Border::No, "empty")
             {
             }
-            void write(const std::string&, const Tile&, const HeightData&) const override { std::this_thread::sleep_for(1ms); }
+            void write(const std::string&, const tile::Descriptor&, const HeightData&) const override { std::this_thread::sleep_for(1ms); }
         };
 
-        auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, std::make_unique<MockTileWriter>(), "./unittest_tiles/");
+        auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, std::make_unique<MockTileWriter>(), "./unittest_tiles/");
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 0, 8 }, true);
     }

@@ -35,15 +35,15 @@ TEST_CASE("tin terra write")
 
     SECTION("cesium terrain")
     {
-        const auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::No);
+        const auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, tile::Border::No);
         const auto b = 20037508.3427892;
-        generator.write(Tile { {0, glm::uvec2(0, 0)}, { -b, -b, b, b }, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(tile::Descriptor { {0, glm::uvec2(0, 0)}, { -b, -b, b, b }, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.terrain"));
     }
 
     SECTION("mesh vertex ranges webmercator")
     {
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
@@ -75,7 +75,7 @@ TEST_CASE("tin terra write")
 
     SECTION("mesh vertex ranges wgs84")
     {
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
 
         OGRSpatialReference wgs84;
@@ -101,7 +101,7 @@ TEST_CASE("tin terra write")
 
     SECTION("mesh vertex ranges unit range scale")
     {
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(9.5, 46.4, 17.1, 49.0);
 
         OGRSpatialReference wgs84;
@@ -127,7 +127,7 @@ TEST_CASE("tin terra write")
 
     SECTION("mesh vertex ranges webmercator global")
     {
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_bounds = ctb::CRSBounds(-180, -80, 180, 80);
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
@@ -158,7 +158,7 @@ TEST_CASE("tin terra write")
 
     SECTION("mesh vertex ranges wgs84 global")
     {
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(-180, -90, 180, 90);
 
         OGRSpatialReference wgs84;
@@ -183,7 +183,7 @@ TEST_CASE("tin terra write")
 
     SECTION("mesh vertex ranges unit range scale global")
     {
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(-180, -90, 180, 90);
 
         OGRSpatialReference wgs84;
@@ -208,7 +208,7 @@ TEST_CASE("tin terra write")
 
     SECTION("mesh edges unit range scale global")
     {
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(-180, -90, 180, 90);
 
         OGRSpatialReference wgs84;
@@ -249,7 +249,7 @@ TEST_CASE("tin terra write")
 
     SECTION("cesium terrain correct header")
     {
-        auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, Tile::Scheme::Tms, Tile::Border::No);
+        auto generator = cesium_tin_terra::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, tile::Border::No);
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 4, 4 });
         CHECK(std::filesystem::exists("./unittest_tiles/4/8/10.terrain"));

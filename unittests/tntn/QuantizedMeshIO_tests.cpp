@@ -84,7 +84,7 @@ namespace unittests {
         ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
         // let's get a mesh of a part of austria (where we know the bounds etc)
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
@@ -208,7 +208,7 @@ namespace unittests {
         ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
         // let's get a mesh of a part of austria (where we know the bounds etc)
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const std::array at_wgs84_bounds_array = {
             ctb::CRSBounds(0, 0, 90, 90),
             ctb::CRSBounds(0, -90, 90, 0),
@@ -301,7 +301,7 @@ namespace unittests {
         ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
         // let's get a mesh of a part of austria (where we know the bounds etc)
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);
@@ -388,7 +388,7 @@ namespace unittests {
         ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
         // let's get a mesh of a part of austria (where we know the bounds etc)
-        const auto converter = cesium_tin_terra::TileWriter(Tile::Border::No);
+        const auto converter = cesium_tin_terra::TileWriter(tile::Border::No);
         const auto at_wgs84_bounds = ctb::CRSBounds(11.362082472, 46.711274137, 12.631425730, 47.945935885);
         OGRSpatialReference webmercator;
         webmercator.importFromEPSG(3857);

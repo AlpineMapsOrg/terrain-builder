@@ -26,24 +26,24 @@
 class Tiler
 {
 public:
-    Tiler(ctb::Grid  grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
+    Tiler(ctb::Grid  grid, const ctb::CRSBounds& bounds, tile::Border border, tile::Scheme scheme);
 
-    [[nodiscard]] Tile::Scheme scheme() const;
+    [[nodiscard]] tile::Scheme scheme() const;
     [[nodiscard]] const ctb::CRSBounds& bounds() const;
     void setBounds(const ctb::CRSBounds& newBounds);
-    [[nodiscard]] Tile tile_for(const Tile::Id& tile_id) const;
+    [[nodiscard]] tile::Descriptor tile_for(const tile::Id& tile_id) const;
 
 protected:
     [[nodiscard]] const ctb::Grid& grid() const;
     [[nodiscard]] ctb::i_tile grid_size() const;
     [[nodiscard]] ctb::i_tile tile_size() const;
-    [[nodiscard]] Tile::Border border_south_east() const;
+    [[nodiscard]] tile::Border border_south_east() const;
 
 private:
 
     const ctb::Grid m_grid;
     ctb::CRSBounds m_bounds;
-    const Tile::Border m_border_south_east;
-    const Tile::Scheme m_scheme;
+    const tile::Border m_border_south_east;
+    const tile::Scheme m_scheme;
 };
 

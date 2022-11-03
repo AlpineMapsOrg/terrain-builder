@@ -22,9 +22,9 @@
 #include "TileHeights.h"
 
 namespace {
-auto key(const Tile::Id& tile_id)
+auto key(const tile::Id& tile_id)
 {
-    const auto id = tile_id.to(Tile::Scheme::Tms);
+    const auto id = tile_id.to(tile::Scheme::Tms);
     return std::make_tuple(id.zoom_level, id.coords.x, id.coords.y);
 }
 }
@@ -34,12 +34,12 @@ TileHeights::TileHeights()
 
 }
 
-void TileHeights::emplace(const Tile::Id& tile_id, const std::pair<float, float>& min_max)
+void TileHeights::emplace(const tile::Id& tile_id, const std::pair<float, float>& min_max)
 {
     m_data[key(tile_id)] = min_max;
 }
 
-TileHeights::ValueType TileHeights::query(Tile::Id tile_id) const
+TileHeights::ValueType TileHeights::query(tile::Id tile_id) const
 {
     auto iter = m_data.find(key(tile_id));
     while (iter == m_data.end()) {

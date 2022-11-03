@@ -148,20 +148,20 @@ public:
     }
 
     /// Get the tile coordinate in which a location falls at a specific zoom level
-    [[nodiscard]] inline Tile::Id crsToTile(const CRSPoint& coord, i_zoom zoom) const
+    [[nodiscard]] inline tile::Id crsToTile(const CRSPoint& coord, i_zoom zoom) const
     {
         const PixelPoint pixel = crsToPixels(coord, zoom);
         TilePoint tile = pixelsToTile(pixel);
 
-        return { zoom, tile, Tile::Scheme::Tms };
+        return { zoom, tile, tile::Scheme::Tms };
     }
 
     /// Get the CRS bounds of a particular tile
     /// border_se should be true if a border should be included on the south eastern corner
     /// e.g., for the cesium raster terrain format (https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0)
-    [[nodiscard]] inline CRSBounds srsBounds(const Tile::Id& tile_id, bool border_se) const
+    [[nodiscard]] inline CRSBounds srsBounds(const tile::Id& tile_id, bool border_se) const
     {
-        const auto tms_tile_id = tile_id.to(Tile::Scheme::Tms);
+        const auto tms_tile_id = tile_id.to(tile::Scheme::Tms);
         // get the pixels coordinates representing the tile bounds
         const PixelPoint pxMinLeft(tms_tile_id.coords.x * mGridSize, tms_tile_id.coords.y * mGridSize);
         const PixelPoint pxMaxRight((tms_tile_id.coords.x + 1) * mGridSize + border_se, (tms_tile_id.coords.y + 1) * mGridSize + border_se);

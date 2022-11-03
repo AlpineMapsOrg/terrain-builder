@@ -25,7 +25,7 @@
 
 class TopDownTiler : public Tiler {
 public:
-    TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, Tile::Border border, Tile::Scheme scheme);
+    TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, tile::Border border, tile::Scheme scheme);
 
-    [[nodiscard]] std::vector<Tile> generateTiles(const Tile::Id& parent_id) const;
+    [[nodiscard]] std::vector<tile::Descriptor> generateTiles(const tile::Id& parent_id) const;
 };

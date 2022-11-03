@@ -20,56 +20,56 @@
 
 #include "Tile.h"
 
-TEST_CASE("Tile::Id scheme conversion")
+TEST_CASE("tile::Id scheme conversion")
 {
     SECTION("tms -> slippy map")
     {
-        CHECK(Tile::Id{ 0, { 0, 0 }, Tile::Scheme::Tms }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 0, { 0, 0 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 1, { 0, 0 }, Tile::Scheme::Tms }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 1, { 0, 1 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 1, { 1, 1 }, Tile::Scheme::Tms }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 1, { 1, 0 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 2, { 2, 3 }, Tile::Scheme::Tms }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 2, { 2, 0 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 2, { 3, 1 }, Tile::Scheme::Tms }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 2, { 3, 2 }, Tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 0, { 0, 0 }, tile::Scheme::Tms }.to(tile::Scheme::SlippyMap) == tile::Id{ 0, { 0, 0 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 1, { 0, 0 }, tile::Scheme::Tms }.to(tile::Scheme::SlippyMap) == tile::Id{ 1, { 0, 1 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 1, { 1, 1 }, tile::Scheme::Tms }.to(tile::Scheme::SlippyMap) == tile::Id{ 1, { 1, 0 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 2, { 2, 3 }, tile::Scheme::Tms }.to(tile::Scheme::SlippyMap) == tile::Id{ 2, { 2, 0 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 2, { 3, 1 }, tile::Scheme::Tms }.to(tile::Scheme::SlippyMap) == tile::Id{ 2, { 3, 2 }, tile::Scheme::SlippyMap });
     }
     SECTION("slippy map -> tms")
     {
-        CHECK(Tile::Id{ 0, { 0, 0 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::Tms) == Tile::Id{ 0, { 0, 0 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 1, { 0, 0 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::Tms) == Tile::Id{ 1, { 0, 1 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 1, { 1, 1 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::Tms) == Tile::Id{ 1, { 1, 0 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 2, { 2, 3 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::Tms) == Tile::Id{ 2, { 2, 0 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 2, { 3, 1 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::Tms) == Tile::Id{ 2, { 3, 2 }, Tile::Scheme::Tms });
+        CHECK(tile::Id{ 0, { 0, 0 }, tile::Scheme::SlippyMap }.to(tile::Scheme::Tms) == tile::Id{ 0, { 0, 0 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 1, { 0, 0 }, tile::Scheme::SlippyMap }.to(tile::Scheme::Tms) == tile::Id{ 1, { 0, 1 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 1, { 1, 1 }, tile::Scheme::SlippyMap }.to(tile::Scheme::Tms) == tile::Id{ 1, { 1, 0 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 2, { 2, 3 }, tile::Scheme::SlippyMap }.to(tile::Scheme::Tms) == tile::Id{ 2, { 2, 0 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 2, { 3, 1 }, tile::Scheme::SlippyMap }.to(tile::Scheme::Tms) == tile::Id{ 2, { 3, 2 }, tile::Scheme::Tms });
     }
     SECTION("tms -> tms (no op)")
     {
-        CHECK(Tile::Id{ 0, { 0, 0 }, Tile::Scheme::Tms }.to(Tile::Scheme::Tms) == Tile::Id{ 0, { 0, 0 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 1, { 0, 0 }, Tile::Scheme::Tms }.to(Tile::Scheme::Tms) == Tile::Id{ 1, { 0, 0 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 1, { 1, 1 }, Tile::Scheme::Tms }.to(Tile::Scheme::Tms) == Tile::Id{ 1, { 1, 1 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 2, { 2, 3 }, Tile::Scheme::Tms }.to(Tile::Scheme::Tms) == Tile::Id{ 2, { 2, 3 }, Tile::Scheme::Tms });
-        CHECK(Tile::Id{ 2, { 3, 1 }, Tile::Scheme::Tms }.to(Tile::Scheme::Tms) == Tile::Id{ 2, { 3, 1 }, Tile::Scheme::Tms });
+        CHECK(tile::Id{ 0, { 0, 0 }, tile::Scheme::Tms }.to(tile::Scheme::Tms) == tile::Id{ 0, { 0, 0 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 1, { 0, 0 }, tile::Scheme::Tms }.to(tile::Scheme::Tms) == tile::Id{ 1, { 0, 0 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 1, { 1, 1 }, tile::Scheme::Tms }.to(tile::Scheme::Tms) == tile::Id{ 1, { 1, 1 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 2, { 2, 3 }, tile::Scheme::Tms }.to(tile::Scheme::Tms) == tile::Id{ 2, { 2, 3 }, tile::Scheme::Tms });
+        CHECK(tile::Id{ 2, { 3, 1 }, tile::Scheme::Tms }.to(tile::Scheme::Tms) == tile::Id{ 2, { 3, 1 }, tile::Scheme::Tms });
     }
     SECTION("slippy map -> slippy map (no op)")
     {
-        CHECK(Tile::Id{ 0, { 0, 0 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 0, { 0, 0 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 1, { 0, 0 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 1, { 0, 0 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 1, { 1, 1 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 1, { 1, 1 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 2, { 2, 3 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 2, { 2, 3 }, Tile::Scheme::SlippyMap });
-        CHECK(Tile::Id{ 2, { 3, 1 }, Tile::Scheme::SlippyMap }.to(Tile::Scheme::SlippyMap) == Tile::Id{ 2, { 3, 1 }, Tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 0, { 0, 0 }, tile::Scheme::SlippyMap }.to(tile::Scheme::SlippyMap) == tile::Id{ 0, { 0, 0 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 1, { 0, 0 }, tile::Scheme::SlippyMap }.to(tile::Scheme::SlippyMap) == tile::Id{ 1, { 0, 0 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 1, { 1, 1 }, tile::Scheme::SlippyMap }.to(tile::Scheme::SlippyMap) == tile::Id{ 1, { 1, 1 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 2, { 2, 3 }, tile::Scheme::SlippyMap }.to(tile::Scheme::SlippyMap) == tile::Id{ 2, { 2, 3 }, tile::Scheme::SlippyMap });
+        CHECK(tile::Id{ 2, { 3, 1 }, tile::Scheme::SlippyMap }.to(tile::Scheme::SlippyMap) == tile::Id{ 2, { 3, 1 }, tile::Scheme::SlippyMap });
     }
 }
 
 
-TEST_CASE("Tile::Id parent")
+TEST_CASE("tile::Id parent")
 {
-    CHECK(Tile::Id { 1, { 0, 1 } }.parent() == Tile::Id { 0, { 0, 0 } });
-    CHECK(Tile::Id { 2, { 2, 1 } }.parent() == Tile::Id { 1, { 1, 0 } });
-    CHECK(Tile::Id { 2, { 0, 0 } }.parent() == Tile::Id { 1, { 0, 0 } });
-    CHECK(Tile::Id { 2, { 3, 3 } }.parent() == Tile::Id { 1, { 1, 1 } });
+    CHECK(tile::Id { 1, { 0, 1 } }.parent() == tile::Id { 0, { 0, 0 } });
+    CHECK(tile::Id { 2, { 2, 1 } }.parent() == tile::Id { 1, { 1, 0 } });
+    CHECK(tile::Id { 2, { 0, 0 } }.parent() == tile::Id { 1, { 0, 0 } });
+    CHECK(tile::Id { 2, { 3, 3 } }.parent() == tile::Id { 1, { 1, 1 } });
 }
 
-TEST_CASE("Tile::Id, children") {
+TEST_CASE("tile::Id, children") {
     SECTION("mercator tms (y point up)")
     {
         {
-            const auto tiles = Tile::Id{0, {0, 0}}.children();
+            const auto tiles = tile::Id{0, {0, 0}}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 1);
@@ -79,7 +79,7 @@ TEST_CASE("Tile::Id, children") {
             CHECK(tiles[3].coords == glm::uvec2 { 1, 1 });
         }
         {
-            const auto tiles = Tile::Id{1, {1, 1}}.children();
+            const auto tiles = tile::Id{1, {1, 1}}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 2);
@@ -92,7 +92,7 @@ TEST_CASE("Tile::Id, children") {
     SECTION("mercator SlippyMap (y points down)")
     {
         {
-            const auto tiles = Tile::Id{0, {0, 0}, Tile::Tile::Scheme::SlippyMap}.children();
+            const auto tiles = tile::Id{0, {0, 0}, tile::Scheme::SlippyMap}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 1);
@@ -102,7 +102,7 @@ TEST_CASE("Tile::Id, children") {
             CHECK(tiles[3].coords == glm::uvec2 { 1, 0 });
         }
         {
-            const auto tiles = Tile::Id{1, {1, 0}, Tile::Tile::Scheme::SlippyMap}.children();
+            const auto tiles = tile::Id{1, {1, 0}, tile::Scheme::SlippyMap}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 2);
@@ -117,7 +117,7 @@ TEST_CASE("Tile::Id, children") {
     {
 
         {
-            const auto tiles = Tile::Id{0, {1, 0}, Tile::Tile::Scheme::Tms}.children();
+            const auto tiles = tile::Id{0, {1, 0}, tile::Scheme::Tms}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 1);
@@ -127,7 +127,7 @@ TEST_CASE("Tile::Id, children") {
             CHECK(tiles[3].coords == glm::uvec2 { 3, 1 });
         }
         {
-            const auto tiles = Tile::Id{1, {3, 0}, Tile::Tile::Scheme::Tms}.children();
+            const auto tiles = tile::Id{1, {3, 0}, tile::Scheme::Tms}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 2);
@@ -141,7 +141,7 @@ TEST_CASE("Tile::Id, children") {
     SECTION("geodetic SlippyMap (y points down)")
     {
         {
-            const auto tiles = Tile::Id{0, {1, 0}, Tile::Tile::Scheme::SlippyMap}.children();
+            const auto tiles = tile::Id{0, {1, 0}, tile::Scheme::SlippyMap}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 1);
@@ -151,7 +151,7 @@ TEST_CASE("Tile::Id, children") {
             CHECK(tiles[3].coords == glm::uvec2 { 3, 0 });
         }
         {
-            const auto tiles = Tile::Id{1, {3, 1}, Tile::Tile::Scheme::SlippyMap}.children();
+            const auto tiles = tile::Id{1, {3, 1}, tile::Scheme::SlippyMap}.children();
             REQUIRE(tiles.size() == 4);
             for (const auto& tid : tiles)
                 CHECK(tid.zoom_level == 2);
