@@ -23,20 +23,10 @@ TopDownTiler::TopDownTiler(const ctb::Grid& grid, const ctb::CRSBounds& bounds, 
 {
 }
 
-std::array<Tile::Id, 4> TopDownTiler::subtiles(const Tile::Id& tile_id) const
-{
-    return {
-        Tile::Id { tile_id.zoom_level + 1, tile_id.coords * 2u + glm::uvec2(0, tile_id.scheme != Tile::Scheme::Tms), tile_id.scheme },
-        Tile::Id { tile_id.zoom_level + 1, tile_id.coords * 2u + glm::uvec2(1, tile_id.scheme != Tile::Scheme::Tms), tile_id.scheme },
-        Tile::Id { tile_id.zoom_level + 1, tile_id.coords * 2u + glm::uvec2(0, tile_id.scheme == Tile::Scheme::Tms), tile_id.scheme },
-        Tile::Id { tile_id.zoom_level + 1, tile_id.coords * 2u + glm::uvec2(1, tile_id.scheme == Tile::Scheme::Tms), tile_id.scheme }
-    };
-}
-
 std::vector<Tile> TopDownTiler::generateTiles(const Tile::Id& parent_id) const
 {
     assert(parent_id.scheme == scheme());
-    const auto tile_ids = subtiles(parent_id.to(scheme()));
+    const auto tile_ids = parent_id.to(scheme()).children();
     std::vector<Tile> tiles;
     for (const auto& tile_id : tile_ids) {
         Tile t = tile_for(tile_id);

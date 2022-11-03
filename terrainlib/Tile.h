@@ -54,6 +54,15 @@ struct Tile {
             return { zoom_level, { coords.x, coord_y }, new_scheme };
         }
         [[nodiscard]] Id parent() const { return { zoom_level - 1, coords / 2u, scheme }; }
+        [[nodiscard]] std::array<Tile::Id, 4> children() const
+        {
+            return {
+                Tile::Id { zoom_level + 1, coords * 2u + glm::uvec2(0, scheme != Tile::Scheme::Tms), scheme },
+                Tile::Id { zoom_level + 1, coords * 2u + glm::uvec2(1, scheme != Tile::Scheme::Tms), scheme },
+                Tile::Id { zoom_level + 1, coords * 2u + glm::uvec2(0, scheme == Tile::Scheme::Tms), scheme },
+                Tile::Id { zoom_level + 1, coords * 2u + glm::uvec2(1, scheme == Tile::Scheme::Tms), scheme }
+            };
+        }
         bool operator==(const Id& other) const { return other.coords == coords && other.scheme == scheme && other.zoom_level == zoom_level; };
         bool operator<(const Id& other) const { return std::tie(zoom_level, coords.x, coords.y, scheme) < std::tie(other.zoom_level, other.coords.x, other.coords.y, other.scheme); };
     };
