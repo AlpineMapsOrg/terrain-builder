@@ -40,29 +40,6 @@ TEST_CASE("grid")
         CHECK(!geodetic.getSRS().IsSame(&webmercator.getSRS()));
     }
 
-    SECTION("number of tiles")
-    {
-        const auto geodetic = ctb::GlobalGeodetic(256);
-        CHECK(geodetic.getTileExtent(0).width() == 2);
-        CHECK(geodetic.getTileExtent(0).height() == 1);
-
-        CHECK(geodetic.getTileExtent(1).width() == 4);
-        CHECK(geodetic.getTileExtent(1).height() == 2);
-
-        CHECK(geodetic.getTileExtent(2).width() == 8);
-        CHECK(geodetic.getTileExtent(2).height() == 4);
-
-        const auto webmercator = ctb::GlobalMercator(256);
-        CHECK(webmercator.getTileExtent(0).width() == 1);
-        CHECK(webmercator.getTileExtent(0).height() == 1);
-
-        CHECK(webmercator.getTileExtent(1).width() == 2);
-        CHECK(webmercator.getTileExtent(1).height() == 2);
-
-        CHECK(webmercator.getTileExtent(2).width() == 4);
-        CHECK(webmercator.getTileExtent(2).height() == 4);
-    }
-
     SECTION("bounds")
     {
         const auto geodetic = ctb::GlobalGeodetic(256);

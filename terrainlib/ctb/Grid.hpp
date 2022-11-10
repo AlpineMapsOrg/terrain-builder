@@ -77,9 +77,9 @@ public:
         , mExtent(extent)
         , mSRS(srs)
         , mEpsgCode(epsgCode)
-        , mInitialResolution((extent.width() / rootTiles) / gridSize)
-        , mXOriginShift(extent.width() / 2)
-        , mYOriginShift(extent.height() / 2)
+        , mInitialResolution((extent.size().x / rootTiles) / gridSize)
+        , mXOriginShift(extent.size().x / 2)
+        , mYOriginShift(extent.size().y / 2)
         , mZoomFactor(zoomFactor)
     {
         mSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -188,15 +188,6 @@ public:
     [[nodiscard]] inline const tile::SrsBounds& getExtent() const
     {
         return mExtent;
-    }
-
-    /// Get the extent covered by the grid in tile coordinates for a zoom level
-    [[nodiscard]] inline tile::Aabb<unsigned> getTileExtent(i_zoom zoom) const
-    {
-        const auto ll = crsToTile(mExtent.min, zoom);
-        const auto ur = crsToTile(mExtent.max, zoom);
-
-        return { ll.coords, ur.coords };
     }
 
     [[nodiscard]] inline int getEpsgCode() const
