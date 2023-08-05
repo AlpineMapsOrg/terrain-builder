@@ -26,39 +26,6 @@
 #include "alpine_raster.h"
 #include "ctb/Grid.hpp"
 
-TEST_CASE("alpine raster format conversion math")
-{
-    const auto one_red = 32.0f;
-    const auto one_green = 32.000000001f / 256;
-    const auto eps = 0.000000001f;
-
-    CHECK(alpine_raster::convert(0) == glm::u8vec3(0, 0, 0));
-
-    CHECK(alpine_raster::convert(one_red + eps) == glm::u8vec3(1, 0, 0));
-    CHECK(alpine_raster::convert(one_green + eps) == glm::u8vec3(0, 1, 0));
-
-    CHECK(alpine_raster::convert(42 * one_red + eps) == glm::u8vec3(42, 0, 0));
-    CHECK(alpine_raster::convert(200 * one_green + eps) == glm::u8vec3(0, 200, 0));
-
-    CHECK(alpine_raster::convert(255 * one_red + eps) == glm::u8vec3(255, 0, 0));
-    CHECK(alpine_raster::convert(253 * one_green + eps) == glm::u8vec3(0, 253, 0));
-    CHECK(alpine_raster::convert(254 * one_green + eps) == glm::u8vec3(0, 254, 0));
-    CHECK(alpine_raster::convert(255 * one_green + eps) == glm::u8vec3(0, 255, 0));
-    CHECK(alpine_raster::convert(256 * one_green + eps) == glm::u8vec3(1, 0, 0));
-    CHECK(alpine_raster::convert(257 * one_green + eps) == glm::u8vec3(1, 1, 0));
-    CHECK(alpine_raster::convert(258 * one_green + eps) == glm::u8vec3(1, 2, 0));
-
-    CHECK(alpine_raster::convert(240 * one_red + 195 * one_green + eps) == glm::u8vec3(240, 195, 0));
-    CHECK(alpine_raster::convert(64 * one_red + 255 * one_green + eps) == glm::u8vec3(64, 255, 0));
-    CHECK(alpine_raster::convert(255 * one_red + 128 * one_green + eps) == glm::u8vec3(255, 128, 0));
-    CHECK(alpine_raster::convert(255 * one_red + 255 * one_green + eps) == glm::u8vec3(255, 255, 0));
-
-    CHECK(alpine_raster::convert(123 * one_red + 250 * one_green + eps) == glm::u8vec3(123, 250, 0));
-    CHECK(alpine_raster::convert(140 * one_red + 255 * one_green + eps) == glm::u8vec3(140, 255, 0));
-    CHECK(alpine_raster::convert(141 * one_red + 0 * one_green + eps) == glm::u8vec3(141, 0, 0));
-    CHECK(alpine_raster::convert(141 * one_red + 1 * one_green + eps) == glm::u8vec3(141, 1, 0));
-}
-
 tile::Border testTypeValue2Border(bool v)
 {
     return v ? tile::Border::Yes : tile::Border::No;

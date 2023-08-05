@@ -28,21 +28,15 @@
 #include "Image.h"
 #include "ParallelTileGenerator.h"
 #include "ctb/Grid.hpp"
+#include "sherpa/height_encoding.h"
 
 ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, tile::Scheme tiling_scheme, tile::Border border, unsigned grid_resolution)
 {
     return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<alpine_raster::TileWriter>(border), output_data_path, grid_resolution);
 }
 
-glm::u8vec3 alpine_raster::convert(float height)
-{
-    const auto r = std::clamp(int(height / 32.0f), 0, 255);
-    const auto g = std::clamp(int(std::fmod(height, 32.0f) * 8), 0, 255);
-
-    return { glm::u8(r), glm::u8(g), 0 };
-}
-
 void alpine_raster::TileWriter::write(const std::string& file_path, const tile::Descriptor& tile, const HeightData& heights) const
 {
-    image::saveImageAsPng(image::transformImage(heights, alpine_raster::convert), file_path);
+    image::saveImageAsPng(image::transformImage(heights, sherpa::height_encoding::to_rgb),
+                          file_path);
 }

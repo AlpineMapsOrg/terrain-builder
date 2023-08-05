@@ -47,8 +47,6 @@ public:
     tile::Scheme tiling_scheme,
     tile::Border border,
     unsigned grid_resolution = 256);
-
-[[nodiscard]] glm::u8vec3 convert(float height);
 };
 
 #endif // ALPINERASTERGENERATOR_H
