@@ -17,6 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Init submodules
+      run: git submodule init
+
     - name: Install dependencies
       run: sudo apt-get install libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev
       
@@ -31,6 +34,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
+    - name: Init submodules
+      run: git submodule init
 
     - name: Install dependencies
       run: sudo apt-get install libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev
