@@ -45,7 +45,7 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target unittests -j 18
 
     - name: Download data
-      run: wget -qO- https://gataki.cg.tuwien.ac.at/raw/terrain_builder_unittest_data.tar.gz | tar xvz -C ../unittests/
+      run: wget -qO- https://gataki.cg.tuwien.ac.at/raw/terrain_builder_unittest_data.tar.gz | tar xvz -C ./unittests/
 
     - name: Test
       working-directory: ${{github.workspace}}/build
