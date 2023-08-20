@@ -45,7 +45,7 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target unittests -j 18
     
     - uses: actions/cache@v3
-      id: terrain_builder_unittest_data.tar.gz
+      id: terrain_builder_unittest_data
       with:
         path: ./unittests/data
         key: terrain_builder_unittest_data.tar.gz
