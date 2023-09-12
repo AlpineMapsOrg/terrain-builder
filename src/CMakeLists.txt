@@ -31,13 +31,6 @@ if(NOT TARGET fmt::fmt)
     )
     FetchContent_MakeAvailable(fmt)
 endif()
-if(NOT TARGET glm::glm)
-    FetchContent_Declare(glm
-        GIT_REPOSITORY https://github.com/g-truc/glm.git
-        SOURCE_DIR 		${CMAKE_SOURCE_DIR}/3rdparty/glm
-    )
-    FetchContent_MakeAvailable(glm)
-endif()
 if(ALP_AUTOUPDATE_RADIX)
     FetchContent_Declare(radix
         GIT_REPOSITORY  git@github.com:AlpineMapsOrg/radix.git
