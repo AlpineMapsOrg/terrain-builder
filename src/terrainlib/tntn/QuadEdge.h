@@ -1,6 +1,6 @@
 #pragma once
 
-#include "algorithms/primitives.h"
+#include "../algorithms/primitives.h"
 #include "ObjPool.h"
 #include "geometrix.h"
 

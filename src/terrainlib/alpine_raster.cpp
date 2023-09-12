@@ -28,7 +28,7 @@
 #include "Image.h"
 #include "ParallelTileGenerator.h"
 #include "ctb/Grid.hpp"
-#include "sherpa/height_encoding.h"
+#include <radix/height_encoding.h>
 
 ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, tile::Scheme tiling_scheme, tile::Border border, unsigned grid_resolution)
 {

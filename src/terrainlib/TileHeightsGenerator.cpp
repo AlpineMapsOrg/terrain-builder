@@ -26,7 +26,7 @@
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include "depth_first_tile_traverser.h"
-#include "sherpa/TileHeights.h"
+#include <radix/TileHeights.h>
 
 TileHeightsGenerator::TileHeightsGenerator(std::string input_data_path, ctb::Grid::Srs srs, tile::Scheme scheme, tile::Border border, std::filesystem::path output_path)
     : m_input_data_path(std::move(input_data_path))

@@ -20,7 +20,7 @@
 #include <array>
 #include "Tiler.h"
 #include "ctb/Grid.hpp"
-#include "sherpa/tile.h"
+#include <radix/tile.h>
 
 class TopDownTiler : public Tiler {
 public:

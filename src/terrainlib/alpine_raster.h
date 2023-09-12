@@ -27,7 +27,7 @@
 
 #include "Image.h"
 #include "ParallelTileGenerator.h"
-#include "sherpa/tile.h"
+#include <radix/tile.h>
 #include "ctb/Grid.hpp"
 
 namespace alpine_raster {

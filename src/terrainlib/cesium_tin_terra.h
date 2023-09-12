@@ -20,7 +20,7 @@
 #define CESIUM_TIN_TERRA_H
 
 #include "ParallelTileGenerator.h"
-#include "geometrix.h"
+#include "tntn/geometrix.h"
 
 namespace tntn {
 class Mesh;

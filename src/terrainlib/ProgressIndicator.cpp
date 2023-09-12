@@ -77,5 +77,5 @@ std::string ProgressIndicator::progressBar() const
 
 std::string ProgressIndicator::xOfYDoneMessagE() const
 {
-    return fmt::format("{}/{}", m_step, m_n_steps);
+    return fmt::format("{}/{}", m_step.load(), m_n_steps);
 }

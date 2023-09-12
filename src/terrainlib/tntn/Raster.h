@@ -12,10 +12,10 @@
 #include <vector>
 
 #include "Image.h"
-#include "sherpa/tile.h"
 #include "geometrix.h"
 #include "logging.h"
 #include "tntn_assert.h"
+#include <radix/tile.h>
 
 namespace tntn {
 

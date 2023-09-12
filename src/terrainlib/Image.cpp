@@ -18,7 +18,7 @@
  *****************************************************************************/
 
 #include "Image.h"
-#include "gdal_init.h"
+#include "tntn/gdal_init.h"
 #include <FreeImage.h>
 #include <cstdlib>
 

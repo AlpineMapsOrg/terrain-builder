@@ -31,7 +31,7 @@
 #include "Exception.h"
 #include "Image.h"
 #include "ctb/types.hpp"
-#include "logging.h"
+#include "tntn/logging.h"
 
 namespace {
 std::string toWkt(const OGRSpatialReference& srs)

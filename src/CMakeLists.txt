@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(terrain_builder LANGUAGES CUDA CXX)
+project(terrain_builder_src LANGUAGES CUDA CXX)
 
 option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" OFF)
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
@@ -114,7 +114,7 @@ add_library(terrainlib
     terrainlib/tntn/ZoomRange.h
 )
 target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL fmt freeimage TBB::tbb)
-target_include_directories(terrainlib PRIVATE .)
+target_include_directories(terrainlib PUBLIC ./terrainlib)
 if (ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()

@@ -23,12 +23,12 @@
 #include "Image.h"
 #include "ctb/types.hpp"
 #include "srs.h"
-#include "Mesh.h"
-#include "QuantizedMeshIO.h"
-#include "Raster.h"
-#include "geometrix.h"
-#include "simple_meshing.h"
-#include "terra_meshing.h"
+#include "tntn/Mesh.h"
+#include "tntn/QuantizedMeshIO.h"
+#include "tntn/Raster.h"
+#include "tntn/geometrix.h"
+#include "tntn/simple_meshing.h"
+#include "tntn/terra_meshing.h"
 
 tntn::BBox3D cesium_tin_terra::TileWriter::computeBbox(const tile::SrsBounds& srs_bounds, const HeightData& heights_in_metres)
 {

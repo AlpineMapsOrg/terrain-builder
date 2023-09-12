@@ -21,7 +21,7 @@
 #define ALGORITHMS_RASTER_TRIANGLE_SCANLINE_H
 
 #include "primitives.h"
-#include "Raster.h"
+#include "tntn/Raster.h"
 #include <glm/common.hpp>
 #include <glm/fwd.hpp>
 #include <glm/glm.hpp>

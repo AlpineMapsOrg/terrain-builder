@@ -30,8 +30,8 @@
 #include "Exception.h"
 #include "ctb/Grid.hpp"
 #include "srs.h"
-#include "gdal_init.h"
-#include "logging.h"
+#include "tntn/gdal_init.h"
+#include "tntn/logging.h"
 
 Dataset::Dataset(const std::string& path)
 {
