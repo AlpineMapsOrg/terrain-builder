@@ -2,3 +2,5 @@
 *.tif.aux.xml
 /CMakeLists.txt.user
 /3rdparty/*
+build/
+.vscode
