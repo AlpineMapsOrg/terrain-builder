@@ -47,12 +47,16 @@ if(ALP_AUTOUPDATE_RADIX)
     )
     FetchContent_MakeAvailable(radix)
 else()
-    FetchContent_Declare(radix
-        GIT_REPOSITORY  git@github.com:AlpineMapsOrg/radix.git
-        GIT_TAG         main
-        SOURCE_DIR      ${CMAKE_SOURCE_DIR}/3rdparty/radix
-    )
-    FetchContent_MakeAvailable(radix)
+    if (NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
+        FetchContent_Declare(radix
+            GIT_REPOSITORY  git@github.com:AlpineMapsOrg/radix.git
+            GIT_TAG         main
+            SOURCE_DIR      ${CMAKE_SOURCE_DIR}/3rdparty/radix
+        )
+        FetchContent_MakeAvailable(radix)
+    else()
+        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/radix ${CMAKE_BINARY_DIR}/_deps/radix-build)
+    endif()
 endif()
 
 add_library(terrainlib
