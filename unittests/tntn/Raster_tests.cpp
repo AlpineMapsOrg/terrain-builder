@@ -1,12 +1,12 @@
 #include <catch2/catch.hpp>
 
-#include "sherpa/tile.h"
 #include "tntn/Mesh.h"
 #include "tntn/Mesh2Raster.h"
 #include "tntn/Raster.h"
 #include "tntn/RasterIO.h"
 #include "tntn/SurfacePoints.h"
 #include "tntn/raster_tools.h"
+#include <radix/tile.h>
 
 #include <boost/filesystem.hpp>
 #include <cstdlib>

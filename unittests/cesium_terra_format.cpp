@@ -25,9 +25,9 @@
 #include "DatasetReader.h"
 #include "Image.h"
 #include "cesium_tin_terra.h"
-#include "sherpa/tile.h"
 #include "srs.h"
 #include "tntn/Mesh.h"
+#include <radix/tile.h>
 
 TEST_CASE("tin terra write")
 {

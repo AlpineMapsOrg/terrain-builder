@@ -25,7 +25,7 @@
 #include "TopDownTiler.h"
 #include "ctb/GlobalMercator.hpp"
 #include "depth_first_tile_traverser.h"
-#include "sherpa/tile.h"
+#include <radix/tile.h>
 
 TEST_CASE("depth_first_tile_traverser interface")
 {

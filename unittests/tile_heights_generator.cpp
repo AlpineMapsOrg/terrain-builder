@@ -16,10 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch.hpp>
-
 #include "TileHeightsGenerator.h"
-#include "sherpa/TileHeights.h"
+#include <catch2/catch.hpp>
+#include <radix/TileHeights.h>
 
 TEST_CASE("TileHeightsGenerator")
 {
