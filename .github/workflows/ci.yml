@@ -22,7 +22,7 @@ jobs:
       run: sudo apt-get install libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev
       
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DATB_UNITTESTS_EXTENDED=OFF
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target terrainbuilder -j 18
