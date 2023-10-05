@@ -54,7 +54,7 @@ endif()
 
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
-    terrainlib/cesium_tin_terra.h terrainlib/cesium_tin_terra.cpp
+
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/DatasetReader.h terrainlib/DatasetReader.cpp
     terrainlib/depth_first_tile_traverser.h

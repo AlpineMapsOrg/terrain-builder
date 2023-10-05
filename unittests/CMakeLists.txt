@@ -17,7 +17,7 @@ FetchContent_MakeAvailable(catch2)
 add_executable(unittests_terrainlib 
     alpine_raster_format.cpp
     catch2_helpers.h
-    cesium_terra_format.cpp
+
     dataset.cpp
     dataset_reading.cpp
     depth_first_tile_traverser.cpp
@@ -38,7 +38,7 @@ add_executable(unittests_terrainlib
     tntn/Mesh_tests.cpp
     tntn/ObjPool_tests.cpp
     tntn/OFFReader_tests.cpp
-    tntn/QuantizedMeshIO_tests.cpp
+
     tntn/RasterIO_tests.cpp
     tntn/Raster_tests.cpp
     tntn/raster_tools_tests.cpp
