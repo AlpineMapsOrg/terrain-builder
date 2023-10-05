@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(terrain_builder_src LANGUAGES CXX)
 
-option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" OFF)
+option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" ON)
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
@@ -33,7 +33,7 @@ if(NOT TARGET fmt::fmt)
 endif()
 if(ALP_AUTOUPDATE_RADIX)
     FetchContent_Declare(radix
-        GIT_REPOSITORY  git@github.com:AlpineMapsOrg/radix.git
+        GIT_REPOSITORY  https://github.com/AlpineMapsOrg/radix.git
         GIT_TAG         origin/main
         SOURCE_DIR      ${CMAKE_SOURCE_DIR}/3rdparty/radix
         SOURCE_SUBDIR   src
