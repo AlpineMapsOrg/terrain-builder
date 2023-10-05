@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(alpine-terrain-builder-unittests)
 
-option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" ON)
+option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" OFF)
 option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
 set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian dataset (terrain model, i.e., OeRect_01m_gt_31287.img)")
 

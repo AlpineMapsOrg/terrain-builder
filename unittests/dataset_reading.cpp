@@ -283,7 +283,6 @@ TEST_CASE("reading")
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);
     }
-#endif
 
     SECTION("lowres overview with warping")
     {
@@ -326,4 +325,5 @@ TEST_CASE("reading")
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);
     }
+#endif
 }
