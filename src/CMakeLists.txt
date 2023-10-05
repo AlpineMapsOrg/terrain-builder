@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(terrain_builder_src LANGUAGES CUDA CXX)
+project(terrain_builder_src LANGUAGES CXX)
 
 option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" OFF)
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
