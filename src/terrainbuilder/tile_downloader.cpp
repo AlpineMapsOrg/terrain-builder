@@ -85,6 +85,7 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
     // Check if the file is opened
     if (!data.file.is_open()) {
         // If the file is not opened yet, try to open it
+        std::filesystem::create_directories(data.path.parent_path());
         data.file.open(data.path, std::ios::binary);
 
         if (!data.file.is_open()) {
@@ -129,9 +130,9 @@ bool download_tile_by_url(const std::string &url, const std::filesystem::path &p
         callback_data.file.close();
     }
     if (res != CURLE_OK) {
-        std::string_view message = curl_easy_strerror(res);
-        std::string output = fmt::format("cURL ERROR: [{}] {}", static_cast<unsigned int>(res), message);
-        std::cout << output << std::endl;
+        //        std::string_view message = curl_easy_strerror(res);
+        //        std::string output = fmt::format("cURL ERROR: [{}] {}", static_cast<unsigned int>(res), message);
+        //        std::cout << output << std::endl;
         std::filesystem::remove(path);
         return false;
     }
@@ -141,11 +142,20 @@ bool download_tile_by_url(const std::string &url, const std::filesystem::path &p
 
 bool download_tile_by_id(const tile::Id root_id, const TileUrlBuilder &url_builder) {
     const std::string url = url_builder.build_url(root_id);
-    return download_tile_by_url(url, fmt::format("./tiles/tile-{}-{}-{}.jpeg", root_id.zoom_level, root_id.coords.x, root_id.coords.y));
+    return download_tile_by_url(url,
+                                fmt::format("./tiles/{}/{}/{}.jpeg",
+                                            root_id.zoom_level,
+                                            root_id.coords.x,
+                                            root_id.coords.y));
 }
 
-bool download_tile_by_id_recursive(const tile::Id root_id, const TileUrlBuilder &url_builder) {
-    std::cout << root_id << std::endl;
+bool download_tile_by_id_recursive(const tile::Id root_id, const TileUrlBuilder &url_builder)
+{
+    if (root_id.zoom_level == 11)
+        std::cout << root_id << std::endl;
+
+    //    if (root_id.zoom_level >= 10)
+    //        return false;
 
     if (!download_tile_by_id(root_id, url_builder)) {
         return false;
@@ -220,5 +230,5 @@ int main(int argc, char *argv[]) {
     const tile::Id root_id = {zoom, {row, col}, scheme};
 
     // Download tile and subtiles recursively.
-    download_tile_by_id_recursive(root_id, *url_builder);
+    return download_tile_by_id_recursive(root_id, *url_builder);
 }
