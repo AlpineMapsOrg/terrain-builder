@@ -52,6 +52,10 @@ else()
     endif()
 endif()
 
+if(NOT TARGET curl)
+    find_package(CURL REQUIRED)
+endif()
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
     terrainlib/cesium_tin_terra.h terrainlib/cesium_tin_terra.cpp
@@ -121,3 +125,10 @@ add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
 target_link_libraries(terrainbuilder PUBLIC terrainlib)
+
+
+add_executable(tile-downloader
+    terrainbuilder/tile_downloader.cpp
+)
+target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
+target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
