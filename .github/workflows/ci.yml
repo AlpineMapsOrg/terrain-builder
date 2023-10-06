@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "tile-downloader" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "tile-downloader" ]
 
 env:
   BUILD_TYPE: Release
@@ -28,6 +28,7 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target terrainbuilder
       
   build-tile-downloader:
+    if: github.ref == 'refs/heads/tile-downloader'
     runs-on: ubuntu-latest
 
     steps:
