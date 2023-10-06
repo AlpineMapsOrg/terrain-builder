@@ -142,7 +142,7 @@ bool download_tile_by_url(const std::string& url, const std::string& path) {
         std::string_view message = curl_easy_strerror(res);
         std::string output = fmt::format("CURL ERROR: [{}] {}", static_cast<unsigned int>(res), message);
         std::cout << output << std::endl;
-        remove(path.c_str());
+        std::filesystem::remove(path);
         return false;
     }
 
