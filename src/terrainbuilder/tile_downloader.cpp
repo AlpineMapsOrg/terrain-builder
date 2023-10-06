@@ -154,16 +154,16 @@ bool download_tile_by_id(const tile::Id root_id, const TileUrlBuilder &url_build
     return download_tile_by_url(url, fmt::format("tile-{}-{}-{}.jpeg", root_id.zoom_level, root_id.coords.x, root_id.coords.y));
 }
 
-bool download_tile_by_id_recursive(const tile::Id root_id, const TopDownTiler& tiler, const TileUrlBuilder &url_builder) {
+bool download_tile_by_id_recursive(const tile::Id root_id, const TileUrlBuilder &url_builder) {
     std::cout << root_id << std::endl;
 
     if (!download_tile_by_id(root_id, url_builder)) {
         return false;
     }
 
-    const auto subtiles = tiler.generateTiles(root_id);
-    for (auto &&tile : subtiles) {
-        download_tile_by_id_recursive(tile.id, tiler, url_builder);
+    const std::array<tile::Id, 4> subtiles = root_id.children();
+    for (const tile::Id& tile : subtiles) {
+        download_tile_by_id_recursive(tile, url_builder);
     }
 
     return true;
@@ -224,16 +224,13 @@ int main(int argc, char *argv[]) {
     if (srs != static_cast<int>(ctb::Grid::Srs::SphericalMercator)) {
         throw std::runtime_error(fmt::format("unsupported srs EPSG \"{}\"", srs));
     }
-    
-    // Construct tiler and root tile
-    const auto grid = ctb::GlobalMercator();
-    const TopDownTiler tiler(grid, grid.getExtent(), tile::Border::No, scheme);
 
+    // Construct root tile
     const unsigned int zoom = svtoui(map_get_required(arg_map, "zoom"));
     const unsigned int row = svtoui(map_get_required(arg_map, "row"));
     const unsigned int col = svtoui(map_get_required(arg_map, "col"));
-    const tile::Id root_id = {zoom, {row, col}, tiler.scheme()};
+    const tile::Id root_id = {zoom, {row, col}, scheme};
 
     // Download tile and subtiles recursively.
-    download_tile_by_id_recursive(root_id, tiler, *url_builder);
+    download_tile_by_id_recursive(root_id, *url_builder);
 }
