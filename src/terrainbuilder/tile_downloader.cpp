@@ -125,6 +125,7 @@ bool download_tile_by_url(const std::string& url, const std::string& path) {
 
     // Create a custom data structure to pass file-related information to the write callback
     WriteCallbackData callback_data;
+    callback_data.path = path;
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_FAILONERROR, TRUE);
