@@ -1,26 +1,15 @@
 #include <charconv>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <span>
 #include <string_view>
-#include <iostream>
-#include <string_view>
-#include <typeinfo>
 
-#include <fmt/core.h>
 #include <curl/curl.h>
+#include <fmt/core.h>
 
-#include "ParallelTiler.h"
-#include "TileHeightsGenerator.h"
-#include "alpine_raster.h"
-#include "cesium_tin_terra.h"
 #include "ctb/Grid.hpp"
-#include "Dataset.h"
-#include "DatasetReader.h"
-#include "TopDownTiler.h"
-#include "ctb/GlobalGeodetic.hpp"
-#include "ctb/GlobalMercator.hpp"
 #include "srs.h"
 
 using namespace std::literals;
@@ -49,7 +38,7 @@ unsigned int svtoui(const std::string_view s) {
 }
 
 template <class K, class V>
-constexpr const V& map_get_or_default(const std::map<K, V>& map, const K& key, const V& default_value) {
+constexpr const V &map_get_or_default(const std::map<K, V> &map, const K &key, const V &default_value) {
     const auto iter = map.find(key);
     if (iter == map.end()) {
         return default_value;
@@ -59,7 +48,7 @@ constexpr const V& map_get_or_default(const std::map<K, V>& map, const K& key, c
 
 constexpr auto &map_get_required(const auto &map, const auto &key) {
     const auto itr = map.find(key);
-    return itr != map.cend() ? itr->second : throw std::runtime_error(fmt::format("missing argument \"{}\"", key));;
+    return itr != map.cend() ? itr->second : throw std::runtime_error(fmt::format("missing argument \"{}\"", key));
 }
 
 class TileUrlBuilder {
@@ -74,7 +63,7 @@ public:
         this->layer = map_get_or_default(args, "layer"sv, "bmaporthofoto30cm"sv);
         this->style = map_get_or_default(args, "style"sv, "normal"sv);
     }
-    
+
     std::string build_url(const tile::Id &tile_id) const {
         return fmt::format("https://mapsneu.wien.gv.at/basemap/{}/{}/google3857/{}/{}/{}.jpeg", layer, style, tile_id.zoom_level, tile_id.coords.x, tile_id.coords.y);
     }
@@ -86,7 +75,7 @@ private:
 
 struct WriteCallbackData {
     std::ofstream file;
-    std::string path;
+    std::filesystem::path path;
 };
 
 // Write callback function to write downloaded data to the file
@@ -97,7 +86,7 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
     if (!data.file.is_open()) {
         // If the file is not opened yet, try to open it
         data.file.open(data.path, std::ios::binary);
-        
+
         if (!data.file.is_open()) {
             // Handle file opening failure
             return 0; // Returning 0 will abort the download
@@ -111,14 +100,14 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
     return total_size;
 }
 
-bool download_tile_by_url(const std::string& url, const std::string& path) {
+bool download_tile_by_url(const std::string &url, const std::filesystem::path &path) {
     // Skip tile if it already exists.
     if (std::filesystem::exists(path)) {
         return true;
     }
 
     // TODO: reuse instance
-    CURL* curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
     if (!curl) {
         return false;
     }
@@ -131,7 +120,8 @@ bool download_tile_by_url(const std::string& url, const std::string& path) {
     curl_easy_setopt(curl, CURLOPT_FAILONERROR, TRUE);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &callback_data);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 1000);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10000000L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10000000L);
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
 
@@ -140,7 +130,7 @@ bool download_tile_by_url(const std::string& url, const std::string& path) {
     }
     if (res != CURLE_OK) {
         std::string_view message = curl_easy_strerror(res);
-        std::string output = fmt::format("CURL ERROR: [{}] {}", static_cast<unsigned int>(res), message);
+        std::string output = fmt::format("cURL ERROR: [{}] {}", static_cast<unsigned int>(res), message);
         std::cout << output << std::endl;
         std::filesystem::remove(path);
         return false;
@@ -151,7 +141,7 @@ bool download_tile_by_url(const std::string& url, const std::string& path) {
 
 bool download_tile_by_id(const tile::Id root_id, const TileUrlBuilder &url_builder) {
     const std::string url = url_builder.build_url(root_id);
-    return download_tile_by_url(url, fmt::format("tile-{}-{}-{}.jpeg", root_id.zoom_level, root_id.coords.x, root_id.coords.y));
+    return download_tile_by_url(url, fmt::format("./tiles/tile-{}-{}-{}.jpeg", root_id.zoom_level, root_id.coords.x, root_id.coords.y));
 }
 
 bool download_tile_by_id_recursive(const tile::Id root_id, const TileUrlBuilder &url_builder) {
@@ -211,9 +201,7 @@ int main(int argc, char *argv[]) {
     const unsigned int srs = svtoui(map_get_or_default(arg_map, "srs"sv, "3857"sv));
     const std::string_view scheme_str = map_get_or_default(arg_map, "scheme"sv, "SlippyMap"sv);
     tile::Scheme scheme;
-    if (string_equals_ignore_case(scheme_str, "SlippyMap")
-        || string_equals_ignore_case(scheme_str, "Google")
-        || string_equals_ignore_case(scheme_str, "XYZ")) {
+    if (string_equals_ignore_case(scheme_str, "SlippyMap") || string_equals_ignore_case(scheme_str, "Google") || string_equals_ignore_case(scheme_str, "XYZ")) {
         scheme = tile::Scheme::SlippyMap;
     } else if (string_equals_ignore_case(scheme_str, "TMS")) {
         scheme = tile::Scheme::Tms;
