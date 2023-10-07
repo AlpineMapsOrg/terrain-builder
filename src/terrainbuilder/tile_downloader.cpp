@@ -189,7 +189,9 @@ class TileDownloader {
 public:
     TileDownloader(TileUrlBuilder *url_builder, const std::map<std::string_view, std::string_view> &args) {
         this->url_builder = url_builder;
-        this->output_path = map_get_or_default(args, "filename"sv, "tiles/tile-{zoom}-{row}-{col}.{ext}"sv);
+        this->output_path = map_get_or_default(args,
+                                               "filename"sv,
+                                               "tiles/{zoom}/{row}/{col}.{ext}"sv);
         this->early_skip = stob(map_get_or_default(args, "early-skip"sv, "true"sv));
 
         this->curl = curl_easy_init();
