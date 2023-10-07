@@ -296,6 +296,12 @@ public:
     }
 
     DownloadResult download_tile_by_id_recursive(const tile::Id root_id) const {
+        if (root_id.zoom_level == 11)
+            std::cout << root_id << std::endl;
+
+        //    if (root_id.zoom_level >= 10)
+        //        return false;
+
         const std::string url = this->url_builder->build_url(root_id);
         const DownloadResult result = this->download_tile_by_id(root_id);
 
