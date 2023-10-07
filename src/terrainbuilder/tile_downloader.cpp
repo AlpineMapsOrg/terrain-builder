@@ -37,6 +37,16 @@ unsigned int svtoui(const std::string_view s) {
     return n;
 }
 
+bool stob(const std::string_view s) {
+    if (string_equals_ignore_case(s, "true") || s == "1") {
+        return true;
+    }
+    if (string_equals_ignore_case(s, "false") || s == "0") {
+        return false;
+    }
+    throw std::invalid_argument{"invalid_argument"};
+}
+
 template <class K, class V>
 constexpr const V &map_get_or_default(const std::map<K, V> &map, const K &key, const V &default_value) {
     const auto iter = map.find(key);
@@ -49,6 +59,37 @@ constexpr const V &map_get_or_default(const std::map<K, V> &map, const K &key, c
 constexpr auto &map_get_required(const auto &map, const auto &key) {
     const auto itr = map.find(key);
     return itr != map.cend() ? itr->second : throw std::runtime_error(fmt::format("missing argument \"{}\"", key));
+}
+
+void string_replace_all(
+    std::string &s,
+    std::string_view find,
+    std::string_view replace) {
+    size_t pos = 0;
+    const size_t find_len = find.length();
+    const size_t replace_len = replace.length();
+
+    while ((pos = s.find(find, pos)) != std::string::npos) {
+        s.replace(pos, find_len, replace);
+        pos += replace_len; // Move past the replaced part
+    }
+}
+
+bool create_directories2(const std::filesystem::path& path) {
+    std::error_code err;
+    err.clear();
+
+    if (!std::filesystem::create_directories(path, err)) {
+        if (std::filesystem::exists(path)) {
+            // The folder already exists:
+            err.clear();
+            return true;
+        }
+
+        return false;
+    }
+
+    return true;
 }
 
 class TileUrlBuilder {
@@ -73,6 +114,22 @@ private:
     std::string_view style;
 };
 
+static std::string format_tile(const tile::Id tile) {
+    return fmt::format("Tile[Zoom={}, Row={}, Col={}]", tile.zoom_level, tile.coords.x, tile.coords.y);
+}
+
+void print_tile(const tile::Id tile) {
+    std::string tile_str = format_tile(tile);
+    fmt::print("{}", tile_str);
+    std::fflush(nullptr);
+}
+
+void update_tile_status(const tile::Id tile, const std::string_view status, const bool final) {
+    std::string tile_str = format_tile(tile);
+    fmt::print("\33[2K\r{} ({}){}", tile_str, status, final ? "\n" : "");
+    std::fflush(nullptr);
+}
+
 struct WriteCallbackData {
     std::ofstream file;
     std::filesystem::path path;
@@ -85,7 +142,6 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
     // Check if the file is opened
     if (!data.file.is_open()) {
         // If the file is not opened yet, try to open it
-        std::filesystem::create_directories(data.path.parent_path());
         data.file.open(data.path, std::ios::binary);
 
         if (!data.file.is_open()) {
@@ -101,73 +157,194 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
     return total_size;
 }
 
-bool download_tile_by_url(const std::string &url, const std::filesystem::path &path) {
-    // Skip tile if it already exists.
-    if (std::filesystem::exists(path)) {
-        return true;
+struct ProgressCallbackData {
+    tile::Id tile;
+};
+
+int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
+    ProgressCallbackData &data = *static_cast<ProgressCallbackData *>(clientp);
+
+    if (dltotal == 0) {
+        update_tile_status(data.tile, "Downloading...", false);
+        return 0;
     }
 
-    // TODO: reuse instance
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        return false;
-    }
+    // Calculate the download progress percentage
+    const double progress = ((double)dlnow / (double)dltotal) * 100;
 
-    // Create a custom data structure to pass file-related information to the write callback
-    WriteCallbackData callback_data;
-    callback_data.path = path;
+    // Write it to the console
+    update_tile_status(data.tile, fmt::format("Downloading {:.0f}%...", progress), false);
 
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_FAILONERROR, TRUE);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &callback_data);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10000000L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10000000L);
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
-    if (callback_data.file.is_open()) {
-        callback_data.file.close();
-    }
-    if (res != CURLE_OK) {
-        //        std::string_view message = curl_easy_strerror(res);
-        //        std::string output = fmt::format("cURL ERROR: [{}] {}", static_cast<unsigned int>(res), message);
-        //        std::cout << output << std::endl;
-        std::filesystem::remove(path);
-        return false;
-    }
-
-    return true;
+    return 0;
 }
 
-bool download_tile_by_id(const tile::Id root_id, const TileUrlBuilder &url_builder) {
-    const std::string url = url_builder.build_url(root_id);
-    return download_tile_by_url(url,
-                                fmt::format("./tiles/{}/{}/{}.jpeg",
-                                            root_id.zoom_level,
-                                            root_id.coords.x,
-                                            root_id.coords.y));
-}
+enum DownloadResult {
+    Downloaded,
+    Skipped,
+    Absent,
+    Failed
+};
 
-bool download_tile_by_id_recursive(const tile::Id root_id, const TileUrlBuilder &url_builder)
-{
-    if (root_id.zoom_level == 11)
-        std::cout << root_id << std::endl;
+class TileDownloader {
+public:
+    TileDownloader(TileUrlBuilder *url_builder, const std::map<std::string_view, std::string_view> &args) {
+        this->url_builder = url_builder;
+        this->output_path = map_get_or_default(args, "filename"sv, "tiles/tile-{zoom}-{row}-{col}.{ext}"sv);
+        this->early_skip = stob(map_get_or_default(args, "early-skip"sv, "true"sv));
 
-    //    if (root_id.zoom_level >= 10)
-    //        return false;
-
-    if (!download_tile_by_id(root_id, url_builder)) {
-        return false;
+        this->curl = curl_easy_init();
+        if (!this->curl) {
+            throw std::runtime_error("failed to init cURL");
+        }
     }
 
-    const std::array<tile::Id, 4> subtiles = root_id.children();
-    for (const tile::Id& tile : subtiles) {
-        download_tile_by_id_recursive(tile, url_builder);
+    ~TileDownloader() {
+        if (this->curl) {
+            curl_easy_cleanup(this->curl);
+        }
     }
 
-    return true;
-}
+    DownloadResult download_tile_by_url(const tile::Id tile, const std::string &url, const std::filesystem::path &path) const {
+        print_tile(tile);
+
+        // Skip tile if it already exists.
+        const std::filesystem::path absolute_path = std::filesystem::absolute(path);
+        if (std::filesystem::exists(absolute_path)) {
+            update_tile_status(tile, "Skipped", true);
+            
+            return DownloadResult::Skipped;
+        }
+
+        // Create parent directories
+        const std::filesystem::path parent_path = absolute_path.parent_path();
+        if (!create_directories2(parent_path)) {
+            throw std::runtime_error(fmt::format("failed to create directories \"{}\"", parent_path.string()));
+        }
+
+        // Perform actual download
+        update_tile_status(tile, "Connecting...", false);
+
+        for (int i = 0; i < 100; i++) {
+            // Set the URL to download
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+            // Create a custom data structure to pass file-related information to the write callback
+            WriteCallbackData write_callback_data;
+            write_callback_data.path = path;
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &write_callback_data);
+
+            // Set the progress callback function and pass the logger state
+            ProgressCallbackData progress_callback_data;
+            progress_callback_data.tile = tile;
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progress_callback);
+            curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress_callback_data);
+
+            // Disable timeouts and fail on HTTP status > 400
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L /* disabled */);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 2147482L);
+            curl_easy_setopt(curl, CURLOPT_FAILONERROR, TRUE);
+
+            const CURLcode res = curl_easy_perform(curl);
+
+            if (write_callback_data.file.is_open()) {
+                write_callback_data.file.close();
+            }
+
+            if (res == CURLE_OK) {
+                update_tile_status(tile, "Done", true);
+                return DownloadResult::Downloaded;
+            }
+
+            // remove empty or partial file.
+            std::filesystem::remove(absolute_path);
+
+            // Handle errors
+            const std::string_view message = curl_easy_strerror(res);
+            const unsigned int code = static_cast<unsigned int>(res);
+
+            if (res == CURLE_HTTP_RETURNED_ERROR) {
+                long status;
+                curl_easy_getinfo(this->curl, CURLINFO_RESPONSE_CODE, &status);
+
+                if (status == 404) {
+                    update_tile_status(tile, "Absent", true);
+                    return DownloadResult::Absent;
+                }
+
+                update_tile_status(tile, fmt::format("Error HTTP [{}]", status), true);
+            } else {
+                // no matter how high the timeout is set, the request still times out, so we just try again if we do.
+                if (res == CURLE_OPERATION_TIMEDOUT) {
+                    continue;
+                }
+
+                update_tile_status(tile, fmt::format("Error cURL [{}] {}", code, message), true);
+            }
+
+            return DownloadResult::Failed;
+        }
+        
+        return DownloadResult::Failed;
+    }
+
+    DownloadResult download_tile_by_id(const tile::Id tile) const {
+        const std::string url = this->url_builder->build_url(tile);
+        const std::string path = this->get_tile_path(tile);
+        return this->download_tile_by_url(tile, url, path);
+    }
+
+    DownloadResult download_tile_by_id_recursive(const tile::Id root_id) const {
+        const std::string url = this->url_builder->build_url(root_id);
+        const DownloadResult result = this->download_tile_by_id(root_id);
+
+        if (result == DownloadResult::Failed || result == DownloadResult::Absent) {
+            return result;
+        }
+
+        const std::array<tile::Id, 4> subtiles = root_id.children();
+
+        bool all_skipped = true;
+        for (const tile::Id &tile : subtiles) {
+            const std::string path = this->get_tile_path(tile);
+            if (!std::filesystem::exists(path)) {
+                all_skipped = false;
+                break;
+            }
+        }
+
+        if (early_skip && all_skipped) {
+            for (const tile::Id &tile : subtiles) {
+                print_tile(tile);
+                update_tile_status(tile, "Skipped", true);
+            }
+        } else {
+            for (const tile::Id &tile : subtiles) {
+                this->download_tile_by_id_recursive(tile);
+            }
+        }
+
+        return result;
+    }
+
+private:
+    TileUrlBuilder *url_builder;
+    std::string_view output_path;
+    std::string_view file_name_template;
+    CURL *curl;
+    bool early_skip;
+
+    std::string get_tile_path(const tile::Id tile) const {
+        std::string file_path(this->output_path);
+        string_replace_all(file_path, "{zoom}"sv, std::to_string(tile.zoom_level));
+        string_replace_all(file_path, "{row}"sv, std::to_string(tile.coords.x));
+        string_replace_all(file_path, "{col}"sv, std::to_string(tile.coords.y));
+        string_replace_all(file_path, "{ext}"sv, "jpeg"sv);
+        return file_path;
+    }
+
+};
 
 int main(int argc, char *argv[]) {
     // Copy args into vector for easier access.
@@ -230,5 +407,6 @@ int main(int argc, char *argv[]) {
     const tile::Id root_id = {zoom, {row, col}, scheme};
 
     // Download tile and subtiles recursively.
-    return download_tile_by_id_recursive(root_id, *url_builder);
+    TileDownloader downloader(url_builder.get(), arg_map);
+    downloader.download_tile_by_id_recursive(root_id);
 }
