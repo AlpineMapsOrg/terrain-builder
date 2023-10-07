@@ -14,6 +14,8 @@
 
 using namespace std::literals;
 
+static unsigned verbosity = 1;
+
 bool char_equals_ignore_case(const char a, const char b) {
     return std::tolower(std::char_traits<char>::to_int_type(a)) ==
            std::tolower(std::char_traits<char>::to_int_type(b));
@@ -165,7 +167,8 @@ int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_
     ProgressCallbackData &data = *static_cast<ProgressCallbackData *>(clientp);
 
     if (dltotal == 0) {
-        update_tile_status(data.tile, "Downloading...", false);
+        if (verbosity > 0)
+            update_tile_status(data.tile, "Downloading...", false);
         return 0;
     }
 
@@ -173,7 +176,8 @@ int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_
     const double progress = ((double)dlnow / (double)dltotal) * 100;
 
     // Write it to the console
-    update_tile_status(data.tile, fmt::format("Downloading {:.0f}%...", progress), false);
+    if (verbosity > 0)
+        update_tile_status(data.tile, fmt::format("Downloading {:.0f}%...", progress), false);
 
     return 0;
 }
@@ -207,13 +211,15 @@ public:
     }
 
     DownloadResult download_tile_by_url(const tile::Id tile, const std::string &url, const std::filesystem::path &path) const {
-        print_tile(tile);
+        if (verbosity > 0)
+            print_tile(tile);
 
         // Skip tile if it already exists.
         const std::filesystem::path absolute_path = std::filesystem::absolute(path);
         if (std::filesystem::exists(absolute_path)) {
-            update_tile_status(tile, "Skipped", true);
-            
+            if (verbosity > 0)
+                update_tile_status(tile, "Skipped", true);
+
             return DownloadResult::Skipped;
         }
 
@@ -224,7 +230,8 @@ public:
         }
 
         // Perform actual download
-        update_tile_status(tile, "Connecting...", false);
+        if (verbosity > 0)
+            update_tile_status(tile, "Connecting...", false);
 
         for (int i = 0; i < 100; i++) {
             // Set the URL to download
@@ -255,7 +262,8 @@ public:
             }
 
             if (res == CURLE_OK) {
-                update_tile_status(tile, "Done", true);
+                if (verbosity > 0)
+                    update_tile_status(tile, "Done", true);
                 return DownloadResult::Downloaded;
             }
 
@@ -271,7 +279,8 @@ public:
                 curl_easy_getinfo(this->curl, CURLINFO_RESPONSE_CODE, &status);
 
                 if (status == 404) {
-                    update_tile_status(tile, "Absent", true);
+                    if (verbosity > 0)
+                        update_tile_status(tile, "Absent", true);
                     return DownloadResult::Absent;
                 }
 
@@ -323,9 +332,11 @@ public:
         }
 
         if (early_skip && all_skipped) {
-            for (const tile::Id &tile : subtiles) {
-                print_tile(tile);
-                update_tile_status(tile, "Skipped", true);
+            if (verbosity > 0) {
+                for (const tile::Id &tile : subtiles) {
+                    print_tile(tile);
+                    update_tile_status(tile, "Skipped", true);
+                }
             }
         } else {
             for (const tile::Id &tile : subtiles) {
@@ -406,6 +417,10 @@ int main(int argc, char *argv[]) {
 
     if (srs != static_cast<int>(ctb::Grid::Srs::SphericalMercator)) {
         throw std::runtime_error(fmt::format("unsupported srs EPSG \"{}\"", srs));
+    }
+
+    if (arg_map.contains("verbosity")) {
+        verbosity = svtoui(arg_map["verbosity"]);
     }
 
     // Construct root tile
