@@ -271,8 +271,8 @@ public:
             curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress_callback_data);
 
             // Disable timeouts and fail on HTTP status > 400
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L /* disabled */);
-            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 2147482L);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
             curl_easy_setopt(curl, CURLOPT_FAILONERROR, TRUE);
 
             const CURLcode res = curl_easy_perform(curl);
@@ -320,7 +320,8 @@ public:
 
             return DownloadResult::Failed;
         }
-        
+        update_tile_status(tile, fmt::format("Failed after 100 attempts"), true);
+
         return DownloadResult::Failed;
     }
 
