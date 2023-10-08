@@ -182,6 +182,25 @@ int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_
     return 0;
 }
 
+enum class ContentType {
+    Image,
+    Other,
+    Unknown,
+};
+
+ContentType read_content_type(CURL *curl)
+{
+    char *content_type = NULL;
+    const auto res = curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &content_type);
+    if (res != CURLE_OK || content_type == nullptr)
+        return ContentType::Unknown;
+
+    const std::string content_type_string = content_type;
+    if (content_type_string.rfind("image", 0) == 0)
+        return ContentType::Image;
+    return ContentType::Other;
+}
+
 enum DownloadResult {
     Downloaded,
     Skipped,
@@ -189,7 +208,8 @@ enum DownloadResult {
     Failed
 };
 
-class TileDownloader {
+class TileDownloader
+{
 public:
     TileDownloader(TileUrlBuilder *url_builder, const std::map<std::string_view, std::string_view> &args) {
         this->url_builder = url_builder;
@@ -261,7 +281,9 @@ public:
                 write_callback_data.file.close();
             }
 
-            if (res == CURLE_OK) {
+            const auto content_type = read_content_type(this->curl);
+
+            if (res == CURLE_OK && content_type == ContentType::Image) {
                 if (verbosity > 0)
                     update_tile_status(tile, "Done", true);
                 return DownloadResult::Downloaded;
@@ -285,6 +307,8 @@ public:
                 }
 
                 update_tile_status(tile, fmt::format("Error HTTP [{}]", status), true);
+            } else if (content_type == ContentType::Other) {
+                update_tile_status(tile, fmt::format("Error, bad content type."), true);
             } else {
                 // no matter how high the timeout is set, the request still times out, so we just try again if we do.
                 if (res == CURLE_OPERATION_TIMEDOUT) {
@@ -363,7 +387,6 @@ private:
         string_replace_all(file_path, "{ext}"sv, "jpeg"sv);
         return file_path;
     }
-
 };
 
 int main(int argc, char *argv[]) {
