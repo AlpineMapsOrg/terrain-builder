@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <optional>
 
 #include <fmt/core.h>
@@ -96,33 +97,46 @@ private:
     std::vector<tile::Id> tile_stack;
 };
 
-void save_mesh(const std::vector<float> vertices, const std::vector<unsigned int> &indices) {
+template<typename T>
+size_t vectorsizeof(const typename std::vector<T>& vec)
+{
+    return sizeof(T) * vec.size();
+}
+
+void save_mesh_as_gltf(const std::vector<float>& vertices, const std::vector<unsigned int> &indices) {
     // Create a model with a single mesh and save it as a gltf file
     tinygltf::Model m;
     tinygltf::Scene scene;
     tinygltf::Mesh mesh;
     tinygltf::Primitive primitive;
     tinygltf::Node node;
-    tinygltf::Buffer vertex_buffer;
-    tinygltf::Buffer index_buffer;
+    tinygltf::Buffer buffer;
     tinygltf::BufferView vertex_buffer_view;
     tinygltf::BufferView index_buffer_view;
     tinygltf::Accessor index_accessor;
     tinygltf::Accessor vertex_accessor;
     tinygltf::Asset asset;
 
-    index_buffer.data.resize(indices.size() * sizeof(unsigned int));
-    memcpy(index_buffer.data.data(), indices.data(), index_buffer.data.size());
+    const size_t index_data_byte_count = vectorsizeof(indices);
+    const size_t index_data_offset = 0;
+    const size_t index_count = indices.size();
+    const size_t vertex_data_byte_count = vectorsizeof(vertices);
+    const size_t vertex_data_offset = index_data_byte_count;
+    const size_t vertex_attributes = 3;
+    const size_t vertex_count = vertices.size() / vertex_attributes;
+
+    buffer.data.resize(index_data_byte_count + vertex_data_byte_count);
+    memcpy(buffer.data.data() + index_data_offset, indices.data(), index_data_byte_count);
+    memcpy(buffer.data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
+
     index_buffer_view.buffer = 0;
-    index_buffer_view.byteOffset = 0;
-    index_buffer_view.byteLength = index_buffer.data.size();
+    index_buffer_view.byteOffset = index_data_offset;
+    index_buffer_view.byteLength = index_data_byte_count;
     index_buffer_view.target = TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER;
 
-    vertex_buffer.data.resize(vertices.size() * sizeof(float));
-    memcpy(vertex_buffer.data.data(), vertices.data(), vertex_buffer.data.size());
-    vertex_buffer_view.buffer = 1;
-    vertex_buffer_view.byteOffset = 0;
-    vertex_buffer_view.byteLength = vertex_buffer.data.size();
+    vertex_buffer_view.buffer = 0;
+    vertex_buffer_view.byteOffset = vertex_data_offset;
+    vertex_buffer_view.byteLength = vertex_data_byte_count;
     vertex_buffer_view.target = TINYGLTF_TARGET_ARRAY_BUFFER;
 
     index_accessor.bufferView = 0;
@@ -136,19 +150,20 @@ void save_mesh(const std::vector<float> vertices, const std::vector<unsigned int
     vertex_accessor.bufferView = 1;
     vertex_accessor.byteOffset = 0;
     vertex_accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-    vertex_accessor.count = vertices.size() / 3;
+    vertex_accessor.count = vertices.size() / vertex_attributes;
     vertex_accessor.type = TINYGLTF_TYPE_VEC3;
     vertex_accessor.minValues = {
         std::numeric_limits<double>::max(),
         std::numeric_limits<double>::max(),
-        std::numeric_limits<double>::max()};
+        std::numeric_limits<double>::max()
+    };
     vertex_accessor.maxValues = {
         std::numeric_limits<double>::min(),
         std::numeric_limits<double>::min(),
         std::numeric_limits<double>::min(),
     };
     for (size_t i = 0; i < vertices.size(); i++) {
-        const size_t index = i % 3;
+        const size_t index = i % vertex_attributes;
         vertex_accessor.minValues[index] = std::min(static_cast<double>(vertices[i]), vertex_accessor.minValues[index]);
         vertex_accessor.maxValues[index] = std::max(static_cast<double>(vertices[i]), vertex_accessor.maxValues[index]);
     }
@@ -173,8 +188,7 @@ void save_mesh(const std::vector<float> vertices, const std::vector<unsigned int
     m.scenes.push_back(scene);
     m.meshes.push_back(mesh);
     m.nodes.push_back(node);
-    m.buffers.push_back(index_buffer);
-    m.buffers.push_back(vertex_buffer);
+    m.buffers.push_back(buffer);
     m.bufferViews.push_back(index_buffer_view);
     m.bufferViews.push_back(vertex_buffer_view);
     m.accessors.push_back(index_accessor);
@@ -218,10 +232,24 @@ glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::ivec2 &v)
     GDALApplyGeoTransform(transform.data(), static_cast<double>(v.x), static_cast<double>(v.y), &result.x, &result.y);
     return result;
 }
+glm::dvec2 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec2 &v) {
+    glm::dvec2 result(v);
+    if (!transform->Transform(1, &result.x, &result.y))
+        throw Exception("apply_transform() failed");
+    return result;
+}
+glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec3 &v) {
+    glm::dvec3 result(v);
+    if (!transform->Transform(1, &result.x, &result.y, &result.z))
+        throw Exception("apply_transform() failed");
+    return result;
+}
 
 int main() {
     // Read MGI Dataset
     const DatasetPtr raw_dataset = Dataset::make_shared("/mnt/c/Users/Admin/Downloads/innenstadt_gs_1m_mgi.tif");
+    // const DatasetPtr raw_dataset = Dataset::make_shared("/mnt/e/Code/TU/2023S/Project/terrain-builder/unittests/data/austria/vienna_20m_mgi.tif");
+    // const DatasetPtr raw_dataset = Dataset::make_shared("/mnt/e/Code/TU/2023S/Project/terrain-builder/unittests/data/austria/at_100m_mgi.tif");
     const OGRSpatialReference source_srs = raw_dataset->srs();
 
     // Convert dataset bounds into google3857
@@ -233,7 +261,16 @@ int main() {
     wgs84.importFromEPSG(4326);
     wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-    const tile::Id root_tile = {19, {285989, 181795}, tile::Scheme::SlippyMap};
+    OGRSpatialReference ecef;
+    ecef.importFromEPSG(4978);
+    ecef.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+    // const tile::SrsBounds original_bounds = raw_dataset->bounds();
+    // const tile::SrsBounds target_bounds = encompassing_bounding_box_transfer(raw_dataset->srs(), webmercator, original_bounds);
+    // TODO: automatically deduce tile from bounds.
+    const tile::Id root_tile = {16, {35748, 22724}, tile::Scheme::SlippyMap};
+    // const tile::Id root_tile = {18, {142994, 90897}, tile::Scheme::SlippyMap};
+    // const tile::Id root_tile = tile::Id {19, {285989, 181795}, tile::Scheme::SlippyMap};
 
     // Tile regions at specific zoom level
     const unsigned int zoom_level = 21;
@@ -279,6 +316,10 @@ int main() {
     std::vector<float> vertices;
     vertices.reserve(point_count * 3);
     std::vector<unsigned int> indices;
+
+    const std::unique_ptr<OGRCoordinateTransformation> transform_source_grid = srs::transformation(source_srs, grid.getSRS());
+    const std::unique_ptr<OGRCoordinateTransformation> transform_source_ecef = srs::transformation(source_srs, ecef);
+
     indices.reserve(triangle_count * 3);
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
@@ -287,14 +328,15 @@ int main() {
             const double height = raw_tile_data.pixel(i, j);
             const glm::dvec2 coords_raster(i + 0.5, j + 0.5);
             const glm::dvec3 coords_source(apply_transform(geo_transform, coords_raster), height);
-            const glm::vec3 coords_ecef = srs::toECEF(source_srs, coords_source);
+            const glm::dvec3 coords_ecef = apply_transform(transform_source_ecef.get(), coords_source);
 
             const glm::ivec2 coords_center_raster_local(i + 1, j + 1);
             const glm::ivec2 coords_center_raster_global = coords_center_raster_local + pixel_bounds.min;
             const glm::dvec2 coords_center_source = apply_transform(geo_transform, coords_center_raster_global);
-            const glm::dvec2 coords_center_webmercator = srs::to(source_srs, grid.getSRS(), coords_center_source);
+            const glm::dvec2 coords_center_webmercator = apply_transform(transform_source_grid.get(), coords_center_source);
 
             // Current Vertex
+            // position
             vertices.push_back(coords_ecef.x);
             vertices.push_back(coords_ecef.y);
             vertices.push_back(coords_ecef.z);
@@ -320,7 +362,7 @@ int main() {
         }
     }
 
-    save_mesh(vertices, indices);
+    save_mesh_as_gltf(vertices, indices);
 
     return 0;
 }
