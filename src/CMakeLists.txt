@@ -52,6 +52,18 @@ else()
     endif()
 endif()
 
+if(NOT TARGET tinygltf)
+    set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+    set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+    FetchContent_Declare(tinygltf
+        GIT_REPOSITORY https://github.com/syoyo/tinygltf
+        GIT_TAG release
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/tinygltf
+    )
+    FetchContent_MakeAvailable(tinygltf)
+    # add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/tinygltf ${CMAKE_BINARY_DIR}/_deps/tinygltf-build)
+endif()
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
@@ -120,4 +132,4 @@ endif()
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_link_libraries(terrainbuilder PUBLIC terrainlib)
+target_link_libraries(terrainbuilder PUBLIC terrainlib tinygltf)

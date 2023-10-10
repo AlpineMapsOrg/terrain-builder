@@ -165,7 +165,7 @@ public:
         const PixelPoint pxMinLeft(tms_tile_id.coords.x * mGridSize, tms_tile_id.coords.y * mGridSize);
         const PixelPoint pxMaxRight((tms_tile_id.coords.x + 1) * mGridSize + border_se, (tms_tile_id.coords.y + 1) * mGridSize + border_se);
 
-             // convert pixels to native coordinates
+        // convert pixels to native coordinates
         const CRSPoint minLeft = pixelsToCrs(pxMinLeft, tms_tile_id.zoom_level);
         const CRSPoint maxRight = pixelsToCrs(pxMaxRight, tms_tile_id.zoom_level);
 

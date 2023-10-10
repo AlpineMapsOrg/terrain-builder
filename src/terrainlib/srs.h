@@ -64,6 +64,14 @@ inline glm::tvec3<T> to(const OGRSpatialReference& source_srs, const OGRSpatialR
 }
 
 template <typename T>
+inline glm::tvec2<T> to(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, glm::tvec2<T> p) {
+    const auto transform = transformation(source_srs, target_srs);
+    if (!transform->Transform(1, &p.x, &p.y))
+        throw Exception("srs::to(glm::tvec2<T>) failed");
+    return p;
+}
+
+template <typename T>
 inline glm::tvec3<T> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p)
 {
     OGRSpatialReference ecef_srs;
