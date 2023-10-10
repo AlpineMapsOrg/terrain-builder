@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(terrain_builder_src LANGUAGES CXX)
+project(terrain_builder_src LANGUAGES C CXX)
 
 option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" ON)
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
@@ -61,7 +61,22 @@ if(NOT TARGET tinygltf)
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/tinygltf
     )
     FetchContent_MakeAvailable(tinygltf)
-    # add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/tinygltf ${CMAKE_BINARY_DIR}/_deps/tinygltf-build)
+endif()
+
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
+set(ASSIMP_BUILD_TESTS OFF)
+set(ASSIMP_BUILD_ZLIB OFF)
+set(ASSIMP_INSTALL OFF)
+# set(ZLIB_FOUND ON)
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/assimp)
+    FetchContent_Declare(assimp
+        GIT_REPOSITORY https://github.com/assimp/assimp.git
+        GIT_TAG master
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/assimp
+    )
+    FetchContent_MakeAvailable(assimp)
+else()
+    add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/assimp ${CMAKE_BINARY_DIR}/_deps/assimp-build)
 endif()
 
 add_library(terrainlib
@@ -128,8 +143,8 @@ if (ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
 
-
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
+    terrainbuilder/mesh_io.cpp
 )
-target_link_libraries(terrainbuilder PUBLIC terrainlib tinygltf)
+target_link_libraries(terrainbuilder PUBLIC terrainlib tinygltf assimp ZLIB::ZLIB)
