@@ -18,13 +18,14 @@
 #include "TileHeightsGenerator.h"
 #include "alpine_raster.h"
 #include "ctb/Grid.hpp"
-
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "TopDownTiler.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include "srs.h"
+
+#include "mesh_io.h"
 
 tile::SrsBounds encompassing_bounding_box_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const tile::SrsBounds &source_bounds) {
     const std::unique_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
@@ -268,8 +269,9 @@ int main() {
     // const tile::SrsBounds original_bounds = raw_dataset->bounds();
     // const tile::SrsBounds target_bounds = encompassing_bounding_box_transfer(raw_dataset->srs(), webmercator, original_bounds);
     // TODO: automatically deduce tile from bounds.
-    const tile::Id root_tile = {16, {35748, 22724}, tile::Scheme::SlippyMap};
-    // const tile::Id root_tile = {18, {142994, 90897}, tile::Scheme::SlippyMap};
+    // const tile::Id root_tile = {16, {35748, 22724}, tile::Scheme::SlippyMap};
+    // const tile::Id root_tile = {17, {71497, 45448}, tile::Scheme::SlippyMap};
+    const tile::Id root_tile = {18, {142994, 90897}, tile::Scheme::SlippyMap};
     // const tile::Id root_tile = tile::Id {19, {285989, 181795}, tile::Scheme::SlippyMap};
 
     // Tile regions at specific zoom level
@@ -313,14 +315,16 @@ int main() {
 
     const unsigned int point_count = raw_tile_data.width() * raw_tile_data.height();
     const unsigned int triangle_count = (raw_tile_data.width() - 1) * (raw_tile_data.height() - 1) * 2;
-    std::vector<float> vertices;
-    vertices.reserve(point_count * 3);
+    std::vector<glm::dvec3> positions;
+    positions.reserve(point_count);
+    std::vector<glm::dvec2> uvs;
+    uvs.reserve(point_count);
     std::vector<unsigned int> indices;
+    indices.reserve(triangle_count * 3);
 
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_grid = srs::transformation(source_srs, grid.getSRS());
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_ecef = srs::transformation(source_srs, ecef);
 
-    indices.reserve(triangle_count * 3);
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
             unsigned int index = i * raw_tile_data.width() + j;
@@ -329,24 +333,25 @@ int main() {
             const glm::dvec2 coords_raster(i + 0.5, j + 0.5);
             const glm::dvec3 coords_source(apply_transform(geo_transform, coords_raster), height);
             const glm::dvec3 coords_ecef = apply_transform(transform_source_ecef.get(), coords_source);
+            const glm::dvec2 coords_grid = apply_transform(transform_source_grid.get(), glm::dvec2(coords_source));
+            const glm::dvec2 coords_in_tile = (coords_grid - tile_bounds.min) / tile_bounds.size();
 
             const glm::ivec2 coords_center_raster_local(i + 1, j + 1);
             const glm::ivec2 coords_center_raster_global = coords_center_raster_local + pixel_bounds.min;
             const glm::dvec2 coords_center_source = apply_transform(geo_transform, coords_center_raster_global);
-            const glm::dvec2 coords_center_webmercator = apply_transform(transform_source_grid.get(), coords_center_source);
+            const glm::dvec2 coords_center_grid = apply_transform(transform_source_grid.get(), coords_center_source);
 
             // Current Vertex
             // position
-            vertices.push_back(coords_ecef.x);
-            vertices.push_back(coords_ecef.y);
-            vertices.push_back(coords_ecef.z);
+            positions.push_back(coords_ecef);
+            uvs.push_back(coords_in_tile);
 
             if (i >= raw_tile_data.width() - 1 || j >= raw_tile_data.width() - 1) {
                 // Skip last row and column because they don't form new triangles
                 continue;
             }
 
-            if (!tile_bounds.contains(coords_center_webmercator)) {
+            if (!tile_bounds.contains(coords_center_grid)) {
                 // Skip triangles out of bounds
                 continue;
             }
@@ -362,7 +367,8 @@ int main() {
         }
     }
 
-    save_mesh_as_gltf(vertices, indices);
+    // save_mesh_as_gltf(vertices, indices);
+    save_mesh_as_dae(indices, positions, uvs);
 
     return 0;
 }

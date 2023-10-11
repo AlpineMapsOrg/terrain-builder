@@ -67,6 +67,8 @@ set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
 set(ASSIMP_BUILD_TESTS OFF)
 set(ASSIMP_BUILD_ZLIB OFF)
 set(ASSIMP_INSTALL OFF)
+set(ASSIMP_DOUBLE_PRECISION ON)
+set(ASSIMP_AI_REAL_TEXT_PRECISION 17)
 # set(ZLIB_FOUND ON)
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/assimp)
     FetchContent_Declare(assimp
@@ -78,6 +80,18 @@ if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/assimp)
 else()
     add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/assimp ${CMAKE_BINARY_DIR}/_deps/assimp-build)
 endif()
+
+FetchContent_Declare(stb
+    GIT_REPOSITORY https://github.com/nothings/stb
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/stb
+    GIT_PROGRESS TRUE
+    USES_TERMINAL_DOWNLOAD TRUE
+)
+FetchContent_MakeAvailable(stb)
+
+# Include stb_image.h
+set(STB_SOURCES_DIR "${PROJECT_SOURCE_DIR}/../3rdparty/stb")
+include_directories(STB_SOURCES_DIR)
 
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
