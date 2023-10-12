@@ -1,10 +1,9 @@
 cmake_minimum_required(VERSION 3.19)
-project(terrain_builder_src LANGUAGES CXX)
+project(terrain_builder_src LANGUAGES C CXX)
 
 option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" ON)
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
-
 
 find_package(GDAL REQUIRED)
 find_package(TBB REQUIRED)
@@ -13,38 +12,40 @@ find_package(ZLIB REQUIRED)
 if(NOT GDAL_CONFIG)
     message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
 endif()
+
 execute_process(
-  COMMAND ${GDAL_CONFIG} --version
-  OUTPUT_VARIABLE SYSTEM_GDAL_VERSION
+    COMMAND ${GDAL_CONFIG} --version
+    OUTPUT_VARIABLE SYSTEM_GDAL_VERSION
 )
 
 if(SYSTEM_GDAL_VERSION VERSION_LESS "3.3")
     message(FATAL_ERROR "GDAL version \"${SYSTEM_GDAL_VERSION}\" is too old, at least 3.2 is required")
 endif()
 
-
 include(FetchContent)
+
 if(NOT TARGET fmt::fmt)
     FetchContent_Declare(fmt
         GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-        SOURCE_DIR 		${CMAKE_SOURCE_DIR}/3rdparty/fmt
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
     )
     FetchContent_MakeAvailable(fmt)
 endif()
+
 if(ALP_AUTOUPDATE_RADIX)
     FetchContent_Declare(radix
-        GIT_REPOSITORY  https://github.com/AlpineMapsOrg/radix.git
-        GIT_TAG         origin/main
-        SOURCE_DIR      ${CMAKE_SOURCE_DIR}/3rdparty/radix
-        SOURCE_SUBDIR   src
+        GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
+        GIT_TAG origin/main
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
+        SOURCE_SUBDIR src
     )
     FetchContent_MakeAvailable(radix)
 else()
-    if (NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
+    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
         FetchContent_Declare(radix
-            GIT_REPOSITORY  git@github.com:AlpineMapsOrg/radix.git
-            GIT_TAG         main
-            SOURCE_DIR      ${CMAKE_SOURCE_DIR}/3rdparty/radix
+            GIT_REPOSITORY git@github.com:AlpineMapsOrg/radix.git
+            GIT_TAG main
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
         )
         FetchContent_MakeAvailable(radix)
     else()
@@ -52,16 +53,24 @@ else()
     endif()
 endif()
 
-if(NOT TARGET tinygltf)
-    set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
-    set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
-    FetchContent_Declare(tinygltf
-        GIT_REPOSITORY https://github.com/syoyo/tinygltf
-        GIT_TAG release
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/tinygltf
+if(NOT TARGET cgltf)
+    FetchContent_Declare(cgltf
+        GIT_REPOSITORY https://github.com/jkuhlmann/cgltf
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cgltf
     )
-    FetchContent_MakeAvailable(tinygltf)
-    # add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/tinygltf ${CMAKE_BINARY_DIR}/_deps/tinygltf-build)
+    FetchContent_MakeAvailable(cgltf)
+    add_library(cgltf INTERFACE)
+    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
+endif()
+
+if(NOT TARGET stb)
+    FetchContent_Declare(stb
+        GIT_REPOSITORY https://github.com/nothings/stb
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/stb
+    )
+    FetchContent_MakeAvailable(stb)
+    add_library(stb INTERFACE)
+    target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 endif()
 
 add_library(terrainlib
@@ -124,12 +133,12 @@ add_library(terrainlib
 )
 target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL fmt freeimage TBB::tbb)
 target_include_directories(terrainlib PUBLIC ./terrainlib)
-if (ALP_ENABLE_OVERVIEW_READING)
+
+if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
-
 
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_link_libraries(terrainbuilder PUBLIC terrainlib tinygltf)
+target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb)
