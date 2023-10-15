@@ -128,7 +128,7 @@ target_link_libraries(terrainbuilder PUBLIC terrainlib)
 
 
 add_executable(tile-downloader
-    terrainbuilder/tile_downloader.cpp
+    tile_downloader/main.cpp
 )
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
