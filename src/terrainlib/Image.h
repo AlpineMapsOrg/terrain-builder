@@ -54,7 +54,8 @@ public:
         return m_data[row * m_width + column];
     }
 
-    [[nodiscard]] float* data() { return m_data.data(); }
+    [[nodiscard]] T* data() { return m_data.data(); }
+    [[nodiscard]] const T *data() const { return m_data.data(); }
 
     [[nodiscard]] auto size() const { return m_data.size(); }
     [[nodiscard]] auto begin() { return m_data.begin(); }

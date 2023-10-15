@@ -26,7 +26,7 @@ include(FetchContent)
 
 if(NOT TARGET fmt::fmt)
     FetchContent_Declare(fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_REPOSITORY https://github.com/fmtlib/fmt
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
     )
     FetchContent_MakeAvailable(fmt)
@@ -35,7 +35,7 @@ endif()
 if(ALP_AUTOUPDATE_RADIX)
     FetchContent_Declare(radix
         GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-        GIT_TAG origin/main
+        GIT_TAG main
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
         SOURCE_SUBDIR src
     )
