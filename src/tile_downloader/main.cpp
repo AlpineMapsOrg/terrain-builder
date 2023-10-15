@@ -333,12 +333,6 @@ public:
 
     DownloadResult download_tile_by_id_recursive(const tile::Id root_id) const
     {
-        // if (root_id.zoom_level == 11)
-        //     std::cout << root_id << std::endl;
-
-        // if (root_id.zoom_level >= 10)
-        //     return false;
-
         const std::string url = this->url_builder->build_url(root_id);
         const DownloadResult result = this->download_tile_by_id(root_id);
 
@@ -348,26 +342,20 @@ public:
 
         const std::array<tile::Id, 4> subtiles = root_id.children();
 
-        bool all_skipped = true;
-        for (const tile::Id &tile : subtiles) {
-            const std::string path = this->get_tile_path(tile);
-            if (!std::filesystem::exists(path)) {
-                all_skipped = false;
-                break;
-            }
-        }
+        for (size_t i = 0; i < subtiles.size(); i++) {
+            const tile::Id &tile = subtiles[i];
 
-        if (early_skip && all_skipped) {
-            if (verbosity > 0) {
-                for (const tile::Id &tile : subtiles) {
+            if (early_skip && i + 1 < subtiles.size()) {
+                const tile::Id &next_tile = subtiles[i + 1];
+                const std::string next_tile_path = this->get_tile_path(next_tile);
+                if (std::filesystem::exists(next_tile_path)) {
                     print_tile(tile);
                     update_tile_status(tile, "Skipped", true);
+                    continue;
                 }
             }
-        } else {
-            for (const tile::Id &tile : subtiles) {
-                this->download_tile_by_id_recursive(tile);
-            }
+            
+            this->download_tile_by_id_recursive(tile);
         }
 
         return result;
