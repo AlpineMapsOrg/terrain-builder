@@ -4,6 +4,7 @@
 #include <iterator>
 #include <optional>
 #include <vector>
+#include <numeric>
 
 #include <FreeImage.h>
 #include <fmt/core.h>
@@ -11,11 +12,6 @@
 #include <gdal_priv.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
-
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb_image_write.h>
 
 #include "Dataset.h"
 #include "DatasetReader.h"
@@ -27,10 +23,16 @@
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
 #include "srs.h"
+#include "tntn/gdal_init.h"
 
 #include "mesh_io.h"
 #include "terrain_mesh.h"
+#include "raw_dataset_reader.h"
+#include "fi_image.h"
 
+/// Transforms bounds from one srs to another,
+/// in such a way that all points inside the original bounds are guaranteed to also be in the new bounds.
+/// But there can be points inside the new bounds that were not present in the original ones.
 tile::SrsBounds encompassing_bounding_box_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const tile::SrsBounds &source_bounds) {
     if (source_srs.IsSame(&target_srs)) {
         return source_bounds;
@@ -58,133 +60,74 @@ template <typename T>
 void print_point(const glm::tvec2<T> &point) {
     fmt::print("{} {}\n", point.x, point.y);
 }
-glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::dvec2 &v) {
+
+template <typename T>
+glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
     glm::dvec2 result;
     GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);
     return result;
 }
-glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::ivec2 &v) {
-    glm::dvec2 result;
-    GDALApplyGeoTransform(transform.data(), static_cast<double>(v.x), static_cast<double>(v.y), &result.x, &result.y);
-    return result;
-}
 glm::dvec2 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec2 &v) {
     glm::dvec2 result(v);
-    if (!transform->Transform(1, &result.x, &result.y))
-        throw Exception("apply_transform() failed");
+    if (!transform->Transform(1, &result.x, &result.y)) {
+        throw std::runtime_error("apply_transform() failed");
+    }
     return result;
 }
 glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec3 &v) {
     glm::dvec3 result(v);
-    if (!transform->Transform(1, &result.x, &result.y, &result.z))
-        throw Exception("apply_transform() failed");
+    if (!transform->Transform(1, &result.x, &result.y, &result.z)) {
+        throw std::runtime_error("apply_transform() failed");
+    }
     return result;
 }
-class RawDatasetReader {
-public:
-    RawDatasetReader(Dataset &target_dataset)
-        : RawDatasetReader(target_dataset.gdalDataset()) {}
-    RawDatasetReader(GDALDataset *target_dataset)
-        : dataset(target_dataset) {
-        if (!dataset) {
-            throw std::invalid_argument("Invalid GDAL dataset provided");
-        }
 
-        if (dataset->GetGeoTransform(this->geo_transform.data()) != CE_None) {
-            throw std::runtime_error("Failed to retrieve the GeoTransform");
-        }
+void remove_unused_vertices(TerrainMesh& mesh) {
+    const unsigned int max_vertex_count = mesh.positions.size();
 
-        if (GDALInvGeoTransform(this->geo_transform.data(), this->inv_geo_transform.data()) != TRUE) {
-            throw std::runtime_error("Failed to invert the GeoTransform");
+    // Find used vertices
+    std::vector<bool> vertex_present;
+    vertex_present.resize(max_vertex_count);
+    for (const glm::uvec3 &triangle : mesh.triangles) {
+        for (unsigned int i = 0; i < triangle.length(); i++) {
+            vertex_present[triangle[i]] = true;
         }
     }
 
-    GDALDataset *gdal_dataset() {
-        return this->dataset;
-    }
+    // Remove unused vertices and remember new indices
+    const unsigned int actual_point_count = std::accumulate(vertex_present.begin(), vertex_present.end(), 0);
 
-    HeightData read_data_in_pixel_bounds(const geometry::Aabb2i &bounds) {
-        GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
+    if (actual_point_count != max_vertex_count) {
+        std::vector<unsigned int> new_vertex_indices;
+        new_vertex_indices.reserve(max_vertex_count);
 
-        // Initialize the HeightData for reading
-        // TODO: +1?
-        HeightData height_data(bounds.width(), bounds.height());
-
-        // Read data from the heights band into heights_data
-        const int read_result = heights_band->RasterIO(
-            GF_Read, bounds.min.x, bounds.min.y, bounds.width(), bounds.height(),
-            static_cast<void *>(height_data.data()), bounds.width(), bounds.height(), GDT_Float32, 0, 0);
-
-        if (read_result != CE_None) {
-            throw std::runtime_error("Failed to read data");
+        std::vector<glm::dvec3> old_positions = std::move(mesh.positions);
+        std::vector<glm::dvec2> old_uvs = std::move(mesh.uvs);
+        mesh.positions.reserve(actual_point_count);
+        mesh.uvs.reserve(actual_point_count);
+        const unsigned int no_new_index = max_vertex_count + 1;
+        unsigned int new_index = 0;
+        for (unsigned int i = 0; i < max_vertex_count; i++) {
+            if (vertex_present[i]) {
+                new_vertex_indices[i] = new_index;
+                new_index += 1;
+                mesh.positions.push_back(old_positions[i]);
+                mesh.uvs.push_back(old_uvs[i]);
+            } else {
+                new_vertex_indices[i] = no_new_index;
+            }
         }
 
-        return height_data;
+        // Reindex triangles
+        for (glm::uvec3 &triangle : mesh.triangles) {
+            for (unsigned int i = 0; i < triangle.length(); i++) {
+                triangle[i] = new_vertex_indices[triangle[i]];
+            }
+        }
     }
+}
 
-    HeightData read_data_in_srs_bounds(const tile::SrsBounds &bounds) {
-        // Transform the SrsBounds to pixel space
-        const geometry::Aabb2i pixel_bounds = this->transform_srs_bounds_to_pixel_bounds(bounds);
-
-        // Use the transformed pixel bounds to read data
-        return this->read_data_in_pixel_bounds(pixel_bounds);
-    }
-
-    geometry::Aabb2i transform_srs_bounds_to_pixel_bounds(const tile::SrsBounds &bounds) const {
-        geometry::Aabb2d pixel_bounds_exact = this->transform_srs_bounds_to_pixel_bounds_exact(bounds);
-
-        const geometry::Aabb2i pixel_bounds(
-            glm::ivec2(static_cast<int>(std::floor(pixel_bounds_exact.min.x)), static_cast<int>(std::floor(pixel_bounds_exact.min.y))),
-            glm::ivec2(static_cast<int>(std::ceil(pixel_bounds_exact.max.x)), static_cast<int>(std::ceil(pixel_bounds_exact.max.y))));
-
-        return pixel_bounds;
-    }
-
-    tile::SrsBounds transform_srs_bounds_to_pixel_bounds_exact(const tile::SrsBounds &bounds) const {
-        tile::SrsBounds transformed_bounds;
-        transformed_bounds.min = this->transform_srs_point_to_pixel_exact(bounds.min);
-        transformed_bounds.max = this->transform_srs_point_to_pixel_exact(bounds.max);
-        transformed_bounds = tile::SrsBounds(glm::min(transformed_bounds.min, transformed_bounds.max),
-                                             glm::max(transformed_bounds.min, transformed_bounds.max));
-        return transformed_bounds;
-    }
-
-    tile::SrsBounds transform_pixel_bounds_to_srs_bounds(const tile::SrsBounds &bounds) const {
-        tile::SrsBounds transformed_bounds;
-        transformed_bounds.min = this->transform_pixel_to_srs_point(bounds.min);
-        transformed_bounds.max = this->transform_pixel_to_srs_point(bounds.max);
-        transformed_bounds = tile::SrsBounds(glm::min(transformed_bounds.min, transformed_bounds.max),
-                                             glm::max(transformed_bounds.min, transformed_bounds.max));
-        return transformed_bounds;
-    }
-
-    template <typename T>
-    inline glm::ivec2 transform_srs_point_to_pixel(const glm::tvec2<T> &p) const {
-        glm::dvec2 pixel_exact = this->transform_srs_point_to_pixel_exact(p);
-        const glm::ivec2 pixel(std::rint(pixel_exact.x), std::rint(pixel_exact.y));
-        return pixel;
-    }
-
-    template <typename T>
-    inline glm::dvec2 transform_srs_point_to_pixel_exact(const glm::tvec2<T> &p) const {
-        glm::dvec2 result;
-        GDALApplyGeoTransform(this->inv_geo_transform.data(), p.x, p.y, &result.x, &result.y);
-        return result;
-    }
-
-    template <typename T>
-    inline glm::dvec2 transform_pixel_to_srs_point(const glm::tvec2<T> &p) const {
-        glm::dvec2 result;
-        GDALApplyGeoTransform(this->geo_transform.data(), p.x, p.y, &result.x, &result.y);
-        return result;
-    }
-
-private:
-    GDALDataset *dataset;
-    mutable std::array<double, 6> geo_transform;     // transform from pixel space to source srs.
-    mutable std::array<double, 6> inv_geo_transform; // transform from source srs to pixel space.
-};
-
+/// Builds a mesh from the given height dataset.
 TerrainMesh build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
@@ -201,12 +144,12 @@ TerrainMesh build_reference_mesh_tile(
     const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds);
 
     // Allocate mesh data structure
-    const unsigned int point_count = raw_tile_data.width() * raw_tile_data.height();
-    const unsigned int triangle_count = (raw_tile_data.width() - 1) * (raw_tile_data.height() - 1) * 2;
+    const unsigned int max_point_count = raw_tile_data.width() * raw_tile_data.height();
+    const unsigned int max_triangle_count = (raw_tile_data.width() - 1) * (raw_tile_data.height() - 1) * 2;
     TerrainMesh mesh;
-    mesh.positions.reserve(point_count);
-    mesh.uvs.reserve(point_count);
-    mesh.triangles.reserve(triangle_count);
+    mesh.positions.reserve(max_point_count);
+    mesh.uvs.reserve(max_point_count);
+    mesh.triangles.reserve(max_triangle_count);
 
     // Prepare transformations here to avoid io inside the loop.
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_tile = srs::transformation(source_srs, tile_srs);
@@ -216,8 +159,8 @@ TerrainMesh build_reference_mesh_tile(
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
             const double height = raw_tile_data.pixel(i, j);
-            // const glm::dvec2 coords_raster_relative(i + 0.5, j + 0.5); // TODO
-            const glm::dvec2 coords_raster_relative(i, j); // TODO
+
+            const glm::dvec2 coords_raster_relative(i + 0.5, j + 0.5);
             const glm::dvec2 coords_raster_absolute = coords_raster_relative + glm::dvec2(pixel_bounds.min);
             const glm::dvec3 coords_source(reader.transform_pixel_to_srs_point(coords_raster_absolute), height);
 
@@ -241,7 +184,7 @@ TerrainMesh build_reference_mesh_tile(
                 continue;
             }
 
-            if (!tile_bounds.contains(coords_center_tile)) {
+            if (!tile_bounds.contains_inclusive(coords_center_tile)) {
                 // Skip triangles out of bounds
                 continue;
             }
@@ -253,11 +196,11 @@ TerrainMesh build_reference_mesh_tile(
         }
     }
 
-    assert(mesh.positions.size() == point_count);
-    assert(mesh.uvs.size() == point_count);
-    assert(mesh.triangles.size() <= triangle_count);
+    assert(mesh.positions.size() == max_point_count);
+    assert(mesh.uvs.size() == max_point_count);
+    assert(mesh.triangles.size() <= max_triangle_count);
 
-    // TODO: remove extra vertices
+    remove_unused_vertices(mesh);
 
     return mesh;
 }
@@ -290,7 +233,7 @@ tile::Id bounds_to_tile_id(const tile::SrsBounds &bounds) {
             // Check if all of the target bounding box is inside this tile.
             bool all_points_inside = true;
             for (const auto &point : points) {
-                if (!tile_bounds.contains(point)) {
+                if (!tile_bounds.contains_inclusive(point)) {
                     all_points_inside = false;
                     break;
                 }
@@ -313,52 +256,6 @@ tile::Id bounds_to_tile_id(const tile::SrsBounds &bounds) {
     }
 
     return current_largest_encompassing_tile;
-}
-
-auto load_image_with_stb(const std::filesystem::path &path, size_t &width, size_t &height, size_t &channels) {
-    int w;
-    int h;
-    int c;
-    unsigned char *image_data = stbi_load(path.c_str(), &w, &h, &c, 0);
-    if (image_data) {
-        width = w;
-        height = h;
-        channels = c;
-        auto stbi_deleter = [](unsigned char *data) {
-            stbi_image_free(data);
-        };
-        return std::unique_ptr<unsigned char, decltype(stbi_deleter)>(image_data, stbi_deleter);
-    } else {
-        throw std::runtime_error(fmt::format("Error loading image: {}", stbi_failure_reason()));
-    }
-}
-
-auto load_image_with_fi(const std::filesystem::path &filename) {
-    // check the file signature and deduce its format
-    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(filename.c_str(), 0);
-    // if still unknown, try to guess the file format from the file extension
-    if (fif == FIF_UNKNOWN) {
-        fif = FreeImage_GetFIFFromFilename(filename.c_str());
-    }
-    // if still unkown, return failure
-    if (fif == FIF_UNKNOWN) {
-        throw std::runtime_error("unable to determine image file type");
-    }
-
-    // check that the plugin has reading capabilities and load the file
-    if (!FreeImage_FIFSupportsReading(fif)) {
-        throw std::runtime_error("no image reading capabilities");
-    }
-
-    FIBITMAP *image = FreeImage_Load(fif, filename.c_str());
-    if (!image) {
-        throw std::runtime_error("error during image loading");
-    }
-
-    auto fi_deleter = [](FIBITMAP *data) {
-        FreeImage_Unload(data);
-    };
-    return std::unique_ptr<FIBITMAP, decltype(fi_deleter)>(image, fi_deleter);
 }
 
 std::vector<unsigned char> prepare_basemap_texture(
@@ -408,7 +305,6 @@ std::vector<unsigned char> prepare_basemap_texture(
             }
         }
     }
-    fmt::print("begin splatter:\n");
 
     if (tiles_to_splatter.empty()) {
         return {};
@@ -431,43 +327,21 @@ std::vector<unsigned char> prepare_basemap_texture(
 
     const tile::Id &any_tile = tiles_to_splatter.front();
     const std::filesystem::path &any_tile_path = tile_to_path_mapper(any_tile);
-    size_t tile_width;
-    size_t tile_height;
-    size_t tile_channels;
-    load_image_with_stb(any_tile_path, tile_width, tile_height, tile_channels);
-    const glm::uvec2 tile_size(tile_width, tile_height);
+    const FiImage any_tile_image = FiImage::load_from_path(any_tile_path);
+    const glm::uvec2 tile_size = any_tile_image.size();
 
     const size_t full_image_size_factor = std::pow(2, zoom_level_range);
 
-    auto src = load_image_with_fi(any_tile_path);
-    print_point(tile_size);
-    fmt::print("{}\n", full_image_size_factor);
-    FIBITMAP *raw_image_ptr = FreeImage_Allocate(
-        tile_width * full_image_size_factor, tile_height * full_image_size_factor,
-        FreeImage_GetBPP(src.get()),
-        FreeImage_GetRedMask(src.get()), FreeImage_GetGreenMask(src.get()), FreeImage_GetBlueMask(src.get()));
-    if (!raw_image_ptr) {
-        throw std::runtime_error{"failed to allocate image buffer"};
-    }
-    auto fi_deleter = [](FIBITMAP *data) {
-        FreeImage_Unload(data);
-    };
-    auto image = std::unique_ptr<FIBITMAP, decltype(fi_deleter)>(raw_image_ptr, fi_deleter);
+    FiImage image = FiImage::allocate_like(any_tile_image, tile_size.x * full_image_size_factor, tile_size.y * full_image_size_factor);
 
     for (const tile::Id &tile : tiles_to_splatter) {
         const std::filesystem::path &tile_path = tile_to_path_mapper(tile);
-        size_t width;
-        size_t height;
-        size_t channels;
-        const auto tile_data = load_image_with_stb(tile_path, width, height, channels);
-        if (width != tile_width) {
+        const FiImage tile_image = FiImage::load_from_path(tile_path);
+        if (tile_image.width() != tile_size.x) {
             throw std::runtime_error{"tiles have inconsitent widths"};
         }
-        if (height != tile_height) {
+        if (tile_image.height() != tile_size.y) {
             throw std::runtime_error{"tiles have inconsitent heights"};
-        }
-        if (channels != tile_channels) {
-            throw std::runtime_error{"tiles have inconsitent channel counts"};
         }
 
         const size_t relative_zoom_level = tile.zoom_level - root_zoom_level;
@@ -476,74 +350,16 @@ std::vector<unsigned char> prepare_basemap_texture(
         const glm::uvec2 relative_tile_coords = tile.coords - largest_encompassing_tile.coords * glm::uvec2(std::pow(2, relative_zoom_level));
         const glm::uvec2 current_tile_position = relative_tile_coords * current_tile_size;
 
-        auto tile_image = load_image_with_fi(tile_path);
-        auto scaled_tile_image = FreeImage_Rescale(tile_image.get(), current_tile_size.x, current_tile_size.y, FILTER_BILINEAR);
-        if (!scaled_tile_image) {
-            throw std::runtime_error{"failed to rescale subtile"};
-        }
-
-        print_point(largest_encompassing_tile.coords);
-        print_point(tile.coords);
-        print_point(relative_tile_coords);
-        print_point(current_tile_size_factor);
-        print_point(current_tile_position);
-        print_point(current_tile_size);
-        if (!FreeImage_Paste(image.get(), scaled_tile_image, current_tile_position.x, current_tile_position.y, 256)) {
-            throw std::runtime_error{"failed to paste subtile into texture buffer"};
-        }
+        const FiImage scaled_tile_image = tile_image.rescale(current_tile_size, FILTER_BILINEAR);
+        image.paste(scaled_tile_image, current_tile_position);
     }
 
-    // FreeImage_Save(FIF_BMP, image.get(), "mybitmap.bmp", 0);
-
-    std::vector<unsigned char> image_data;
-    FIMEMORY *memStream = FreeImage_OpenMemory();
-    if (FreeImage_SaveToMemory(FIF_JPEG, image.get(), memStream, JPEG_DEFAULT)) {
-        // Get the size of the memory stream
-        unsigned int size = FreeImage_TellMemory(memStream);
-        fmt::print("{}\n", size);
-
-        // FreeImage_SeekMemory(memStream, 0L, SEEK_SET);
-
-        // Copy the image data from the memory stream to the vector
-        unsigned char * data_ptr = nullptr;
-        if (!FreeImage_AcquireMemory(memStream, &data_ptr, &size)) {
-            throw std::runtime_error{"FreeImage_AcquireMemory failed"};
-        }
-
-        // Resize the vector to the size of the image data
-        image_data.resize(size);
-        std::copy(data_ptr, data_ptr + size, image_data.data());
-
-        // Clean up
-        FreeImage_CloseMemory(memStream);
-    } else {
-        throw std::runtime_error{"FreeImage_SaveToMemory failed"};
-    }
+    const std::vector<unsigned char> image_data = image.save_to_vector(FIF_JPEG);
 
     return image_data;
 }
 
-/**
-FreeImage error handler
-@param fif Format / Plugin responsible for the error
-@param message Error message
-*/
-void FreeImageErrorHandler(FREE_IMAGE_FORMAT fif, const char *message) {
-    printf("\n*** ");
-    if (fif != FIF_UNKNOWN) {
-        printf("%s Format\n", FreeImage_GetFormatFromFIF(fif));
-    }
-    printf(message);
-    printf(" ***\n");
-}
-
 int main() {
-    // In your main program …
-    FreeImage_Initialise(true);
-    std::cout << "FreeImage " << FreeImage_GetVersion() << "\n";
-    std::cout << FreeImage_GetCopyrightMessage() << "\n\n";
-    FreeImage_SetOutputMessage(FreeImageErrorHandler);
-
     // Read MGI Dataset
     const DatasetPtr dataset = Dataset::make_shared("/mnt/c/Users/Admin/Downloads/innenstadt_gs_1m_mgi.tif");
     // const DatasetPtr dataset = Dataset::make_shared("/mnt/e/Code/TU/2023S/Project/terrain-builder/unittests/data/austria/vienna_20m_mgi.tif");
@@ -564,33 +380,13 @@ int main() {
 
     // https://mapsneu.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/18/90897/142994.jpeg
     const ctb::Grid grid = ctb::GlobalMercator();
-    const tile::Id root_tile = {18, {142994, 90897}, tile::Scheme::SlippyMap};
-
-    // const tile::SrsBounds original_bounds = raw_dataset->bounds();
-    // const tile::SrsBounds target_bounds = encompassing_bounding_box_transfer(raw_dataset->srs(), webmercator, original_bounds);
-    // TODO: automatically deduce tile from bounds.
     // const tile::Id root_tile = {16, {35748, 22724}, tile::Scheme::SlippyMap};
     // const tile::Id root_tile = {17, {71497, 45448}, tile::Scheme::SlippyMap};
-    // const tile::Id root_tile = {19, {285989, 181795}, tile::Scheme::SlippyMap};
+    const tile::Id root_tile = {18, {142994, 90897}, tile::Scheme::SlippyMap};
+    // const tile::Id root_tile = {19, {285989, 181795}, tile::Scheme::SlippyMap};.
 
     // Translate tile bounds into MGI
     const tile::SrsBounds tile_bounds = grid.srsBounds(root_tile, false);
-
-    /*
-    int width, height, channels;
-    unsigned char *image_data = stbi_load("/mnt/c/Users/Admin/Downloads/142994.jpeg", &width, &height, &channels, 0);
-    RgbImage texture(width, height);
-    if (image_data) {
-        if (channels != 3) {
-            throw std::runtime_error("Image not RGB");
-        }
-
-        memcpy(texture.data(), image_data, width * height * channels);
-        stbi_image_free(image_data);
-    } else {
-        throw std::runtime_error(fmt::format("Error loading image: {}", stbi_failure_reason()));
-    }
-    */
 
     const TerrainMesh mesh = build_reference_mesh_tile(
         *dataset.get(),
@@ -598,16 +394,6 @@ int main() {
         grid.getSRS(), tile_bounds,
         grid.getSRS(), tile_bounds);
 
-    /*
-    std::ifstream texture_input("/mnt/c/Users/Admin/Downloads/142994.jpeg", std::ios::binary);
-    // std::ifstream texture_input("/mnt/c/Users/Admin/Downloads/testTexture.png", std::ios::binary);
-
-    std::vector<unsigned char> texture_bytes(
-        (std::istreambuf_iterator<char>(texture_input)),
-        (std::istreambuf_iterator<char>()));
-
-    texture_input.close();
-    */
     std::vector<unsigned char> texture_bytes = prepare_basemap_texture(
         grid.getSRS(), tile_bounds,
         [](tile::Id tile_id) { return fmt::format("/mnt/e/Code/TU/2023S/Project/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x); });
