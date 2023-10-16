@@ -208,8 +208,8 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t) {
     cgltf_image &image = images[0] = {};
     // image.uri = texture_buffer.uri;
     image.buffer_view = &texture_buffer_view;
-    // std::string image_mimy_type = "image/jpeg\0";
-    std::string image_mimy_type = "image/png\0";
+    std::string image_mimy_type = "image/jpeg\0";
+    // std::string image_mimy_type = "image/png\0";
     image.mime_type = image_mimy_type.data();
 
     std::array<cgltf_sampler, 1> samplers;
