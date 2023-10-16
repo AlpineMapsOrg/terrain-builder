@@ -1,3 +1,5 @@
+#include <filesystem>
+
 #include <glm/gtc/type_ptr.hpp>
 
 
@@ -67,7 +69,8 @@ std::string data_uri_encode(unsigned char const *bytes_to_encode, unsigned int i
     return "data:application/octet-stream;base64," + base64_encode(bytes_to_encode, in_len);
 }
 
-void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t) {
+
+void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t, const std::filesystem::path path, const bool binary = true) {
     const size_t vertex_count = m.positions.size();
 
     glm::dvec3 average_position(0, 0, 0);
@@ -95,12 +98,15 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t) {
     const size_t index_data_offset = 0;
     const size_t index_count = m.triangles.size();
     const size_t vertex_data_byte_count = vectorsizeof(vertices);
-    const size_t vertex_data_offset = index_data_byte_count;
+    const size_t vertex_data_offset = index_data_offset + index_data_byte_count;
+    const size_t texture_data_byte_count = vectorsizeof(t);
+    const size_t texture_data_offset = vertex_data_offset + vertex_data_byte_count;
 
     std::vector<unsigned char> buffer_data;
-    buffer_data.resize(index_data_byte_count + vertex_data_byte_count);
+    buffer_data.resize(index_data_byte_count + vertex_data_byte_count + texture_data_byte_count);
     memcpy(buffer_data.data() + index_data_offset, m.triangles.data(), index_data_byte_count);
     memcpy(buffer_data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
+    memcpy(buffer_data.data() + texture_data_offset, t.data(), texture_data_byte_count);
 
     // Initialize a GLTF data structure
     cgltf_data data = {};
@@ -109,22 +115,20 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t) {
     std::string generator = "cgltf\0";
     data.asset.generator = generator.data();
 
-    std::array<cgltf_buffer, 2> buffers;
+    std::array<cgltf_buffer, 1> buffers;
 
-    // Create a buffer for the texture data
-    cgltf_buffer &texture_buffer = buffers[1] = {};
-    texture_buffer.size = t.size();
-    texture_buffer.data = t.data();
-    std::string texture_encoded = data_uri_encode(t.data(), t.size());
-    texture_buffer.uri = texture_encoded.data();
-
-    
     // Create a buffer to hold vertex and index data
     cgltf_buffer &buffer = buffers[0] = {};
     buffer.size = buffer_data.size();
     buffer.data = buffer_data.data();
-    std::string buffer_data_encoded = data_uri_encode(buffer_data.data(), buffer_data.size());
-    buffer.uri = buffer_data_encoded.data();
+    if (binary) {
+        // The binary blob will be used as the contents of the first buffer if it does not have an uri defined.
+        data.bin = buffer_data.data();
+        data.bin_size = buffer_data.size();
+    } else {
+        std::string buffer_data_encoded = data_uri_encode(buffer_data.data(), buffer_data.size());
+        buffer.uri = buffer_data_encoded.data();
+    }
 
     // Create an accessor for indices
     std::array<cgltf_buffer_view, 3> buffer_views;
@@ -144,9 +148,9 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t) {
     vertex_buffer_view.type = cgltf_buffer_view_type_vertices;
 
     cgltf_buffer_view &texture_buffer_view = buffer_views[2] = {};
-    texture_buffer_view.buffer = &texture_buffer;
-    texture_buffer_view.offset = 0;
-    texture_buffer_view.size = texture_buffer.size;
+    texture_buffer_view.buffer = &buffer;
+    texture_buffer_view.offset = texture_data_offset;
+    texture_buffer_view.size = texture_data_byte_count;
     texture_buffer_view.stride = 0;
 
     // Create an accessor for indices
@@ -294,10 +298,15 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t) {
     // }
 
     // Save the GLTF data to a file
-    const char *output_path = "./tile.gltf";
+
+    std::filesystem::path output_path(path);
+    output_path.replace_extension(binary ? "glb" : "gltf");
     cgltf_options options;
-    if (cgltf_write_file(&options, output_path, &data) != cgltf_result_success) {
-        std::cerr << "Failed to save GLTF file." << std::endl;
+    if (binary) {
+        options.type = cgltf_file_type_glb;
+    }
+    if (cgltf_write_file(&options, output_path.c_str(), &data) != cgltf_result_success) {
+        throw std::runtime_error("Failed to save GLTF file");
     }
 
     // Free memory

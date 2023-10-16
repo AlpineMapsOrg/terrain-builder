@@ -398,7 +398,7 @@ int main() {
         grid.getSRS(), tile_bounds,
         [](tile::Id tile_id) { return fmt::format("/mnt/e/Code/TU/2023S/Project/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x); });
 
-    save_mesh_as_gltf(mesh, texture_bytes);
+    save_mesh_as_gltf(mesh, texture_bytes, "./tile.gltf", true);
 
     return 0;
 }
