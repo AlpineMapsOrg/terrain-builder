@@ -87,8 +87,8 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t, cons
         vertices.push_back(normalized_position.x);
         vertices.push_back(normalized_position.y);
         vertices.push_back(normalized_position.z);
-        vertices.push_back(1- m.uvs[i].y);
         vertices.push_back(m.uvs[i].x);
+        vertices.push_back(m.uvs[i].y);
 
         max_position = glm::max(max_position, normalized_position);
         min_position = glm::min(min_position, normalized_position);
