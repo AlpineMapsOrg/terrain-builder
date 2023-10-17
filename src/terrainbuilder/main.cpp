@@ -237,14 +237,16 @@ TerrainMesh build_reference_mesh_tile(
                     continue;
                 }
 
-                // TODO: this has issues if border size > original pixel bounds
                 const glm::dvec2 tile_data_size(raw_tile_data.width(), raw_tile_data.height());
                 const glm::dvec2 tile_data_center = tile_data_size / glm::dvec2(2);
                 const glm::ivec2 border_offset_direction(glm::sign(tile_data_center - coords_raster_relative));
                 glm::ivec2 border_offset;
                 border_offset.x = border_offset_direction.x == 1 ? vertex_border.left : -vertex_border.right;
                 border_offset.y = border_offset_direction.y == 1 ? vertex_border.top : -vertex_border.bottom;
-                const glm::dvec2 coords_to_check_raster_relative = coords_raster_relative + glm::dvec2(border_offset);
+                glm::dvec2 coords_to_check_raster_relative = coords_raster_relative + glm::dvec2(border_offset);
+                if (border_offset_direction != glm::ivec2(glm::sign(tile_data_center - coords_to_check_raster_relative))) {
+                    coords_to_check_raster_relative = tile_data_center;
+                }
                 const glm::dvec2 coords_to_check_raster_absolute = coords_to_check_raster_relative + glm::dvec2(pixel_bounds.min);
                 const glm::dvec2 coords_to_check_source = reader.transform_pixel_to_srs_point(coords_to_check_raster_absolute);
                 const glm::dvec2 coords_to_check_tile = apply_transform(transform_source_tile.get(), coords_to_check_source);
@@ -423,6 +425,7 @@ std::vector<unsigned char> prepare_basemap_texture(
 
     // TODO: cutoff border
 
+
     const std::vector<unsigned char> image_data = image.save_to_vector(FIF_JPEG);
 
     return image_data;
@@ -463,7 +466,7 @@ int main() {
         ecef,
         grid.getSRS(), tile_bounds,
         grid.getSRS(), tile_bounds,
-        Border(10, 20, 30, 40)
+        Border(0, 1, 1, 0)
     );
 
     std::vector<unsigned char> texture_bytes = prepare_basemap_texture(
