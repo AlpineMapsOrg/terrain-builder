@@ -81,6 +81,9 @@ public:
                                              glm::max(transformed_bounds.min, transformed_bounds.max));
         return transformed_bounds;
     }
+    tile::SrsBounds transform_pixel_bounds_to_srs_bounds(const geometry::Aabb2i &bounds) const {
+        return this->transform_pixel_bounds_to_srs_bounds(tile::SrsBounds(glm::dvec2(bounds.min), glm::dvec2(bounds.max)));
+    }
 
     template <typename T>
     inline glm::ivec2 transform_srs_point_to_pixel(const glm::tvec2<T> &p) const {

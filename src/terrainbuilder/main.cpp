@@ -170,14 +170,12 @@ void remove_unused_vertices(TerrainMesh& mesh) {
     }
 }
 
-
-
 /// Builds a mesh from the given height dataset.
 TerrainMesh build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs, const tile::SrsBounds &tile_bounds,
-    const OGRSpatialReference &texture_srs, const tile::SrsBounds &texture_bounds,
+    const OGRSpatialReference &tile_srs, tile::SrsBounds &tile_bounds,
+    const OGRSpatialReference &texture_srs, tile::SrsBounds &texture_bounds,
     const Border<int>& vertex_border) {
     const OGRSpatialReference &source_srs = dataset.srs();
 
@@ -203,6 +201,12 @@ TerrainMesh build_reference_mesh_tile(
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_mesh = srs::transformation(source_srs, mesh_srs);
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_texture = srs::transformation(source_srs, texture_srs);
 
+    // Expand texture and tile bounds based on border
+    const tile::SrsBounds source_bounds_with_border = reader.transform_pixel_bounds_to_srs_bounds(pixel_bounds);
+    const double infinity = std::numeric_limits<double>::infinity();
+    tile::SrsBounds actual_tile_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
+    tile::SrsBounds actual_texture_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
+
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
             const double height = raw_tile_data.pixel(j, i);
@@ -210,12 +214,14 @@ TerrainMesh build_reference_mesh_tile(
             const glm::dvec2 coords_raster_relative(i + 0.5, j + 0.5);
             const glm::dvec2 coords_raster_absolute = coords_raster_relative + glm::dvec2(pixel_bounds.min);
             const glm::dvec3 coords_source(reader.transform_pixel_to_srs_point(coords_raster_absolute), height);
+            actual_tile_bounds.expand_by(coords_source);
 
             const glm::dvec3 coords_mesh = apply_transform(transform_source_mesh.get(), coords_source);
             // const glm::dvec2 coords_tile = apply_transform(transform_source_tile.get(), glm::dvec2(coords_source));
 
             const glm::dvec2 coords_texture_absolute = apply_transform(transform_source_texture.get(), coords_source);
-            const glm::dvec2 coords_texture_relative = (coords_texture_absolute - texture_bounds.min) / texture_bounds.size();
+            actual_texture_bounds.expand_by(coords_texture_absolute);
+            // const glm::dvec2 coords_texture_relative = (coords_texture_absolute - texture_bounds_with_border.min) / texture_bounds_with_border.size();
 
             const glm::ivec2 coords_center_raster_relative(i + 1, j + 1);
             const glm::ivec2 coords_center_raster_absolute = coords_center_raster_relative + pixel_bounds.min;
@@ -224,7 +230,8 @@ TerrainMesh build_reference_mesh_tile(
 
             // Current Vertex
             mesh.positions.push_back(coords_mesh);
-            mesh.uvs.push_back(coords_texture_relative);
+            // mesh.uvs.push_back(coords_texture_relative);
+            mesh.uvs.push_back(coords_texture_absolute);
 
             if (i >= raw_tile_data.width() - 1 || j >= raw_tile_data.height() - 1) {
                 // Skip last row and column because they don't form new triangles
@@ -266,7 +273,14 @@ TerrainMesh build_reference_mesh_tile(
     assert(mesh.uvs.size() == max_point_count);
     assert(mesh.triangles.size() <= max_triangle_count);
 
+    for (glm::dvec2& uv : mesh.uvs) {
+        uv = (uv - actual_texture_bounds.min) / actual_texture_bounds.size();
+    }
+
     remove_unused_vertices(mesh);
+
+    tile_bounds = actual_tile_bounds;
+    texture_bounds = actual_texture_bounds;
 
     return mesh;
 }
@@ -287,9 +301,9 @@ tile::Id bounds_to_tile_id(const tile::SrsBounds &bounds) {
 
     // We start at the root tile and repeatedly check every subtile until we find one that contains all
     // of the bounding box.
-    tile::Id current_largest_encompassing_tile = {0, {0, 0}, tile::Scheme::Tms};
+    tile::Id current_smallest_encompassing_tile = {0, {0, 0}, tile::Scheme::Tms};
     while (true) {
-        const std::array<tile::Id, 4> children = current_largest_encompassing_tile.children();
+        const std::array<tile::Id, 4> children = current_smallest_encompassing_tile.children();
 
         bool all_points_inside_any_child = false;
         for (const auto &child : children) {
@@ -311,7 +325,7 @@ tile::Id bounds_to_tile_id(const tile::SrsBounds &bounds) {
             }
 
             all_points_inside_any_child = true;
-            current_largest_encompassing_tile = child;
+            current_smallest_encompassing_tile = child;
             break;
         }
 
@@ -321,7 +335,7 @@ tile::Id bounds_to_tile_id(const tile::SrsBounds &bounds) {
         }
     }
 
-    return current_largest_encompassing_tile;
+    return current_smallest_encompassing_tile;
 }
 
 // TODO: add comments
@@ -333,21 +347,28 @@ std::vector<unsigned char> prepare_basemap_texture(
         return {};
     }
 
+    const ctb::GlobalMercator grid;
+
     OGRSpatialReference webmercator;
     webmercator.importFromEPSG(3857);
     webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
     const tile::SrsBounds webmercator_bounds = encompassing_bounding_box_transfer(target_srs, webmercator, target_bounds);
-    const tile::Id largest_encompassing_tile = bounds_to_tile_id(webmercator_bounds).to(tile::Scheme::SlippyMap);
+    const tile::Id smallest_encompassing_tile = bounds_to_tile_id(webmercator_bounds).to(tile::Scheme::SlippyMap);
 
     std::vector<tile::Id> tiles_to_splatter;
 
     std::vector<tile::Id> tile_stack;
-    tile_stack.emplace_back(largest_encompassing_tile);
+    tile_stack.emplace_back(smallest_encompassing_tile);
 
     while (!tile_stack.empty()) {
         const tile::Id tile = tile_stack.back();
         tile_stack.pop_back();
+
+        const tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
+        if (!geometry::intersect(webmercator_bounds, tile_bounds)) {
+            continue;
+        }
 
         constexpr size_t subtile_count = 4;
         const std::array<tile::Id, subtile_count> subtiles = tile.children();
@@ -363,7 +384,6 @@ std::vector<unsigned char> prepare_basemap_texture(
         if (!all_present) {
             const std::filesystem::path tile_path = tile_to_path_mapper(tile);
             tiles_to_splatter.push_back(tile);
-            // std::cout << tile << std::endl;
         }
 
         for (size_t i = 0; i < subtile_count; i++) {
@@ -376,14 +396,14 @@ std::vector<unsigned char> prepare_basemap_texture(
     if (tiles_to_splatter.empty()) {
         return {};
     }
-    if (tiles_to_splatter.size() == 1 && tiles_to_splatter[0] == largest_encompassing_tile) {
-        const std::filesystem::path root_tile_path = tile_to_path_mapper(largest_encompassing_tile);
+    if (tiles_to_splatter.size() == 1 && tiles_to_splatter[0] == smallest_encompassing_tile) {
+        const std::filesystem::path root_tile_path = tile_to_path_mapper(smallest_encompassing_tile);
         if (root_tile_path.empty() || !std::filesystem::exists(root_tile_path)) {
             throw std::runtime_error("found no tile in bounds");
         }
     }
 
-    unsigned int root_zoom_level = largest_encompassing_tile.zoom_level;
+    unsigned int root_zoom_level = smallest_encompassing_tile.zoom_level;
     unsigned int min_zoom_level = 0;
     unsigned int max_zoom_level = 0;
     for (const tile::Id &tile : tiles_to_splatter) {
@@ -414,17 +434,26 @@ std::vector<unsigned char> prepare_basemap_texture(
         const size_t relative_zoom_level = tile.zoom_level - root_zoom_level;
         const glm::uvec2 current_tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
         const glm::uvec2 current_tile_size = tile_size * current_tile_size_factor;
-        const glm::uvec2 relative_tile_coords = tile.coords - largest_encompassing_tile.coords * glm::uvec2(std::pow(2, relative_zoom_level));
+        const glm::uvec2 relative_tile_coords = tile.coords - smallest_encompassing_tile.coords * glm::uvec2(std::pow(2, relative_zoom_level));
         const glm::uvec2 current_tile_position = relative_tile_coords * current_tile_size;
 
         const FiImage scaled_tile_image = tile_image.rescale(current_tile_size, FILTER_BILINEAR);
         image.paste(scaled_tile_image, current_tile_position);
     }
 
+    // cutoff excess
+    const tile::SrsBounds smallest_encompassing_tile_bounds = grid.srsBounds(smallest_encompassing_tile, false);
+    const glm::dvec2 relative_min = (webmercator_bounds.min - smallest_encompassing_tile_bounds.min) / smallest_encompassing_tile_bounds.size();
+    const glm::dvec2 relative_max = (webmercator_bounds.max - smallest_encompassing_tile_bounds.min) / smallest_encompassing_tile_bounds.size();
+    const glm::uvec2 pixel_min(glm::ceil(relative_min * glm::dvec2(image.size())));
+    const glm::uvec2 pixel_max(glm::ceil(relative_max * glm::dvec2(image.size())));
+    const geometry::Aabb2i pixel_bounds(pixel_min, pixel_max);
+
     image.flip_vertical();
 
-    // TODO: cutoff border
-
+    image.save("./full.png");
+    image = std::move(image.copy(pixel_bounds));
+    image.save("./cut.png");
 
     const std::vector<unsigned char> image_data = image.save_to_vector(FIF_JPEG);
 
@@ -455,22 +484,28 @@ int main() {
     const ctb::Grid grid = ctb::GlobalMercator();
     // const tile::Id root_tile = {16, {35748, 22724}, tile::Scheme::SlippyMap};
     // const tile::Id root_tile = {17, {71497, 45448}, tile::Scheme::SlippyMap};
-    const tile::Id root_tile = {18, {142994, 90897}, tile::Scheme::SlippyMap};
+    // const tile::Id root_tile = tile::Id{18, {142994, 90897}, tile::Scheme::SlippyMap}.parent().parent().parent();
+    const tile::Id root_tile = tile::Id{18, {142994, 90897}, tile::Scheme::SlippyMap};
     // const tile::Id root_tile = {19, {285989, 181795}, tile::Scheme::SlippyMap};.
 
     // Translate tile bounds into MGI
-    const tile::SrsBounds tile_bounds = grid.srsBounds(root_tile, false);
+    tile::SrsBounds tile_bounds = grid.srsBounds(root_tile, false);
+    tile::SrsBounds texture_bounds = tile_bounds;
 
+    print_bounds(tile_bounds);
+    print_bounds(texture_bounds);
     const TerrainMesh mesh = build_reference_mesh_tile(
         *dataset.get(),
         ecef,
         grid.getSRS(), tile_bounds,
-        grid.getSRS(), tile_bounds,
-        Border(0, 1, 1, 0)
+        grid.getSRS(), texture_bounds,
+        Border(0) // Border(0, 1, 1, 0)
     );
+    print_bounds(tile_bounds);
+    print_bounds(texture_bounds);
 
     std::vector<unsigned char> texture_bytes = prepare_basemap_texture(
-        grid.getSRS(), tile_bounds,
+        grid.getSRS(), texture_bounds,
         [](tile::Id tile_id) { return fmt::format("/mnt/e/Code/TU/2023S/Project/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x); });
 
     save_mesh_as_gltf(mesh, texture_bytes, "./tile.gltf", true);

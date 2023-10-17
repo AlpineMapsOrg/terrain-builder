@@ -61,6 +61,21 @@ public:
         FreeImage_Unload(this->raw_image);
     }
 
+    // Move constructor
+    FiImage(FiImage &&other) {
+        this->raw_image = other.raw_image;
+        other.raw_image = nullptr;
+    }
+
+    // Move assignment operator
+    FiImage &operator=(FiImage &&other) {
+        if (this != &other) {
+            this->raw_image = other.raw_image;
+            other.raw_image = nullptr;
+        }
+        return *this;
+    }
+
     FIBITMAP * raw(){
         return this->raw_image;
     }
@@ -101,6 +116,14 @@ public:
         return FiImage(scaled);
     }
 
+    FiImage copy(const geometry::Aabb2i& box) {
+        FIBITMAP *copy = FreeImage_Copy(this->raw_image, box.min.x, box.min.y, box.max.x, box.max.y);
+        if (!copy) {
+            throw std::runtime_error{"FreeImage_Copy failed"};
+        }
+        return FiImage(copy);
+    }
+
     void paste(const FiImage& src, const glm::uvec2 target_position) {
         if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
             throw std::runtime_error{"FreeImage_Paste failed"};
@@ -116,6 +139,22 @@ public:
     void flip_vertical() {
         if (!FreeImage_FlipVertical(this->raw_image)) {
             throw std::runtime_error{"FreeImage_FlipVertical failed"};
+        }
+    }
+
+    void save(const std::filesystem::path filename, const int flags = 0 /* default settings */) {
+        const FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(filename.c_str());
+        if (fif == FIF_UNKNOWN) {
+            throw std::runtime_error("unable to determine image file type");
+        }
+
+        // check that the plugin has writing capabilities
+        if (!FreeImage_FIFSupportsWriting(fif)) {
+            throw std::runtime_error("no image writing capabilities");
+        }
+
+        if (!FreeImage_Save(fif, this->raw_image, filename.c_str(), flags)) {
+            throw std::runtime_error("FreeImage_Save failed");
         }
     }
 
