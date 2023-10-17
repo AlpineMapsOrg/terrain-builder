@@ -82,6 +82,49 @@ glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const glm::dv
     return result;
 }
 
+template <typename T>
+class Border
+{
+public:
+    T top;
+    T right;
+    T bottom;
+    T left;
+
+    Border() : Border(0) {}
+    Border(T uniform)
+        : Border(uniform, uniform, uniform, uniform) {}
+    Border(T horizontal, T vertical)
+        : Border(vertical, horizontal, vertical, horizontal) {}
+    Border(T top, T right, T bottom, T left)
+        : top(top), right(right), bottom(bottom), left(left) {}
+
+    bool is_empty() const {
+        return this->top == 0 && this->right == 0 && this->bottom == 0 && this->left == 0;
+    }
+
+    bool operator==(const Border<T> &other) const {
+        return top == other.top && right == other.right && bottom == other.bottom && left == other.left;
+    }
+
+    bool operator!=(const Border<T> &other) const {
+        return !(*this == other);
+    }
+
+    friend std::ostream &operator<<(std::ostream &os, const Border<T> &border) {
+        os << "Top: " << border.top << ", Right: " << border.right << ", Bottom: " << border.bottom << ", Left: " << border.left;
+        return os;
+    }
+};
+
+template <typename T1, typename T2>
+void add_border_to_aabb(geometry::Aabb2<T1>& bounds, const Border<T2>& border) {
+    bounds.min.x -= border.left;
+    bounds.min.y -= border.top;
+    bounds.max.x += border.right;
+    bounds.max.y += border.bottom;
+}
+
 void remove_unused_vertices(TerrainMesh& mesh) {
     const unsigned int max_vertex_count = mesh.positions.size();
 
@@ -127,12 +170,15 @@ void remove_unused_vertices(TerrainMesh& mesh) {
     }
 }
 
+
+
 /// Builds a mesh from the given height dataset.
 TerrainMesh build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs, const tile::SrsBounds &tile_bounds,
-    const OGRSpatialReference &texture_srs, const tile::SrsBounds &texture_bounds) {
+    const OGRSpatialReference &texture_srs, const tile::SrsBounds &texture_bounds,
+    const Border<int>& vertex_border) {
     const OGRSpatialReference &source_srs = dataset.srs();
 
     // Translate tile bounds from tile srs into the source srs, so we know what data to read.
@@ -140,7 +186,8 @@ TerrainMesh build_reference_mesh_tile(
 
     // Read height data according to bounds directly from dataset (no interpolation).
     RawDatasetReader reader(dataset);
-    const geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(tile_bounds_in_source_srs);
+    geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(tile_bounds_in_source_srs);
+    add_border_to_aabb(pixel_bounds, vertex_border);
     const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds);
 
     // Allocate mesh data structure
@@ -158,7 +205,7 @@ TerrainMesh build_reference_mesh_tile(
 
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
-            const double height = raw_tile_data.pixel(i, j);
+            const double height = raw_tile_data.pixel(j, i);
 
             const glm::dvec2 coords_raster_relative(i + 0.5, j + 0.5);
             const glm::dvec2 coords_raster_absolute = coords_raster_relative + glm::dvec2(pixel_bounds.min);
@@ -179,18 +226,35 @@ TerrainMesh build_reference_mesh_tile(
             mesh.positions.push_back(coords_mesh);
             mesh.uvs.push_back(coords_texture_relative);
 
-            if (i >= raw_tile_data.width() - 1 || j >= raw_tile_data.width() - 1) {
+            if (i >= raw_tile_data.width() - 1 || j >= raw_tile_data.height() - 1) {
                 // Skip last row and column because they don't form new triangles
                 continue;
             }
 
             if (!tile_bounds.contains_inclusive(coords_center_tile)) {
-                // Skip triangles out of bounds
-                continue;
+                // Skip triangles out of bounds, but only if they are not part of the border.
+                if (vertex_border.is_empty()) {
+                    continue;
+                }
+
+                // TODO: this has issues if border size > original pixel bounds
+                const glm::dvec2 tile_data_size(raw_tile_data.width(), raw_tile_data.height());
+                const glm::dvec2 tile_data_center = tile_data_size / glm::dvec2(2);
+                const glm::ivec2 border_offset_direction(glm::sign(tile_data_center - coords_raster_relative));
+                glm::ivec2 border_offset;
+                border_offset.x = border_offset_direction.x == 1 ? vertex_border.left : -vertex_border.right;
+                border_offset.y = border_offset_direction.y == 1 ? vertex_border.top : -vertex_border.bottom;
+                const glm::dvec2 coords_to_check_raster_relative = coords_raster_relative + glm::dvec2(border_offset);
+                const glm::dvec2 coords_to_check_raster_absolute = coords_to_check_raster_relative + glm::dvec2(pixel_bounds.min);
+                const glm::dvec2 coords_to_check_source = reader.transform_pixel_to_srs_point(coords_to_check_raster_absolute);
+                const glm::dvec2 coords_to_check_tile = apply_transform(transform_source_tile.get(), coords_to_check_source);
+                if (!tile_bounds.contains_inclusive(coords_to_check_tile)) {
+                    continue;
+                }
             }
 
             // Add triangles
-            const unsigned int vertex_index = i * raw_tile_data.width() + j;
+            const unsigned int vertex_index = j * raw_tile_data.width() + i;
             mesh.triangles.emplace_back(vertex_index, vertex_index + raw_tile_data.width(), vertex_index + raw_tile_data.width() + 1);
             mesh.triangles.emplace_back(vertex_index, vertex_index + raw_tile_data.width() + 1, vertex_index + 1);
         }
@@ -258,6 +322,7 @@ tile::Id bounds_to_tile_id(const tile::SrsBounds &bounds) {
     return current_largest_encompassing_tile;
 }
 
+// TODO: add comments
 std::vector<unsigned char> prepare_basemap_texture(
     const OGRSpatialReference &target_srs,
     const tile::SrsBounds &target_bounds,
@@ -296,7 +361,7 @@ std::vector<unsigned char> prepare_basemap_texture(
         if (!all_present) {
             const std::filesystem::path tile_path = tile_to_path_mapper(tile);
             tiles_to_splatter.push_back(tile);
-            std::cout << tile << std::endl;
+            // std::cout << tile << std::endl;
         }
 
         for (size_t i = 0; i < subtile_count; i++) {
@@ -354,11 +419,16 @@ std::vector<unsigned char> prepare_basemap_texture(
         image.paste(scaled_tile_image, current_tile_position);
     }
 
+    image.flip_vertical();
+
+    // TODO: cutoff border
+
     const std::vector<unsigned char> image_data = image.save_to_vector(FIF_JPEG);
 
     return image_data;
 }
 
+// TODO: setup cli interface
 int main() {
     // Read MGI Dataset
     const DatasetPtr dataset = Dataset::make_shared("/mnt/c/Users/Admin/Downloads/innenstadt_gs_1m_mgi.tif");
@@ -392,7 +462,9 @@ int main() {
         *dataset.get(),
         ecef,
         grid.getSRS(), tile_bounds,
-        grid.getSRS(), tile_bounds);
+        grid.getSRS(), tile_bounds,
+        Border(10, 20, 30, 40)
+    );
 
     std::vector<unsigned char> texture_bytes = prepare_basemap_texture(
         grid.getSRS(), tile_bounds,

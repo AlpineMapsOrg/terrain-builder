@@ -107,6 +107,18 @@ public:
         }
     }
 
+    void flip_horizontal() {
+        if (!FreeImage_FlipHorizontal(this->raw_image)) {
+            throw std::runtime_error{"FreeImage_FlipHorizontal failed"};
+        }
+    }
+
+    void flip_vertical() {
+        if (!FreeImage_FlipVertical(this->raw_image)) {
+            throw std::runtime_error{"FreeImage_FlipVertical failed"};
+        }
+    }
+
     std::vector<unsigned char> save_to_vector(const FREE_IMAGE_FORMAT format, const int flags = 0 /* default settings */) const {
         std::vector<unsigned char> buffer;
 
