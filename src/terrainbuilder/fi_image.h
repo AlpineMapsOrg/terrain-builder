@@ -35,30 +35,30 @@ public:
         return FiImage(image);
     }
 
-    static FiImage allocate(const FREE_IMAGE_TYPE type, const unsigned int width, const unsigned int height, const unsigned int bpp, const unsigned int red_mask = 0U, const unsigned int green_mask = 0U, const unsigned int blue_mask = 0U) {
+    static FiImage allocate(const FREE_IMAGE_TYPE type, const glm::uvec2& size, const unsigned int bpp, const unsigned int red_mask = 0U, const unsigned int green_mask = 0U, const unsigned int blue_mask = 0U) {
         tntn::initialize_freeimage_once();
 
-        FIBITMAP *raw_image_ptr = FreeImage_AllocateT(type, width, height, bpp, red_mask, green_mask, blue_mask);
+        FIBITMAP *raw_image_ptr = FreeImage_AllocateT(type, size.x, size.y, bpp, red_mask, green_mask, blue_mask);
         if (raw_image_ptr == nullptr) {
             throw std::runtime_error("FreeImage_Allocate failed");
         }
         return FiImage(raw_image_ptr);
     }
 
-    static FiImage allocate_like(const FiImage &other, const unsigned int width, const unsigned int height) {
+    static FiImage allocate_like(const FiImage &other, const glm::uvec2& size) {
         const FREE_IMAGE_TYPE type = other.type();
         const unsigned int bpp = other.bits_per_pixel();
         const unsigned int red_mask = other.red_mask();
         const unsigned int green_mask = other.green_mask();
         const unsigned int blue_mask = other.blue_mask();
-        return FiImage::allocate(type, width, height, bpp, red_mask, green_mask, blue_mask);
+        return FiImage::allocate(type, size, bpp, red_mask, green_mask, blue_mask);
     }
 
     FiImage(FIBITMAP *image)
         : raw_image(image) {}
 
     ~FiImage() {
-        FreeImage_Unload(this->raw_image);
+        // FreeImage_Unload(this->raw_image);
     }
 
     // Move constructor
@@ -116,7 +116,24 @@ public:
         return FiImage(scaled);
     }
 
-    FiImage copy(const geometry::Aabb2i& box) {
+    FiImage copy(const geometry::Aabb<2, unsigned int> &box) {
+        assert(box.min.x >= 0);
+        assert(box.max.x <= this->width());
+        assert(box.min.y >= 0);
+        assert(box.max.y <= this->height());
+
+        /*
+        const geometry::Aabb2ui fi_box(
+            {box.min.x, this->height() - box.max.y},
+            {box.max.y, this->height() - box.min.y}
+        );
+        assert(fi_box.min.x >= 0);
+        assert(fi_box.max.x <= this->width());
+        assert(fi_box.min.y >= 0);
+        assert(fi_box.max.y <= this->height());
+        */
+
+        // FIBITMAP *copy = FreeImage_Copy(this->raw_image, fi_box.min.x, fi_box.min.y, fi_box.max.x - 1, fi_box.max.y - 1);
         FIBITMAP *copy = FreeImage_Copy(this->raw_image, box.min.x, box.min.y, box.max.x, box.max.y);
         if (!copy) {
             throw std::runtime_error{"FreeImage_Copy failed"};
@@ -125,9 +142,27 @@ public:
     }
 
     void paste(const FiImage& src, const glm::uvec2 target_position) {
-        if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
+        assert(target_position.x >= 0);
+        assert(target_position.x < this->width());
+        assert(target_position.y >= 0);
+        assert(target_position.y < this->height());
+
+        const glm::uvec2 fi_target_position(
+            target_position.x, 
+            this->height() - target_position.y - src.height()
+        );
+        assert(fi_target_position.x >= 0);
+        assert(fi_target_position.x < this->width());
+        assert(fi_target_position.y >= 0);
+        assert(fi_target_position.y < this->height());
+
+        // if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
+        if (!FreeImage_Paste(this->raw_image, src.raw_image, fi_target_position.x, fi_target_position.y, 256 /* no alpha blending */)) {
             throw std::runtime_error{"FreeImage_Paste failed"};
         }
+        // if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
+        //     throw std::runtime_error{"FreeImage_Paste failed"};
+        // }
     }
 
     void flip_horizontal() {
