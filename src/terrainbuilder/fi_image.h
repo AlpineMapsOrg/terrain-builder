@@ -116,7 +116,7 @@ public:
         return FiImage(scaled);
     }
 
-    FiImage copy(const geometry::Aabb<2, unsigned int> &box) {
+    FiImage copy(const geometry::Aabb<2, unsigned int> &box) const {
         assert(box.min.x >= 0);
         assert(box.max.x <= this->width());
         assert(box.min.y >= 0);
@@ -129,7 +129,31 @@ public:
         return FiImage(copy);
     }
 
-    void paste(const FiImage& src, const glm::uvec2 target_position) {
+    void paste(const FiImage& src, const glm::ivec2& target_position, const bool trim_excess = false) {
+        if (trim_excess) {
+            const glm::ivec2 image_size = this->size();
+            const geometry::Aabb2i target_bounds(
+                target_position,
+                target_position + glm::ivec2(src.size()));
+            const geometry::Aabb2ui clamped_target_bounds(
+                glm::max(glm::min(target_bounds.min, image_size - glm::ivec2(1)), glm::ivec2(0)),
+                glm::max(glm::min(target_bounds.max, image_size - glm::ivec2(1)), glm::ivec2(0)));
+
+            if (clamped_target_bounds.width() == 0 || clamped_target_bounds.height() == 0) {
+                // src is fully outside of the bounds of this image and thus we have nothing to do.
+                return;
+            }
+
+            if (glm::uvec2(target_bounds.size()) != clamped_target_bounds.size()) {
+                const geometry::Aabb2ui image_bounds_no_excess(
+                    glm::ivec2(clamped_target_bounds.min) - target_bounds.min,
+                    glm::ivec2(clamped_target_bounds.max) - target_bounds.min);
+                const FiImage src_no_excess = src.copy(image_bounds_no_excess);
+                this->paste(src_no_excess, clamped_target_bounds.min, false);
+                return;
+            }
+        }
+
         assert(target_position.x >= 0);
         assert(target_position.x < this->width());
         assert(target_position.y >= 0);

@@ -375,7 +375,7 @@ std::vector<unsigned char> prepare_basemap_texture(
 
         const tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
         if (!geometry::intersect(webmercator_bounds, tile_bounds)) {
-             continue;
+            continue;
         }
 
         constexpr size_t subtile_count = 4;
@@ -440,7 +440,7 @@ std::vector<unsigned char> prepare_basemap_texture(
         glm::uvec2(pixel_offset_max.x, image_size_for_smallest_encompassing_tile.y - pixel_offset_min.y));
     const glm::uvec2 image_size = target_image_region.size();
 
-    FiImage image = FiImage::allocate_like(any_tile_image, image_size); // image_size);
+    FiImage image = FiImage::allocate_like(any_tile_image, image_size);
 
     for (const tile::Id &tile : tiles_to_splatter) {
         const size_t relative_zoom_level = tile.zoom_level - root_zoom_level;
@@ -449,36 +449,19 @@ std::vector<unsigned char> prepare_basemap_texture(
         const glm::uvec2 relative_tile_coords = tile.coords - smallest_encompassing_tile.coords * glm::uvec2(std::pow(2, relative_zoom_level));
         const glm::uvec2 current_tile_position = relative_tile_coords * current_tile_size;
 
-        const geometry::Aabb2i tile_bounds_image(
-            glm::ivec2(current_tile_position) - glm::ivec2(target_image_region.min),
-            glm::ivec2(current_tile_position) - glm::ivec2(target_image_region.min) + glm::ivec2(current_tile_size));
-        const geometry::Aabb2ui clamped_tile_bounds_image(
-            glm::max(glm::min(tile_bounds_image.min, glm::ivec2(image_size) - glm::ivec2(1)), glm::ivec2(0)),
-            glm::max(glm::min(tile_bounds_image.max, glm::ivec2(image_size) - glm::ivec2(1)), glm::ivec2(0)));
-
-        if (clamped_tile_bounds_image.width() == 0 || clamped_tile_bounds_image.height() == 0) {
-            continue;
-        }
-
         const std::filesystem::path &tile_path = tile_to_path_mapper(tile);
         FiImage tile_image = FiImage::load_from_path(tile_path);
 
         if (tile_image.width() != tile_size.x) {
-            throw std::runtime_error{"tiles have inconsitent widths"};
+            throw std::runtime_error{"tiles have inconsistent widths"};
         }
         if (tile_image.height() != tile_size.y) {
-            throw std::runtime_error{"tiles have inconsitent heights"};
+            throw std::runtime_error{"tiles have inconsistent heights"};
         }
         tile_image = tile_image.rescale(current_tile_size, FILTER_BICUBIC);
-
-        if (glm::uvec2(tile_bounds_image.size()) != clamped_tile_bounds_image.size()) {
-            const geometry::Aabb2ui cut_tile_bounds_image(
-                glm::ivec2(clamped_tile_bounds_image.min) - tile_bounds_image.min,
-                glm::ivec2(clamped_tile_bounds_image.max) - tile_bounds_image.min);
-            tile_image = tile_image.copy(cut_tile_bounds_image);
-        }
-
-        image.paste(tile_image, glm::uvec2(clamped_tile_bounds_image.min));
+        
+        const glm::ivec2 tile_target_position(glm::ivec2(current_tile_position) - glm::ivec2(target_image_region.min));
+        image.paste(tile_image, tile_target_position, true);
     }
 
     image.flip_vertical();
