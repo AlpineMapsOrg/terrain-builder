@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -5,7 +6,6 @@
 #include <numeric>
 #include <optional>
 #include <vector>
-#include <chrono>
 
 #include <FreeImage.h>
 #include <fmt/core.h>
@@ -132,58 +132,14 @@ void add_border_to_aabb(geometry::Aabb2<T1> &bounds, const Border<T2> &border) {
     bounds.max.y += border.bottom;
 }
 
-void remove_unused_vertices(TerrainMesh &mesh) {
-    const unsigned int max_vertex_count = mesh.positions.size();
-
-    // Find used vertices
-    std::vector<bool> vertex_present;
-    vertex_present.resize(max_vertex_count);
-    for (const glm::uvec3 &triangle : mesh.triangles) {
-        for (unsigned int i = 0; i < triangle.length(); i++) {
-            vertex_present[triangle[i]] = true;
-        }
-    }
-
-    // Remove unused vertices and remember new indices
-    const unsigned int actual_point_count = std::accumulate(vertex_present.begin(), vertex_present.end(), 0);
-
-    if (actual_point_count != max_vertex_count) {
-        std::vector<unsigned int> new_vertex_indices;
-        new_vertex_indices.reserve(max_vertex_count);
-
-        std::vector<glm::dvec3> old_positions = std::move(mesh.positions);
-        std::vector<glm::dvec2> old_uvs = std::move(mesh.uvs);
-        mesh.positions.reserve(actual_point_count);
-        mesh.uvs.reserve(actual_point_count);
-        const unsigned int no_new_index = max_vertex_count + 1;
-        unsigned int new_index = 0;
-        for (unsigned int i = 0; i < max_vertex_count; i++) {
-            if (vertex_present[i]) {
-                new_vertex_indices[i] = new_index;
-                new_index += 1;
-                mesh.positions.push_back(old_positions[i]);
-                mesh.uvs.push_back(old_uvs[i]);
-            } else {
-                new_vertex_indices[i] = no_new_index;
-            }
-        }
-
-        // Reindex triangles
-        for (glm::uvec3 &triangle : mesh.triangles) {
-            for (unsigned int i = 0; i < triangle.length(); i++) {
-                triangle[i] = new_vertex_indices[triangle[i]];
-            }
-        }
-    }
-}
-
 /// Builds a mesh from the given height dataset.
 TerrainMesh build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs, tile::SrsBounds &tile_bounds,
     const OGRSpatialReference &texture_srs, tile::SrsBounds &texture_bounds,
-    const Border<int> &vertex_border) {
+    const Border<int> &vertex_border,
+    const bool inclusive_bounds) {
     const OGRSpatialReference &source_srs = dataset.srs();
 
     // Translate tile bounds from tile srs into the source srs, so we know what data to read.
@@ -193,14 +149,17 @@ TerrainMesh build_reference_mesh_tile(
     RawDatasetReader reader(dataset);
     geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(tile_bounds_in_source_srs);
     add_border_to_aabb(pixel_bounds, vertex_border);
+    if (inclusive_bounds) {
+        add_border_to_aabb(pixel_bounds, Border(1));
+    }
     const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds);
 
     // Allocate mesh data structure
-    const unsigned int max_point_count = raw_tile_data.width() * raw_tile_data.height();
+    const unsigned int max_vertex_count = raw_tile_data.width() * raw_tile_data.height();
     const unsigned int max_triangle_count = (raw_tile_data.width() - 1) * (raw_tile_data.height() - 1) * 2;
     TerrainMesh mesh;
-    mesh.positions.reserve(max_point_count);
-    mesh.uvs.reserve(max_point_count);
+    mesh.positions.reserve(max_vertex_count);
+    mesh.uvs.reserve(max_vertex_count);
     mesh.triangles.reserve(max_triangle_count);
 
     // Prepare transformations here to avoid io inside the loop.
@@ -208,51 +167,86 @@ TerrainMesh build_reference_mesh_tile(
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_mesh = srs::transformation(source_srs, mesh_srs);
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_texture = srs::transformation(source_srs, texture_srs);
 
-    // Expand texture and tile bounds based on border
+    // Preparation for loop
     const tile::SrsBounds source_bounds_with_border = reader.transform_pixel_bounds_to_srs_bounds(pixel_bounds);
     const double infinity = std::numeric_limits<double>::infinity();
     tile::SrsBounds actual_tile_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
-    tile::SrsBounds actual_texture_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
 
+    std::vector<glm::dvec3> source_positions;
+    source_positions.resize(max_vertex_count);
+
+    std::vector<bool> is_in_bounds;
+    is_in_bounds.resize(max_vertex_count);
+    std::fill(is_in_bounds.begin(), is_in_bounds.end(), false);
+
+    // Pixel values represent the average over their area, or a value at their center.
+    const glm::dvec2 point_offset_in_raster(0.5);
+
+    // Iterate over height map and calculate vertex positions for each pixel and whether they are inside the requested bounds.
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
+            const unsigned int vertex_index = j * raw_tile_data.width() + i;
             const double height = raw_tile_data.pixel(j, i);
 
-            const glm::dvec2 coords_raster_relative(i + 0.5, j + 0.5);
+            // Convert pixel coordinates into a point in the dataset's srs.
+            const glm::dvec2 coords_raster_relative = glm::dvec2(i, j) + point_offset_in_raster;
             const glm::dvec2 coords_raster_absolute = coords_raster_relative + glm::dvec2(pixel_bounds.min);
             const glm::dvec3 coords_source(reader.transform_pixel_to_srs_point(coords_raster_absolute), height);
             actual_tile_bounds.expand_by(coords_source);
+            source_positions[vertex_index] = coords_source;
 
-            const glm::dvec3 coords_mesh = apply_transform(transform_source_mesh.get(), coords_source);
-            // const glm::dvec2 coords_tile = apply_transform(transform_source_tile.get(), glm::dvec2(coords_source));
+            // Check if the point is inside the given bounds.
+            if (inclusive_bounds) {
+                // For inclusive bounds we decide based on the center of the quad,
+                // that is spanned from the current vertex to the right and bottom.
+                // We do not account for the extra quads on the top and left here,
+                // because this is done by adding a 1px border to raw_tile_data above.
 
-            const glm::dvec2 coords_texture_absolute = apply_transform(transform_source_texture.get(), coords_source);
-            actual_texture_bounds.expand_by(coords_texture_absolute);
-            // const glm::dvec2 coords_texture_relative = (coords_texture_absolute - texture_bounds_with_border.min) / texture_bounds_with_border.size();
-
-            const glm::ivec2 coords_center_raster_relative(i + 1, j + 1);
-            const glm::ivec2 coords_center_raster_absolute = coords_center_raster_relative + pixel_bounds.min;
-            const glm::dvec2 coords_center_source = reader.transform_pixel_to_srs_point(coords_center_raster_absolute);
-            const glm::dvec2 coords_center_tile = apply_transform(transform_source_tile.get(), coords_center_source);
-
-            // Current Vertex
-            mesh.positions.push_back(coords_mesh);
-            // mesh.uvs.push_back(coords_texture_relative);
-            mesh.uvs.push_back(coords_texture_absolute);
-
-            if (i >= raw_tile_data.width() - 1 || j >= raw_tile_data.height() - 1) {
-                // Skip last row and column because they don't form new triangles
-                continue;
-            }
-
-            if (!tile_bounds.contains_inclusive(coords_center_tile)) {
-                // Skip triangles out of bounds, but only if they are not part of the border.
-                if (vertex_border.is_empty()) {
+                if (i >= raw_tile_data.width() - 1 || j >= raw_tile_data.height() - 1) {
+                    // Skip last row and column because they don't form new triangles
                     continue;
                 }
 
-                const glm::dvec2 tile_data_size(raw_tile_data.width(), raw_tile_data.height());
-                const glm::dvec2 tile_data_center = tile_data_size / glm::dvec2(2);
+                // Transform the center of the quad into the srs the bounds are given.
+                const glm::ivec2 coords_center_raster_relative = glm::dvec2(i, j) + point_offset_in_raster + glm::dvec2(0.5);
+                const glm::ivec2 coords_center_raster_absolute = coords_center_raster_relative + pixel_bounds.min;
+                const glm::dvec2 coords_center_source = reader.transform_pixel_to_srs_point(coords_center_raster_absolute);
+                const glm::dvec2 coords_center_tile = apply_transform(transform_source_tile.get(), coords_center_source);
+
+                if (!tile_bounds.contains_inclusive(coords_center_tile)) {
+                    continue;
+                }
+            } else {
+                // For exclusive bounds, we only include points (and thereforce triangles) that are (fully) inside the bounds.
+                const glm::dvec2 coords_tile = apply_transform(transform_source_tile.get(), coords_source);
+                if (!tile_bounds.contains_inclusive(coords_tile)) {
+                    continue;
+                }
+            }
+
+            // If we arrive here the point is inside the bounds.
+            is_in_bounds[vertex_index] = true;
+        }
+    }
+
+    // Mark all border vertices as inside bounds.
+    if (!vertex_border.is_empty()) {
+        const glm::dvec2 tile_data_size(raw_tile_data.width(), raw_tile_data.height());
+        const glm::dvec2 tile_data_center = tile_data_size / glm::dvec2(2);
+
+        for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
+            for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
+                const unsigned int vertex_index = j * raw_tile_data.width() + i;
+                const bool current_is_in_bounds = is_in_bounds[vertex_index];
+
+                // skip all vertices already inside bounds
+                if (current_is_in_bounds) {
+                    continue;
+                }
+
+                // check if the current vertex is inside the border region.
+                const glm::dvec2 coords_raster_relative = glm::dvec2(i, j) + point_offset_in_raster;
+                // TODO: we dont account for non uniform borders here.
                 const glm::ivec2 border_offset_direction(glm::sign(tile_data_center - coords_raster_relative));
                 glm::ivec2 border_offset;
                 border_offset.x = border_offset_direction.x == 1 ? vertex_border.left : -vertex_border.right;
@@ -261,30 +255,113 @@ TerrainMesh build_reference_mesh_tile(
                 if (border_offset_direction != glm::ivec2(glm::sign(tile_data_center - coords_to_check_raster_relative))) {
                     coords_to_check_raster_relative = tile_data_center;
                 }
-                const glm::dvec2 coords_to_check_raster_absolute = coords_to_check_raster_relative + glm::dvec2(pixel_bounds.min);
-                const glm::dvec2 coords_to_check_source = reader.transform_pixel_to_srs_point(coords_to_check_raster_absolute);
-                const glm::dvec2 coords_to_check_tile = apply_transform(transform_source_tile.get(), coords_to_check_source);
-                if (!tile_bounds.contains_inclusive(coords_to_check_tile)) {
-                    continue;
+
+                const unsigned int vertex_index_to_check = coords_to_check_raster_relative.y * raw_tile_data.width() + coords_to_check_raster_relative.x;
+                const bool vertex_to_check_in_bounds = is_in_bounds[vertex_index_to_check];
+                if (vertex_to_check_in_bounds) {
+                    // as we cannot have a reference into an std::vector<bool> we have to have another lookup here.
+                    is_in_bounds[vertex_index] = true;
                 }
             }
-
-            // Add triangles
-            const unsigned int vertex_index = j * raw_tile_data.width() + i;
-            mesh.triangles.emplace_back(vertex_index, vertex_index + raw_tile_data.width(), vertex_index + raw_tile_data.width() + 1);
-            mesh.triangles.emplace_back(vertex_index, vertex_index + raw_tile_data.width() + 1, vertex_index + 1);
         }
     }
 
-    assert(mesh.positions.size() == max_point_count);
-    assert(mesh.uvs.size() == max_point_count);
-    assert(mesh.triangles.size() <= max_triangle_count);
+    // Compact the vertex array to exclude all vertices out of bounds.
+    const unsigned int actual_vertex_count = std::accumulate(is_in_bounds.begin(), is_in_bounds.end(), 0);
+    // Marks entries that are not present in the new vector (not inside bounds or border)
+    const unsigned int no_new_index = max_vertex_count + 1;
+    // Index in old vector mapped to the index in the new one.
+    std::vector<unsigned int> new_vertex_indices;
+    if (actual_vertex_count != max_vertex_count) {
+        new_vertex_indices.reserve(max_vertex_count);
 
-    for (glm::dvec2 &uv : mesh.uvs) {
+        unsigned int write_index = 0;
+        for (unsigned int read_index = 0; read_index < max_vertex_count; read_index++) {
+            if (is_in_bounds[read_index]) {
+                new_vertex_indices.push_back(write_index);
+                source_positions[write_index] = source_positions[read_index];
+                write_index += 1;
+            } else {
+                new_vertex_indices.push_back(no_new_index);
+            }
+        }
+
+        // Remove out of bounds vertices
+        source_positions.resize(actual_vertex_count);
+    }
+
+    // Calculate absolute texture coordinates for every vertex.
+    tile::SrsBounds actual_texture_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
+    std::vector<glm::dvec2> texture_positions;
+    texture_positions.reserve(max_vertex_count);
+    for (unsigned int i = 0; i < actual_vertex_count; i++) {
+        const glm::dvec3 coords_source = source_positions[i];
+        const glm::dvec2 coords_texture_absolute = apply_transform(transform_source_texture.get(), coords_source);
+        actual_texture_bounds.expand_by(coords_texture_absolute);
+        texture_positions.push_back(coords_texture_absolute);
+    }
+
+    // Normalize texture coordinates
+    for (glm::dvec2 &uv : texture_positions) {
         uv = (uv - actual_texture_bounds.min) / actual_texture_bounds.size();
     }
 
-    remove_unused_vertices(mesh);
+    // Add triangles
+    for (unsigned int i = 0; i < max_vertex_count; i++) {
+        std::array<unsigned int, 4> quad = {
+            i,
+            i + 1,
+            i + raw_tile_data.width() + 1,
+            i + raw_tile_data.width(),
+        };
+
+        if (inclusive_bounds) {
+            // Check if all of the quad is inside the bounds
+            bool skip_quad = false;
+            for (const unsigned int vertex_index : quad) {
+                if (!is_in_bounds[vertex_index]) {
+                    skip_quad = true;
+                    break;
+                }
+            }
+            if (skip_quad) {
+                continue;
+            }
+
+            // Calculate the index of the given vertex in the reindexed buffer.
+            if (actual_vertex_count != max_vertex_count) {
+                for (unsigned int &vertex_index : quad) {
+                    vertex_index = new_vertex_indices[vertex_index];
+                    assert(vertex_index != no_new_index);
+                }
+            }
+
+            mesh.triangles.emplace_back(quad[0], quad[3], quad[2]);
+            mesh.triangles.emplace_back(quad[0], quad[2], quad[1]);
+        } else {
+            for (unsigned int i = 0; i < 4; i++) {
+                const unsigned int v0 = quad[i];
+                const unsigned int v1 = quad[(i + 1) % 4];
+                const unsigned int v2 = quad[(i + 2) % 4];
+
+                // Check if the indices are valid
+                if (is_in_bounds[v0] && is_in_bounds[v1] && is_in_bounds[v2]) {
+                    mesh.triangles.emplace_back(new_vertex_indices[v0], new_vertex_indices[v1], new_vertex_indices[v2]);
+                    i++;
+                }
+            }
+        }
+    }
+    assert(mesh.triangles.size() <= max_triangle_count);
+
+    mesh.positions = std::move(source_positions);
+    for (glm::dvec3 &position : mesh.positions) {
+        position = apply_transform(transform_source_mesh.get(), position);
+    }
+    assert(mesh.positions.size() == actual_vertex_count);
+
+    mesh.uvs = std::move(texture_positions);
+    assert(mesh.uvs.size() == actual_vertex_count);
 
     tile_bounds = actual_tile_bounds;
     texture_bounds = actual_texture_bounds;
@@ -392,11 +469,12 @@ std::vector<unsigned char> prepare_basemap_texture(
 
         if (!all_present) {
             const std::filesystem::path tile_path = tile_to_path_mapper(tile);
-            tiles_to_splatter.push_back(tile);
+            if (std::filesystem::exists(tile_path))
+                tiles_to_splatter.push_back(tile);
         }
 
         for (size_t i = 0; i < subtile_count; i++) {
-            if (subtile_present[i]) {
+            if (subtile_present[i] || subtiles[i].zoom_level < 22) {
                 tile_stack.push_back(subtiles[i]);
             }
         }
@@ -459,7 +537,7 @@ std::vector<unsigned char> prepare_basemap_texture(
             throw std::runtime_error{"tiles have inconsistent heights"};
         }
         tile_image = tile_image.rescale(current_tile_size, FILTER_BICUBIC);
-        
+
         const glm::ivec2 tile_target_position(glm::ivec2(current_tile_position) - glm::ivec2(target_image_region.min));
         image.paste(tile_image, tile_target_position, true);
     }
@@ -470,7 +548,7 @@ std::vector<unsigned char> prepare_basemap_texture(
     return image_data;
 }
 
-std::string format_secs_since(const std::chrono::high_resolution_clock::time_point& start) {
+std::string format_secs_since(const std::chrono::high_resolution_clock::time_point &start) {
     return std::to_string(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start).count());
 }
 
@@ -513,8 +591,8 @@ int main() {
         ecef,
         grid.getSRS(), tile_bounds,
         grid.getSRS(), texture_bounds,
-        Border(50, 70) // Border(0, 1, 1, 0)
-    );
+        Border(0), // Border(0, 1, 1, 0)
+        true);
     fmt::print("mesh building took {}s\n", format_secs_since(start));
 
     start = std::chrono::high_resolution_clock::now();
