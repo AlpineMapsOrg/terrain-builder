@@ -121,19 +121,7 @@ public:
         assert(box.max.x <= this->width());
         assert(box.min.y >= 0);
         assert(box.max.y <= this->height());
-
-        /*
-        const geometry::Aabb2ui fi_box(
-            {box.min.x, this->height() - box.max.y},
-            {box.max.y, this->height() - box.min.y}
-        );
-        assert(fi_box.min.x >= 0);
-        assert(fi_box.max.x <= this->width());
-        assert(fi_box.min.y >= 0);
-        assert(fi_box.max.y <= this->height());
-        */
-
-        // FIBITMAP *copy = FreeImage_Copy(this->raw_image, fi_box.min.x, fi_box.min.y, fi_box.max.x - 1, fi_box.max.y - 1);
+        
         FIBITMAP *copy = FreeImage_Copy(this->raw_image, box.min.x, box.min.y, box.max.x, box.max.y);
         if (!copy) {
             throw std::runtime_error{"FreeImage_Copy failed"};
@@ -147,22 +135,9 @@ public:
         assert(target_position.y >= 0);
         assert(target_position.y < this->height());
 
-        const glm::uvec2 fi_target_position(
-            target_position.x, 
-            this->height() - target_position.y - src.height()
-        );
-        assert(fi_target_position.x >= 0);
-        assert(fi_target_position.x < this->width());
-        assert(fi_target_position.y >= 0);
-        assert(fi_target_position.y < this->height());
-
-        // if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
-        if (!FreeImage_Paste(this->raw_image, src.raw_image, fi_target_position.x, fi_target_position.y, 256 /* no alpha blending */)) {
+        if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
             throw std::runtime_error{"FreeImage_Paste failed"};
         }
-        // if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
-        //     throw std::runtime_error{"FreeImage_Paste failed"};
-        // }
     }
 
     void flip_horizontal() {

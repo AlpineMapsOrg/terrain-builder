@@ -5,6 +5,7 @@
 #include <numeric>
 #include <optional>
 #include <vector>
+#include <chrono>
 
 #include <FreeImage.h>
 #include <fmt/core.h>
@@ -286,7 +287,7 @@ TerrainMesh build_reference_mesh_tile(
     remove_unused_vertices(mesh);
 
     tile_bounds = actual_tile_bounds;
-    // texture_bounds = actual_texture_bounds;
+    texture_bounds = actual_texture_bounds;
 
     return mesh;
 }
@@ -362,7 +363,6 @@ std::vector<unsigned char> prepare_basemap_texture(
     const tile::SrsBounds webmercator_bounds = encompassing_bounding_box_transfer(target_srs, webmercator, target_bounds);
     const tile::Id smallest_encompassing_tile = bounds_to_tile_id(webmercator_bounds).to(tile::Scheme::SlippyMap);
     const tile::SrsBounds smallest_encompassing_tile_bounds = grid.srsBounds(smallest_encompassing_tile, false);
-    std::cout << smallest_encompassing_tile << std::endl;
 
     std::vector<tile::Id> tiles_to_splatter;
 
@@ -373,11 +373,10 @@ std::vector<unsigned char> prepare_basemap_texture(
         const tile::Id tile = tile_stack.back();
         tile_stack.pop_back();
 
-        // TODO:
-        // const tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
-        // if (!geometry::intersect(webmercator_bounds, tile_bounds)) {
-        //      continue;
-        // }
+        const tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
+        if (!geometry::intersect(webmercator_bounds, tile_bounds)) {
+             continue;
+        }
 
         constexpr size_t subtile_count = 4;
         const std::array<tile::Id, subtile_count> subtiles = tile.children();
@@ -390,21 +389,6 @@ std::vector<unsigned char> prepare_basemap_texture(
         }
 
         bool all_present = std::all_of(subtile_present.begin(), subtile_present.end(), [](bool e) { return e; });
-
-        // TODO:
-        /*
-        if (tile.zoom_level == 18) {
-            const std::filesystem::path tile_path = tile_to_path_mapper(tile);
-            tiles_to_splatter.push_back(tile);
-        } else if (tile.zoom_level < 18) {
-            for (size_t i = 0; i < subtile_count; i++) {
-                if (subtile_present[i]) {
-                    tile_stack.push_back(subtiles[i]);
-                }
-            }
-        }
-        continue;
-        */
 
         if (!all_present) {
             const std::filesystem::path tile_path = tile_to_path_mapper(tile);
@@ -444,8 +428,6 @@ std::vector<unsigned char> prepare_basemap_texture(
 
     const size_t full_image_size_factor = std::pow(2, zoom_level_range);
 
-    print_bounds("webmercator", webmercator_bounds);
-    print_bounds("root_tile", smallest_encompassing_tile_bounds);
     const glm::dvec2 relative_min = (webmercator_bounds.min - smallest_encompassing_tile_bounds.min) / smallest_encompassing_tile_bounds.size();
     const glm::dvec2 relative_max = (webmercator_bounds.max - smallest_encompassing_tile_bounds.min) / smallest_encompassing_tile_bounds.size();
     const glm::uvec2 image_size_for_smallest_encompassing_tile = tile_size * glm::uvec2(full_image_size_factor);
@@ -461,13 +443,10 @@ std::vector<unsigned char> prepare_basemap_texture(
     FiImage image = FiImage::allocate_like(any_tile_image, image_size); // image_size);
 
     for (const tile::Id &tile : tiles_to_splatter) {
-        fmt::print("\n");
-        std::cout << tile << std::endl;
-
         const size_t relative_zoom_level = tile.zoom_level - root_zoom_level;
         const glm::uvec2 current_tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
         const glm::uvec2 current_tile_size = tile_size * current_tile_size_factor;
-        glm::uvec2 relative_tile_coords = tile.coords - smallest_encompassing_tile.coords * glm::uvec2(std::pow(2, relative_zoom_level));
+        const glm::uvec2 relative_tile_coords = tile.coords - smallest_encompassing_tile.coords * glm::uvec2(std::pow(2, relative_zoom_level));
         const glm::uvec2 current_tile_position = relative_tile_coords * current_tile_size;
 
         const geometry::Aabb2i tile_bounds_image(
@@ -496,26 +475,20 @@ std::vector<unsigned char> prepare_basemap_texture(
             const geometry::Aabb2ui cut_tile_bounds_image(
                 glm::ivec2(clamped_tile_bounds_image.min) - tile_bounds_image.min,
                 glm::ivec2(clamped_tile_bounds_image.max) - tile_bounds_image.min);
-            print_bounds("target_image_region", target_image_region);
-            print_bounds("tile_bounds_image", tile_bounds_image);
-            print_bounds("clamped_tile_bounds_image", clamped_tile_bounds_image);
-            print_bounds("cut_tile_bounds_image", cut_tile_bounds_image);
-            print_point(tile_image.size());
             tile_image = tile_image.copy(cut_tile_bounds_image);
         }
 
-        tile_image.flip_vertical();
-        print_bounds("clamped_tile_bounds_image", clamped_tile_bounds_image);
-        print_point(image.size());
         image.paste(tile_image, glm::uvec2(clamped_tile_bounds_image.min));
-        // image.paste(tile_image, current_tile_position);
     }
 
-    image.save("./tile.png");
-    // image.flip_vertical();
+    image.flip_vertical();
     const std::vector<unsigned char> image_data = image.save_to_vector(FIF_JPEG);
 
     return image_data;
+}
+
+std::string format_secs_since(const std::chrono::high_resolution_clock::time_point& start) {
+    return std::to_string(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start).count());
 }
 
 // TODO: setup cli interface
@@ -549,26 +522,27 @@ int main() {
     // Translate tile bounds into MGI
     tile::SrsBounds tile_bounds = grid.srsBounds(root_tile, false);
     tile::SrsBounds texture_bounds = tile_bounds;
-    // print_bounds(tile_bounds);
-    print_bounds(texture_bounds);
-    tile_bounds.max.x += texture_bounds.width();
-    texture_bounds.max.x += texture_bounds.width();
 
+    std::chrono::high_resolution_clock::time_point start;
+    start = std::chrono::high_resolution_clock::now();
     const TerrainMesh mesh = build_reference_mesh_tile(
         *dataset.get(),
-        webmercator, // TODO: ecef,
+        ecef,
         grid.getSRS(), tile_bounds,
         grid.getSRS(), texture_bounds,
-        Border(0) // Border(0, 1, 1, 0)
+        Border(50, 70) // Border(0, 1, 1, 0)
     );
-    // print_bounds(tile_bounds);
-    print_bounds(texture_bounds);
+    fmt::print("mesh building took {}s\n", format_secs_since(start));
 
+    start = std::chrono::high_resolution_clock::now();
     std::vector<unsigned char> texture_bytes = prepare_basemap_texture(
         grid.getSRS(), texture_bounds,
         [](tile::Id tile_id) { return fmt::format("/mnt/e/Code/TU/2023S/Project/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x); });
+    fmt::print("texture stitching took {}s\n", format_secs_since(start));
 
+    start = std::chrono::high_resolution_clock::now();
     save_mesh_as_gltf(mesh, texture_bytes, "./tile.gltf", true);
+    fmt::print("mesh writing took {}s\n", format_secs_since(start));
 
     return 0;
 }
