@@ -73,6 +73,19 @@ if(NOT TARGET stb)
     target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 endif()
 
+if(NOT TARGET cli11)
+    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/cli11)
+        FetchContent_Declare(cli11
+            GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+            GIT_TAG main
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cli11
+        )
+        FetchContent_MakeAvailable(cli11)
+    else()
+        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/cli11 ${CMAKE_BINARY_DIR}/_deps/cli11-build)
+    endif()
+endif()
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
@@ -141,4 +154,4 @@ endif()
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb)
+target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb CLI11::CLI11)
