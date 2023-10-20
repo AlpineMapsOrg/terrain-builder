@@ -1,3 +1,5 @@
+#ifndef RAWDATASETREADER_H
+#define RAWDATASETREADER_H
 
 #include <fmt/core.h>
 #include <gdal.h>
@@ -28,7 +30,17 @@ public:
         return this->dataset;
     }
 
-    HeightData read_data_in_pixel_bounds(const geometry::Aabb2i &bounds) {
+    glm::uvec2 dataset_size() {
+        GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
+        return glm::uvec2(heights_band->GetXSize(), heights_band->GetYSize());
+    }
+
+    HeightData read_data_in_pixel_bounds(geometry::Aabb2i bounds, const bool clamp_bounds = false) {
+        if (clamp_bounds) {
+            bounds.min = glm::max(bounds.min, glm::ivec2(0));
+            bounds.max = glm::min(bounds.max, glm::ivec2(this->dataset_size()) - glm::ivec2(1));
+        }
+
         GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
 
         // Initialize the HeightData for reading
@@ -46,12 +58,12 @@ public:
         return height_data;
     }
 
-    HeightData read_data_in_srs_bounds(const tile::SrsBounds &bounds) {
+    HeightData read_data_in_srs_bounds(const tile::SrsBounds &bounds, const bool clamp_bounds = false) {
         // Transform the SrsBounds to pixel space
         const geometry::Aabb2i pixel_bounds = this->transform_srs_bounds_to_pixel_bounds(bounds);
 
         // Use the transformed pixel bounds to read data
-        return this->read_data_in_pixel_bounds(pixel_bounds);
+        return this->read_data_in_pixel_bounds(pixel_bounds, clamp_bounds);
     }
 
     geometry::Aabb2i transform_srs_bounds_to_pixel_bounds(const tile::SrsBounds &bounds) const {
@@ -111,3 +123,5 @@ private:
     mutable std::array<double, 6> geo_transform;     // transform from pixel space to source srs.
     mutable std::array<double, 6> inv_geo_transform; // transform from source srs to pixel space.
 };
+
+#endif

@@ -24,6 +24,7 @@
  */
 
 #include <cmath>
+#include <optional>
 
 #include "ogr_spatialref.h"
 
@@ -71,13 +72,14 @@ public:
         const tile::SrsBounds extent,
         const OGRSpatialReference& srs,
         int epsgCode,
-        unsigned short int rootTiles,
+        std::vector<tile::Id> rootTiles,
         double zoomFactor)
         : mGridSize(gridSize)
         , mExtent(extent)
         , mSRS(srs)
         , mEpsgCode(epsgCode)
-        , mInitialResolution((extent.size().x / rootTiles) / gridSize)
+        , mRootTiles(rootTiles)
+        , mInitialResolution((extent.size().x / rootTiles.size()) / gridSize)
         , mXOriginShift(extent.size().x / 2)
         , mYOriginShift(extent.size().y / 2)
         , mZoomFactor(zoomFactor)
@@ -171,6 +173,86 @@ public:
 
         return { minLeft, maxRight };
     }
+    
+    [[nodiscard]] const std::vector<tile::Id>& rootTiles() const {
+        return this->mRootTiles;
+    }
+
+    // Searches for the smallest tile that encompasses the given bounding box.
+    [[nodiscard]] tile::Id findSmallestEncompassingTile(const tile::SrsBounds &bounds) const {
+        // We dont want to recurse indefinetely if the bounds are empty.
+        if (bounds.width() == 0 || bounds.height() == 0) {
+            throw std::invalid_argument("bounds cannot be empty");
+        }
+
+        const std::array<glm::dvec2, 4> points = {
+            bounds.min,
+            bounds.max,
+            glm::dvec2(bounds.min.x, bounds.max.y),
+            glm::dvec2(bounds.max.x, bounds.min.y)};
+
+
+        // We start at the root tiles and repeatedly check every subtile until we find one that contains all
+        // of the bounding box.
+        for (const tile::Id &root_tile : this->rootTiles()) {
+            // Get the bounds of the current root tile.
+            const tile::SrsBounds root_tile_bounds = this->srsBounds(root_tile, false);
+
+            // Check if all of the target bounding box is inside this tile.
+            bool all_points_inside = true;
+            for (const auto &point : points) {
+                if (!root_tile_bounds.contains_inclusive(point)) {
+                    all_points_inside = false;
+                    break;
+                }
+            }
+
+            // If not all points are inside, continue to the next root tile.
+            if (!all_points_inside) {
+                continue;
+            }
+
+            // Now find the smallest tile under this root.
+            tile::Id current_smallest_encompassing_tile = root_tile;
+            while (true) {
+                const std::array<tile::Id, 4> children = current_smallest_encompassing_tile.children();
+
+                bool all_points_inside_any_child = false;
+                for (const auto &child : children) {
+                    // Get the bounds of the current child
+                    const tile::SrsBounds tile_bounds = this->srsBounds(child, false);
+
+                    // Check if all of the target bounding box is inside this tile.
+                    bool all_points_inside = true;
+                    for (const auto &point : points) {
+                        if (!tile_bounds.contains_inclusive(point)) {
+                            all_points_inside = false;
+                            break;
+                        }
+                    }
+
+                    // If all points are inside, we can recurse.
+                    if (!all_points_inside) {
+                        continue;
+                    }
+
+                    all_points_inside_any_child = true;
+                    current_smallest_encompassing_tile = child;
+                    break;
+                }
+
+                // Check if all of the points are contained in any children, so we can stop the recursion.
+                if (!all_points_inside_any_child) {
+                    break;
+                }
+            }
+
+            return current_smallest_encompassing_tile;
+        }
+
+        throw std::invalid_argument("bounds are not inside this grid");
+    }
+
 
     /// Get the tile size associated with this grid
     [[nodiscard]] inline i_tile tileSize() const
@@ -212,6 +294,9 @@ private:
 
     /// By what factor will the scale increase at each zoom level?
     double mZoomFactor;
+
+    /// A list of all the root tiles of the grid.
+    std::vector<tile::Id> mRootTiles;
 };
 
 #endif /* CTBGRID_HPP */

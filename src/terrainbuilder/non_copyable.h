@@ -1,3 +1,6 @@
+#ifndef NONCOPYABLE_H
+#define NONCOPYABLE_H
+
 class NonCopyable
 {
   public: 
@@ -8,3 +11,6 @@ class NonCopyable
     NonCopyable () = default;
     ~NonCopyable () = default; /// Protected non-virtual destructor
 };
+
+
+#endif

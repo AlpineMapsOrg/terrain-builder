@@ -38,12 +38,11 @@ class ctb::GlobalMercator : public Grid {
 public:
     GlobalMercator(i_tile tileSize = 256)
         : Grid(tileSize,
-            tile::SrsBounds{{-cOriginShift, -cOriginShift}, {cOriginShift, cOriginShift}},
-            cSRS,
-            3857,
-            1,
-            2)
-    {
+               tile::SrsBounds{{-cOriginShift, -cOriginShift}, {cOriginShift, cOriginShift}},
+               cSRS,
+               3857,
+               std::vector<tile::Id>{tile::Id{0, {0, 0}, tile::Scheme::Tms}},
+               2) {
     }
 
 protected:

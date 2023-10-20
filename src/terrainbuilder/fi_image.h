@@ -1,3 +1,6 @@
+#ifndef FIIMAGE_H
+#define FIIMAGE_H
+
 #include <filesystem>
 
 #include <FreeImage.h>
@@ -176,7 +179,7 @@ public:
         }
     }
 
-    void save(const std::filesystem::path filename, const int flags = 0 /* default settings */) {
+    void save(const std::filesystem::path filename, const int flags = 0 /* default settings */) const {
         const FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(filename.c_str());
         if (fif == FIF_UNKNOWN) {
             throw std::runtime_error("unable to determine image file type");
@@ -224,3 +227,5 @@ public:
 private:
     FIBITMAP *raw_image;
 };
+
+#endif
