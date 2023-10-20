@@ -121,12 +121,13 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t, cons
     cgltf_buffer &buffer = buffers[0] = {};
     buffer.size = buffer_data.size();
     buffer.data = buffer_data.data();
+    std::string buffer_data_encoded;
     if (binary) {
         // The binary blob will be used as the contents of the first buffer if it does not have an uri defined.
         data.bin = buffer_data.data();
         data.bin_size = buffer_data.size();
     } else {
-        std::string buffer_data_encoded = data_uri_encode(buffer_data.data(), buffer_data.size());
+        buffer_data_encoded = data_uri_encode(buffer_data.data(), buffer_data.size());
         buffer.uri = buffer_data_encoded.data();
     }
 
@@ -257,17 +258,28 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t, cons
     mesh.primitives = &primitive;
 
     // Create a node
-    std::array<cgltf_node, 1> nodes;
-    cgltf_node &node = nodes[0] = {};
-    node.has_translation = true;
-    glm::vec3 mesh_offset(average_position);
-    std::copy(glm::value_ptr(mesh_offset), glm::value_ptr(mesh_offset) + mesh_offset.length(), node.translation);
-    node.mesh = &mesh;
+    std::array<cgltf_node, 2> nodes;
+    cgltf_node &mesh_node = nodes[1] = {};
+    mesh_node.has_translation = true;
+    mesh_node.mesh = &mesh;
+
+    cgltf_node &parent_node = nodes[0] = {};
+    std::array<cgltf_node*, 1> parent_node_children = { &mesh_node };
+    parent_node.children_count = parent_node_children.size();
+    parent_node.children = parent_node_children.data();
+    parent_node.has_translation = true;
+
+    const glm::vec3 parent_offset(average_position);
+    const glm::dvec3 parent_offset_error = glm::dvec3(parent_offset) - average_position;
+    const glm::vec3 mesh_offset(-parent_offset_error);
+    std::copy(glm::value_ptr(parent_offset), glm::value_ptr(parent_offset) + parent_offset.length(), parent_node.translation);
+    std::copy(glm::value_ptr(mesh_offset), glm::value_ptr(mesh_offset) + mesh_offset.length(), mesh_node.translation);
+
 
     // Create a scene
     std::array<cgltf_scene, 1> scenes;
     cgltf_scene &scene = scenes[0] = {};
-    std::array<cgltf_node *, 1> scene_nodes = {&node};
+    std::array<cgltf_node *, 1> scene_nodes = {&parent_node};
     scene.nodes_count = scene_nodes.size();
     scene.nodes = scene_nodes.data();
 
@@ -301,6 +313,7 @@ void save_mesh_as_gltf(const TerrainMesh &m, std::vector<unsigned char>& t, cons
 
     std::filesystem::path output_path(path);
     output_path.replace_extension(binary ? "glb" : "gltf");
+    // std::filesystem::create_directories(output_path.parent_path());
     cgltf_options options;
     if (binary) {
         options.type = cgltf_file_type_glb;
