@@ -591,33 +591,40 @@ int main() {
     // const tile::Id root_tile = {16, {35748, 22724}, tile::Scheme::SlippyMap};
     // const tile::Id root_tile = {17, {71497, 45448}, tile::Scheme::SlippyMap};
     // const tile::Id root_tile = tile::Id{18, {142994, 90897}, tile::Scheme::SlippyMap}.parent().parent().parent();
-    const tile::Id root_tile = tile::Id{18, {142994, 90897}, tile::Scheme::SlippyMap};
+    const std::array<tile::Id, 4> target_tiles = tile::Id {17, {71497, 45448}, tile::Scheme::SlippyMap}.children();
     // const tile::Id root_tile = {19, {285989, 181795}, tile::Scheme::SlippyMap};.
 
-    // Translate tile bounds into MGI
-    tile::SrsBounds tile_bounds = grid.srsBounds(root_tile, false);
-    tile::SrsBounds texture_bounds = tile_bounds;
+    for (unsigned int i = 0; i < target_tiles.size(); i++) {
+        const tile::Id &root_tile = target_tiles[i];
+        std::cout << root_tile << std::endl;
 
-    std::chrono::high_resolution_clock::time_point start;
-    start = std::chrono::high_resolution_clock::now();
-    const TerrainMesh mesh = build_reference_mesh_tile(
-        *dataset.get(),
-        ecef,
-        grid.getSRS(), tile_bounds,
-        grid.getSRS(), texture_bounds,
-        Border(0), // Border(0, 1, 1, 0)
-        true);
-    fmt::print("mesh building took {}s\n", format_secs_since(start));
+        // Translate tile bounds into MGI
+        tile::SrsBounds tile_bounds = grid.srsBounds(root_tile, false);
+        tile::SrsBounds texture_bounds = tile_bounds;
 
-    start = std::chrono::high_resolution_clock::now();
-    std::vector<unsigned char> texture_bytes = prepare_basemap_texture(
-        grid.getSRS(), texture_bounds,
-        [](tile::Id tile_id) { return fmt::format("/mnt/e/Code/TU/2023S/Project/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x); });
-    fmt::print("texture stitching took {}s\n", format_secs_since(start));
+        std::chrono::high_resolution_clock::time_point start;
+        start = std::chrono::high_resolution_clock::now();
+        const TerrainMesh mesh = build_reference_mesh_tile(
+            *dataset.get(),
+            ecef,
+            grid.getSRS(), tile_bounds,
+            grid.getSRS(), texture_bounds,
+            Border(0, 1, 1, 0),
+            true);
+        fmt::print("mesh building took {}s\n", format_secs_since(start));
 
-    start = std::chrono::high_resolution_clock::now();
-    save_mesh_as_gltf(mesh, texture_bytes, "./tile.gltf", true);
-    fmt::print("mesh writing took {}s\n", format_secs_since(start));
+        start = std::chrono::high_resolution_clock::now();
+        std::vector<unsigned char> texture_bytes = prepare_basemap_texture(
+            grid.getSRS(), texture_bounds,
+            [](tile::Id tile_id) { return fmt::format("/mnt/e/Code/TU/2023S/Project/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x); });
+        fmt::print("texture stitching took {}s\n", format_secs_since(start));
+
+        start = std::chrono::high_resolution_clock::now();
+        const std::filesystem::path mesh_path = fmt::format("/mnt/e/Code/TU/2023S/Project/meshes/{}/{}-{}.gltf", root_tile.zoom_level, root_tile.coords.y, root_tile.coords.x);
+        save_mesh_as_gltf(mesh, texture_bytes, mesh_path, false);
+        fmt::print("mesh writing took {}s\n", format_secs_since(start));
+        fmt::print("\n");
+    }
 
     return 0;
 }
