@@ -230,40 +230,54 @@ TerrainMesh build_reference_mesh_tile(
     }
 
     // Mark all border vertices as inside bounds.
+    // TODO: This code is rather inefficient for larger borders.
     if (!vertex_border.is_empty()) {
-        const glm::dvec2 tile_data_size(raw_tile_data.width(), raw_tile_data.height());
-        const glm::dvec2 tile_data_center = tile_data_size / glm::dvec2(2);
+        std::vector<unsigned int> border_vertices;
+        const unsigned int max_border_vertices = std::max(raw_tile_data.width(), raw_tile_data.height()); // for each step, assuming convexity
+        border_vertices.reserve(max_border_vertices);
 
-        for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
-            for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
-                const unsigned int vertex_index = j * raw_tile_data.width() + i;
-                const bool current_is_in_bounds = is_in_bounds[vertex_index];
+        const std::array<std::pair<unsigned int, glm::ivec2>, 4> border_offsets = {
+            std::make_pair(vertex_border.left, glm::ivec2(-1, 0)),
+            std::make_pair(vertex_border.right, glm::ivec2(1, 0)),
+            std::make_pair(vertex_border.top, glm::ivec2(0, -1)),
+            std::make_pair(vertex_border.bottom, glm::ivec2(0, 1))
+        };
 
-                // skip all vertices already inside bounds
-                if (current_is_in_bounds) {
-                    continue;
+        for (unsigned int k = 0; k < border_offsets.size(); k++) {
+            const unsigned int border_thickness = border_offsets[k].first;
+            const glm::ivec2 border_direction = border_offsets[k].second;
+
+            for (unsigned int l = 0; l < border_thickness; l++) {
+                for (unsigned int j = 0; j < raw_tile_data.height() - 1; j++) {
+                    for (unsigned int i = 0; i < raw_tile_data.width() - 1; i++) {
+                        const unsigned int vertex_index = j * raw_tile_data.width() + i;
+
+                        // skip all vertices already inside bounds
+                        if (is_in_bounds[vertex_index]) {
+                            continue;
+                        }
+
+                        // Current vertex index offset into the opposite direction of the current border direction.
+                        // So if we are currently making a top border, we offset the current position down.
+                        const unsigned int vertex_index_to_check = (j + border_direction.y) * raw_tile_data.width() + (i + border_direction.x);
+                        assert(vertex_index_to_check < max_vertex_count);
+                        if (is_in_bounds[vertex_index_to_check]) {
+                            // as we cannot have a reference into an std::vector<bool> we have to have another lookup here.
+                            border_vertices.push_back(vertex_index);
+                        }
+                    }
                 }
 
-                // check if the current vertex is inside the border region.
-                const glm::dvec2 coords_raster_relative = glm::dvec2(i, j) + point_offset_in_raster;
-                // TODO: we dont account for non uniform borders here.
-                const glm::ivec2 border_offset_direction(glm::sign(tile_data_center - coords_raster_relative));
-                glm::ivec2 border_offset;
-                border_offset.x = border_offset_direction.x == 1 ? vertex_border.left : -vertex_border.right;
-                border_offset.y = border_offset_direction.y == 1 ? vertex_border.top : -vertex_border.bottom;
-                glm::dvec2 coords_to_check_raster_relative = coords_raster_relative + glm::dvec2(border_offset);
-                if (border_offset_direction != glm::ivec2(glm::sign(tile_data_center - coords_to_check_raster_relative))) {
-                    coords_to_check_raster_relative = tile_data_center;
+                for (const unsigned int border_vertex : border_vertices) {
+                    assert(border_vertex < is_in_bounds.size());
+                    is_in_bounds[border_vertex] = true;
                 }
 
-                const unsigned int vertex_index_to_check = coords_to_check_raster_relative.y * raw_tile_data.width() + coords_to_check_raster_relative.x;
-                const bool vertex_to_check_in_bounds = is_in_bounds[vertex_index_to_check];
-                if (vertex_to_check_in_bounds) {
-                    // as we cannot have a reference into an std::vector<bool> we have to have another lookup here.
-                    is_in_bounds[vertex_index] = true;
-                }
+                assert(border_vertices.size() <= max_border_vertices);
+                border_vertices.clear();
             }
         }
+
     }
 
     // Compact the vertex array to exclude all vertices out of bounds.
