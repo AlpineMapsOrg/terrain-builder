@@ -316,52 +316,58 @@ TerrainMesh build_reference_mesh_tile(
     }
 
     // Normalize texture coordinates
+    mesh.uvs = std::move(texture_positions);
     for (glm::dvec2 &uv : texture_positions) {
         uv = (uv - actual_texture_bounds.min) / actual_texture_bounds.size();
     }
+    assert(mesh.uvs.size() == actual_vertex_count);
 
     // Add triangles
-    for (unsigned int i = 0; i < max_vertex_count; i++) {
-        std::array<unsigned int, 4> quad = {
-            i,
-            i + 1,
-            i + raw_tile_data.width() + 1,
-            i + raw_tile_data.width(),
-        };
+    for (unsigned int j = 0; j < raw_tile_data.height() - 1; j++) {
+        for (unsigned int i = 0; i < raw_tile_data.width() - 1; i++) {
+            const unsigned int vertex_index = j * raw_tile_data.width() + i;
 
-        if (inclusive_bounds) {
-            // Check if all of the quad is inside the bounds
-            bool skip_quad = false;
-            for (const unsigned int vertex_index : quad) {
-                if (!is_in_bounds[vertex_index]) {
-                    skip_quad = true;
-                    break;
+            std::array<unsigned int, 4> quad = {
+                vertex_index,
+                vertex_index + 1,
+                vertex_index + raw_tile_data.width() + 1,
+                vertex_index + raw_tile_data.width(),
+            };
+
+            if (inclusive_bounds) {
+                // Check if all of the quad is inside the bounds
+                bool skip_quad = false;
+                for (const unsigned int vertex_index : quad) {
+                    if (!is_in_bounds[vertex_index]) {
+                        skip_quad = true;
+                        break;
+                    }
                 }
-            }
-            if (skip_quad) {
-                continue;
-            }
-
-            // Calculate the index of the given vertex in the reindexed buffer.
-            if (actual_vertex_count != max_vertex_count) {
-                for (unsigned int &vertex_index : quad) {
-                    vertex_index = new_vertex_indices[vertex_index];
-                    assert(vertex_index != no_new_index);
+                if (skip_quad) {
+                    continue;
                 }
-            }
 
-            mesh.triangles.emplace_back(quad[0], quad[3], quad[2]);
-            mesh.triangles.emplace_back(quad[0], quad[2], quad[1]);
-        } else {
-            for (unsigned int i = 0; i < 4; i++) {
-                const unsigned int v0 = quad[i];
-                const unsigned int v1 = quad[(i + 1) % 4];
-                const unsigned int v2 = quad[(i + 2) % 4];
+                // Calculate the index of the given vertex in the reindexed buffer.
+                if (actual_vertex_count != max_vertex_count) {
+                    for (unsigned int &vertex_index : quad) {
+                        vertex_index = new_vertex_indices[vertex_index];
+                        assert(vertex_index != no_new_index);
+                    }
+                }
 
-                // Check if the indices are valid
-                if (is_in_bounds[v0] && is_in_bounds[v1] && is_in_bounds[v2]) {
-                    mesh.triangles.emplace_back(new_vertex_indices[v0], new_vertex_indices[v1], new_vertex_indices[v2]);
-                    i++;
+                mesh.triangles.emplace_back(quad[0], quad[3], quad[2]);
+                mesh.triangles.emplace_back(quad[0], quad[2], quad[1]);
+            } else {
+                for (unsigned int i = 0; i < 4; i++) {
+                    const unsigned int v0 = quad[i];
+                    const unsigned int v1 = quad[(i + 1) % 4];
+                    const unsigned int v2 = quad[(i + 2) % 4];
+
+                    // Check if the indices are valid
+                    if (is_in_bounds[v0] && is_in_bounds[v1] && is_in_bounds[v2]) {
+                        mesh.triangles.emplace_back(new_vertex_indices[v0], new_vertex_indices[v1], new_vertex_indices[v2]);
+                        i++;
+                    }
                 }
             }
         }
@@ -373,9 +379,6 @@ TerrainMesh build_reference_mesh_tile(
         position = apply_transform(transform_source_mesh.get(), position);
     }
     assert(mesh.positions.size() == actual_vertex_count);
-
-    mesh.uvs = std::move(texture_positions);
-    assert(mesh.uvs.size() == actual_vertex_count);
 
     tile_bounds = actual_tile_bounds;
     texture_bounds = actual_texture_bounds;
