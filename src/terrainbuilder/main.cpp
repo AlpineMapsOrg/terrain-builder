@@ -19,7 +19,12 @@
 #include "texture_assembler.h"
 
 std::string format_secs_since(const std::chrono::high_resolution_clock::time_point &start) {
-    return std::to_string(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start).count());
+    const auto duration = std::chrono::high_resolution_clock::now() - start;
+    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
+    const double seconds_value = std::chrono::duration<double>(seconds).count();
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2) << seconds_value;
+    return ss.str();
 }
 
 void build(
