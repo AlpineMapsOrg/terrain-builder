@@ -41,6 +41,9 @@ public:
             bounds.max = glm::min(bounds.max, glm::ivec2(this->dataset_size()) - glm::ivec2(1));
         }
 
+        assert(glm::all(glm::greaterThanEqual(bounds.min, glm::ivec2(0))));
+        assert(glm::all(glm::lessThan(bounds.min, glm::ivec2(this->dataset_size()))));
+
         GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
 
         // Initialize the HeightData for reading

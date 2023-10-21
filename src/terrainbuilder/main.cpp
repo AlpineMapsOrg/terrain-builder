@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
 
     tile::Scheme target_tile_scheme;
     std::map<std::string, tile::Scheme> scheme_str_map{{"slippymap", tile::Scheme::SlippyMap}, {"google", tile::Scheme::SlippyMap}, {"tms", tile::Scheme::Tms}};
-    app.add_option("--scheme", target_tile_data, "Target tile id for the reference tile as \"{zoom} {x} {y}\"")
+    app.add_option("--scheme", target_tile_scheme, "Target tile id for the reference tile as \"{zoom} {x} {y}\"")
         ->default_val(tile::Scheme::SlippyMap)
         ->excludes("--bounds")
         ->transform(CLI::CheckedTransformer(scheme_str_map, CLI::ignore_case));
