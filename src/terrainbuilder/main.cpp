@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
 
     CLI11_PARSE(app, argc, argv);
 
-    const DatasetPtr dataset(dataset_path);
+    Dataset dataset(dataset_path);
 
     OGRSpatialReference tile_srs;
     tile_srs.importFromEPSG(target_srs_code);
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     std::chrono::high_resolution_clock::time_point start;
     start = std::chrono::high_resolution_clock::now();
     TerrainMesh mesh = build_reference_mesh_tile(
-        *dataset.get(),
+        dataset,
         mesh_srs,
         tile_srs, tile_bounds,
         texture_srs, texture_bounds,

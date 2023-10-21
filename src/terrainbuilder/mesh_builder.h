@@ -100,7 +100,7 @@ TerrainMesh build_reference_mesh_tile(
     if (inclusive_bounds) {
         add_border_to_aabb(pixel_bounds, Border(1));
     }
-    const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds);
+    const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds, true);
 
     // Allocate mesh data structure
     const unsigned int max_vertex_count = raw_tile_data.width() * raw_tile_data.height();
