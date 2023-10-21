@@ -137,8 +137,7 @@ void save_mesh_as_gltf(const TerrainMesh &m, const std::filesystem::path path) {
     memcpy(buffer_data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
     memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
 
-
-    const bool binary_output = path.extension() == "glb";
+    const bool binary_output = path.extension() == ".glb";
 
     // ********************* Create GLTF data structure ********************* //
 
