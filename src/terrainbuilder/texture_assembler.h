@@ -161,7 +161,12 @@ std::optional<FiImage> assemble_texture_from_tiles(
         if (tile_image.height() != tile_size.y) {
             throw std::runtime_error{"tiles have inconsistent heights"};
         }
-        tile_image = tile_image.rescale(current_tile_size, FILTER_BICUBIC);
+
+        assert(glm::all(glm::greaterThanEqual( current_tile_size, tile_image.size())));
+
+        if (tile_image.size() != current_tile_size) {
+            tile_image = tile_image.rescale(current_tile_size, FILTER_BICUBIC);
+        }
 
         const glm::ivec2 tile_target_position(glm::ivec2(current_tile_position) - glm::ivec2(target_image_region.min));
         image.paste(tile_image, tile_target_position, true /* allows und handles overflow */);
