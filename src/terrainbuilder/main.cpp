@@ -20,10 +20,9 @@
 
 std::string format_secs_since(const std::chrono::high_resolution_clock::time_point &start) {
     const auto duration = std::chrono::high_resolution_clock::now() - start;
-    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
-    const double seconds_value = std::chrono::duration<double>(seconds).count();
+    const double seconds = std::chrono::duration<double>(duration).count();
     std::stringstream ss;
-    ss << std::fixed << std::setprecision(2) << seconds_value;
+    ss << std::fixed << std::setprecision(2) << seconds;
     return ss.str();
 }
 
