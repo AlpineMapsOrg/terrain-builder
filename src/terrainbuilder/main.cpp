@@ -56,6 +56,9 @@ void build(
         return fmt::format("{}/{}/{}/{}.jpeg", std::string(texture_base_path), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
     };
     std::optional<FiImage> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, tile_to_path_mapper);
+    if (!texture.has_value()) {
+        throw std::runtime_error{"failed to assemble tile texture"};
+    }
     mesh.texture = std::move(texture);
     fmt::print("texture stitching took {}s\n", format_secs_since(start));
 
