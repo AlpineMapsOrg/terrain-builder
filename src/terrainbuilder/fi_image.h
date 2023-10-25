@@ -61,7 +61,9 @@ public:
         : raw_image(image) {}
 
     ~FiImage() {
-        // FreeImage_Unload(this->raw_image);
+        if (this->raw_image) {
+            FreeImage_Unload(this->raw_image);
+        }
     }
 
     // Move constructor
