@@ -42,7 +42,7 @@ public:
         }
 
         assert(glm::all(glm::greaterThanEqual(bounds.min, glm::ivec2(0))));
-        assert(glm::all(glm::lessThan(bounds.min, glm::ivec2(this->dataset_size()))));
+        assert(glm::all(glm::lessThan(bounds.max, glm::ivec2(this->dataset_size()))));
 
         GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
 
