@@ -62,7 +62,17 @@ void build(
     fmt::print("texture stitching took {}s\n", format_secs_since(start));
 
     start = std::chrono::high_resolution_clock::now();
-    save_mesh_as_gltf(mesh, output_path);
+    std::unordered_map<std::string, std::string> metadata;
+    metadata["mesh_srs"] = mesh_srs.GetAuthorityCode(nullptr);
+    metadata["bounds_srs"] = tile_srs.GetAuthorityCode(nullptr);
+    metadata["texture_srs"] = texture_srs.GetAuthorityCode(nullptr);
+    metadata["tile_bounds"] = fmt::format(
+        "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
+        tile_bounds.min.x, tile_bounds.min.y, tile_bounds.max.x, tile_bounds.max.y);
+    metadata["texture_srs"] = fmt::format(
+        "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
+        texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
+    save_mesh_as_gltf(mesh, output_path, metadata);
     fmt::print("mesh writing took {}s\n", format_secs_since(start));
 }
 

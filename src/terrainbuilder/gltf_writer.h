@@ -88,7 +88,7 @@ std::string data_uri_encode(unsigned char const *bytes_to_encode, unsigned int i
 }
 
 /// Saves the mesh as a .gltf or .glb file at the given path.
-void save_mesh_as_gltf(const TerrainMesh &m, const std::filesystem::path path) {
+void save_mesh_as_gltf(const TerrainMesh &m, const std::filesystem::path& path, const std::unordered_map<std::string, std::string> extra_metadata = {}) {
     // ********************* Preprocessing ********************* //
 
     // Calculate the average vertex position for later normalization.
@@ -336,6 +336,27 @@ void save_mesh_as_gltf(const TerrainMesh &m, const std::filesystem::path path) {
     data.samplers = samplers.data();
     data.materials_count = materials.size();
     data.materials = materials.data();
+
+
+    // Set up extra metadata
+    std::string extras_str;
+    if (!extra_metadata.empty()) {
+        std::stringstream extras = {};
+        extras << "{";
+        for (auto const &[key, val] : extra_metadata) {
+            extras << "\n";
+            extras << "    ";
+            extras << "\"" << key << "\"";
+            extras << ": ";
+            extras << val;
+            extras << ",";
+        }
+        extras.seekp(-1, std::ios_base::end); // remove last ","
+        extras << "\n  }";
+        extras << "\0";
+        extras_str = extras.str();
+        data.extras.data = extras_str.data();
+    }
 
     // ********************* Save the GLTF data to a file ********************* //
     std::filesystem::create_directories(path.parent_path());
