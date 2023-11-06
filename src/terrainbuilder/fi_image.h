@@ -9,7 +9,67 @@
 
 #include "non_copyable.h"
 
-class FiImage : private NonCopyable {
+class FiMemoryStream : public NonCopyable {
+public:
+    static FiMemoryStream create() {
+        tntn::initialize_freeimage_once();
+
+        FIMEMORY *raw_memory = FreeImage_OpenMemory();
+        return FiMemoryStream(raw_memory);
+    }
+
+    static FiMemoryStream from_buffer(unsigned char *data, size_t size) {
+        tntn::initialize_freeimage_once();
+
+        FIMEMORY *raw_memory = FreeImage_OpenMemory(data, size);
+        return FiMemoryStream(raw_memory);
+    }
+
+    FiMemoryStream(FIMEMORY *memory)
+        : raw_stream(memory) {}
+
+    ~FiMemoryStream() {
+        if (this->raw_stream) {
+            FreeImage_CloseMemory(this->raw_stream);
+        }
+    }
+
+    // Move constructor
+    FiMemoryStream(FiMemoryStream &&other) {
+        this->raw_stream = other.raw_stream;
+        other.raw_stream = nullptr;
+    }
+
+    // Move assignment operator
+    FiMemoryStream &operator=(FiMemoryStream &&other) {
+        if (this != &other) {
+            this->raw_stream = other.raw_stream;
+            other.raw_stream = nullptr;
+        }
+        return *this;
+    }
+
+    FREE_IMAGE_FORMAT format() const {
+        return FreeImage_GetFileTypeFromMemory(this->raw_stream, 0);
+    }
+
+    size_t position() const {
+        return FreeImage_TellMemory(this->raw_stream);
+    }
+
+    FIMEMORY *raw() {
+        return this->raw_stream;
+    }
+
+    const FIMEMORY *raw() const {
+        return this->raw_stream;
+    }
+
+private:
+    FIMEMORY *raw_stream;
+};
+
+class FiImage : public NonCopyable {
 public:
     static FiImage load_from_path(const std::filesystem::path &filename) {
         tntn::initialize_freeimage_once();
@@ -38,7 +98,33 @@ public:
         return FiImage(image);
     }
 
-    static FiImage allocate(const FREE_IMAGE_TYPE type, const glm::uvec2& size, const unsigned int bpp, const unsigned int red_mask = 0U, const unsigned int green_mask = 0U, const unsigned int blue_mask = 0U) {
+    static FiImage load_from_buffer(const std::vector<unsigned char> &buffer) {
+        return FiImage::load_from_buffer(buffer.data(), buffer.size());
+    }
+    static FiImage load_from_buffer(const unsigned char *data, const size_t size) {
+        FiMemoryStream memory_stream = FiMemoryStream::from_buffer(const_cast<unsigned char *>(data), size);
+        return FiImage::load_from_memory_stream(memory_stream);
+    }
+
+    static FiImage load_from_memory_stream(const FiMemoryStream& stream) {
+        // tntn::initialize_freeimage_once(); no need to init because someone already constructed a stream.
+
+        // get the file type
+        FREE_IMAGE_FORMAT fif = stream.format();
+        if (fif == FIF_UNKNOWN) {
+            throw std::runtime_error("unable to determine image file format");
+        }
+
+        // decode the image from the memory stream
+        FIBITMAP *image = FreeImage_LoadFromMemory(fif, const_cast<FIMEMORY*>(stream.raw()), 0);
+        if (!image) {
+            throw std::runtime_error("error during image loading");
+        }
+
+        return FiImage(image);
+    }
+
+    static FiImage allocate(const FREE_IMAGE_TYPE type, const glm::uvec2 &size, const unsigned int bpp, const unsigned int red_mask = 0U, const unsigned int green_mask = 0U, const unsigned int blue_mask = 0U) {
         tntn::initialize_freeimage_once();
 
         FIBITMAP *raw_image_ptr = FreeImage_AllocateT(type, size.x, size.y, bpp, red_mask, green_mask, blue_mask);
@@ -48,7 +134,7 @@ public:
         return FiImage(raw_image_ptr);
     }
 
-    static FiImage allocate_like(const FiImage &other, const glm::uvec2& size) {
+    static FiImage allocate_like(const FiImage &other, const glm::uvec2 &size) {
         const FREE_IMAGE_TYPE type = other.type();
         const unsigned int bpp = other.bits_per_pixel();
         const unsigned int red_mask = other.red_mask();
@@ -81,10 +167,10 @@ public:
         return *this;
     }
 
-    FIBITMAP * raw(){
+    FIBITMAP *raw() {
         return this->raw_image;
     }
-    const FIBITMAP * raw() const {
+    const FIBITMAP *raw() const {
         return this->raw_image;
     }
 
@@ -114,7 +200,7 @@ public:
     }
 
     FiImage rescale(const glm::uvec2 new_size, const FREE_IMAGE_FILTER filter = FILTER_BILINEAR) const {
-        FIBITMAP * scaled = FreeImage_Rescale(this->raw_image, new_size.x, new_size.y, filter);
+        FIBITMAP *scaled = FreeImage_Rescale(this->raw_image, new_size.x, new_size.y, filter);
         if (!scaled) {
             throw std::runtime_error{"FreeImage_Rescale failed"};
         }
@@ -126,7 +212,7 @@ public:
         assert(box.max.x <= this->width());
         assert(box.min.y >= 0);
         assert(box.max.y <= this->height());
-        
+
         FIBITMAP *copy = FreeImage_Copy(this->raw_image, box.min.x, box.min.y, box.max.x, box.max.y);
         if (!copy) {
             throw std::runtime_error{"FreeImage_Copy failed"};
@@ -134,7 +220,7 @@ public:
         return FiImage(copy);
     }
 
-    void paste(const FiImage& src, const glm::ivec2& target_position, const bool trim_excess = false) {
+    void paste(const FiImage &src, const glm::ivec2 &target_position, const bool trim_excess = false) {
         if (trim_excess) {
             const glm::ivec2 image_size = this->size();
             const geometry::Aabb2i target_bounds(
@@ -197,20 +283,15 @@ public:
         }
     }
 
-    std::vector<unsigned char> save_to_vector(const FREE_IMAGE_FORMAT format, const int flags = 0 /* default settings */) const {
-        std::vector<unsigned char> buffer;
-
-        FIMEMORY *fi_buffer = FreeImage_OpenMemory();
-        if (!FreeImage_SaveToMemory(format, this->raw_image, fi_buffer, flags)) {
-            throw std::runtime_error{"FreeImage_SaveToMemory failed"};
-        }
+    void save_to_vector(std::vector<unsigned char>& buffer, const FREE_IMAGE_FORMAT format, const int flags = 0 /* default settings */) const {
+        FiMemoryStream stream = this->save_to_memory_stream(format, flags);
 
         // Get the size of the memory stream
-        unsigned int size = FreeImage_TellMemory(fi_buffer);
+        unsigned int size = stream.position();
 
         // Encode the image into the FreeImage buffer.
         unsigned char *data_ptr = nullptr;
-        if (!FreeImage_AcquireMemory(fi_buffer, &data_ptr, &size)) {
+        if (!FreeImage_AcquireMemory(stream.raw(), &data_ptr, &size)) {
             throw std::runtime_error{"FreeImage_AcquireMemory failed"};
         }
 
@@ -219,11 +300,23 @@ public:
 
         // Copy the FreeImage buffer to our buffer.
         std::copy(data_ptr, data_ptr + size, buffer.data());
-
-        // Clean up
-        FreeImage_CloseMemory(fi_buffer);
-
+    }
+    std::vector<unsigned char> save_to_vector(const FREE_IMAGE_FORMAT format, const int flags = 0 /* default settings */) const {
+        std::vector<unsigned char> buffer;
+        this->save_to_vector(buffer, format, flags);
         return buffer;
+    }
+
+    void save_to_memory_stream(FiMemoryStream& stream, const FREE_IMAGE_FORMAT format, const int flags = 0 /* default settings */) const {
+        if (!FreeImage_SaveToMemory(format, this->raw_image, stream.raw(), flags)) {
+            throw std::runtime_error{"FreeImage_SaveToMemory failed"};
+        }
+    }
+
+    FiMemoryStream save_to_memory_stream(const FREE_IMAGE_FORMAT format, const int flags = 0 /* default settings */) const {
+        FiMemoryStream stream = FiMemoryStream::create();
+        this->save_to_memory_stream(stream, format, flags);
+        return stream;
     }
 
 private:
