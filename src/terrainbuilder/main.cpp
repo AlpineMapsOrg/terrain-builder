@@ -46,7 +46,7 @@ void build(
         mesh_srs,
         tile_srs, target_tile_bounds,
         texture_srs, texture_bounds,
-        Border(0, 1, 1, 0),
+        Border(0),
         true);
     fmt::print("mesh building took {}s\n", format_secs_since(start));
 
