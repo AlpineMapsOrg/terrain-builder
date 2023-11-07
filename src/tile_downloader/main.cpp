@@ -116,6 +116,18 @@ private:
     std::string_view style;
 };
 
+// https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/11/710/1098.jpeg
+class GatakiTileUrlBuilder : public TileUrlBuilder {
+public:
+    GatakiTileUrlBuilder(const std::map<std::string_view, std::string_view> &args) {}
+
+    std::string build_url(const tile::Id &tile_id) const {
+        return fmt::format("https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.x, tile_id.coords.y);
+    }
+
+private:
+};
+
 static std::string format_tile(const tile::Id tile) {
     return fmt::format("Tile[Zoom={}, Row={}, Col={}]", tile.zoom_level, tile.coords.x, tile.coords.y);
 }
@@ -412,6 +424,8 @@ int main(int argc, char *argv[]) {
     std::unique_ptr<TileUrlBuilder> url_builder;
     if (string_equals_ignore_case(provider, "basemap")) {
         url_builder = std::make_unique<BasemapTileUrlBuilder>(arg_map);
+    } else if (string_equals_ignore_case(provider, "gataki")) {
+        url_builder = std::make_unique<GatakiTileUrlBuilder>(arg_map);
     } else {
         throw std::runtime_error(fmt::format("unsupported tile provider \"{}\"", provider));
     }
