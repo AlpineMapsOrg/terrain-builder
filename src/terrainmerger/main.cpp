@@ -511,23 +511,13 @@ int main() {
         "/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285984.glb",
         "/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285985.glb",
         "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285986.glb",
-        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285987.glb"
-    };
+        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285987.glb"};
 
     std::vector<Mesh> meshes;
     for (const auto &path : paths) {
         std::optional<RawGltfMesh> raw_mesh = RawGltfMesh::load_from_path(path);
         Mesh mesh = load_mesh_from_raw(std::move(raw_mesh.value()));
         meshes.push_back(std::move(mesh));
-    }
-
-    geometry::Aabb<3, float> bounds;
-    for (unsigned int i = 0; i < meshes.size(); i++) {
-        const auto &mesh = meshes[i];
-        for (unsigned int j = 0; j < mesh.positions.size(); j++) {
-            const auto &position = mesh.positions[j];
-            bounds.expand_by(position);
-        }
     }
 
     std::vector<unsigned int> index_offsets;
@@ -540,33 +530,31 @@ int main() {
     }
 
     std::vector<glm::dvec3> new_positions;
+    std::vector<glm::dvec2> new_uvs;
     new_positions.reserve(current_offset);
+    new_uvs.reserve(current_offset);
 
-    xatlas::Atlas *atlas = xatlas::Create();
+    std::vector<glm::dvec2> uv_offsets = {
+        glm::dvec2(0, 0),
+        glm::dvec2(1, 0),
+        glm::dvec2(0, 1),
+        glm::dvec2(1, 1)};
+    std::vector<glm::dvec2> uv_offsets_abs = {
+        glm::dvec2(0, 0),
+        glm::dvec2(meshes[0].texture->width(), 0),
+        glm::dvec2(0, meshes[0].texture->height()),
+        glm::dvec2(meshes[0].texture->width(), meshes[0].texture->height())};
+    glm::uvec2 texture_size = meshes[0].texture->size() +
+                              glm::uvec2(
+                                  std::max(meshes[1].texture->width(), meshes[3].texture->width()),
+                                  std::max(meshes[2].texture->height(), meshes[3].texture->height()));
+
     for (unsigned int i = 0; i < meshes.size(); i++) {
         auto &mesh = meshes[i];
 
         for (size_t j = 0; j < mesh.positions.size(); j++) {
             new_positions.push_back(mesh.positions[j]);
-        }
-    }
-
-    for (unsigned int i = 0; i < meshes.size(); i++) {
-        auto &mesh = meshes[i];
-
-        xatlas::UvMeshDecl meshDecl;
-        meshDecl.vertexCount = mesh.uvs.size();
-        meshDecl.vertexUvData = mesh.uvs.data();
-        meshDecl.vertexStride = sizeof(glm::vec2);
-        meshDecl.indexCount = (uint32_t)mesh.indices.size() * 3;
-        meshDecl.indexData = mesh.indices.data();
-        meshDecl.indexFormat = xatlas::IndexFormat::UInt32;
-        meshDecl.indexOffset = 0; // index_offsets[i];
-
-        xatlas::AddMeshError error = xatlas::AddUvMesh(atlas, meshDecl);
-        if (error != xatlas::AddMeshError::Success) {
-            xatlas::Destroy(atlas);
-            return EXIT_FAILURE;
+            new_uvs.push_back((glm::dvec2(mesh.uvs[j]) * glm::dvec2(mesh.texture->size()) + uv_offsets_abs[i]) / glm::dvec2(texture_size));
         }
     }
 
@@ -583,220 +571,17 @@ int main() {
         }
     }
 
-    xatlas::ChartOptions co;
-    // co.fixWinding = true;
-    // co.maxIterations = 1;
-    // co.maxCost = 0.5;
-    // co.useInputMeshUvs = true;
-    xatlas::PackOptions po;
-    po.rotateChartsToAxis = true;
-    // po.bruteForce = true;
-    // po.bilinear = true;
-    // po.padding = 10;
-    xatlas::Generate(atlas, co, po);
-    printf("   %d charts\n", atlas->chartCount);
-    printf("   %d atlases\n", atlas->atlasCount);
-    for (uint32_t i = 0; i < atlas->atlasCount; i++)
-        printf("      %d: %0.2f%% utilization\n", i, atlas->utilization[i] * 100.0f);
-    printf("   %ux%u resolution\n", atlas->width, atlas->height);
-
-
-    std::vector<uint8_t> outputTrisImage, outputChartsImage;
-    const uint32_t imageDataSize = atlas->width * atlas->height * 3;
-    outputTrisImage.resize(imageDataSize);
-    outputChartsImage.resize(imageDataSize);
-
-    const uint8_t white[] = {255, 255, 255};
-
-    // Rasterize mesh triangles.
-    for (uint32_t m = 0; m < atlas->meshCount; m++) {
-        const xatlas::Mesh &mesh = atlas->meshes[m];
-
-        for (uint32_t i = 0; i < mesh.chartCount; i++) {
-            const xatlas::Chart *chart = &mesh.chartArray[i];
-            uint8_t color[3];
-            RandomColor(color);
-
-            for (uint32_t j = 0; j < chart->faceCount; j++) {
-                const uint32_t face = chart->faceArray[j];
-                const uint32_t faceVertexCount = 3;
-                const uint32_t faceFirstIndex = face * 3;
-
-                int verts[3][2];
-                for (uint32_t k = 0; k < faceVertexCount; k++) {
-                    const xatlas::Vertex &v = mesh.vertexArray[mesh.indexArray[faceFirstIndex + k]];
-                    verts[k][0] = int(v.uv[0]);
-                    verts[k][1] = int(v.uv[1]);
-                }
-
-                uint8_t *imageData = &outputTrisImage[0];
-                RasterizeTriangle(imageData, atlas->width, verts[0], verts[1], verts[2], color);
-
-                for (uint32_t k = 0; k < faceVertexCount; k++) {
-                    RasterizeLine(imageData, atlas->width, verts[k], verts[(k + 1) % faceVertexCount], white);
-                }
-            }
-        }
-
-        // Rasterize mesh charts.
-        for (uint32_t i = 0; i < mesh.chartCount; i++) {
-            const xatlas::Chart *chart = &mesh.chartArray[i];
-            uint8_t color[3];
-            RandomColor(color);
-
-            for (uint32_t j = 0; j < chart->faceCount; j++) {
-                const uint32_t face = chart->faceArray[j];
-                const uint32_t faceVertexCount = 3;
-                const uint32_t faceFirstIndex = face * 3;
-
-                int verts[3][2];
-                for (uint32_t k = 0; k < faceVertexCount; k++) {
-                    const xatlas::Vertex &v = mesh.vertexArray[mesh.indexArray[faceFirstIndex + k]];
-                    verts[k][0] = int(v.uv[0]);
-                    verts[k][1] = int(v.uv[1]);
-                }
-
-                uint8_t *imageData = &outputChartsImage[0];
-                RasterizeTriangle(imageData, atlas->width, verts[0], verts[1], verts[2], color);
-
-                for (uint32_t k = 0; k < faceVertexCount; k++) {
-                    RasterizeLine(imageData, atlas->width, verts[k], verts[(k + 1) % faceVertexCount], white);
-                }
-            }
-        }
-    }
-
-    // Save the image as a PNG file
-    if (!stbi_write_png("output-tris.png", atlas->width, atlas->height, 3, outputTrisImage.data(), atlas->width * 3)) {
-        printf("Error writing the image.\n");
-        return 1;
-    }
-    // Save the image as a PNG file
-    if (!stbi_write_png("output-charts.png", atlas->width, atlas->height, 3, outputChartsImage.data(), atlas->width * 3)) {
-        printf("Error writing the image.\n");
-        return 1;
-    }
-
-    std::vector<cv::Mat> textures;
-    for (unsigned int i = 0; i < meshes.size(); i++) {
-        // meshes[i].texture->flip_horizontal();
-        std::vector<uint8_t> buffer = meshes[i].texture->save_to_vector(FIF_PNG);
-        cv::Mat mat = cv::imdecode(cv::Mat(1, buffer.size(), CV_8UC1, buffer.data()), cv::IMREAD_UNCHANGED);
-        mat.convertTo(mat, CV_32FC3);
-        cv::imwrite("output-pre.png", mat);
-        textures.push_back(mat);
-    }
-
-    float scale = 4;
-    cv::Mat new_atlas(atlas->height * scale, atlas->width * scale, CV_32FC3);
-
-    std::vector<glm::dvec2> final_uvs;
-    final_uvs.resize(new_positions.size());
-
-    for (uint32_t m = 0; m < atlas->meshCount; m++) {
-        const xatlas::Mesh &mesh = atlas->meshes[m];
-
-        for (uint32_t i = 0; i < mesh.chartCount; i++) {
-            const xatlas::Chart *chart = &mesh.chartArray[i];
-
-            for (uint32_t j = 0; j < chart->faceCount; j++) {
-                const uint32_t face = chart->faceArray[j];
-                const uint32_t faceVertexCount = 3;
-                const uint32_t faceFirstIndex = face * 3;
-
-                std::array<cv::Point2f, 3> new_uv_triangle;
-                std::array<cv::Point2f, 3> old_uv_triangle;
-                for (uint32_t k = 0; k < faceVertexCount; k++) {
-                    const xatlas::Vertex &v = mesh.vertexArray[mesh.indexArray[faceFirstIndex + k]];
-                    unsigned int index = v.xref;
-
-                    assert(v.atlasIndex == 0);
-
-                    new_uv_triangle[k] = cv::Point2f(4 * v.uv[0], 4 * v.uv[1]);
-
-                    final_uvs[v.xref + index_offsets[m]] = glm::vec2(v.uv[0] / atlas->width, v.uv[1] / atlas->height);
-
-                    glm::vec2 tmp = meshes[m].uvs[index] * glm::vec2(meshes[m].texture->size());
-
-                    old_uv_triangle[k] = cv::Point2f(tmp.x, tmp.y);
-                }
-
-                warpTriangle(textures[m], new_atlas, old_uv_triangle, new_uv_triangle);
-            }
-        }
-    }
-
-    /*
-            for (uint32_t i = 0; i < mesh.chartCount; i++) {
-                const xatlas::Chart *chart = &mesh.chartArray[i];
-
-                for (uint32_t j = 0; j < chart->faceCount; j++) {
-                    const uint32_t face = chart->faceArray[j];
-                    const uint32_t faceVertexCount = 3;
-                    const uint32_t faceFirstIndex = face * 3;
-
-                    std::array<cv::Point2f, 3> new_uv_triangle;
-                    for (uint32_t k = 0; k < faceVertexCount; k++) {
-                        const xatlas::Vertex &v = mesh.vertexArray[mesh.indexArray[faceFirstIndex + k]];
-                        new_uv_triangle[k] = cv::Point2f(v.uv[0], v.uv[1]);
-                    }
-
-                    std::array<cv::Point2f, 3> old_uv_triangle;
-                    size_t mesh_index = -1;
-                    for (uint32_t k = 0; k < faceVertexCount; k++) {
-                        const xatlas::Vertex &v = mesh.vertexArray[mesh.indexArray[faceFirstIndex + k]];
-                        unsigned int index = v.xref;
-
-                        glm::vec2 tmp;
-                        for (unsigned int m = 0; m < meshes.size(); m++) {
-                            if (index < index_offsets[m] + meshes[m].positions.size()) {
-                                tmp = meshes[m].uvs[index - index_offsets[m]];
-                                break;
-                            }
-                        }
-
-                        old_uv_triangle[k] = cv::Point2f(tmp.x, tmp.y);
-                    }
-
-                    warpTriangle(textures[mesh_index], new_atlas, old_uv_triangle, new_uv_triangle);
-                }
-            }*/
-
-    cv::imwrite("output-vc.png", new_atlas);
-    /*
-    image.save("output-fi.png", FIF_PNG);
-    image.flip_vertical();
-
+    FiImage new_atlas_fi = FiImage::allocate(meshes[0].texture->type(), texture_size, 24);
+    new_atlas_fi.paste(*meshes[0].texture, glm::ivec2(0), true);
+    new_atlas_fi.paste(*meshes[1].texture, glm::ivec2(meshes[0].texture->width(), 0), true);
+    new_atlas_fi.paste(*meshes[2].texture, glm::ivec2(0, meshes[0].texture->height()), true);
+    new_atlas_fi.paste(*meshes[3].texture, glm::ivec2(meshes[0].texture->width(), meshes[0].texture->height()), true);
+    new_atlas_fi.save("./output2.png", FIF_PNG);
 
     TerrainMesh final_mesh;
     final_mesh.triangles = new_indices;
     final_mesh.positions = new_positions;
-    final_mesh.uvs = final_uvs;
-    final_mesh.texture = std::move(image);
-    save_mesh_as_gltf2(final_mesh, "./out2.glb");
-
-    std::vector<uint8_t> buf;
-    new_atlas.convertTo(new_atlas, CV_8UC3);
-    cv::imencode(".png", new_atlas, buf);
-    FiImage new_atlas_fi = FiImage::load_from_buffer(buf);
-
-    TerrainMesh final_mesh2;
-    final_mesh2.triangles = new_indices;
-    final_mesh2.positions = new_positions;
-    final_mesh2.uvs = final_uvs;
-    final_mesh2.texture = std::move(new_atlas_fi);
-    save_mesh_as_gltf2(final_mesh2, "./out3.glb");
-    */
-
-    std::vector<uint8_t> buf;
-    new_atlas.convertTo(new_atlas, CV_8UC3);
-    cv::imencode(".png", new_atlas, buf);
-    FiImage new_atlas_fi = FiImage::load_from_buffer(buf);
-
-    TerrainMesh final_mesh;
-    final_mesh.triangles = new_indices;
-    final_mesh.positions = new_positions;
-    final_mesh.uvs = final_uvs;
+    final_mesh.uvs = new_uvs;
     final_mesh.texture = std::move(new_atlas_fi);
     save_mesh_as_gltf2(final_mesh, "./out3.glb");
 
