@@ -86,6 +86,9 @@ if(NOT TARGET cli11)
     endif()
 endif()
 
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
@@ -155,3 +158,10 @@ add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
 target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb CLI11::CLI11)
+
+
+add_executable(terrainmerger
+    terrainmerger/main.cpp
+    terrainmerger/xatlas.cpp
+)
+target_link_libraries(terrainmerger PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS})
