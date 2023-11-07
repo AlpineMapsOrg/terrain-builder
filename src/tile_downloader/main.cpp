@@ -5,6 +5,7 @@
 #include <map>
 #include <span>
 #include <string_view>
+#include <optional>
 
 #include <curl/curl.h>
 #include <fmt/core.h>
@@ -230,6 +231,10 @@ public:
                                                "tiles/{zoom}/{row}/{col}.{ext}"sv);
         this->early_skip = stob(map_get_or_default(args, "early-skip"sv, "true"sv));
 
+        if (args.contains("max-zoom-level")) {
+            this->max_zoom_level = svtoui(args.at("max-zoom-level"));
+        }
+
         this->curl = curl_easy_init();
         if (!this->curl) {
             throw std::runtime_error("failed to init cURL");
@@ -367,6 +372,11 @@ public:
                 }
             }
             
+            if (this->max_zoom_level.has_value() && tile.zoom_level > this->max_zoom_level.value()) {
+                print_tile(tile);
+                update_tile_status(tile, "Skipped", true);
+                continue;
+            }
             this->download_tile_by_id_recursive(tile);
         }
 
@@ -379,6 +389,7 @@ private:
     std::string_view file_name_template;
     CURL *curl;
     bool early_skip;
+    std::optional<int> max_zoom_level;
 
     std::string get_tile_path(const tile::Id tile) const {
         std::string file_path(this->output_path);
