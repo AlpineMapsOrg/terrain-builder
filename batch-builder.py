@@ -32,12 +32,12 @@ def process_tile(terrainbuilder_path, tile_x, tile_y, zoom, output_dir, args, bu
     if build_intermediate or zoom == args.target_zoom:
         print(f"({zoom}, {tile_x}, {tile_y})")
         build_command(terrainbuilder_path, tile_x, tile_y, zoom, output_dir, force_rebuild, [str(arg) for arg in args.command_args])
-        print();
+        print()
 
     if zoom < args.target_zoom:
         children = get_children(tile_x, tile_y)
         for child in children:
-            process_tile(terrainbuilder_path, child[1], child[0], zoom + 1, output_dir, args, build_intermediate, force_rebuild)
+            process_tile(terrainbuilder_path, child[0], child[1], zoom + 1, output_dir, args, build_intermediate, force_rebuild)
 
 def main():
     parser = argparse.ArgumentParser(description="Calculate and build a command for EPSG 3857 tiles.")
