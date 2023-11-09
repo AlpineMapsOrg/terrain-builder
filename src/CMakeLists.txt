@@ -8,6 +8,9 @@ option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with ne
 find_package(GDAL REQUIRED)
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(CGAL REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
 
 if(NOT GDAL_CONFIG)
     message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
@@ -86,9 +89,6 @@ if(NOT TARGET cli11)
     endif()
 endif()
 
-find_package(OpenCV REQUIRED)
-include_directories(${OpenCV_INCLUDE_DIRS})
-
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
@@ -162,6 +162,6 @@ target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb CLI11::CLI11)
 
 add_executable(terrainmerger
     terrainmerger/main.cpp
-    terrainmerger/xatlas.cpp
 )
-target_link_libraries(terrainmerger PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS})
+include_directories(${OpenCV_INCLUDE_DIRS})
+target_link_libraries(terrainmerger PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL)
