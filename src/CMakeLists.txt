@@ -42,7 +42,7 @@ if(ALP_AUTOUPDATE_RADIX)
 else()
     if (NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
         FetchContent_Declare(radix
-            GIT_REPOSITORY  git@github.com:AlpineMapsOrg/radix.git
+            GIT_REPOSITORY  https://github.com/AlpineMapsOrg/radix.git
             GIT_TAG         main
             SOURCE_DIR      ${CMAKE_SOURCE_DIR}/3rdparty/radix
         )
@@ -50,6 +50,10 @@ else()
     else()
         add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/radix ${CMAKE_BINARY_DIR}/_deps/radix-build)
     endif()
+endif()
+
+if(NOT TARGET curl)
+    find_package(CURL REQUIRED)
 endif()
 
 add_library(terrainlib
@@ -121,3 +125,10 @@ add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
 target_link_libraries(terrainbuilder PUBLIC terrainlib)
+
+
+add_executable(tile-downloader
+    tile_downloader/main.cpp
+)
+target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
+target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
