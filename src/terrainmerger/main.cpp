@@ -21,6 +21,10 @@
 #include "gltf_writer.h"
 #include "non_copyable.h"
 
+#ifndef DEBUG
+#define DEBUG !NDEBUG
+#endif
+
 class RawGltfMesh : public NonCopyable {
 public:
     cgltf_data *data;
@@ -416,7 +420,7 @@ int main() {
         assert(face != SurfaceMesh::null_face());
     }
 
-#if _DEBUG
+#if DEBUG
     assert(cgal_mesh.is_valid(true));
 #endif
 
