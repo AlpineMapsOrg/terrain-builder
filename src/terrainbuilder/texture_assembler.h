@@ -37,10 +37,13 @@ std::optional<FiImage> assemble_texture_from_tiles(
 
     // Start by transforming the input bounds into the srs the tiles are in.
     const tile::SrsBounds encompassing_bounds = srs::encompassing_bounding_box_transfer(target_srs, grid.getSRS(), target_bounds);
-    // Then we find the smalles tile (id) that encompasses these bounds.
+    // Then we find the smallest tile (id) that encompasses these bounds.
     const tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).to(tile::Scheme::SlippyMap);
     const tile::SrsBounds smallest_encompassing_tile_bounds = grid.srsBounds(smallest_encompassing_tile, false);
 
+    if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {
+        return std::nullopt;
+    }
 
     // ********************* Find relevant tiles in bounds ********************* //
 
@@ -89,7 +92,7 @@ std::optional<FiImage> assemble_texture_from_tiles(
         // We recurse for every tile that was present or all the time if we were given a maximum zoom
         // (to allow for missing intermediates)
         for (size_t i = 0; i < subtile_count; i++) {
-            if (subtile_present[i] || (max_zoom.has_value() && subtiles[i].zoom_level <= max_zoom.value())) {
+            if (!max_zoom.has_value() && subtile_present[i] || max_zoom.has_value() && subtiles[i].zoom_level <= max_zoom.value()) {
                 tile_stack.push_back(subtiles[i]);
             }
         }
