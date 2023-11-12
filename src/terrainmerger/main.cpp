@@ -513,6 +513,8 @@ int main() {
     new_atlas.convertTo(new_atlas, CV_8UC3);
     cv::imencode(".jpeg", new_atlas, buf);
     FiImage new_atlas_fi = FiImage::load_from_buffer(buf);
+    new_atlas_fi.rescale(glm::uvec2(1024));
+    new_atlas_fi.save("atlas.png");
 
     TerrainMesh final_mesh;
     final_mesh.triangles = new_indices;
