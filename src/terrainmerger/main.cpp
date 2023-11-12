@@ -9,7 +9,17 @@
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Surface_mesh/Surface_mesh.h>
+#include <CGAL/Surface_mesh_parameterization/ARAP_parameterizer_3.h>
+#include <CGAL/Surface_mesh_parameterization/Barycentric_mapping_parameterizer_3.h>
+#include <CGAL/Surface_mesh_parameterization/Circular_border_parameterizer_3.h>
+#include <CGAL/Surface_mesh_parameterization/Discrete_authalic_parameterizer_3.h>
+#include <CGAL/Surface_mesh_parameterization/Discrete_conformal_map_parameterizer_3.h>
+#include <CGAL/Surface_mesh_parameterization/Error_code.h>
+#include <CGAL/Surface_mesh_parameterization/Iterative_authalic_parameterizer_3.h>
+#include <CGAL/Surface_mesh_parameterization/Mean_value_coordinates_parameterizer_3.h>
+#include <CGAL/Surface_mesh_parameterization/Square_border_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/parameterize.h>
+#include <CGAL/Unique_hash_map.h>
 #include <cgltf.h>
 #include <fmt/core.h>
 #include <glm/glm.hpp>
@@ -426,12 +436,30 @@ int main() {
 
     halfedge_descriptor bhd = CGAL::Polygon_mesh_processing::longest_border(cgal_mesh).first;
     // The UV property map that holds the parameterized values
-    typedef SurfaceMesh::Property_map<vertex_descriptor, Point_2> UV_pmap;
+    typedef CGAL::Unique_hash_map<vertex_descriptor, Point_2> UvHashMap;
+    typedef boost::associative_property_map<UvHashMap> UvPropertyMap;
+    // typedef SurfaceMesh::Property_map<vertex_descriptor, Point_2> UvPropertyMap;
 
     // The 2D points of the uv parametrisation will be written into this map
-    UV_pmap uv_map = cgal_mesh.add_property_map<vertex_descriptor, Point_2>("h:uv").first;
+    // UvPropertyMap uv_map = cgal_mesh.add_property_map<vertex_descriptor, Point_2>("h:uv").first;
+    UvHashMap uv_uhm;
+    UvPropertyMap uv_map(uv_uhm);
 
-    CGAL::Surface_mesh_parameterization::parameterize(cgal_mesh, bhd, uv_map);
+    typedef CGAL::Surface_mesh_parameterization::Circular_border_uniform_parameterizer_3<SurfaceMesh> BorderParameterizer;
+    // typedef CGAL::Surface_mesh_parameterization::Square_border_uniform_parameterizer_3<SurfaceMesh> BorderParameterizer;
+    // typedef CGAL::Surface_mesh_parameterization::Discrete_authalic_parameterizer_3<SurfaceMesh, BorderParameterizer> Parameterizer;
+    typedef CGAL::Surface_mesh_parameterization::Discrete_conformal_map_parameterizer_3<SurfaceMesh, BorderParameterizer> Parameterizer;
+    // typedef CGAL::Surface_mesh_parameterization::Mean_value_coordinates_parameterizer_3<SurfaceMesh, BorderParameterizer> Parameterizer;
+    // typedef CGAL::Surface_mesh_parameterization::Iterative_authalic_parameterizer_3<SurfaceMesh, BorderParameterizer> Parameterizer;
+    // CGAL::Surface_mesh_parameterization::Error_code err = CGAL::Surface_mesh_parameterization::parameterize(cgal_mesh, Parameterizer(), bhd, uv_map);
+    // GAL::Surface_mesh_parameterization::Error_code err = Parameterizer().parameterize(cgal_mesh, bhd, uv_map, 15);
+    // typedef CGAL::Surface_mesh_parameterization::ARAP_parameterizer_3<SurfaceMesh, BorderParameterizer> Parameterizer;
+    CGAL::Surface_mesh_parameterization::Error_code err = CGAL::Surface_mesh_parameterization::parameterize(cgal_mesh, Parameterizer(), bhd, uv_map);
+
+    if (err != CGAL::Surface_mesh_parameterization::OK) {
+        std::cerr << "Error: " << CGAL::Surface_mesh_parameterization::get_error_message(err) << std::endl;
+        return EXIT_FAILURE;
+    }
 
     std::vector<cv::Mat> textures;
     for (unsigned int i = 0; i < meshes.size(); i++) {
@@ -505,7 +533,11 @@ int main() {
 
     std::vector<glm::dvec2> final_uvs;
     final_uvs.reserve(new_uvs.size());
-    for (const Point_2 &uv : uv_map) {
+    // for (const Point_2 &uv : uv_map) {
+    //     final_uvs.emplace_back(uv.x(), uv.y());
+    // }
+    for (unsigned int i = 0; i < new_uvs.size(); i++) {
+        const Point_2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
         final_uvs.emplace_back(uv.x(), uv.y());
     }
 
