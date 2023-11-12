@@ -511,7 +511,7 @@ int main() {
 
     std::vector<uint8_t> buf;
     new_atlas.convertTo(new_atlas, CV_8UC3);
-    cv::imencode(".png", new_atlas, buf);
+    cv::imencode(".jpeg", new_atlas, buf);
     FiImage new_atlas_fi = FiImage::load_from_buffer(buf);
 
     TerrainMesh final_mesh;
