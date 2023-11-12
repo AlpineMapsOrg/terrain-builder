@@ -316,10 +316,10 @@ typedef boost::graph_traits<SurfaceMesh>::face_descriptor face_descriptor;
 
 int main() {
     std::vector<std::filesystem::path> paths = {
-        "/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285984.glb",
-        "/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285985.glb",
-        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285986.glb",
-        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285987.glb"
+        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285984.glb",
+        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285985.glb",
+        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181793/285984.glb",
+        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181793/285985.glb"
     };
 
     std::vector<Mesh> meshes;
