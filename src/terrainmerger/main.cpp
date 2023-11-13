@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <CLI/CLI.hpp>
+
 #include <CGAL/Polygon_mesh_processing/measure.h>
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Surface_mesh.h>
@@ -328,16 +330,28 @@ typedef boost::graph_traits<SurfaceMesh>::vertex_descriptor vertex_descriptor;
 typedef boost::graph_traits<SurfaceMesh>::halfedge_descriptor halfedge_descriptor;
 typedef boost::graph_traits<SurfaceMesh>::face_descriptor face_descriptor;
 
-int main() {
-    std::vector<std::filesystem::path> paths = {
-        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285984.glb",
-        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181792/285985.glb",
-        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181793/285984.glb",
-        "/mnt/e/Code/TU/2023S/Project/meshes/out/19/181793/285985.glb"
-    };
+int main(int argc, char **argv) {
+    CLI::App app{"Terrain Builder"};
+    // app.allow_windows_style_options();
+    argv = app.ensure_utf8(argv);
+
+    std::vector<std::filesystem::path> input_paths;
+    app.add_option("--input", input_paths, "Paths to tiles that should be merged")
+        ->required()
+        ->expected(-1);
+        // ->check(CLI::ExistingFile);
+
+    std::filesystem::path output_path;
+    app.add_option("--output", output_path, "Path to output the merged tile to")
+        ->required();
+
+    bool simplify_mesh = true;
+    app.add_flag("--no-simplify", simplify_mesh, "Disable mesh simplification");
+
+    CLI11_PARSE(app, argc, argv);
 
     std::vector<Mesh> meshes;
-    for (const auto &path : paths) {
+    for (const auto &path : input_paths) {
         std::optional<RawGltfMesh> raw_mesh = RawGltfMesh::load_from_path(path);
         Mesh mesh = load_mesh_from_raw(std::move(raw_mesh.value()));
         meshes.push_back(std::move(mesh));
@@ -553,7 +567,7 @@ int main() {
     final_mesh.positions = new_positions;
     final_mesh.uvs = final_uvs;
     final_mesh.texture = std::move(new_atlas_fi);
-    save_mesh_as_gltf2(final_mesh, "./out3.glb");
+    save_mesh_as_gltf2(final_mesh, output_path);
 
     return 0;
 }
