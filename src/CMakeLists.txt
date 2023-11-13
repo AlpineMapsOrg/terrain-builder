@@ -27,6 +27,7 @@ include(FetchContent)
 if(NOT TARGET fmt::fmt)
     FetchContent_Declare(fmt
         GIT_REPOSITORY https://github.com/fmtlib/fmt
+        GIT_TAG 6b0082e6c799c42c41596c008b2891fb6b786143
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
     )
     FetchContent_MakeAvailable(fmt)
