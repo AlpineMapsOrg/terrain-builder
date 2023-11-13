@@ -27,6 +27,18 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     return tile_path.has_value() && !tile_path->empty() && std::filesystem::exists(*tile_path);
 }
 
+[[nodiscard]] unsigned int estimate_zoom_level(
+    const unsigned int reference_room_level,
+    const tile::SrsBounds reference_tile_bounds,
+    const tile::SrsBounds target_bounds
+) {
+    const glm::dvec2 relative_size = reference_tile_bounds.size() / target_bounds.size();
+    const double relative_factor = (relative_size.x + relative_size.y) / 2;
+    const int zoom_level_change = std::rint(std::log2(relative_factor));
+    assert(static_cast<int>(reference_room_level) + zoom_level_change >= 0);
+    return reference_room_level + zoom_level_change;
+}
+
 /// Find all the tiles needed to construct the texture for the given target bounds under the root tile.
 /// The result tiles are ordered in such a way that they can be sequentially written to a texture.
 /// Larger tiles are only included if they are not covered by smaller tiles.
@@ -44,6 +56,11 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     if (max_zoom.has_value() && root_tile.zoom_level > max_zoom.value()) {
         return {};
     }
+
+    // It can happen that the root tile is very large because the target tile was (slightly) over the tile border
+    // at a high zoom level. So we try to estimate the actual zoom level of the target bounds and recurse at least
+    // to that level to find relevant textures.
+    const unsigned int min_examine_zoom_level = estimate_zoom_level(root_tile.zoom_level, grid.srsBounds(root_tile, false), target_bounds) + 1;
 
     // A stack for tiles to be considered for relevancy.
     std::vector<tile::Id> tile_stack;
@@ -72,13 +89,7 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
 
         // If not all children are present we have to include the current tile to avoid empty regions.
         if (!all_usable) {
-            if (max_zoom.has_value()) {
-                // If we are using a max zoom we cannot be sure that the current file even exists
-                // so double check it.
-                if (is_usable_tile(tile, tile_to_path_mapper)) {
-                    tiles_to_splatter.push_back(tile);
-                }
-            } else {
+            if (is_usable_tile(tile, tile_to_path_mapper)) {
                 tiles_to_splatter.push_back(tile);
             }
         }
@@ -86,17 +97,15 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
         // We recurse for every tile that was present or all the time if we were given a maximum zoom
         // (to allow for missing intermediates)
         for (size_t i = 0; i < subtile_count; i++) {
-            if (!max_zoom.has_value() && subtile_usable[i] || max_zoom.has_value() && subtiles[i].zoom_level <= max_zoom.value()) {
-                tile_stack.push_back(subtiles[i]);
+            if (max_zoom.has_value()) {
+                if (subtiles[i].zoom_level <= max_zoom.value()) {
+                    tile_stack.push_back(subtiles[i]);
+                }
+            } else {
+                if (subtile_usable[i] || subtiles[i].zoom_level <= min_examine_zoom_level) {
+                    tile_stack.push_back(subtiles[i]);
+                }
             }
-        }
-    }
-
-    // Due to the way the above loop is done, we never check whether the root tile is present,
-    // if it is the only one selected. So we do that here.
-    if (tiles_to_splatter.size() == 1 && tiles_to_splatter[0] == root_tile) {
-        if (!is_usable_tile(root_tile, tile_to_path_mapper)) {
-            return {};
         }
     }
 
