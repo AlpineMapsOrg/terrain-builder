@@ -87,6 +87,12 @@ std::string data_uri_encode(unsigned char const *bytes_to_encode, unsigned int i
     return "data:application/octet-stream;base64," + base64_encode(bytes_to_encode, in_len);
 }
 
+std::vector<uint8_t> image_to_bytes(const cv::Mat& image) {
+    std::vector<uint8_t> buf;
+    cv::imencode(".jpeg", image, buf);
+    return buf;
+}
+
 /// Saves the mesh as a .gltf or .glb file at the given path.
 void save_mesh_as_gltf(const TerrainMesh &m, const std::filesystem::path& path, const std::unordered_map<std::string, std::string> extra_metadata = {}) {
     // ********************* Preprocessing ********************* //
@@ -119,7 +125,7 @@ void save_mesh_as_gltf(const TerrainMesh &m, const std::filesystem::path& path, 
     }
 
     // Encode the texture as jpeg data.
-    const std::vector<unsigned char> texture_bytes = m.texture->save_to_vector(FIF_JPEG);
+    const std::vector<unsigned char> texture_bytes = image_to_bytes(m.texture.value());
 
     // Create a single buffer that holds all binary data (indices, vertices, textures)
     // We need to do this because only a single buffer can be written as a binary blob in .glb files.

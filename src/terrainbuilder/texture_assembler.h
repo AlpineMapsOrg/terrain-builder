@@ -7,7 +7,6 @@
 #include <vector>
 #include <span>
 
-#include <FreeImage.h>
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
@@ -237,7 +236,7 @@ void copy_paste_image(
 }
 
 /// Creates a texture for the given region.
-[[nodiscard]] std::optional<FiImage> assemble_texture_from_tiles(
+[[nodiscard]] std::optional<cv::Mat> assemble_texture_from_tiles(
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
     /// Specifies the srs the target bounds are in.
@@ -283,14 +282,7 @@ void copy_paste_image(
     };
 
     // Splatter tiles into texture buffer
-    auto image = splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_to_path_mapper_checked, tiles_to_splatter, rescale_filter);
-
-    std::vector<uint8_t> buf;
-    image.convertTo(image, CV_8UC3);
-    cv::imencode(".jpeg", image, buf);
-    FiImage image_fi = FiImage::load_from_buffer(buf);
-
-    return image_fi;
+    return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_to_path_mapper_checked, tiles_to_splatter, rescale_filter);
 }
 
 #endif
