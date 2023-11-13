@@ -212,6 +212,9 @@ void copy_paste_image(
     for (const tile::Id &tile : tiles_to_splatter) {
         const std::filesystem::path &tile_path = tile_to_path_mapper(tile);
         cv::Mat tile_image = cv::imread(tile_path);
+        if (tile_image.empty()) {
+            throw std::runtime_error(fmt::format("failed to load image from path: {}", tile_path.string()));
+        }
 
         const glm::uvec2 current_tile_image_size(tile_image.cols, tile_image.rows);
         if (current_tile_image_size != tile_image_size) {
