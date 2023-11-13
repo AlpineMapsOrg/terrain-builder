@@ -11,12 +11,11 @@
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
+#include <opencv2/opencv.hpp>
 
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
 #include "srs.h"
-
-#include "fi_image.h"
 
 typedef std::function<std::optional<std::filesystem::path>(tile::Id)> TileToPathMapper;
 typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
@@ -140,7 +139,45 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     return geometry::Aabb2ui(tile_position, tile_position + tile_size);
 }
 
-[[nodiscard]] FiImage splatter_tiles_to_texture(
+
+void copy_paste_image(
+    cv::Mat& target,
+    const cv::Mat& source,
+    const geometry::Aabb2i target_bounds,
+    const bool trim_excess = false,
+    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
+    if (target_bounds.width() != source.cols || target_bounds.height() != source.rows) {
+        cv::Mat source_resized;
+        cv::resize(source, source, cv::Size(target_bounds.width(), target_bounds.height()), 0, 0, rescale_filter);
+        copy_paste_image(target, source_resized, target_bounds, trim_excess);
+        return;
+    }
+
+    cv::Rect source_rect(0, 0, source.cols, source.rows);
+    cv::Rect target_rect(target_bounds.min.x, target_bounds.min.y, target_bounds.width(), target_bounds.height());
+    if (trim_excess) {
+        const cv::Rect full_target_rect(0, 0, target.cols, target.rows);
+        target_rect = target_rect & full_target_rect;
+        source_rect = cv::Rect(target_rect.x - target_bounds.min.x, target_rect.y - target_bounds.min.y, target_rect.width, target_rect.height);
+    }
+
+    if (source_rect.empty()) {
+        return;
+    }
+
+    source(source_rect).copyTo(target(target_rect));
+}
+
+void copy_paste_image(
+    cv::Mat &target,
+    const cv::Mat &source,
+    const glm::ivec2 target_position,
+    const bool trim_excess = false,
+    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
+   copy_paste_image(target, source, geometry::Aabb2i(target_position, target_position + glm::ivec2(source.cols, source.rows)), trim_excess);
+}
+
+[[nodiscard]] cv::Mat splatter_tiles_to_texture(
     const tile::Id root_tile,
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
@@ -148,8 +185,8 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     const tile::SrsBounds &target_bounds,
     /// A mapping from tile id to a filesystem path.
     const TileToPathMapperChecked &tile_to_path_mapper,
-    const std::vector<tile::Id> tiles_to_splatter,
-    const FREE_IMAGE_FILTER rescale_filter = FILTER_BILINEAR) {
+    const std::span<const tile::Id> tiles_to_splatter,
+    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
     assert(!tiles_to_splatter.empty());
     const tile::SrsBounds root_tile_bounds = grid.srsBounds(root_tile, false);
 
@@ -162,43 +199,39 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     // Choose any tile to load infer like tile size and format to allocate our texture buffer accordingly.
     const tile::Id &any_tile = tiles_to_splatter.front();
     const std::filesystem::path &any_tile_path = tile_to_path_mapper(any_tile);
-    const FiImage any_tile_image = FiImage::load_from_path(any_tile_path);
-    const glm::uvec2 tile_size = any_tile_image.size();
+    const cv::Mat any_tile_image = cv::imread(any_tile_path);
+    const glm::uvec2 tile_image_size(any_tile_image.cols, any_tile_image.rows);
 
     // Calculate the offset and size of the target bounds inside the smallest encompassing tile.
     // As we dont want to allocate and fill a larger buffer than we have to.
-    const geometry::Aabb2ui target_image_region = calculate_target_image_region(target_bounds, root_tile_bounds, tile_size, zoom_level_range);
+    const geometry::Aabb2ui target_image_region = calculate_target_image_region(target_bounds, root_tile_bounds, tile_image_size, zoom_level_range);
     const glm::uvec2 image_size = target_image_region.size();
 
     // Allocate the image to write all the individual tiles into.
-    FiImage image = FiImage::allocate_like(any_tile_image, target_image_region.size());
+    cv::Mat image(image_size.y, image_size.x, any_tile_image.type());
 
     for (const tile::Id &tile : tiles_to_splatter) {
-        // We start by calculating the relative position of each tile inside the root tile
-        // and then use the previosly calculated target image region to determine the position in the buffer.
-        const geometry::Aabb2ui pixel_tile_bounds = calculate_pixel_tile_bounds(tile, root_tile, tile_size, max_zoom_level);
-
         const std::filesystem::path &tile_path = tile_to_path_mapper(tile);
-        FiImage tile_image = FiImage::load_from_path(tile_path);
+        cv::Mat tile_image = cv::imread(tile_path);
 
-        if (tile_image.width() != tile_size.x) {
-            throw std::runtime_error{"tiles have inconsistent widths"};
-        }
-        if (tile_image.height() != tile_size.y) {
-            throw std::runtime_error{"tiles have inconsistent heights"};
+        const glm::uvec2 current_tile_image_size(tile_image.cols, tile_image.rows);
+        if (current_tile_image_size != tile_image_size) {
+            throw std::runtime_error{"tiles have inconsistent sizes"};
         }
 
-        assert(glm::all(glm::greaterThanEqual(pixel_tile_bounds.size(), tile_image.size())));
+        // Pixel bounds of this image relative to the root tile.
+        const geometry::Aabb2ui pixel_tile_bounds = calculate_pixel_tile_bounds(tile, root_tile, tile_image_size, max_zoom_level);
+        assert(glm::all(glm::greaterThanEqual(pixel_tile_bounds.size(), current_tile_image_size)));
 
-        if (tile_image.size() != pixel_tile_bounds.size()) {
-            tile_image = tile_image.rescale(pixel_tile_bounds.size(), rescale_filter);
-        }
+        // Pixel bounds relative to the target image texture region.
+        const glm::ivec2 tile_target_position = glm::ivec2(pixel_tile_bounds.min) - glm::ivec2(target_image_region.min);
+        const geometry::Aabb2i target_pixel_tile_bounds(tile_target_position, tile_target_position + glm::ivec2(pixel_tile_bounds.size()));
 
-        const glm::ivec2 tile_target_position(glm::ivec2(pixel_tile_bounds.min) - glm::ivec2(target_image_region.min));
-        image.paste(tile_image, tile_target_position, true /* allows und handles overflow */);
+        // Resize current tile image and copy into image buffer.
+        copy_paste_image(image, tile_image, tile_target_position, true /* allows und handles overflow */, rescale_filter);
     }
 
-    image.flip_vertical();
+    cv::flip(image, image, 0);
 
     return image;
 }
@@ -216,7 +249,7 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     /// The maximal zoom level to be considered. If not present, this function will use the maximal available.
     const std::optional<unsigned int> max_zoom = std::nullopt,
     /// The filter used to rescale the tile images if required due to missing detail tiles.
-    const FREE_IMAGE_FILTER rescale_filter = FILTER_BILINEAR) {
+    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
     if (target_bounds.width() == 0 || target_bounds.height() == 0) {
         return std::nullopt;
     }
@@ -239,6 +272,7 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
         return std::nullopt;
     }
 
+    // Setup new tile to path mapper that asserts that the tiles exist, because we already checked them.
     const TileToPathMapperChecked tile_to_path_mapper_checked = [=](tile::Id tile) {
 #ifdef DEBUG
         assert(is_tile_usable(tile));
@@ -247,7 +281,16 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
         assert(tile_path.has_value());
         return tile_path.value();
     };
-    return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_to_path_mapper_checked, tiles_to_splatter, rescale_filter);
+
+    // Splatter tiles into texture buffer
+    auto image = splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_to_path_mapper_checked, tiles_to_splatter, rescale_filter);
+
+    std::vector<uint8_t> buf;
+    image.convertTo(image, CV_8UC3);
+    cv::imencode(".jpeg", image, buf);
+    FiImage image_fi = FiImage::load_from_buffer(buf);
+
+    return image_fi;
 }
 
 #endif

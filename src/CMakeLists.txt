@@ -8,6 +8,7 @@ option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with ne
 find_package(GDAL REQUIRED)
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(OpenCV REQUIRED)
 
 if(NOT GDAL_CONFIG)
     message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
@@ -157,4 +158,5 @@ endif()
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb CLI11::CLI11)
+target_include_directories(terrainbuilder PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS})
