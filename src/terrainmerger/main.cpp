@@ -331,15 +331,16 @@ typedef boost::graph_traits<SurfaceMesh>::halfedge_descriptor halfedge_descripto
 typedef boost::graph_traits<SurfaceMesh>::face_descriptor face_descriptor;
 
 int main(int argc, char **argv) {
-    CLI::App app{"Terrain Builder"};
+
+    CLI::App app{"Terrain Merger"};
     // app.allow_windows_style_options();
     argv = app.ensure_utf8(argv);
 
     std::vector<std::filesystem::path> input_paths;
     app.add_option("--input", input_paths, "Paths to tiles that should be merged")
         ->required()
-        ->expected(-1);
-        // ->check(CLI::ExistingFile);
+        ->expected(-1)
+        ->check(CLI::ExistingFile);
 
     std::filesystem::path output_path;
     app.add_option("--output", output_path, "Path to output the merged tile to")
@@ -350,12 +351,18 @@ int main(int argc, char **argv) {
 
     CLI11_PARSE(app, argc, argv);
 
+    fmt::println("[1/5] Preparing meshes for merging...");
+
+    fmt::println("  Loading meshes...");
+
     std::vector<Mesh> meshes;
     for (const auto &path : input_paths) {
         std::optional<RawGltfMesh> raw_mesh = RawGltfMesh::load_from_path(path);
         Mesh mesh = load_mesh_from_raw(std::move(raw_mesh.value()));
         meshes.push_back(std::move(mesh));
     }
+
+    fmt::println("  Calculating merged mesh AABB...");
 
     geometry::Aabb<3, float> bounds;
     for (unsigned int i = 0; i < meshes.size(); i++) {
@@ -365,6 +372,8 @@ int main(int argc, char **argv) {
             bounds.expand_by(position);
         }
     }
+
+    fmt::println("[2/5]  Merging meshes...");
 
     std::vector<std::vector<unsigned int>> index_mapping;
     std::vector<std::unordered_map<unsigned int, unsigned int>> inverse_mapping;
@@ -431,22 +440,36 @@ int main(int argc, char **argv) {
         }
     }
 
+    fmt::println("[3/5] Creating UV parametrization...");
+
+    fmt::println("  Setting up CGAL SurfaceMesh...");
+
     SurfaceMesh cgal_mesh;
     for (const auto &position : new_positions) {
         const auto vertex = cgal_mesh.add_vertex(Point_3(position.x, position.y, position.z));
         assert(vertex != SurfaceMesh::null_vertex());
     }
     for (const auto &triangle : new_indices) {
-        const auto face = cgal_mesh.add_face(
+        auto face = cgal_mesh.add_face(
             CGAL::SM_Vertex_index(triangle.x),
             CGAL::SM_Vertex_index(triangle.y),
             CGAL::SM_Vertex_index(triangle.z));
+
+            if (face == SurfaceMesh::null_face()) {
+                fmt::println("Adding face failed, trying again with different order");
+                face = cgal_mesh.add_face(
+                    CGAL::SM_Vertex_index(triangle.x),
+                    CGAL::SM_Vertex_index(triangle.z),
+                    CGAL::SM_Vertex_index(triangle.y));
+            }
         assert(face != SurfaceMesh::null_face());
     }
 
 #if DEBUG
     assert(cgal_mesh.is_valid(true));
 #endif
+
+    fmt::println("  Calculating UV parametrization...");
 
     halfedge_descriptor bhd = CGAL::Polygon_mesh_processing::longest_border(cgal_mesh).first;
     // The UV property map that holds the parameterized values
@@ -475,6 +498,10 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    fmt::println("[4/5] Creating texture atlas...");
+
+    fmt::println("  Loading textures...");
+
     std::vector<cv::Mat> textures;
     for (unsigned int i = 0; i < meshes.size(); i++) {
         std::vector<uint8_t> buffer = meshes[i].texture->save_to_vector(FIF_PNG);
@@ -482,6 +509,8 @@ int main(int argc, char **argv) {
         mat.convertTo(mat, CV_32FC3);
         textures.push_back(mat);
     }
+
+    fmt::println("  Populating texture atlas...");
 
     glm::uvec2 atlas_size(1024);
     cv::Mat new_atlas(atlas_size.y, atlas_size.x, CV_32FC3);
@@ -555,12 +584,16 @@ int main(int argc, char **argv) {
         final_uvs.emplace_back(uv.x(), uv.y());
     }
 
+    fmt::println("  Saving texture atlas...");
+
     std::vector<uint8_t> buf;
     new_atlas.convertTo(new_atlas, CV_8UC3);
     cv::imencode(".jpeg", new_atlas, buf);
     FiImage new_atlas_fi = FiImage::load_from_buffer(buf);
     new_atlas_fi.rescale(glm::uvec2(1024));
     new_atlas_fi.save("atlas.png");
+
+    fmt::println("[5/5] Saving merged mesh...");
 
     TerrainMesh final_mesh;
     final_mesh.triangles = new_indices;
