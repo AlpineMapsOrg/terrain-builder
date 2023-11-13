@@ -27,6 +27,7 @@ include(FetchContent)
 if(NOT TARGET fmt::fmt)
     FetchContent_Declare(fmt
         GIT_REPOSITORY https://github.com/fmtlib/fmt
+        GIT_TAG 6b0082e6c799c42c41596c008b2891fb6b786143
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
     )
     FetchContent_MakeAvailable(fmt)
@@ -35,7 +36,7 @@ endif()
 if(ALP_AUTOUPDATE_RADIX)
     FetchContent_Declare(radix
         GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-        GIT_TAG main
+        GIT_TAG origin/main
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
         SOURCE_SUBDIR src
     )
@@ -56,6 +57,7 @@ endif()
 if(NOT TARGET cgltf)
     FetchContent_Declare(cgltf
         GIT_REPOSITORY https://github.com/jkuhlmann/cgltf
+        GIT_TAG fd3a6184babd6981d5c7195fb8c40faf86652182
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cgltf
     )
     FetchContent_MakeAvailable(cgltf)
@@ -66,6 +68,7 @@ endif()
 if(NOT TARGET stb)
     FetchContent_Declare(stb
         GIT_REPOSITORY https://github.com/nothings/stb
+        GIT_TAG beebb24b945efdea3b9bba23affb8eb3ba8982e7
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/stb
     )
     FetchContent_MakeAvailable(stb)
@@ -76,8 +79,8 @@ endif()
 if(NOT TARGET cli11)
     if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/cli11)
         FetchContent_Declare(cli11
-            GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-            GIT_TAG main
+            GIT_REPOSITORY https://github.com/CLIUtils/CLI11
+            GIT_TAG f043d0c06b5fc42a5916554819f8392266a64113
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cli11
         )
         FetchContent_MakeAvailable(cli11)
