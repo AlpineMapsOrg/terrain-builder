@@ -37,6 +37,6 @@ ParallelTileGenerator alpine_raster::make_generator(const std::string& input_dat
 
 void alpine_raster::TileWriter::write(const std::string& file_path, const tile::Descriptor& tile, const HeightData& heights) const
 {
-    image::saveImageAsPng(image::transformImage(heights, sherpa::height_encoding::to_rgb),
+    image::saveImageAsPng(image::transformImage(heights, radix::height_encoding::to_rgb),
                           file_path);
 }
