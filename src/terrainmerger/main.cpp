@@ -29,6 +29,8 @@
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
 
+#include <meshoptimizer.h>
+
 #include "fi_image.h"
 #include "gltf_writer.h"
 #include "non_copyable.h"
@@ -317,6 +319,126 @@ void warpTriangle(cv::Mat &img1, cv::Mat &img2, std::array<cv::Point2f, 3> tri1,
     img2(r2) = img2(r2) + img2Cropped;
 }
 
+void simplify_mesh(TerrainMesh &mesh, float simplification_factor, float simplification_target_error) {
+    // start = std::chrono::high_resolution_clock::now();
+    
+    fmt::println("  Normalizing positions...");
+
+    const size_t vertex_count = mesh.positions.size();
+    glm::dvec3 average_position(0, 0, 0);
+    for (size_t i = 0; i < vertex_count; i++) {
+        average_position += mesh.positions[i] / static_cast<double>(vertex_count);
+    }
+
+    std::vector<float> norm_vertices;
+    norm_vertices.reserve((mesh.positions.size() * 3) / sizeof(float));
+    for (size_t i = 0; i < vertex_count; i++) {
+        const glm::vec3 normalized_position = mesh.positions[i] - average_position;
+        norm_vertices.push_back(normalized_position.x);
+        norm_vertices.push_back(normalized_position.y);
+        norm_vertices.push_back(normalized_position.z);
+    }
+
+    // 1.) size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* result_error);
+
+    fmt::println("  Simplifying mesh...");
+
+    size_t target_index_count = size_t(mesh.triangles.size() * 3 * simplification_factor);
+
+    std::vector<unsigned int> simplified_indices(mesh.triangles.size() * 3);
+    float result_error;
+    size_t simplified_index_count = meshopt_simplify(
+        simplified_indices.data(),
+        reinterpret_cast<const unsigned int*>(mesh.triangles.data()),
+        mesh.triangles.size() * 3,
+        norm_vertices.data(),
+        norm_vertices.size() / 3,
+        sizeof(float) * 3,
+        target_index_count,
+        simplification_target_error,
+        0,
+        &result_error);
+    // size_t simplified_index_count = meshopt_simplify(
+    //     simplified_indices.data(),
+    //     reinterpret_cast<const unsigned int*>(mesh.triangles.data()),
+    //     mesh.triangles.size() * 3,
+    //     reinterpret_cast<const float*>(mesh.positions.data()),
+    //     mesh.positions.size(),
+    //     sizeof(glm::dvec3),
+    //     target_index_count,
+    //     target_error,
+    //     0,
+    //     &result_error);
+
+    simplified_indices.resize(simplified_index_count);
+    fmt::println("  Input Statistics:");
+    fmt::println("    Index count: {}", mesh.triangles.size() * 3);
+    fmt::println("    Target index factor: {}", simplification_factor);
+    fmt::println("    Target index count: {}", target_index_count);
+    fmt::println("    Target error: {}", simplification_target_error);
+    fmt::println("  Output Statistics:");
+    fmt::println("    Index count: {}", simplified_index_count);
+    fmt::println("    Result error: {}", result_error);
+    
+    // 2a.) MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
+
+    fmt::println("  Optimizing vertex fetch...");
+
+    assert(mesh.positions.size() == mesh.uvs.size());
+
+    std::vector<unsigned int> remap(mesh.positions.size());
+    size_t remap_count = meshopt_optimizeVertexFetchRemap(
+        remap.data(),
+        simplified_indices.data(),
+        simplified_indices.size(),
+        mesh.positions.size());
+    remap.resize(remap_count);
+
+    // 2b.) POS: MESHOPTIMIZER_API void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap);
+
+    fmt::println("  Remapping vertex buffer...");
+
+    std::vector<glm::dvec3> simplified_positions(remap_count);
+    meshopt_remapVertexBuffer(
+        simplified_positions.data(),
+        mesh.positions.data(),
+        mesh.positions.size(),
+        sizeof(glm::dvec3),
+        remap.data());
+
+    // 2c.) TEX: MESHOPTIMIZER_API void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap);
+
+    fmt::println("  Remapping tex vertex buffer...");
+
+    std::vector<glm::dvec2> simplified_uvs(remap_count);
+    meshopt_remapVertexBuffer(
+        simplified_uvs.data(),
+        mesh.uvs.data(),
+        mesh.uvs.size(),
+        sizeof(glm::dvec2),
+        remap.data());
+
+    // 2d.) IDX: MESHOPTIMIZER_API void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap);
+
+    fmt::println("  Remapping index buffer...");
+
+    std::vector<unsigned int> remapped_simplified_indices(simplified_indices.size());
+    meshopt_remapIndexBuffer(
+        remapped_simplified_indices.data(),
+        simplified_indices.data(),
+        simplified_indices.size(),
+        remap.data());
+
+    std::vector<glm::uvec3> simplified_triangles(simplified_indices.size() / 3);
+    for (size_t i = 0; i < simplified_triangles.size(); i++) {
+        simplified_triangles[i] = glm::uvec3(remapped_simplified_indices[i * 3], remapped_simplified_indices[i * 3 + 1], remapped_simplified_indices[i * 3 + 2]);
+    }
+
+    mesh.triangles = simplified_triangles;
+    mesh.positions = simplified_positions;
+    mesh.uvs = simplified_uvs;
+}
+
 typedef CGAL::Simple_cartesian<double> Kernel;
 typedef Kernel::Point_2 Point_2;
 typedef Kernel::Point_3 Point_3;
@@ -342,12 +464,30 @@ int main(int argc, char **argv) {
     app.add_option("--output", output_path, "Path to output the merged tile to")
         ->required();
 
-    bool simplify_mesh = true;
-    app.add_flag("--no-simplify", simplify_mesh, "Disable mesh simplification");
+    bool no_mesh_simplification = false;
+    app.add_flag("--no-simplify", no_mesh_simplification, "Disable mesh simplification");
+
+    float simplification_factor = 0.25f;
+    app.add_option("--simplify-factor", simplification_factor, "Mesh index simplification factor")
+        ->check(CLI::Range(0.0f, 1.0f))
+        ->excludes("--no-simplify");
+
+    float simplification_target_error = 0.01f;
+    app.add_option("--simplify-error", simplification_target_error, "Mesh simplification target error")
+        ->check(CLI::Range(0.0f, 1.0f))
+        ->excludes("--no-simplify");
+
+    //TODO: Add option to specify the verbosity level
 
     CLI11_PARSE(app, argc, argv);
 
-    fmt::println("[1/5] Preparing meshes for merging...");
+    int steps = 6;
+    int step = 1;
+    if (no_mesh_simplification) {
+        steps = 5;
+    }
+
+    fmt::println("[{}/{}] Preparing meshes for merging...", step, steps);
 
     fmt::println("  Loading meshes...");
 
@@ -371,7 +511,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    fmt::println("[2/5]  Merging meshes...");
+    step++;
+
+    fmt::println("[{}/{}]  Merging meshes...", step, steps);
 
     std::vector<std::vector<unsigned int>> index_mapping;
     std::vector<std::unordered_map<unsigned int, unsigned int>> inverse_mapping;
@@ -443,7 +585,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    fmt::println("[3/5] Creating UV parametrization...");
+    step++;
+
+    fmt::println("[{}/{}] Creating UV parametrization...", step, steps);
 
     fmt::println("  Setting up CGAL SurfaceMesh...");
 
@@ -596,13 +740,24 @@ int main(int argc, char **argv) {
     new_atlas_fi.rescale(glm::uvec2(1024));
     new_atlas_fi.save("atlas.png");
 
-    fmt::println("[5/5] Saving merged mesh...");
+    step++;
 
     TerrainMesh final_mesh;
     final_mesh.triangles = new_indices;
     final_mesh.positions = new_positions;
     final_mesh.uvs = final_uvs;
     final_mesh.texture = std::move(new_atlas_fi);
+
+    if (!no_mesh_simplification) {
+        fmt::println("[{}/{}] Simplifying mesh...", step, steps);
+
+        simplify_mesh(final_mesh, simplification_factor, simplification_target_error);
+        
+        step++;
+    }
+
+    fmt::println("[{}/{}] Saving merged mesh...", steps, steps);
+
     save_mesh_as_gltf2(final_mesh, output_path);
 
     return 0;

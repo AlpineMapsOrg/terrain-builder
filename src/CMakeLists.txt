@@ -89,6 +89,14 @@ if(NOT TARGET cli11)
     endif()
 endif()
 
+if(NOT TARGET meshoptimizer)
+    FetchContent_Declare(meshoptimizer
+        GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+        SOURCE_DIR 		${CMAKE_SOURCE_DIR}/3rdparty/meshoptimizer
+    )
+    FetchContent_MakeAvailable(meshoptimizer)
+endif()
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
@@ -164,4 +172,4 @@ add_executable(terrainmerger
     terrainmerger/main.cpp
 )
 include_directories(${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainmerger PUBLIC radix fmt cgltf stb freeimage CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL)
+target_link_libraries(terrainmerger PUBLIC radix fmt cgltf stb freeimage CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL meshoptimizer)
