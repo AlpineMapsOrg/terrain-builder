@@ -5,14 +5,32 @@
 
 #include <FreeImage.h>
 
-#include "tntn/gdal_init.h"
-
 #include "non_copyable.h"
+
+
+std::once_flag g_freeimage_initialized_once_flag;
+
+namespace {
+    struct FreeImageDeinitialiserHandler {
+        ~FreeImageDeinitialiserHandler()
+        {
+            FreeImage_DeInitialise();
+        }
+    };
+}
+
+void initialize_freeimage_once()
+{
+    std::call_once(g_freeimage_initialized_once_flag, []() {
+        FreeImage_Initialise();
+    });
+    static FreeImageDeinitialiserHandler deinitialiser;
+}
 
 class FiImage : private NonCopyable {
 public:
     static FiImage load_from_path(const std::filesystem::path &filename) {
-        tntn::initialize_freeimage_once();
+        initialize_freeimage_once();
 
         // check the file signature and deduce its format
         FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(filename.c_str(), 0);
@@ -42,7 +60,7 @@ public:
         return FiImage::load_from_buffer(buffer.data(), buffer.size());
     }
     static FiImage load_from_buffer(const unsigned char* data, const size_t size) {
-        tntn::initialize_freeimage_once();
+        initialize_freeimage_once();
 
         // attach the binary data to a memory stream
         FIMEMORY *fi_buffer = FreeImage_OpenMemory(const_cast<unsigned char*>(data), size);
@@ -65,7 +83,7 @@ public:
     }
 
     static FiImage allocate(const FREE_IMAGE_TYPE type, const glm::uvec2& size, const unsigned int bpp, const unsigned int red_mask = 0U, const unsigned int green_mask = 0U, const unsigned int blue_mask = 0U) {
-        tntn::initialize_freeimage_once();
+        initialize_freeimage_once();
 
         FIBITMAP *raw_image_ptr = FreeImage_AllocateT(type, size.x, size.y, bpp, red_mask, green_mask, blue_mask);
         if (raw_image_ptr == nullptr) {

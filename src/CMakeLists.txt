@@ -29,7 +29,7 @@ include(FetchContent)
 
 if(NOT TARGET fmt::fmt)
     FetchContent_Declare(fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
     )
     FetchContent_MakeAvailable(fmt)
@@ -164,4 +164,4 @@ add_executable(terrainmerger
     terrainmerger/main.cpp
 )
 include_directories(${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainmerger PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL)
+target_link_libraries(terrainmerger PUBLIC radix fmt cgltf stb freeimage CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL)
