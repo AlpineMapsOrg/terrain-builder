@@ -436,6 +436,11 @@ int main(int argc, char **argv) {
             for (unsigned int k = 0; k < 3; k++) {
                 new_triangle[k] = index_mapping[i][triangle[k]];
             }
+            if (new_triangle[0] == new_triangle[1] ||
+                new_triangle[1] == new_triangle[2] || 
+                new_triangle[2] == new_triangle[0]) {
+                continue;
+            }
             new_indices.push_back(new_triangle);
         }
     }
