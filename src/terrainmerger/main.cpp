@@ -323,7 +323,7 @@ void warpTriangle(cv::Mat &img1, cv::Mat &img2, std::array<cv::Point2f, 3> tri1,
     img2(r2) = img2(r2) + img2Cropped;
 }
 
-void simplify_mesh(TerrainMesh &mesh, float simplification_threshold, float simplification_target_error) {
+void simplify_mesh(TerrainMesh &mesh, float simplification_factor, float simplification_target_error) {
     // start = std::chrono::high_resolution_clock::now();
     
     fmt::println("  Normalizing positions...");
@@ -347,7 +347,7 @@ void simplify_mesh(TerrainMesh &mesh, float simplification_threshold, float simp
 
     fmt::println("  Simplifying mesh...");
 
-    size_t target_index_count = size_t(mesh.triangles.size() * 3 * simplification_threshold);
+    size_t target_index_count = size_t(mesh.triangles.size() * 3 * simplification_factor);
 
     std::vector<unsigned int> simplified_indices(mesh.triangles.size() * 3);
     float result_error;
@@ -377,6 +377,7 @@ void simplify_mesh(TerrainMesh &mesh, float simplification_threshold, float simp
     simplified_indices.resize(simplified_index_count);
     fmt::println("  Input Statistics:");
     fmt::println("    Index count: {}", mesh.triangles.size() * 3);
+    fmt::println("    Target index factor: {}", simplification_factor);
     fmt::println("    Target index count: {}", target_index_count);
     fmt::println("    Target error: {}", simplification_target_error);
     fmt::println("  Output Statistics:");
@@ -470,8 +471,8 @@ int main(int argc, char **argv) {
     bool no_mesh_simplification = false;
     app.add_flag("--no-simplify", no_mesh_simplification, "Disable mesh simplification");
 
-    float simplification_threshold = 0.25f;
-    app.add_option("--simplify-threshold", simplification_threshold, "Mesh simplification threshold")
+    float simplification_factor = 0.25f;
+    app.add_option("--simplify-factor", simplification_factor, "Mesh index simplification factor")
         ->check(CLI::Range(0.0f, 1.0f))
         ->excludes("--no-simplify");
 
@@ -480,6 +481,8 @@ int main(int argc, char **argv) {
         ->check(CLI::Range(0.0f, 1.0f))
         ->excludes("--no-simplify");
 
+    //TODO: Add option to specify the verbosity level
+
     CLI11_PARSE(app, argc, argv);
 
     int steps = 6;
@@ -487,12 +490,6 @@ int main(int argc, char **argv) {
     if (no_mesh_simplification) {
         steps = 5;
     }
-
-    fmt::println("{}", no_mesh_simplification ? "Not Simplifying mesh" : "Simplifying mesh");
-
-    fmt::println("Simplification threshold {}", simplification_threshold);
-
-    fmt::println("Simplification target error {}", simplification_target_error);
 
     fmt::println("[{}/{}] Preparing meshes for merging...", step, steps);
 
@@ -751,7 +748,7 @@ int main(int argc, char **argv) {
     if (!no_mesh_simplification) {
         fmt::println("[{}/{}] Simplifying mesh...", step, steps);
 
-        simplify_mesh(final_mesh, simplification_threshold, simplification_target_error);
+        simplify_mesh(final_mesh, simplification_factor, simplification_target_error);
         
         step++;
     }
