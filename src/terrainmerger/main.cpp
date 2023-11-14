@@ -29,6 +29,8 @@
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
 
+#include <meshoptimizer.h>
+
 #include "fi_image.h"
 #include "gltf_writer.h"
 #include "non_copyable.h"
@@ -346,12 +348,34 @@ int main(int argc, char **argv) {
     app.add_option("--output", output_path, "Path to output the merged tile to")
         ->required();
 
-    bool simplify_mesh = true;
-    app.add_flag("--no-simplify", simplify_mesh, "Disable mesh simplification");
+    bool no_mesh_simplification = false;
+    app.add_flag("--no-simplify", no_mesh_simplification, "Disable mesh simplification");
+
+    float simplification_threshold = 0.25f;
+    app.add_option("--simplify-threshold", simplification_threshold, "Mesh simplification threshold")
+        ->check(CLI::Range(0.0f, 1.0f))
+        ->excludes("--no-simplify");
+
+    float simplification_target_error = 0.01f;
+    app.add_option("--simplify-error", simplification_target_error, "Mesh simplification target error")
+        ->check(CLI::Range(0.0f, 1.0f))
+        ->excludes("--no-simplify");
 
     CLI11_PARSE(app, argc, argv);
 
-    fmt::println("[1/5] Preparing meshes for merging...");
+    int steps = 6;
+    int step = 1;
+    if (no_mesh_simplification) {
+        steps = 5;
+    }
+
+    fmt::println("{}", no_mesh_simplification ? "Not Simplifying mesh" : "Simplifying mesh");
+
+    fmt::println("Simplification threshold {}", simplification_threshold);
+
+    fmt::println("Simplification target error {}", simplification_target_error);
+
+    fmt::println("[{}/{}] Preparing meshes for merging...", step, steps);
 
     fmt::println("  Loading meshes...");
 
@@ -373,7 +397,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    fmt::println("[2/5]  Merging meshes...");
+    step++;
+
+    fmt::println("[{}/{}]  Merging meshes...", step, steps);
 
     std::vector<std::vector<unsigned int>> index_mapping;
     std::vector<std::unordered_map<unsigned int, unsigned int>> inverse_mapping;
@@ -440,7 +466,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    fmt::println("[3/5] Creating UV parametrization...");
+    step++;
+
+    fmt::println("[{}/{}] Creating UV parametrization...", step, steps);
 
     fmt::println("  Setting up CGAL SurfaceMesh...");
 
@@ -593,13 +621,24 @@ int main(int argc, char **argv) {
     new_atlas_fi.rescale(glm::uvec2(1024));
     new_atlas_fi.save("atlas.png");
 
-    fmt::println("[5/5] Saving merged mesh...");
+    step++;
 
     TerrainMesh final_mesh;
     final_mesh.triangles = new_indices;
     final_mesh.positions = new_positions;
     final_mesh.uvs = final_uvs;
     final_mesh.texture = std::move(new_atlas_fi);
+
+    if (!no_mesh_simplification) {
+        fmt::println("[{}/{}] Simplifying mesh...", step, steps);
+
+        
+
+        step++;
+    }
+
+    fmt::println("[{}/{}] Saving merged mesh...", steps, steps);
+
     save_mesh_as_gltf2(final_mesh, output_path);
 
     return 0;
