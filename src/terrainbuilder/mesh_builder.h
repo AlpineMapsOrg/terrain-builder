@@ -16,27 +16,25 @@
 #include "raw_dataset_reader.h"
 #include "terrain_mesh.h"
 
-namespace {
-    template <typename T>
-    glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
-        glm::dvec2 result;
-        GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);
-        return result;
+template <typename T>
+glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
+    glm::dvec2 result;
+    GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);
+    return result;
+}
+glm::dvec2 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec2 &v) {
+    glm::dvec2 result(v);
+    if (!transform->Transform(1, &result.x, &result.y)) {
+        throw std::runtime_error("apply_transform() failed");
     }
-    glm::dvec2 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec2 &v) {
-        glm::dvec2 result(v);
-        if (!transform->Transform(1, &result.x, &result.y)) {
-            throw std::runtime_error("apply_transform() failed");
-        }
-        return result;
+    return result;
+}
+glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec3 &v) {
+    glm::dvec3 result(v);
+    if (!transform->Transform(1, &result.x, &result.y, &result.z)) {
+        throw std::runtime_error("apply_transform() failed");
     }
-    glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec3 &v) {
-        glm::dvec3 result(v);
-        if (!transform->Transform(1, &result.x, &result.y, &result.z)) {
-            throw std::runtime_error("apply_transform() failed");
-        }
-        return result;
-    }
+    return result;
 }
 
 template <typename T>
@@ -68,21 +66,6 @@ public:
         return !(*this == other);
     }
 
-    Border<T> operator+(const Border<T> &other) const {
-        return Border<T>(top + other.top, right + other.right, bottom + other.bottom, left + other.left);
-    }
-    Border<T> operator-(const Border<T> &other) const {
-        return Border<T>(top - other.top, right - other.right, bottom - other.bottom, left - other.left);
-    }
-    Border<T> &operator+=(const Border<T> &other) {
-        *this = *this + other;
-        return *this;
-    }
-    Border<T> &operator-=(const Border<T> &other) {
-        *this = *this - other;
-        return *this;
-    }
-
     friend std::ostream &operator<<(std::ostream &os, const Border<T> &border) {
         os << "Top: " << border.top << ", Right: " << border.right << ", Bottom: " << border.bottom << ", Left: " << border.left;
         return os;
@@ -103,7 +86,7 @@ TerrainMesh build_reference_mesh_tile(
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs, tile::SrsBounds &tile_bounds,
     const OGRSpatialReference &texture_srs, tile::SrsBounds &texture_bounds,
-    Border<int> vertex_border,
+    const Border<int> &vertex_border,
     const bool inclusive_bounds) {
     const OGRSpatialReference &source_srs = dataset.srs();
 
@@ -113,17 +96,10 @@ TerrainMesh build_reference_mesh_tile(
     // Read height data according to bounds directly from dataset (no interpolation).
     RawDatasetReader reader(dataset);
     geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(tile_bounds_in_source_srs);
+    add_border_to_aabb(pixel_bounds, vertex_border);
     if (inclusive_bounds) {
-        // See the comment in the loop below for why this is required.
         add_border_to_aabb(pixel_bounds, Border(1));
     }
-    // Pixel values represent the average over their area, or a value at their center.
-    const glm::dvec2 point_offset_in_raster(0.5);
-    const glm::dvec2 quad_center_offset_in_raster = point_offset_in_raster + glm::dvec2(0.5);
-    const glm::ivec2 extra_pixels_for_offsets(quad_center_offset_in_raster);
-    add_border_to_aabb(pixel_bounds, Border(0, extra_pixels_for_offsets.x, extra_pixels_for_offsets.y, 0));
-
-    add_border_to_aabb(pixel_bounds, vertex_border);
     const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds, true);
 
     // Allocate mesh data structure
@@ -151,6 +127,8 @@ TerrainMesh build_reference_mesh_tile(
     is_in_bounds.resize(max_vertex_count);
     std::fill(is_in_bounds.begin(), is_in_bounds.end(), false);
 
+    // Pixel values represent the average over their area, or a value at their center.
+    const glm::dvec2 point_offset_in_raster(0.5);
 
     // Iterate over height map and calculate vertex positions for each pixel and whether they are inside the requested bounds.
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
@@ -176,12 +154,9 @@ TerrainMesh build_reference_mesh_tile(
                     // Skip last row and column because they don't form new triangles
                     continue;
                 }
-                // But this is still not enough because the bounds check will fail
-                // for the other vertices of the quad and thus we will miss a line
-                // of quads at the right and bottom. Thus we add a manual border further below.
 
                 // Transform the center of the quad into the srs the bounds are given.
-                const glm::ivec2 coords_center_raster_relative = glm::dvec2(i, j) + quad_center_offset_in_raster;
+                const glm::ivec2 coords_center_raster_relative = glm::dvec2(i, j) + point_offset_in_raster + glm::dvec2(0.5);
                 const glm::ivec2 coords_center_raster_absolute = coords_center_raster_relative + pixel_bounds.min;
                 const glm::dvec2 coords_center_source = reader.transform_pixel_to_srs_point(coords_center_raster_absolute);
                 const glm::dvec2 coords_center_tile = apply_transform(transform_source_tile.get(), coords_center_source);
@@ -190,8 +165,7 @@ TerrainMesh build_reference_mesh_tile(
                     continue;
                 }
             } else {
-                // For exclusive bounds, we only include points (and thereforce triangles)
-                // that are (fully) inside the bounds.
+                // For exclusive bounds, we only include points (and thereforce triangles) that are (fully) inside the bounds.
                 const glm::dvec2 coords_tile = apply_transform(transform_source_tile.get(), coords_source);
                 if (!tile_bounds.contains_inclusive(coords_tile)) {
                     continue;
@@ -201,11 +175,6 @@ TerrainMesh build_reference_mesh_tile(
             // If we arrive here the point is inside the bounds.
             is_in_bounds[vertex_index] = true;
         }
-    }
-
-    if (inclusive_bounds) {
-        // See the comment in the loop above for why this is required.
-        vertex_border += Border(0, 1, 1, 0);
     }
 
     // Mark all border vertices as inside bounds.
@@ -226,8 +195,8 @@ TerrainMesh build_reference_mesh_tile(
             const glm::ivec2 border_direction = border_offsets[k].second;
 
             for (unsigned int l = 0; l < border_thickness; l++) {
-                for (unsigned int j = 1; j < raw_tile_data.height() - 1; j++) {
-                    for (unsigned int i = 1; i < raw_tile_data.width() - 1; i++) {
+                for (unsigned int j = 0; j < raw_tile_data.height() - 1; j++) {
+                    for (unsigned int i = 0; i < raw_tile_data.width() - 1; i++) {
                         const unsigned int vertex_index = j * raw_tile_data.width() + i;
 
                         // skip all vertices already inside bounds
