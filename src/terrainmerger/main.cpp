@@ -11,15 +11,15 @@
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Surface_mesh/Surface_mesh.h>
-#include <CGAL/Surface_mesh_parameterization/ARAP_parameterizer_3.h>
-#include <CGAL/Surface_mesh_parameterization/Barycentric_mapping_parameterizer_3.h>
+// #include <CGAL/Surface_mesh_parameterization/ARAP_parameterizer_3.h>
+// #include <CGAL/Surface_mesh_parameterization/Barycentric_mapping_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/Circular_border_parameterizer_3.h>
-#include <CGAL/Surface_mesh_parameterization/Discrete_authalic_parameterizer_3.h>
+// #include <CGAL/Surface_mesh_parameterization/Discrete_authalic_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/Discrete_conformal_map_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/Error_code.h>
-#include <CGAL/Surface_mesh_parameterization/Iterative_authalic_parameterizer_3.h>
-#include <CGAL/Surface_mesh_parameterization/Mean_value_coordinates_parameterizer_3.h>
-#include <CGAL/Surface_mesh_parameterization/Square_border_parameterizer_3.h>
+// #include <CGAL/Surface_mesh_parameterization/Iterative_authalic_parameterizer_3.h>
+// #include <CGAL/Surface_mesh_parameterization/Mean_value_coordinates_parameterizer_3.h>
+// #include <CGAL/Surface_mesh_parameterization/Square_border_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/parameterize.h>
 #include <CGAL/Unique_hash_map.h>
 #include <cgltf.h>
@@ -201,13 +201,13 @@ Mesh load_mesh_from_raw(const RawGltfMesh &raw) {
 template <typename T>
 class Grid3d {
 public:
-    Grid3d(glm::vec3 origin, glm::vec3 size, glm::uvec3 divisions)
+    Grid3d(glm::dvec3 origin, glm::dvec3 size, glm::uvec3 divisions)
         : origin(origin), size(size), divisions(divisions) {
         grid_data.resize(divisions.x * divisions.y * divisions.z);
     }
 
     struct GridCellItem {
-        glm::vec3 point;
+        glm::dvec3 point;
         T value;
     };
 
@@ -215,12 +215,12 @@ public:
         std::vector<GridCellItem> items;
     };
 
-    T *find(glm::vec3 point, float epsilon = 0.00001f) {
+    T *find(glm::dvec3 point, double epsilon = 0.00001f) {
         if (!is_in_bounds(point)) {
             return nullptr;
         }
 
-        int cell_index = this->calculate_cell_index(point);
+        const unsigned int cell_index = this->calculate_cell_index(point);
 
         GridCell &cell = this->grid_data[cell_index];
         for (GridCellItem &item : cell.items) {
@@ -232,37 +232,33 @@ public:
         return nullptr;
     }
 
-    void insert(glm::vec3 point, T value) {
+    void insert(glm::dvec3 point, T value) {
         if (!is_in_bounds(point)) {
             return;
         }
 
-        int cell_index = this->calculate_cell_index(point);
+        const unsigned int cell_index = this->calculate_cell_index(point);
 
-        GridCellItem item = GridCellItem{
+        const GridCellItem item {
             .point = point,
             .value = value};
         GridCell &cell = grid_data[cell_index];
         cell.items.push_back(item);
     }
 
-    bool is_in_bounds(glm::vec3 point) {
-        glm::vec3 maxBounds = origin + size;
-        return glm::all(glm::greaterThanEqual(point, origin)) && glm::all(glm::lessThanEqual(point, maxBounds));
+    bool is_in_bounds(glm::dvec3 point) {
+        const glm::dvec3 max_bounds = origin + size;
+        return glm::all(glm::greaterThanEqual(point, origin)) && glm::all(glm::lessThanEqual(point, max_bounds));
     }
 
-    // Calculate the cell index for a given point
-    int calculate_cell_index(glm::vec3 point) {
-        glm::vec3 cellSize = this->size / glm::vec3(this->divisions);
-        glm::uvec3 cellIndex = glm::uvec3((point - this->origin) / cellSize);
-        return cellIndex.x + cellIndex.y * divisions.x + cellIndex.z * divisions.x * divisions.y;
+    unsigned int calculate_cell_index(glm::dvec3 point) {
+        const glm::dvec3 cell_size = this->size / glm::dvec3(this->divisions);
+        const glm::uvec3 cell_index = glm::uvec3((point - this->origin) / cell_size);
+        return cell_index.x + cell_index.y * divisions.x + cell_index.z * divisions.x * divisions.y;
     }
-
-    // Other member functions and private members can be added here.
-
 private:
-    glm::vec3 origin;
-    glm::vec3 size;
+    glm::dvec3 origin;
+    glm::dvec3 size;
     glm::uvec3 divisions;
     std::vector<GridCell> grid_data;
 };
@@ -364,7 +360,9 @@ int main(int argc, char **argv) {
 
     fmt::println("  Calculating merged mesh AABB...");
 
-    geometry::Aabb<3, float> bounds;
+    geometry::Aabb<3, double> bounds;
+    bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
+    bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
     for (unsigned int i = 0; i < meshes.size(); i++) {
         const auto &mesh = meshes[i];
         for (unsigned int j = 0; j < mesh.positions.size(); j++) {
