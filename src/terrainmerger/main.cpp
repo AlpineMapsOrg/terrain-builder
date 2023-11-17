@@ -175,10 +175,14 @@ Mesh load_mesh_from_raw(const RawGltfMesh &raw) {
     assert(root_node.children_count == 1);
     cgltf_node &intermediate_node = *root_node.children[0];
     assert(intermediate_node.has_translation);
-    assert(intermediate_node.children_count == 0);
+    assert(intermediate_node.children_count == 1);
+    cgltf_node &mesh_node = *intermediate_node.children[0];
+    assert(mesh_node.has_translation);
+    assert(mesh_node.children_count == 0);
     glm::dvec3 offset =
         glm::dvec3(root_node.translation[0], root_node.translation[1], root_node.translation[2]) +
-        glm::dvec3(intermediate_node.translation[0], intermediate_node.translation[1], intermediate_node.translation[2]);
+        glm::dvec3(intermediate_node.translation[0], intermediate_node.translation[1], intermediate_node.translation[2]) +
+        glm::dvec3(mesh_node.translation[0], mesh_node.translation[1], mesh_node.translation[2]);
 
     cgltf_material &material = *mesh_primitive.material;
     assert(material.has_pbr_metallic_roughness);
