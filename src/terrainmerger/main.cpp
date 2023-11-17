@@ -200,6 +200,11 @@ Mesh load_mesh_from_raw(const RawGltfMesh &raw) {
     return std::move(Mesh(indices, positionsd, uvs, std::move(texture)));
 }
 
+struct VertexRef {
+    unsigned int mesh;
+    unsigned int vertex;
+};
+
 template <typename T>
 class Grid3d {
 public:
@@ -217,21 +222,26 @@ public:
         std::vector<GridCellItem> items;
     };
 
-    T *find(glm::dvec3 point, double epsilon = 0.00001f) {
+    std::optional<T> find(glm::dvec3 point, double epsilon = 0.1f) {
         if (!is_in_bounds(point)) {
-            return nullptr;
+            fmt::println("Point is out of bounds {} {} {}", point.x, point.y, point.z);
+            return std::nullopt;
         }
 
         const unsigned int cell_index = this->calculate_cell_index(point);
 
         GridCell &cell = this->grid_data[cell_index];
+        std::optional<T> closest_value;
+        double closest_distance = std::numeric_limits<double>::infinity();
         for (GridCellItem &item : cell.items) {
-            if (glm::distance(point, item.point) < epsilon) {
-                return &item.value;
+            double distance = glm::distance(point, item.point);
+            if (distance < epsilon && distance < closest_distance) {
+                closest_value = item.value;
+                closest_distance = distance;
             }
         }
 
-        return nullptr;
+        return closest_value;
     }
 
     void insert(glm::dvec3 point, T value) {
@@ -241,7 +251,7 @@ public:
 
         const unsigned int cell_index = this->calculate_cell_index(point);
 
-        const GridCellItem item {
+        const GridCellItem item{
             .point = point,
             .value = value};
         GridCell &cell = grid_data[cell_index];
@@ -258,16 +268,12 @@ public:
         const glm::uvec3 cell_index = glm::uvec3((point - this->origin) / cell_size);
         return cell_index.x + cell_index.y * divisions.x + cell_index.z * divisions.x * divisions.y;
     }
+
 private:
     glm::dvec3 origin;
     glm::dvec3 size;
     glm::uvec3 divisions;
     std::vector<GridCell> grid_data;
-};
-
-struct VertexRef {
-    unsigned int mesh;
-    unsigned int vertex;
 };
 
 cv::Rect clampRectToMatBounds(const cv::Rect &rect, const cv::Mat &mat) {
@@ -510,6 +516,8 @@ int main(int argc, char **argv) {
             bounds.expand_by(position);
         }
     }
+    glm::dvec3 bounds_padding = bounds.size() * 0.01;
+    geometry::Aabb<3, double> padded_bounds(bounds.min - bounds_padding, bounds.max + bounds_padding);
 
     step++;
 
@@ -534,7 +542,7 @@ int main(int argc, char **argv) {
         max_combined_index_count += meshes[i].indices.size();
     }
 
-    Grid3d<VertexRef> grid(bounds.centre(), bounds.size(), glm::uvec3(100));
+    Grid3d<VertexRef> grid(padded_bounds.min, padded_bounds.size(), glm::uvec3(100));
 
     std::vector<glm::dvec3> new_positions;
     std::vector<glm::dvec2> new_uvs;
@@ -546,8 +554,8 @@ int main(int argc, char **argv) {
             auto &position = mesh.positions[j];
             auto &uv = mesh.uvs[j];
 
-            VertexRef *other_vertex = grid.find(position);
-            if (other_vertex) {
+            std::optional<VertexRef> other_vertex = grid.find(position);
+            if (other_vertex.has_value()) {
                 // duplicated
                 index_mapping[i][j] = index_mapping[other_vertex->mesh][other_vertex->vertex];
                 inverse_mapping[i].emplace(index_mapping[i][j], j);
@@ -579,6 +587,7 @@ int main(int argc, char **argv) {
             if (new_triangle[0] == new_triangle[1] ||
                 new_triangle[1] == new_triangle[2] || 
                 new_triangle[2] == new_triangle[0]) {
+                fmt::println("  Skipping illegal triangle...");
                 continue;
             }
             new_indices.push_back(new_triangle);
