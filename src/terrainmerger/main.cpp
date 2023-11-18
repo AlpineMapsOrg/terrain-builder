@@ -21,6 +21,18 @@
 // #include <CGAL/Surface_mesh_parameterization/Mean_value_coordinates_parameterizer_3.h>
 // #include <CGAL/Surface_mesh_parameterization/Square_border_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/parameterize.h>
+#include <CGAL/Surface_mesh_simplification/edge_collapse.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Count_ratio_stop_predicate.h>
+// Midpoint placement policy
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Midpoint_placement.h>
+// Placement wrapper
+#include <CGAL/Polygon_mesh_processing/polygon_soup_to_polygon_mesh.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Constrained_placement.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Count_ratio_stop_predicate.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Bounded_normal_change_placement.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/GarlandHeckbert_policies.h>
+#include <CGAL/Polyhedron_3.h>
+#include <CGAL/Polygon_mesh_processing/stitch_borders.h>
 #include <CGAL/Unique_hash_map.h>
 #include <cgltf.h>
 #include <fmt/core.h>
@@ -28,8 +40,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
-
-#include <meshoptimizer.h>
 
 #include "fi_image.h"
 #include "gltf_writer.h"
@@ -329,126 +339,6 @@ void warpTriangle(cv::Mat &img1, cv::Mat &img2, std::array<cv::Point2f, 3> tri1,
     img2(r2) = img2(r2) + img2Cropped;
 }
 
-void simplify_mesh(TerrainMesh &mesh, float simplification_factor, float simplification_target_error) {
-    // start = std::chrono::high_resolution_clock::now();
-    
-    fmt::println("  Normalizing positions...");
-
-    const size_t vertex_count = mesh.positions.size();
-    glm::dvec3 average_position(0, 0, 0);
-    for (size_t i = 0; i < vertex_count; i++) {
-        average_position += mesh.positions[i] / static_cast<double>(vertex_count);
-    }
-
-    std::vector<float> norm_vertices;
-    norm_vertices.reserve((mesh.positions.size() * 3) / sizeof(float));
-    for (size_t i = 0; i < vertex_count; i++) {
-        const glm::vec3 normalized_position = mesh.positions[i] - average_position;
-        norm_vertices.push_back(normalized_position.x);
-        norm_vertices.push_back(normalized_position.y);
-        norm_vertices.push_back(normalized_position.z);
-    }
-
-    // 1.) size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* result_error);
-
-    fmt::println("  Simplifying mesh...");
-
-    size_t target_index_count = size_t(mesh.triangles.size() * 3 * simplification_factor);
-
-    std::vector<unsigned int> simplified_indices(mesh.triangles.size() * 3);
-    float result_error;
-    size_t simplified_index_count = meshopt_simplify(
-        simplified_indices.data(),
-        reinterpret_cast<const unsigned int*>(mesh.triangles.data()),
-        mesh.triangles.size() * 3,
-        norm_vertices.data(),
-        norm_vertices.size() / 3,
-        sizeof(float) * 3,
-        target_index_count,
-        simplification_target_error,
-        0,
-        &result_error);
-    // size_t simplified_index_count = meshopt_simplify(
-    //     simplified_indices.data(),
-    //     reinterpret_cast<const unsigned int*>(mesh.triangles.data()),
-    //     mesh.triangles.size() * 3,
-    //     reinterpret_cast<const float*>(mesh.positions.data()),
-    //     mesh.positions.size(),
-    //     sizeof(glm::dvec3),
-    //     target_index_count,
-    //     target_error,
-    //     0,
-    //     &result_error);
-
-    simplified_indices.resize(simplified_index_count);
-    fmt::println("  Input Statistics:");
-    fmt::println("    Index count: {}", mesh.triangles.size() * 3);
-    fmt::println("    Target index factor: {}", simplification_factor);
-    fmt::println("    Target index count: {}", target_index_count);
-    fmt::println("    Target error: {}", simplification_target_error);
-    fmt::println("  Output Statistics:");
-    fmt::println("    Index count: {}", simplified_index_count);
-    fmt::println("    Result error: {}", result_error);
-    
-    // 2a.) MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
-
-    fmt::println("  Optimizing vertex fetch...");
-
-    assert(mesh.positions.size() == mesh.uvs.size());
-
-    std::vector<unsigned int> remap(mesh.positions.size());
-    size_t remap_count = meshopt_optimizeVertexFetchRemap(
-        remap.data(),
-        simplified_indices.data(),
-        simplified_indices.size(),
-        mesh.positions.size());
-    remap.resize(remap_count);
-
-    // 2b.) POS: MESHOPTIMIZER_API void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap);
-
-    fmt::println("  Remapping vertex buffer...");
-
-    std::vector<glm::dvec3> simplified_positions(remap_count);
-    meshopt_remapVertexBuffer(
-        simplified_positions.data(),
-        mesh.positions.data(),
-        mesh.positions.size(),
-        sizeof(glm::dvec3),
-        remap.data());
-
-    // 2c.) TEX: MESHOPTIMIZER_API void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap);
-
-    fmt::println("  Remapping tex vertex buffer...");
-
-    std::vector<glm::dvec2> simplified_uvs(remap_count);
-    meshopt_remapVertexBuffer(
-        simplified_uvs.data(),
-        mesh.uvs.data(),
-        mesh.uvs.size(),
-        sizeof(glm::dvec2),
-        remap.data());
-
-    // 2d.) IDX: MESHOPTIMIZER_API void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap);
-
-    fmt::println("  Remapping index buffer...");
-
-    std::vector<unsigned int> remapped_simplified_indices(simplified_indices.size());
-    meshopt_remapIndexBuffer(
-        remapped_simplified_indices.data(),
-        simplified_indices.data(),
-        simplified_indices.size(),
-        remap.data());
-
-    std::vector<glm::uvec3> simplified_triangles(simplified_indices.size() / 3);
-    for (size_t i = 0; i < simplified_triangles.size(); i++) {
-        simplified_triangles[i] = glm::uvec3(remapped_simplified_indices[i * 3], remapped_simplified_indices[i * 3 + 1], remapped_simplified_indices[i * 3 + 2]);
-    }
-
-    mesh.triangles = simplified_triangles;
-    mesh.positions = simplified_positions;
-    mesh.uvs = simplified_uvs;
-}
-
 typedef CGAL::Simple_cartesian<double> Kernel;
 typedef Kernel::Point_2 Point_2;
 typedef Kernel::Point_3 Point_3;
@@ -456,7 +346,35 @@ typedef CGAL::Surface_mesh<Point_3> SurfaceMesh;
 
 typedef boost::graph_traits<SurfaceMesh>::vertex_descriptor vertex_descriptor;
 typedef boost::graph_traits<SurfaceMesh>::halfedge_descriptor halfedge_descriptor;
+typedef boost::graph_traits<SurfaceMesh>::edge_descriptor edge_descriptor;
 typedef boost::graph_traits<SurfaceMesh>::face_descriptor face_descriptor;
+
+// Stop-condition policy
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Count_ratio_stop_predicate.h>
+
+// Default cost and placement policies
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/LindstromTurk_placement.h>
+
+// Non-default cost and placement policies
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Edge_length_cost.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Midpoint_placement.h>
+
+// BGL property map which indicates whether an edge is marked as non-removable
+struct Border_is_constrained_edge_map {
+    const SurfaceMesh *sm_ptr;
+    typedef edge_descriptor key_type;
+    typedef bool value_type;
+    typedef value_type reference;
+    typedef boost::readable_property_map_tag category;
+    Border_is_constrained_edge_map(const SurfaceMesh &sm)
+        : sm_ptr(&sm) {}
+    friend value_type get(const Border_is_constrained_edge_map &m, const key_type &edge) {
+        return CGAL::is_border(edge, *m.sm_ptr);
+    }
+};
+// Placement class
+typedef CGAL::Surface_mesh_simplification::Constrained_placement<CGAL::Surface_mesh_simplification::Midpoint_placement<SurfaceMesh>,
+                                   Border_is_constrained_edge_map> Placement;
 
 int main(int argc, char **argv) {
 
@@ -548,7 +466,16 @@ int main(int argc, char **argv) {
 
     Grid3d<VertexRef> grid(padded_bounds.min, padded_bounds.size(), glm::uvec3(100));
 
-    std::vector<glm::dvec3> new_positions;
+    glm::dvec3 average_position(0);
+    for (unsigned int i = 0; i < meshes.size(); i++) {
+        const auto &mesh = meshes[i];
+        for (unsigned int j = 0; j < mesh.positions.size(); j++) {
+            const auto &position = mesh.positions[j];
+            average_position += position / glm::dvec3(max_combined_vertex_count);
+        }
+    }
+
+    std::vector<glm::vec3> new_positions;
     std::vector<glm::dvec2> new_uvs;
     new_positions.reserve(max_combined_vertex_count);
     new_uvs.reserve(max_combined_vertex_count);
@@ -572,7 +499,7 @@ int main(int argc, char **argv) {
 
                 index_mapping[i][j] = new_positions.size();
                 inverse_mapping[i].emplace(new_positions.size(), j);
-                new_positions.push_back(position);
+                new_positions.push_back(position - average_position);
                 new_uvs.push_back(uv);
             }
         }
@@ -727,10 +654,6 @@ int main(int argc, char **argv) {
             old_uv_triangle[i] = cv::Point2f(uv2.x * mesh.texture->width(), uv2.y * mesh.texture->height());
         }
 
-        if (mesh_count > 1) {
-            int a = 1;
-        }
-
         warpTriangle(textures[mesh_index], new_atlas, old_uv_triangle, new_uv_triangle);
     }
 
@@ -750,26 +673,115 @@ int main(int argc, char **argv) {
     new_atlas.convertTo(new_atlas, CV_8UC3);
     cv::imencode(".jpeg", new_atlas, buf);
     FiImage new_atlas_fi = FiImage::load_from_buffer(buf);
-    new_atlas_fi.rescale(glm::uvec2(1024));
+    new_atlas_fi = new_atlas_fi.rescale(glm::uvec2(256));
     new_atlas_fi.save("atlas.png");
 
     step++;
 
-    TerrainMesh final_mesh;
-    final_mesh.triangles = new_indices;
-    final_mesh.positions = new_positions;
-    final_mesh.uvs = final_uvs;
-    final_mesh.texture = std::move(new_atlas_fi);
+    cgal_mesh.is_valid(true);
 
-    if (!no_mesh_simplification) {
-        fmt::println("[{}/{}] Simplifying mesh...", step, steps);
+    std::vector<std::vector<std::size_t>> polygons;
+    for (const auto& triangle : new_indices) {
+        std::vector<std::size_t> polygon;
+        for (unsigned int i=0; i<triangle.length(); i++) {
+            polygon.push_back(triangle[i]);
+        }
+        polygons.push_back(polygon);
+    }
+    assert(CGAL::Polygon_mesh_processing::is_polygon_soup_a_polygon_mesh(polygons));
 
-        simplify_mesh(final_mesh, simplification_factor, simplification_target_error);
-        
-        step++;
+    if (!CGAL::is_triangle_mesh(cgal_mesh)) {
+        std::cerr << "Input geometry is not triangulated." << std::endl;
+        return EXIT_FAILURE;
     }
 
+    /*
+    double stop_ratio = 1;
+    CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(stop_ratio);
+    int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop);
+    std::cout << "\nFinished!\n" << r << " edges removed.\n"
+            << cgal_mesh.number_of_vertices() << " vertices edges.\n";
     fmt::println("[{}/{}] Saving merged mesh...", steps, steps);
+    */
+   /*
+    double stop_ratio = 1;
+    typedef CGAL::Surface_mesh_simplification::LindstromTurk_cost<SurfaceMesh> LT_cost;
+    CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(stop_ratio);
+    int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop, CGAL::parameters::get_cost(LT_cost())
+                 .get_placement(CGAL::Surface_mesh_simplification::LindstromTurk_placement<SurfaceMesh>()));
+    std::cout << "\nFinished!\n" << r << " edges removed.\n"
+            << cgal_mesh.number_of_vertices() << " vertices edges.\n";
+
+            */
+    double stop_ratio = 0.25;
+
+    std::cout << "start edge collages." << std::endl;
+    CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(stop_ratio);
+
+    typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<SurfaceMesh, Kernel> GH_policies;
+    typedef GH_policies::Get_cost GH_cost;
+    typedef GH_policies::Get_placement GH_placement;
+    typedef CGAL::Surface_mesh_simplification::Bounded_normal_change_placement<GH_placement> Bounded_GH_placement;
+     
+
+    bool check_mesh = CGAL::is_valid_polygon_mesh(cgal_mesh);
+    std::cout << "vaild or in valid: " << check_mesh << std::endl;
+    GH_policies gh_policies(cgal_mesh);
+    const GH_cost& gh_cost = gh_policies.get_cost();
+    const GH_placement& gh_placement = gh_policies.get_placement();
+    Bounded_GH_placement placement(gh_placement);
+
+    std::cout << "Input mesh has " << CGAL::num_vertices(cgal_mesh) << " nv "<< CGAL::num_edges(cgal_mesh) << " ne "
+        << CGAL::num_faces(cgal_mesh) << " nf" << std::endl;
+    /*internal::cgal_enable_sms_trace = true;*/
+    int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop, CGAL::parameters::get_cost(gh_cost).get_placement(placement)); 
+
+    // Contract the surface mesh as much as possible
+    // CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(stop_ratio);
+    // Border_is_constrained_edge_map bem(cgal_mesh);
+    // This the actual call to the simplification algorithm.
+    // The surface mesh and stop conditions are mandatory arguments.
+    // int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop,
+    //                                                          CGAL::parameters::edge_is_constrained_map(bem)
+    //                                                            .get_placement(Placement(bem)));
+
+    TerrainMesh final_mesh;
+    const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
+    const size_t face_count = CGAL::num_faces(cgal_mesh);
+    // final_mesh.positions.resize(vertex_count);
+    final_mesh.positions.reserve(vertex_count);
+    final_mesh.uvs.reserve(vertex_count);
+    final_mesh.triangles.resize(face_count);
+
+    std::vector<unsigned int> mapmapmap;
+    mapmapmap.resize(vertex_count);
+
+    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
+        const Point_3 &vertex = cgal_mesh.point(vertex_index);
+        mapmapmap[vertex_index] = final_mesh.positions.size();
+        // final_mesh.positions[vertex_index] = glm::dvec3(vertex[0], vertex[1], vertex[2]) + average_position;
+        final_mesh.positions.push_back(glm::dvec3(vertex[0], vertex[1], vertex[2]) + average_position);
+    }
+    for (const glm::dvec3 position : final_mesh.positions) {
+        assert(position.x != 0);
+    }
+    for (const CGAL::SM_Face_index face_index : cgal_mesh.faces()) {
+        std::array<unsigned int, 3> triangle;
+        unsigned int i = 0;
+        for (const CGAL::SM_Vertex_index vertex_index : CGAL::vertices_around_face(cgal_mesh.halfedge(face_index), cgal_mesh)) {
+            triangle[i] =  mapmapmap[vertex_index];
+            i++;
+        }
+        final_mesh.triangles.emplace_back(triangle[0], triangle[1], triangle[2]);
+    }
+    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
+        // final_mesh.uvs[vertex_index] = glm::dvec2(0, 0);
+    }
+    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
+        const Point_2 &uv = uv_map[vertex_index];
+        final_mesh.uvs.emplace_back(uv.x(), uv.y());
+    }
+    final_mesh.texture = std::move(new_atlas_fi);
 
     save_mesh_as_gltf2(final_mesh, output_path);
 

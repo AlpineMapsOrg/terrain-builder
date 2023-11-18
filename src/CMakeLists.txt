@@ -37,7 +37,7 @@ endif()
 
 if(ALP_AUTOUPDATE_RADIX)
     FetchContent_Declare(radix
-        GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
+        GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix
         GIT_TAG main
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
         SOURCE_SUBDIR src
@@ -172,4 +172,4 @@ add_executable(terrainmerger
     terrainmerger/main.cpp
 )
 include_directories(${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainmerger PUBLIC radix fmt cgltf stb freeimage CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL meshoptimizer)
+target_link_libraries(terrainmerger PUBLIC radix fmt cgltf stb freeimage CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL)

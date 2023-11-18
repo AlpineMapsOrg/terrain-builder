@@ -290,23 +290,33 @@ void save_mesh_as_gltf(const TerrainMesh &m, const std::filesystem::path& path, 
     // Create the node hierachy.
     // We create parent nodes to offset the position by the average calculate above.
     // We need multiple parents to ensure that we dont lose our double precision accurary.
-    std::array<cgltf_node, 2> nodes;
-    cgltf_node &mesh_node = nodes[1] = {};
+    std::array<cgltf_node, 3> nodes;
+    cgltf_node &mesh_node = nodes[2] = {};
     mesh_node.has_translation = true;
     mesh_node.mesh = &mesh;
 
-    cgltf_node &parent_node = nodes[0] = {};
-    std::array<cgltf_node*, 1> parent_node_children = { &mesh_node };
+    cgltf_node &parent_node = nodes[1] = {};
+    std::array<cgltf_node *, 1> parent_node_children = {&mesh_node};
     parent_node.children_count = parent_node_children.size();
     parent_node.children = parent_node_children.data();
     parent_node.has_translation = true;
 
-    const glm::vec3 parent_offset(average_position);
-    const glm::dvec3 parent_offset_error = glm::dvec3(parent_offset) - average_position;
+    cgltf_node &parent_parent_node = nodes[0] = {};
+    std::array<cgltf_node *, 1> parent_parent_node_children = {&parent_node};
+    parent_parent_node.children_count = parent_parent_node_children.size();
+    parent_parent_node.children = parent_parent_node_children.data();
+    parent_parent_node.has_translation = true;
+
+    const glm::vec3 parent_parent_offset(average_position);
+    const glm::dvec3 parent_parent_offset_error = glm::dvec3(parent_parent_offset) - average_position;
+    const glm::vec3 parent_offset(-parent_parent_offset_error);
+    const glm::dvec3 parent_offset_error = glm::dvec3(parent_offset) + glm::dvec3(parent_parent_offset) - average_position;
     const glm::vec3 mesh_offset(-parent_offset_error);
+    std::copy(glm::value_ptr(parent_parent_offset), glm::value_ptr(parent_parent_offset) + parent_parent_offset.length(), parent_node.translation);
     std::copy(glm::value_ptr(parent_offset), glm::value_ptr(parent_offset) + parent_offset.length(), parent_node.translation);
     std::copy(glm::value_ptr(mesh_offset), glm::value_ptr(mesh_offset) + mesh_offset.length(), mesh_node.translation);
-
+    const glm::dvec3 full_error = (glm::dvec3(parent_parent_offset) + glm::dvec3(parent_offset) + glm::dvec3(mesh_offset)) - average_position;
+    assert(glm::length(full_error) == 0);
 
     // Create a scene
     std::array<cgltf_scene, 1> scenes;
