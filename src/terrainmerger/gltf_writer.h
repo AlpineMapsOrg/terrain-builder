@@ -786,4 +786,319 @@ void save_mesh_as_gltf(const TerrainMesh& mesh) {
 }
 */
 
+/// Saves the mesh as a .gltf or .glb file at the given path.
+void save_mesh_as_gltf3(const TerrainMesh &m, std::vector<glm::vec3>& colors, const std::filesystem::path &path, const std::unordered_map<std::string, std::string> extra_metadata = {}) {
+    // ********************* Preprocessing ********************* //
+
+    // Calculate the average vertex position for later normalization.
+    const size_t vertex_count = m.positions.size();
+    glm::dvec3 average_position(0, 0, 0);
+    for (size_t i = 0; i < vertex_count; i++) {
+        average_position += m.positions[i] / static_cast<double>(vertex_count);
+    }
+
+    // Create vertex data vector from positions and uvs.
+    // We also normalize vertex position by extracting their average position and storing the offsets.
+    // This is dont to preserve our double accuracy, as gltf cannot store them directly.
+    std::vector<float> vertices;
+    vertices.reserve((vectorsizeof(m.positions) + vectorsizeof(m.uvs)) / sizeof(float));
+    glm::vec3 max_position(std::numeric_limits<float>::min());
+    glm::vec3 min_position(std::numeric_limits<float>::max());
+    for (size_t i = 0; i < vertex_count; i++) {
+        const glm::vec3 normalized_position = m.positions[i] - average_position;
+
+        vertices.push_back(normalized_position.x);
+        vertices.push_back(normalized_position.y);
+        vertices.push_back(normalized_position.z);
+        vertices.push_back(colors[i].x);
+        vertices.push_back(colors[i].y);
+        vertices.push_back(colors[i].z);
+        vertices.push_back(m.uvs[i].x);
+        vertices.push_back(m.uvs[i].y);
+
+        max_position = glm::max(max_position, normalized_position);
+        min_position = glm::min(min_position, normalized_position);
+    }
+
+    // Encode the texture as jpeg data.
+    const bool has_texture = m.texture.has_value();
+    std::vector<unsigned char> texture_bytes;
+    if (has_texture) {
+        texture_bytes = m.texture->save_to_vector(FIF_JPEG);
+    }
+
+    // Create a single buffer that holds all binary data (indices, vertices, textures)
+    // We need to do this because only a single buffer can be written as a binary blob in .glb files.
+    const size_t index_data_byte_count = vectorsizeof(m.triangles);
+    const size_t index_data_offset = 0;
+    const size_t index_count = m.triangles.size();
+    const size_t vertex_data_byte_count = vectorsizeof(vertices);
+    const size_t vertex_data_offset = index_data_offset + index_data_byte_count;
+    const size_t texture_data_byte_count = vectorsizeof(texture_bytes);
+    const size_t texture_data_offset = vertex_data_offset + vertex_data_byte_count;
+
+    std::vector<unsigned char> buffer_data;
+    buffer_data.resize(index_data_byte_count + vertex_data_byte_count + texture_data_byte_count);
+    memcpy(buffer_data.data() + index_data_offset, m.triangles.data(), index_data_byte_count);
+    memcpy(buffer_data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
+    memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
+
+    const bool binary_output = path.extension() == ".glb";
+
+    // ********************* Create GLTF data structure ********************* //
+
+    // Initialize a GLTF data structure
+    cgltf_data data = {};
+    std::string version = "2.0\0";
+    data.asset.version = version.data();
+    std::string generator = "cgltf\0";
+    data.asset.generator = generator.data();
+
+    std::array<cgltf_buffer, 1> buffers;
+
+    // Create a gltf buffer to hold vertex data, index data and the texture.
+    cgltf_buffer &buffer = buffers[0] = {};
+    buffer.size = buffer_data.size();
+    buffer.data = buffer_data.data();
+    std::string buffer_data_encoded;
+    if (binary_output) {
+        // The binary blob at the end of the file will be used as the contents of the first buffer if it does not have an uri defined.
+        data.bin = buffer_data.data();
+        data.bin_size = buffer_data.size();
+    } else {
+        buffer_data_encoded = data_uri_encode(buffer_data.data(), buffer_data.size());
+        buffer.uri = buffer_data_encoded.data();
+    }
+
+    // Create buffer views for each of types of data in the buffer.
+    std::array<cgltf_buffer_view, 3> buffer_views;
+
+    cgltf_buffer_view &index_buffer_view = buffer_views[0] = {};
+    index_buffer_view.buffer = &buffer;
+    index_buffer_view.offset = index_data_offset;
+    index_buffer_view.size = index_data_byte_count;
+    index_buffer_view.stride = 0;
+    index_buffer_view.type = cgltf_buffer_view_type_indices;
+
+    cgltf_buffer_view &vertex_buffer_view = buffer_views[1] = {};
+    vertex_buffer_view.buffer = &buffer;
+    vertex_buffer_view.offset = vertex_data_offset;
+    vertex_buffer_view.size = vertex_data_byte_count;
+    vertex_buffer_view.stride = 8 * sizeof(float);
+    vertex_buffer_view.type = cgltf_buffer_view_type_vertices;
+
+    cgltf_buffer_view &texture_buffer_view = buffer_views[2] = {};
+    texture_buffer_view.buffer = &buffer;
+    texture_buffer_view.offset = texture_data_offset;
+    texture_buffer_view.size = texture_data_byte_count;
+    texture_buffer_view.stride = 0;
+
+    // Create accessors describing the layout of data in the buffer views.
+    std::array<cgltf_accessor, 4> accessors;
+
+    // Create an accessor for indices.
+    cgltf_accessor &index_accessor = accessors[0] = {};
+    index_accessor.buffer_view = &index_buffer_view;
+    index_accessor.type = cgltf_type_scalar;
+    index_accessor.component_type = cgltf_component_type_r_32u;
+    index_accessor.count = m.triangles.size() * 3;
+    index_accessor.has_min = true;
+    index_accessor.min[0] = static_cast<cgltf_float>(0.0);
+    index_accessor.has_max = true;
+    index_accessor.max[0] = static_cast<cgltf_float>(vertex_count - 1);
+
+    // Create an accessor for vertex positions
+    cgltf_accessor &position_accessor = accessors[1] = {};
+    position_accessor.buffer_view = &vertex_buffer_view;
+    position_accessor.component_type = cgltf_component_type_r_32f;
+    position_accessor.type = cgltf_type_vec3;
+    position_accessor.offset = 0 * sizeof(float);
+    position_accessor.count = vertex_count;
+    // We need the min and max as some viewers otherwise refuse to open the file.
+    position_accessor.has_min = true;
+    position_accessor.has_max = true;
+    std::copy(glm::value_ptr(min_position), glm::value_ptr(min_position) + min_position.length(), position_accessor.min);
+    std::copy(glm::value_ptr(max_position), glm::value_ptr(max_position) + max_position.length(), position_accessor.max);
+
+    // Create an accessor for vertex colors
+    cgltf_accessor &color_accessor = accessors[2] = {};
+    color_accessor.buffer_view = &vertex_buffer_view;
+    color_accessor.component_type = cgltf_component_type_r_32f;
+    color_accessor.type = cgltf_type_vec3;
+    color_accessor.offset = 3 * sizeof(float);
+    color_accessor.count = vertex_count;
+    color_accessor.has_min = true;
+    color_accessor.has_max = true;
+    std::fill(color_accessor.min, color_accessor.min + 3, 0);
+    std::fill(color_accessor.max, color_accessor.max + 3, 1);
+
+    // Create an accessor for vertex uvs
+    cgltf_accessor &uv_accessor = accessors[3] = {};
+    uv_accessor.buffer_view = &vertex_buffer_view;
+    uv_accessor.component_type = cgltf_component_type_r_32f;
+    uv_accessor.type = cgltf_type_vec2;
+    uv_accessor.offset = 6 * sizeof(float);
+    uv_accessor.count = vertex_count;
+    uv_accessor.has_min = true;
+    uv_accessor.has_max = true;
+    std::fill(uv_accessor.min, uv_accessor.min + 2, 0);
+    std::fill(uv_accessor.max, uv_accessor.max + 2, 1);
+
+    // Create a mesh primitive.
+    std::array<cgltf_attribute, 3> primitive_attributes;
+    cgltf_attribute &position_attribute = primitive_attributes[0] = {};
+    std::string position_attribute_name = "POSITION\0";
+    position_attribute.name = position_attribute_name.data();
+    position_attribute.type = cgltf_attribute_type::cgltf_attribute_type_position;
+    position_attribute.index = 0;
+    position_attribute.data = &position_accessor;
+    cgltf_attribute &color_attribute = primitive_attributes[1] = {};
+    std::string color_attribute_name = "COLOR_0\0";
+    color_attribute.name = color_attribute_name.data();
+    color_attribute.type = cgltf_attribute_type::cgltf_attribute_type_color;
+    color_attribute.index = 0;
+    color_attribute.data = &color_accessor;
+    cgltf_attribute &uv_attribute = primitive_attributes[2] = {};
+    std::string uv_attribute_name = "TEXCOORD_0\0";
+    uv_attribute.name = uv_attribute_name.data();
+    uv_attribute.type = cgltf_attribute_type::cgltf_attribute_type_texcoord;
+    uv_attribute.index = 0;
+    uv_attribute.data = &uv_accessor;
+
+    // Create a gltf texture
+    std::array<cgltf_image, 1> images;
+    cgltf_image &image = images[0] = {};
+    image.buffer_view = &texture_buffer_view;
+    std::string image_mime_type = "image/jpeg\0";
+    image.mime_type = image_mime_type.data();
+
+    std::array<cgltf_sampler, 1> samplers;
+    cgltf_sampler &sampler = samplers[0] = {};
+    sampler.min_filter = GL_LINEAR_MIPMAP_LINEAR;
+    sampler.mag_filter = GL_LINEAR;
+    sampler.wrap_s = GL_CLAMP_TO_EDGE;
+    sampler.wrap_t = GL_CLAMP_TO_EDGE;
+
+    std::array<cgltf_texture, 1> textures;
+    cgltf_texture &texture = textures[0] = {};
+    texture.image = &image;
+    texture.sampler = &sampler;
+
+    // Create a material
+    std::array<cgltf_material, 1> materials;
+    cgltf_material &material = materials[0] = {};
+    material.has_pbr_metallic_roughness = true;
+    material.pbr_metallic_roughness.base_color_factor[0] = 1.0f;
+    material.pbr_metallic_roughness.base_color_factor[1] = 0.9f;
+    material.pbr_metallic_roughness.base_color_factor[2] = 0.9f;
+    material.pbr_metallic_roughness.base_color_factor[3] = 1.0f;
+    material.pbr_metallic_roughness.roughness_factor = 1;
+    material.pbr_metallic_roughness.base_color_texture.texture = &texture;
+
+    material.double_sided = true;
+
+    // Build the primitive for the mesh
+    std::array<cgltf_primitive, 1> primitives;
+    cgltf_primitive &primitive = primitives[0] = {};
+    primitive.type = cgltf_primitive_type_triangles;
+    primitive.indices = &index_accessor;
+    primitive.attributes_count = primitive_attributes.size();
+    primitive.attributes = primitive_attributes.data();
+    primitive.material = &material;
+
+    // Build the actual mesh
+    std::array<cgltf_mesh, 1> meshes;
+    cgltf_mesh &mesh = meshes[0] = {};
+    mesh.primitives_count = 1;
+    mesh.primitives = &primitive;
+
+    // Create the node hierachy.
+    // We create parent nodes to offset the position by the average calculate above.
+    // We need multiple parents to ensure that we dont lose our double precision accurary.
+    std::array<cgltf_node, 3> nodes;
+    cgltf_node &mesh_node = nodes[2] = {};
+    mesh_node.has_translation = true;
+    mesh_node.mesh = &mesh;
+
+    cgltf_node &parent_node = nodes[1] = {};
+    std::array<cgltf_node *, 1> parent_node_children = {&mesh_node};
+    parent_node.children_count = parent_node_children.size();
+    parent_node.children = parent_node_children.data();
+    parent_node.has_translation = true;
+
+    cgltf_node &parent_parent_node = nodes[0] = {};
+    std::array<cgltf_node*, 1> parent_parent_node_children = { &parent_node };
+    parent_parent_node.children_count = parent_parent_node_children.size();
+    parent_parent_node.children = parent_parent_node_children.data();
+    parent_parent_node.has_translation = true;
+
+    const glm::vec3 parent_parent_offset(average_position);
+    const glm::dvec3 parent_parent_offset_error = glm::dvec3(parent_parent_offset) - average_position;
+    const glm::vec3 parent_offset(-parent_parent_offset_error);
+    const glm::dvec3 parent_offset_error = glm::dvec3(parent_offset) + glm::dvec3(parent_parent_offset) - average_position;
+    const glm::vec3 mesh_offset(-parent_offset_error);
+    std::copy(glm::value_ptr(parent_parent_offset), glm::value_ptr(parent_parent_offset) + parent_parent_offset.length(), parent_node.translation);
+    std::copy(glm::value_ptr(parent_offset), glm::value_ptr(parent_offset) + parent_offset.length(), parent_node.translation);
+    std::copy(glm::value_ptr(mesh_offset), glm::value_ptr(mesh_offset) + mesh_offset.length(), mesh_node.translation);
+    const glm::dvec3 full_error = (glm::dvec3(parent_parent_offset) + glm::dvec3(parent_offset) + glm::dvec3(mesh_offset)) - average_position;
+    assert(glm::length(full_error) == 0);
+    // Create a scene
+    std::array<cgltf_scene, 1> scenes;
+    cgltf_scene &scene = scenes[0] = {};
+    std::array<cgltf_node *, 1> scene_nodes = {&parent_parent_node};
+    scene.nodes_count = scene_nodes.size();
+    scene.nodes = scene_nodes.data();
+
+    // Set up data references
+    data.meshes_count = meshes.size();
+    data.meshes = meshes.data();
+    data.nodes_count = nodes.size();
+    data.nodes = nodes.data();
+    data.scenes_count = scenes.size();
+    data.scenes = scenes.data();
+    data.buffers_count = buffers.size();
+    data.buffers = buffers.data();
+    data.buffer_views_count = buffer_views.size();
+    data.buffer_views = buffer_views.data();
+    data.accessors_count = accessors.size();
+    data.accessors = accessors.data();
+    data.textures_count = textures.size();
+    data.textures = textures.data();
+    data.images_count = images.size();
+    data.images = images.data();
+    data.samplers_count = samplers.size();
+    data.samplers = samplers.data();
+    data.materials_count = materials.size();
+    data.materials = materials.data();
+
+    // Set up extra metadata
+    std::string extras_str;
+    if (!extra_metadata.empty()) {
+        std::stringstream extras = {};
+        extras << "{";
+        for (auto const &[key, val] : extra_metadata) {
+            extras << "\n";
+            extras << "    ";
+            extras << "\"" << key << "\"";
+            extras << ": ";
+            extras << val;
+            extras << ",";
+        }
+        extras.seekp(-1, std::ios_base::end); // remove last ","
+        extras << "\n  }";
+        extras << "\0";
+        extras_str = extras.str();
+        data.extras.data = extras_str.data();
+    }
+
+    // ********************* Save the GLTF data to a file ********************* //
+    std::filesystem::create_directories(path.parent_path());
+    cgltf_options options;
+    if (binary_output) {
+        options.type = cgltf_file_type_glb;
+    }
+    if (cgltf_write_file(&options, path.c_str(), &data) != cgltf_result_success) {
+        throw std::runtime_error("Failed to save GLTF file");
+    }
+}
 #endif

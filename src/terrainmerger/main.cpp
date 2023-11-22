@@ -40,6 +40,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
+#include <CGAL/Surface_mesh_simplification/Edge_collapse_visitor_base.h>
 
 #include "fi_image.h"
 #include "gltf_writer.h"
@@ -343,6 +344,7 @@ typedef CGAL::Simple_cartesian<double> Kernel;
 typedef Kernel::Point_2 Point_2;
 typedef Kernel::Point_3 Point_3;
 typedef CGAL::Surface_mesh<Point_3> SurfaceMesh;
+typedef CGAL::Surface_mesh_simplification::Edge_profile<SurfaceMesh> Profile;
 
 typedef boost::graph_traits<SurfaceMesh>::vertex_descriptor vertex_descriptor;
 typedef boost::graph_traits<SurfaceMesh>::halfedge_descriptor halfedge_descriptor;
@@ -376,7 +378,79 @@ struct Border_is_constrained_edge_map {
 typedef CGAL::Surface_mesh_simplification::Constrained_placement<CGAL::Surface_mesh_simplification::Midpoint_placement<SurfaceMesh>,
                                    Border_is_constrained_edge_map> Placement;
 
+typedef SurfaceMesh::Property_map<vertex_descriptor, size_t> SM_pmap;
+typedef SurfaceMesh::Property_map<vertex_descriptor, Point_2> UV_pmap;
+
+typedef CGAL::Unique_hash_map<vertex_descriptor, Point_2> UvHashMap;
+typedef boost::associative_property_map<UvHashMap> UvPropertyMap;
+
+glm::dvec3 cgal2glm(Point_3 point) {
+    return glm::dvec3(point[0], point[1], point[2]);
+}
+glm::dvec2 cgal2glm(Point_2 point) {
+    return glm::dvec2(point[0], point[1]);
+}
+Point_3 glm2cgal(glm::dvec3 point) {
+    return Point_3(point[0], point[1], point[2]);
+}
+Point_2 glm2cgal(glm::dvec2 point) {
+    return Point_2(point[0], point[1]);
+}
+
+struct My_visitor : CGAL::Surface_mesh_simplification::Edge_collapse_visitor_base<SurfaceMesh> {
+    My_visitor(SM_pmap sm_pmap, UV_pmap uv_pmap)
+        : sm_pmap(sm_pmap), uv_pmap(uv_pmap) {}
+
+    // Called during the processing phase for each edge being collapsed.
+    // If placement is absent the edge is left uncollapsed.
+    void OnCollapsing(const Profile &prof,
+                      boost::optional<Point> placement) {
+        if (prof.is_v0_v1_a_border() || prof.is_v1_v0_a_border()) {
+            assert(false);
+        }
+
+        if (placement) {
+            vertex_descriptor v0 = prof.v0();
+            vertex_descriptor v1 = prof.v1();
+            size_t p0_2 = get(sm_pmap, v0);
+            size_t p1_2 = get(sm_pmap, v1);
+            p_2 = static_cast<double>(p0_2 + p1_2) * 0.5;
+
+            const glm::dvec3 pt = cgal2glm(*placement);
+            const glm::dvec3 p0 = cgal2glm(prof.p0());
+            const glm::dvec3 p1 = cgal2glm(prof.p1());
+
+            // fmt::println("{}", std::abs(1 - glm::dot(glm::normalize(pt-p0), glm::normalize(p1-p0))));
+            // assert(std::abs(1 - glm::dot(glm::normalize(pt-p0), glm::normalize(p1-p0))) < 0.001); // make sure pt is on the edge p0-p1; normalise for numerical stability.
+            const auto w1 = std::clamp(glm::length(pt - p0) / glm::length(p1 - p0), 0.0, 1.0);
+            // fmt::println("{}", w1);
+            // assert(w1 <= 1.0001);
+            const auto w0 = 1 - w1;
+            
+            
+            const glm::dvec2 uv0 = cgal2glm(get(uv_pmap, v0));
+            const glm::dvec2 uv1 = cgal2glm(get(uv_pmap, v1));
+            this->new_uv = glm2cgal(uv0 * w0 + uv1 * w1);
+        }
+    }
+
+    // Called after each edge has been collapsed
+    void OnCollapsed(const Profile &, vertex_descriptor vd) {
+        put(sm_pmap, vd, p_2);
+        uv_pmap[vd] = new_uv;
+    }
+
+    SM_pmap sm_pmap;
+    UV_pmap uv_pmap;
+    size_t p_2;
+    Point_2 new_uv;
+};
+
 int main(int argc, char **argv) {
+    // Override argc and argv
+    argc = 8; // Set the desired number of arguments
+    char *new_argv[] = {"./terrainmerger", "--input", "183325_276252.glb", "183325_276253.glb", "183326_276252.glb", "183326_276253.glb", "--output", "./out2.glb"};
+    argv = new_argv;
 
     CLI::App app{"Terrain Merger"};
     // app.allow_windows_style_options();
@@ -477,6 +551,7 @@ int main(int argc, char **argv) {
 
     std::vector<glm::vec3> new_positions;
     std::vector<glm::dvec2> new_uvs;
+    std::vector<unsigned int> new_mesh_id;
     new_positions.reserve(max_combined_vertex_count);
     new_uvs.reserve(max_combined_vertex_count);
     for (unsigned int i = 0; i < meshes.size(); i++) {
@@ -501,6 +576,7 @@ int main(int argc, char **argv) {
                 inverse_mapping[i].emplace(new_positions.size(), j);
                 new_positions.push_back(position - average_position);
                 new_uvs.push_back(uv);
+                new_mesh_id.push_back(i);
             }
         }
     }
@@ -560,8 +636,6 @@ int main(int argc, char **argv) {
 
     halfedge_descriptor bhd = CGAL::Polygon_mesh_processing::longest_border(cgal_mesh).first;
     // The UV property map that holds the parameterized values
-    typedef CGAL::Unique_hash_map<vertex_descriptor, Point_2> UvHashMap;
-    typedef boost::associative_property_map<UvHashMap> UvPropertyMap;
     // typedef SurfaceMesh::Property_map<vertex_descriptor, Point_2> UvPropertyMap;
 
     // The 2D points of the uv parametrisation will be written into this map
@@ -673,7 +747,7 @@ int main(int argc, char **argv) {
     new_atlas.convertTo(new_atlas, CV_8UC3);
     cv::imencode(".jpeg", new_atlas, buf);
     FiImage new_atlas_fi = FiImage::load_from_buffer(buf);
-    new_atlas_fi = new_atlas_fi.rescale(glm::uvec2(256));
+    // new_atlas_fi = new_atlas_fi.rescale(glm::uvec2(256));
     new_atlas_fi.save("atlas.png");
 
     step++;
@@ -731,19 +805,27 @@ int main(int argc, char **argv) {
     const GH_placement& gh_placement = gh_policies.get_placement();
     Bounded_GH_placement placement(gh_placement);
 
+    SM_pmap sm_pmap = cgal_mesh.add_property_map<vertex_descriptor, size_t>("v:sm").first;
+    UV_pmap uv_pmap = cgal_mesh.add_property_map<vertex_descriptor, Point_2>("h:uv").first;
+    My_visitor vis(sm_pmap, uv_pmap);
+    for (unsigned int i = 0; i < final_uvs.size(); i++) {
+        uv_pmap[CGAL::SM_Vertex_index(i)] = glm2cgal(final_uvs[i]);
+    }
+    for (unsigned int i = 0; i < new_mesh_id.size(); i++) {
+        sm_pmap[CGAL::SM_Vertex_index(i)] = new_mesh_id[i];
+    }
+
     std::cout << "Input mesh has " << CGAL::num_vertices(cgal_mesh) << " nv "<< CGAL::num_edges(cgal_mesh) << " ne "
         << CGAL::num_faces(cgal_mesh) << " nf" << std::endl;
     /*internal::cgal_enable_sms_trace = true;*/
-    int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop, CGAL::parameters::get_cost(gh_cost).get_placement(placement)); 
+    // int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop, CGAL::parameters::get_cost(gh_cost).get_placement(placement).visitor(vis)); 
 
     // Contract the surface mesh as much as possible
     // CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(stop_ratio);
-    // Border_is_constrained_edge_map bem(cgal_mesh);
+    Border_is_constrained_edge_map bem(cgal_mesh);
     // This the actual call to the simplification algorithm.
     // The surface mesh and stop conditions are mandatory arguments.
-    // int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop,
-    //                                                          CGAL::parameters::edge_is_constrained_map(bem)
-    //                                                            .get_placement(Placement(bem)));
+    // int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop, CGAL::parameters::edge_is_constrained_map(bem).get_placement(Placement(bem)).visitor(vis));
 
     TerrainMesh final_mesh;
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
@@ -778,8 +860,14 @@ int main(int argc, char **argv) {
         // final_mesh.uvs[vertex_index] = glm::dvec2(0, 0);
     }
     for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
-        const Point_2 &uv = uv_map[vertex_index];
-        final_mesh.uvs.emplace_back(uv.x(), uv.y());
+        const glm::dvec2 &uv = cgal2glm(uv_pmap[vertex_index]);
+        final_mesh.uvs.push_back((uv - glm::dvec2(0.5)) * 0.99 + glm::dvec2(0.5));
+    }
+
+    std::vector<glm::vec3> colors;
+    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
+        const size_t sm = sm_pmap[vertex_index];
+        colors.emplace_back(static_cast<float>(sm)/4);
     }
     final_mesh.texture = std::move(new_atlas_fi);
 
