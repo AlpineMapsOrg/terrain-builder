@@ -187,10 +187,14 @@ add_library(terrainmergerlib
     terrainmerger/cli.cpp
     terrainmerger/io.h
     terrainmerger/merge.h
+    terrainmerger/merge.cpp
     terrainmerger/simplify.h
+    terrainmerger/simplify.cpp
     terrainmerger/uv_map.h
+    terrainmerger/uv_map.cpp
     terrainmerger/cgal.h
     terrainmerger/convert.h
+    terrainmerger/convert.cpp
     terrainmerger/terrain_mesh.h
     terrainmerger/non_copyable.h
 )

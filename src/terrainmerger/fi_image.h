@@ -11,19 +11,18 @@
 
 #include "non_copyable.h"
 
-
-std::once_flag g_freeimage_initialized_once_flag;
-
 namespace {
+    std::once_flag g_freeimage_initialized_once_flag;
+
     struct FreeImageDeinitialiserHandler {
         ~FreeImageDeinitialiserHandler()
         {
             FreeImage_DeInitialise();
         }
     };
-}
+} // namespace
 
-void initialize_freeimage_once() {
+inline void initialize_freeimage_once() {
     std::call_once(g_freeimage_initialized_once_flag, []() {
         FreeImage_Initialise();
     });

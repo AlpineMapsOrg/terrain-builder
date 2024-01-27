@@ -3,6 +3,7 @@
 #include "merge.h"
 #include "simplify.h"
 #include "uv_map.h"
+#include "convert.h"
 
 #include <CGAL/boost/graph/IO/OBJ.h>
 
