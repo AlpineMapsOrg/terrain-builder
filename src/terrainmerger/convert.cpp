@@ -74,20 +74,3 @@ TerrainMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
 
     return mesh;
 }
-
-cv::Mat convert::fi2cv(const FiImage &image) {
-    std::vector<uint8_t> buffer = image.save_to_vector(FIF_PNG);
-    cv::Mat mat = cv::imdecode(cv::Mat(1, buffer.size(), CV_8UC1, buffer.data()), cv::IMREAD_UNCHANGED);
-    mat.convertTo(mat, CV_32FC3);
-    return mat;
-}
-
-FiImage convert::cv2fi(const cv::Mat &image) {
-    assert(!image.empty());
-
-    cv::Mat converted;
-    std::vector<uint8_t> buffer;
-    image.convertTo(converted, CV_8UC3);
-    cv::imencode(".png", image, buffer);
-    return FiImage::load_from_buffer(buffer);
-}

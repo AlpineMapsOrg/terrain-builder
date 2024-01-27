@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 
 #include "terrain_mesh.h"
-#include "fi_image.h"
 #include "cgal.h"
 
 namespace convert {
@@ -17,9 +16,6 @@ Point2 glm2cgal(glm::dvec2 point);
 
 SurfaceMesh mesh2cgal(const TerrainMesh& mesh);
 TerrainMesh cgal2mesh(const SurfaceMesh& cgal_mesh);
-
-cv::Mat fi2cv(const FiImage& image);
-FiImage cv2fi(const cv::Mat& image);
 
 }
 

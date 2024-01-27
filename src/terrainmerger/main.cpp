@@ -56,7 +56,7 @@ void run(const cli::Args &args) {
     merged_mesh.uvs = uv_map::decode_uv_map(uv_map, merged_mesh.vertex_count());
 
     fmt::println("Merging textures...");
-    merged_mesh.texture = convert::cv2fi(uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, glm::uvec2(1024)));
+    merged_mesh.texture = uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, glm::uvec2(1024));
 
     fmt::println("Simplifying merged mesh...");
     TerrainMesh simplified_mesh = simplify::simplify_mesh(merged_mesh);

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <optional>
 #include <vector>
+#include <span>
 
 #define CGLTF_IMPLEMENTATION
 #define CGLTF_WRITE_IMPLEMENTATION
@@ -14,7 +15,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <tl/expected.hpp>
 
-#include "fi_image.h"
 #include "non_copyable.h"
 #include "terrain_mesh.h"
 
@@ -84,6 +84,24 @@ cgltf_attribute *find_attribute_with_type(cgltf_attribute *attributes, size_t at
 }
 } // namespace
 
+
+inline cv::Mat read_texture_from_encoded_bytes(std::span<const uint8_t> buffer) {
+    cv::Mat raw_data = cv::Mat(1, buffer.size(), CV_8UC1, const_cast<uint8_t*>(buffer.data()));
+    cv::Mat mat = cv::imdecode(raw_data, cv::IMREAD_UNCHANGED);
+    mat.convertTo(mat, CV_32FC3);
+    return mat;
+}
+inline void write_texture_to_encoded_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer) {
+    cv::Mat converted;
+    image.convertTo(converted, CV_8UC3);
+    cv::imencode(".png", image, buffer);
+}
+inline std::vector<uint8_t> write_texture_to_encoded_buffer(const cv::Mat& image) {
+    std::vector<uint8_t> buffer;
+    write_texture_to_encoded_buffer(image, buffer);
+    return buffer;
+}
+
 TerrainMesh load_mesh_from_raw(const RawGltfMesh &raw) {
     const cgltf_data &data = *raw.data;
     assert(data.file_type == cgltf_file_type::cgltf_file_type_glb);
@@ -144,9 +162,8 @@ TerrainMesh load_mesh_from_raw(const RawGltfMesh &raw) {
     cgltf_texture &albedo_texture = *material.pbr_metallic_roughness.base_color_texture.texture;
     cgltf_image &albedo_image = *albedo_texture.image;
 
-    FiImage texture = FiImage::load_from_buffer(
-        cgltf_buffer_view_data(albedo_image.buffer_view),
-        albedo_image.buffer_view->size);
+    const std::span<const uint8_t> raw_texture {cgltf_buffer_view_data(albedo_image.buffer_view), albedo_image.buffer_view->size};
+    cv::Mat texture = read_texture_from_encoded_bytes(raw_texture);
 
     std::vector<glm::dvec3> positionsd;
     positionsd.resize(positions.size());
@@ -160,7 +177,7 @@ TerrainMesh load_mesh_from_raw(const RawGltfMesh &raw) {
         uvsd[i] = glm::dvec2(uvs[i]);
     }
 
-    return TerrainMesh(indices, positionsd, uvsd, std::move(texture));
+    return TerrainMesh(indices, positionsd, uvsd, texture);
 }
 
 enum class LoadMeshErrorKind {
@@ -363,10 +380,10 @@ void save_mesh_as_gltf2(const TerrainMesh &terrain_mesh, const std::filesystem::
     }
 
     // Encode the texture as jpeg data.
-    const bool has_texture = terrain_mesh.texture.has_value();
+    const bool has_texture = terrain_mesh.has_texture();
     std::vector<uint8_t> texture_bytes;
     if (has_texture) {
-        texture_bytes = terrain_mesh.texture->save_to_vector(FIF_JPEG);
+        texture_bytes = write_texture_to_encoded_buffer(terrain_mesh.texture.value());
     }
 
     // Create a single buffer that holds all binary data (indices, vertices, textures)

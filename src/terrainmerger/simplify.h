@@ -5,7 +5,6 @@
 #include <opencv2/opencv.hpp>
 
 #include "cgal.h"
-#include "fi_image.h"
 #include "terrain_mesh.h"
 
 namespace simplify {
@@ -15,8 +14,6 @@ namespace simplify {
 typedef SurfaceMesh::Property_map<VertexDescriptor, Point2> AttachedUvPropertyMap;
 
 cv::Mat simplify_texture(const cv::Mat& texture, glm::uvec2 target_resolution);
-
-FiImage simplify_texture(const FiImage& texture, glm::uvec2 target_resolution);
 
 void simplify_mesh_texture(TerrainMesh& mesh, glm::uvec2 target_resolution);
 

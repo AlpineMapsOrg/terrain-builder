@@ -112,7 +112,7 @@ static cv::Rect_<T> clamp_rect_to_mat_bounds(const cv::Rect_<T> &rect, const cv:
     return cv::Rect(x, y, width, height);
 }
 
-static void warp_triangle(cv::Mat &source_image, cv::Mat &target_image, std::array<cv::Point2f, 3> source_triangle, std::array<cv::Point2f, 3> target_triangle) {
+static void warp_triangle(const cv::Mat &source_image, cv::Mat &target_image, std::array<cv::Point2f, 3> source_triangle, std::array<cv::Point2f, 3> target_triangle) {
     // Find bounding rectangle for each triangle
     const cv::Rect source_rect = clamp_rect_to_mat_bounds(cv::boundingRect(source_triangle), source_image);
     const cv::Rect target_rect = clamp_rect_to_mat_bounds(cv::boundingRect(target_triangle), target_image);
@@ -162,24 +162,15 @@ Texture uv_map::merge_textures(
     const merge::VertexMapping &mapping,
     const UvMap &uv_map,
     const glm::uvec2 merged_texture_size) {
-
-    std::vector<cv::Mat> original_textures;
-    original_textures.reserve(original_meshes.size());
-    for (size_t i = 0; i < original_meshes.size(); i++) {
-        if (original_meshes[i].texture.has_value()) {
-            const FiImage& texture = original_meshes[i].texture.value();
-            const cv::Mat converted = convert::fi2cv(texture);
-            original_textures.push_back(converted);
-        } else {
-            original_textures.push_back(cv::Mat());
-        }
+    for (const TerrainMesh& mesh : original_meshes) {
+        assert(mesh.has_texture());
     }
 
     cv::Mat merged_atlas = cv::Mat::zeros(merged_texture_size.y, merged_texture_size.x, CV_32FC3);
 
     for (const glm::uvec3 &mapped_triangle : merged_mesh.triangles) {
         std::array<cv::Point2f, 3> mapped_uv_triangle;
-        for (size_t i = 0; i < mapped_triangle.length(); i++) {
+        for (size_t i = 0; i < static_cast<size_t>(mapped_triangle.length()); i++) {
             const auto uv = uv_map[CGAL::SM_Vertex_index(mapped_triangle[i])];
             mapped_uv_triangle[i] = cv::Point2f(uv.x() * merged_texture_size.x, uv.y() * merged_texture_size.y);
         }
@@ -190,12 +181,13 @@ Texture uv_map::merge_textures(
         const glm::uvec3 source_triangle = source_mesh_and_triangle.triangle;
 
         std::array<cv::Point2f, 3> source_uv_triangle;
-        for (size_t i = 0; i < source_triangle.length(); i++) {
+        for (size_t i = 0; i < static_cast<size_t>(source_triangle.length()); i++) {
             const glm::dvec2 uv = source_mesh.uvs[source_triangle[i]];
-            source_uv_triangle[i] = cv::Point2f(uv.x * source_mesh.texture->width(), uv.y * source_mesh.texture->height());
+            const cv::Size source_texture_size = source_mesh.texture->size();
+            source_uv_triangle[i] = cv::Point2f(uv.x * source_texture_size.width, uv.y * source_texture_size.height);
         }
 
-        warp_triangle(original_textures[source_mesh_index], merged_atlas, source_uv_triangle, mapped_uv_triangle);
+        warp_triangle(source_mesh.texture.value(), merged_atlas, source_uv_triangle, mapped_uv_triangle);
     }
 
     return merged_atlas;

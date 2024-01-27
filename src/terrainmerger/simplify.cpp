@@ -111,10 +111,6 @@ cv::Mat simplify::simplify_texture(const cv::Mat& texture, glm::uvec2 target_res
     return simplified_texture;
 }
 
-FiImage simplify::simplify_texture(const FiImage& texture, glm::uvec2 target_resolution) {
-    return convert::cv2fi(simplify_texture(convert::fi2cv(texture), target_resolution));
-}
-
 void simplify::simplify_mesh_texture(TerrainMesh& mesh, glm::uvec2 target_resolution) {
     if (mesh.texture.has_value()) {
         mesh.texture = simplify_texture(mesh.texture.value(), target_resolution);

@@ -196,7 +196,7 @@ TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, c
             const glm::uvec3 &triangle = mesh.triangles[triangle_index];
 
             glm::uvec3 new_triangle;
-            for (size_t k = 0; k < triangle.length(); k++) {
+            for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
                 new_triangle[k] = mapping.map(VertexId{.mesh_index = mesh_index, .vertex_index = triangle[k]});
             }
             if (new_triangle[0] == new_triangle[1] ||

@@ -203,5 +203,5 @@ add_executable(terrainmerger
     terrainmerger/main.cpp
 )
 target_include_directories(terrainmergerlib PUBLIC ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainmergerlib PUBLIC tinygltf radix fmt cgltf stb freeimage CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL expected)
+target_link_libraries(terrainmergerlib PUBLIC tinygltf radix fmt cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL expected)
 target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
