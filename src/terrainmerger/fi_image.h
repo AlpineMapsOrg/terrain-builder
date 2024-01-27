@@ -2,8 +2,12 @@
 #define FIIMAGE_H
 
 #include <filesystem>
+#include <mutex>
+#include <vector>
 
 #include <FreeImage.h>
+#include <glm/glm.hpp>
+#include <radix/geometry.h>
 
 #include "non_copyable.h"
 
@@ -19,8 +23,7 @@ namespace {
     };
 }
 
-void initialize_freeimage_once()
-{
+void initialize_freeimage_once() {
     std::call_once(g_freeimage_initialized_once_flag, []() {
         FreeImage_Initialise();
     });
