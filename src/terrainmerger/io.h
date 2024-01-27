@@ -115,13 +115,9 @@ TerrainMesh load_mesh_from_raw(const RawGltfMesh &raw) {
     cgltf_accessor &position_accessor = *position_attr->data;
     cgltf_accessor &uv_accessor = *uv_attr->data;
     assert(position_accessor.buffer_view == uv_accessor.buffer_view);
-    // cgltf_buffer_view &vertex_buffer_view = *position_accessor.buffer_view;
-    // const void *vertex_data = cgltf_buffer_view_data(&vertex_buffer_view);
-    // const size_t position_size = cgltf_num_components(position_accessor.type) * cgltf_component_size(position_accessor.component_type);
     std::vector<glm::vec3> positions;
     positions.resize(position_accessor.count);
     cgltf_accessor_unpack_floats(&position_accessor, reinterpret_cast<float *>(positions.data()), positions.size() * 3);
-    // const size_t uv_size = cgltf_num_components(uv_accessor.type) * cgltf_component_size(uv_accessor.component_type);
     std::vector<glm::vec2> uvs;
     uvs.resize(uv_accessor.count);
     cgltf_accessor_unpack_floats(&uv_accessor, reinterpret_cast<float *>(uvs.data()), uvs.size() * 2);
@@ -147,7 +143,6 @@ TerrainMesh load_mesh_from_raw(const RawGltfMesh &raw) {
     assert(material.pbr_metallic_roughness.base_color_texture.texture != nullptr);
     cgltf_texture &albedo_texture = *material.pbr_metallic_roughness.base_color_texture.texture;
     cgltf_image &albedo_image = *albedo_texture.image;
-    // cgltf_sampler &albedo_sampler = *albedo_texture.sampler;
 
     FiImage texture = FiImage::load_from_buffer(
         cgltf_buffer_view_data(albedo_image.buffer_view),

@@ -168,9 +168,7 @@ public:
     }
 
     FiImage copy(const geometry::Aabb<2, unsigned int> &box) const {
-        assert(box.min.x >= 0);
         assert(box.max.x <= this->width());
-        assert(box.min.y >= 0);
         assert(box.max.y <= this->height());
         
         FIBITMAP *copy = FreeImage_Copy(this->raw_image, box.min.x, box.min.y, box.max.x, box.max.y);
@@ -206,9 +204,9 @@ public:
         }
 
         assert(target_position.x >= 0);
-        assert(target_position.x < this->width());
+        assert(target_position.x < static_cast<int>(this->width()));
         assert(target_position.y >= 0);
-        assert(target_position.y < this->height());
+        assert(target_position.y < static_cast<int>(this->height()));
 
         if (!FreeImage_Paste(this->raw_image, src.raw_image, target_position.x, target_position.y, 256 /* no alpha blending */)) {
             throw std::runtime_error{"FreeImage_Paste failed"};

@@ -87,7 +87,7 @@ public:
     std::optional<glm::uvec3> find_source_triangle_in_mesh(glm::uvec3 mapped_triangle, size_t mesh_index) const {
         glm::uvec3 source_triangle;
 
-        for (size_t i = 0; i < mapped_triangle.length(); i++) {
+        for (size_t i = 0; i < static_cast<size_t>(mapped_triangle.length()); i++) {
             const size_t mapped_vertex_index = mapped_triangle[i];
             const std::optional<size_t> source_vertex = this->map_inverse(mesh_index, mapped_vertex_index);
             if (source_vertex.has_value()) {
