@@ -1,16 +1,21 @@
 #pragma once
 
+#ifndef SPDLOG_FMT_EXTERNAL
 #define SPDLOG_FMT_EXTERNAL
+#endif
 #include <spdlog/spdlog.h>
 
 class Log {
 private:
-	static std::shared_ptr<spdlog::logger> Logger;
+	static std::shared_ptr<spdlog::logger> logger;
 public:
 	static void init(spdlog::level::level_enum logLevel);
 
 	inline static std::shared_ptr<spdlog::logger>& get_logger() {
-		return Logger;
+        if (Log::logger == nullptr) {
+            Log::init(spdlog::level::level_enum::trace);
+        }
+		return Log::logger;
 	}
 };
 

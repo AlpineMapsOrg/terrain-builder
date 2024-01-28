@@ -94,20 +94,20 @@ TEST_CASE("terrainmerger") {
         REQUIRE(expected.triangles == actual.triangles);
     }
 
-    SECTION("fine mesh") {
+    SECTION("distance epsilon") {
         TerrainMesh mesh1;
-        mesh1.positions.push_back(glm::dvec3(-1, -1, 0));
-        mesh1.positions.push_back(glm::dvec3(1, -1, 0));
-        mesh1.positions.push_back(glm::dvec3(-1, 1, 0));
+        mesh1.positions.push_back(glm::dvec3(0, 0, 0));
+        mesh1.positions.push_back(glm::dvec3(1, 0, 0));
+        mesh1.positions.push_back(glm::dvec3(0, 1, 0));
         mesh1.positions.push_back(glm::dvec3(1, 1, 0));
         mesh1.triangles.push_back(glm::uvec3(0, 2, 1));
         mesh1.triangles.push_back(glm::uvec3(1, 2, 3));
 
         TerrainMesh mesh2;
-        mesh2.positions.push_back(glm::dvec3(0.9, 0.9, 0));
-        mesh2.positions.push_back(glm::dvec3(1.1, 0.9, 0));
-        mesh2.positions.push_back(glm::dvec3(-1, 0.9, 0));
-        mesh2.positions.push_back(glm::dvec3(0.9, 0.9, 0));
+        mesh2.positions.push_back(glm::dvec3(0.91, 0, 0));
+        mesh2.positions.push_back(glm::dvec3(2, 0, 0));
+        mesh2.positions.push_back(glm::dvec3(1.11, 1, 0));
+        mesh2.positions.push_back(glm::dvec3(2, 1, 0));
         mesh2.triangles.push_back(glm::uvec3(0, 2, 1));
         mesh2.triangles.push_back(glm::uvec3(1, 2, 3));
 
@@ -116,12 +116,20 @@ TEST_CASE("terrainmerger") {
         TerrainMesh actual = merge::merge_by_distance(meshes, 0.1);
 
         TerrainMesh expected;
-        expected.positions.push_back(glm::dvec3(-1, -1, 0));
-        expected.positions.push_back(glm::dvec3(1, -1, 0));
-        expected.positions.push_back(glm::dvec3(-1, 1, 0));
+        expected.positions.push_back(glm::dvec3(0, 0, 0));
+        expected.positions.push_back(glm::dvec3(0.91, 0, 0));
+        expected.positions.push_back(glm::dvec3(0, 1, 0));
         expected.positions.push_back(glm::dvec3(1, 1, 0));
+
+        expected.positions.push_back(glm::dvec3(2, 0, 0));
+        expected.positions.push_back(glm::dvec3(1.11, 1, 0));
+        expected.positions.push_back(glm::dvec3(2, 1, 0));
+
         expected.triangles.push_back(glm::uvec3(0, 2, 1));
         expected.triangles.push_back(glm::uvec3(1, 2, 3));
+
+        expected.triangles.push_back(glm::uvec3(1, 5, 4));
+        expected.triangles.push_back(glm::uvec3(4, 5, 6));
 
         REQUIRE(expected.positions == actual.positions);
         REQUIRE(expected.uvs == actual.uvs);
