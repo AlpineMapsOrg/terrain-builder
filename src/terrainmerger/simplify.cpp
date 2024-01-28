@@ -5,7 +5,8 @@
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Constrained_placement.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Count_ratio_stop_predicate.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/GarlandHeckbert_policies.h>
-#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Midpoint_placement.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/LindstromTurk_cost.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/LindstromTurk_placement.h>
 #include <CGAL/Surface_mesh_simplification/Edge_collapse_visitor_base.h>
 #include <CGAL/Surface_mesh_simplification/edge_collapse.h>
 
@@ -63,47 +64,75 @@ struct Uv_update_edge_collapse_visitor : CGAL::Surface_mesh_simplification::Edge
 
 // Property map that indicates whether an edge is marked as non-removable.
 struct Border_is_constrained_edge_map {
-    const SurfaceMesh *mesh;
     typedef EdgeDescriptor key_type;
     typedef bool value_type;
     typedef value_type reference;
     typedef boost::readable_property_map_tag category;
 
-    Border_is_constrained_edge_map(const SurfaceMesh &mesh)
-        : mesh(&mesh) {}
+    const SurfaceMesh *mesh;
+    const bool active = true;
+
+    Border_is_constrained_edge_map(const SurfaceMesh &mesh, const bool active = true)
+        : mesh(&mesh), active(active) {}
+        
     friend value_type get(const Border_is_constrained_edge_map &map, const key_type &edge) {
-        return CGAL::is_border(edge, *map.mesh);
+        return map.active && CGAL::is_border(edge, *map.mesh);
     }
+
 };
 
-typedef CGAL::Surface_mesh_simplification::Constrained_placement<CGAL::Surface_mesh_simplification::Midpoint_placement<SurfaceMesh>,
-                                Border_is_constrained_edge_map> Placement;
+template <class Cost, class Placement>
+static void _simplify_mesh(
+    SurfaceMesh &mesh,
+    AttachedUvPropertyMap &uv_map,
+    const Cost &cost,
+    const Placement &placement,
+    const bool lock_borders = true) {
+    typedef typename CGAL::Surface_mesh_simplification::Constrained_placement<Placement, Border_is_constrained_edge_map> ConstrainedPlacement;
 
-void simplify_mesh_with_garland_heckbert(SurfaceMesh &mesh, AttachedUvPropertyMap uv_map) {
-    /*
-    typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_plane_policies<Surface_mesh, Kernel> Classic_plane_policy;
-    typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_probabilistic_plane_policies<Surface_mesh, Kernel> Probabilistic_plane_policy;
-    typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_triangle_policies<Surface_mesh, Kernel> Classic_triangle_policy;
-    typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_probabilistic_triangle_policies<Surface_mesh, Kernel> Probabilistic_triangle_policy;
-    */
+    const size_t initial_vertex_count = CGAL::num_vertices(mesh);
+    const size_t initial_edge_count = CGAL::num_edges(mesh);
+    const size_t initial_face_count = CGAL::num_faces(mesh);
 
-    typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<SurfaceMesh, Kernel> GH_policies;
-    typedef GH_policies::Get_cost GH_cost;
-    typedef GH_policies::Get_placement GH_placement;
-    typedef CGAL::Surface_mesh_simplification::Bounded_normal_change_placement<GH_placement> Bounded_GH_placement;
+    Border_is_constrained_edge_map bem(mesh, lock_borders);
 
-    GH_policies gh_policies(mesh);
-    const GH_cost &gh_cost = gh_policies.get_cost();
-    const GH_placement &gh_placement = gh_policies.get_placement();
+    const ConstrainedPlacement constrained_placement(bem, placement);
 
-    Border_is_constrained_edge_map bem(mesh);
-
-    const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(0.5);
+    const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(0.25);
     Uv_update_edge_collapse_visitor visitor(uv_map);
-    const int _removed_edge_count = CGAL::Surface_mesh_simplification::edge_collapse(mesh, stop,
+
+    const int removed_edge_count = CGAL::Surface_mesh_simplification::edge_collapse(mesh, stop,
         CGAL::parameters::edge_is_constrained_map(bem)
-            .get_placement(Placement(bem))
+            .get_placement(constrained_placement)
+            .get_cost(cost)
             .visitor(visitor));
+    LOG_TRACE("Removed {} edges from simplified mesh", removed_edge_count);
+
+    const size_t simplified_vertex_count = CGAL::num_vertices(mesh);
+    const size_t simplified_edge_count = CGAL::num_edges(mesh);
+    const size_t simplified_face_count = CGAL::num_faces(mesh);
+    LOG_DEBUG("Simplified mesh to {}/{} vertices, {}/{} edges, {}/{} faces",
+              simplified_vertex_count, initial_vertex_count,
+              simplified_edge_count, initial_edge_count,
+              simplified_face_count, initial_face_count);
+
+    // Actually remove the vertices, edges and faces
+    mesh.collect_garbage();
+}
+
+template <class Policies>
+static void _simplify_mesh(
+    SurfaceMesh &mesh,
+    AttachedUvPropertyMap& uv_map,
+    const Policies& policies,
+    const bool lock_borders = true) {
+    typedef typename Policies::Get_cost Cost;
+    typedef typename Policies::Get_placement Placement;
+
+    const Cost &cost = policies.get_cost();
+    const Placement &placement = policies.get_placement();
+
+    _simplify_mesh(mesh, uv_map, cost, placement, lock_borders);
 }
 
 cv::Mat simplify::simplify_texture(const cv::Mat& texture, glm::uvec2 target_resolution) {
@@ -126,9 +155,17 @@ TerrainMesh simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
         uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
     }
 
-    simplify_mesh_with_garland_heckbert(cgal_mesh, uv_map);
-
-    cgal_mesh.collect_garbage();
+    switch (options.algorithm) {
+    case Algorithm::GarlandHeckbert:
+        typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<SurfaceMesh, Kernel> GH_policies;
+        _simplify_mesh<GH_policies>(cgal_mesh, uv_map, GH_policies(cgal_mesh));
+        break;
+    case Algorithm::LindstromTurk:
+        typedef CGAL::Surface_mesh_simplification::LindstromTurk_cost<SurfaceMesh> LT_cost;
+        typedef CGAL::Surface_mesh_simplification::LindstromTurk_placement<SurfaceMesh> LT_placement;
+        _simplify_mesh<LT_cost, LT_placement>(cgal_mesh, uv_map, LT_cost(), LT_placement());
+        break;
+    }
 
     TerrainMesh simplified_mesh = convert::cgal2mesh(cgal_mesh);
     simplified_mesh.uvs.resize(simplified_mesh.vertex_count());
@@ -136,85 +173,4 @@ TerrainMesh simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
         simplified_mesh.uvs[i] = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(i)]);
     }
     return simplified_mesh;
-
-    /*
-    const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(options.stop_ratio);
-
-    typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<SurfaceMesh, Kernel> GH_policies;
-    typedef GH_policies::Get_cost GH_cost;
-    typedef GH_policies::Get_placement GH_placement;
-    typedef CGAL::Surface_mesh_simplification::Bounded_normal_change_placement<GH_placement> Bounded_GH_placement;
-     
-
-    bool check_mesh = CGAL::is_valid_polygon_mesh(cgal_mesh);
-    std::cout << "vaild or in valid: " << check_mesh << std::endl;
-    GH_policies gh_policies(cgal_mesh);
-    const GH_cost& gh_cost = gh_policies.get_cost();
-    const GH_placement& gh_placement = gh_policies.get_placement();
-    Bounded_GH_placement placement(gh_placement);
-
-    SM_pmap sm_pmap = cgal_mesh.add_property_map<vertex_descriptor, size_t>("v:sm").first;
-    UV_pmap uv_pmap = cgal_mesh.add_property_map<vertex_descriptor, Point_2>("h:uv").first;
-    My_visitor vis(sm_pmap, uv_pmap);
-    for (unsigned int i = 0; i < final_uvs.size(); i++) {
-        uv_pmap[CGAL::SM_Vertex_index(i)] = glm2cgal(final_uvs[i]);
-    }
-    for (unsigned int i = 0; i < new_mesh_id.size(); i++) {
-        sm_pmap[CGAL::SM_Vertex_index(i)] = new_mesh_id[i];
-    }
-
-    std::cout << "Input mesh has " << CGAL::num_vertices(cgal_mesh) << " nv "<< CGAL::num_edges(cgal_mesh) << " ne "
-        << CGAL::num_faces(cgal_mesh) << " nf" << std::endl;
-    // int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop, CGAL::parameters::get_cost(gh_cost).get_placement(placement).visitor(vis)); 
-
-    // Contract the surface mesh as much as possible
-    // CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop(stop_ratio);
-    Border_is_constrained_edge_map bem(cgal_mesh);
-    // This the actual call to the simplification algorithm.
-    // The surface mesh and stop conditions are mandatory arguments.
-    int r = CGAL::Surface_mesh_simplification::edge_collapse(cgal_mesh, stop, CGAL::parameters::edge_is_constrained_map(bem).get_placement(Placement(bem)).visitor(vis));
-
-    TerrainMesh final_mesh;
-    const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
-    const size_t face_count = CGAL::num_faces(cgal_mesh);
-    // final_mesh.positions.resize(vertex_count);
-    final_mesh.positions.reserve(vertex_count);
-    final_mesh.uvs.reserve(vertex_count);
-    final_mesh.triangles.resize(face_count);
-
-    std::vector<unsigned int> mapmapmap;
-    mapmapmap.resize(vertex_count);
-
-    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
-        const Point_3 &vertex = cgal_mesh.point(vertex_index);
-        mapmapmap[vertex_index] = final_mesh.positions.size();
-        // final_mesh.positions[vertex_index] = glm::dvec3(vertex[0], vertex[1], vertex[2]) + average_position;
-        final_mesh.positions.push_back(glm::dvec3(vertex[0], vertex[1], vertex[2]) + average_position);
-    }
-    for (const glm::dvec3 position : final_mesh.positions) {
-        assert(position.x != 0);
-    }
-    for (const CGAL::SM_Face_index face_index : cgal_mesh.faces()) {
-        std::array<unsigned int, 3> triangle;
-        unsigned int i = 0;
-        for (const CGAL::SM_Vertex_index vertex_index : CGAL::vertices_around_face(cgal_mesh.halfedge(face_index), cgal_mesh)) {
-            triangle[i] =  mapmapmap[vertex_index];
-            i++;
-        }
-        final_mesh.triangles.emplace_back(triangle[0], triangle[1], triangle[2]);
-    }
-    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
-        // final_mesh.uvs[vertex_index] = glm::dvec2(0, 0);
-    }
-    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
-        const glm::dvec2 &uv = cgal2glm(uv_pmap[vertex_index]);
-        final_mesh.uvs.push_back((uv - glm::dvec2(0.5)) * 0.99 + glm::dvec2(0.5));
-    }
-
-    std::vector<glm::vec3> colors;
-    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
-        const size_t sm = sm_pmap[vertex_index];
-        colors.emplace_back(static_cast<float>(sm)/4);
-    }
-    */
 }

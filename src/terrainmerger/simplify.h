@@ -18,15 +18,14 @@ cv::Mat simplify_texture(const cv::Mat& texture, glm::uvec2 target_resolution);
 void simplify_mesh_texture(TerrainMesh& mesh, glm::uvec2 target_resolution);
 
 enum class Algorithm {
-    GarlandHeckbert
+    GarlandHeckbert,
+    LindstromTurk
 };
 
 struct Options {
-    Algorithm algorithm;
-    bool lock_borders;
-    double stop_ratio;
-
-    Options() : algorithm(Algorithm::GarlandHeckbert), lock_borders(true), stop_ratio(0.25) {}
+    Algorithm algorithm = Algorithm::LindstromTurk;
+    bool lock_borders = true;
+    double stop_ratio = 0.25;
 };
 
 TerrainMesh simplify_mesh(const TerrainMesh &mesh, Options options = Options());
