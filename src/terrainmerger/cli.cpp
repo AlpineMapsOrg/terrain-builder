@@ -1,6 +1,7 @@
 #include "cli.h"
 
 #include <CLI/CLI.hpp>
+#include <spdlog/spdlog.h>
 
 cli::Args cli::parse(int argc, char **argv) {
     CLI::App app{"Terrain Merger"};
@@ -30,7 +31,9 @@ cli::Args cli::parse(int argc, char **argv) {
         ->check(CLI::Range(0.0f, 1.0f))
         ->excludes("--no-simplify");
 
-    // TODO: Add option to specify the verbosity level
+    spdlog::level::level_enum log_level = spdlog::level::level_enum::info;
+    app.add_option("--verbosity", log_level, "Verbosity level of logging")
+        ->check(CLI::Range(0.0f, 1.0f));
 
     try {
         app.parse(argc, argv);
@@ -41,6 +44,7 @@ cli::Args cli::parse(int argc, char **argv) {
     Args args;
     args.input_paths = input_paths;
     args.output_path = output_path;
+    args.log_level = log_level;
     if (!no_mesh_simplification) {
         SimplificationArgs simplification_args;
         simplification_args.simplification_factor = simplification_factor;

@@ -16,6 +16,7 @@
 #include "convert.h"
 #include "simplify.h"
 #include "uv_map.h"
+#include "log.h"
 
 // We use a different uv map type here, because we need this one to be attached to the mesh
 // as otherwise the entries for removed vertices are not removed during garbage collection.

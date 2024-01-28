@@ -2,12 +2,12 @@
 #include <unordered_map>
 #include <vector>
 
-#include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
 #include "terrain_mesh.h"
 #include "merge.h"
+#include "log.h"
 
 using namespace merge;
 
@@ -202,7 +202,7 @@ TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, c
             if (new_triangle[0] == new_triangle[1] ||
                 new_triangle[1] == new_triangle[2] ||
                 new_triangle[2] == new_triangle[0]) {
-                fmt::println("Skipping illegal triangle...");
+                LOG_INFO("Skipping illegal triangle...");
                 continue;
             }
 

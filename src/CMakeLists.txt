@@ -111,6 +111,15 @@ if(NOT TARGET expected)
     FetchContent_MakeAvailable(expected)
 endif()
 
+if(NOT TARGET spdlog)
+    FetchContent_Declare(spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG v1.13.0
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/spdlog/expected
+    )
+    FetchContent_MakeAvailable(spdlog)
+endif()
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
@@ -197,11 +206,13 @@ add_library(terrainmergerlib
     terrainmerger/convert.cpp
     terrainmerger/terrain_mesh.h
     terrainmerger/non_copyable.h
+    terrainmerger/log.h
+    terrainmerger/log.cpp
 )
 target_include_directories(terrainmergerlib PUBLIC ./terrainmerger)
 add_executable(terrainmerger
     terrainmerger/main.cpp
 )
 target_include_directories(terrainmergerlib PUBLIC ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainmergerlib PUBLIC tinygltf radix fmt cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL expected)
+target_link_libraries(terrainmergerlib PUBLIC tinygltf radix spdlog cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL expected)
 target_link_libraries(terrainmerger PUBLIC terrainmergerlib)

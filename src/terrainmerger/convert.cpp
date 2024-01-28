@@ -3,6 +3,7 @@
 #include <fmt/core.h>
 
 #include "convert.h"
+#include "log.h"
     
 glm::dvec3 convert::cgal2glm(Point3 point) {
     return glm::dvec3(point[0], point[1], point[2]);
@@ -32,7 +33,7 @@ SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
             CGAL::SM_Vertex_index(triangle.z));
 
         if (face == SurfaceMesh::null_face()) {
-            fmt::println("Adding face failed, trying again with different order");
+            LOG_WARN("Adding face failed, trying again with different order");
             face = cgal_mesh.add_face(
                 CGAL::SM_Vertex_index(triangle.x),
                 CGAL::SM_Vertex_index(triangle.z),

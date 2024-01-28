@@ -4,6 +4,7 @@
 #include "simplify.h"
 #include "uv_map.h"
 #include "convert.h"
+#include "log.h"
 
 #include <CGAL/boost/graph/IO/OBJ.h>
 
@@ -19,7 +20,7 @@ std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::
         if (!result.has_value()) {
             const io::LoadMeshError error = result.error();
             if (print_errors) {
-                fmt::println(stderr, "Failed to load mesh from {}: {}", path.string(), error.description());
+                LOG_ERROR("Failed to load mesh from {}: {}", path.string(), error.description());
             }
             exit(EXIT_FAILURE);
         }
@@ -38,33 +39,43 @@ uv_map::UvMap parameterize_mesh(TerrainMesh &mesh) {
         return result.value();
     } else {
         const uv_map::UvParameterizationError error = result.error();
-        fmt::println(stderr, "Failed to parameterize merged mesh due to '{}'", error.description());
+        LOG_ERROR("Failed to parameterize merged mesh due to '{}'", error.description());
         exit(EXIT_FAILURE);
     }
 }
 
 void run(const cli::Args &args) {
-    fmt::println("Loading meshes...");
+    Log::init(args.log_level);
+
+    LOG_INFO("Loading meshes...");
     std::vector<TerrainMesh> meshes = load_meshes_from_path(args.input_paths);
 
-    fmt::println("Merging meshes...");
+    LOG_INFO("Merging meshes...");
     merge::VertexMapping vertex_mapping;
     TerrainMesh merged_mesh = merge::merge_by_distance(meshes, 0.1, vertex_mapping);
 
-    fmt::println("Calculating uv mapping...");
+    LOG_INFO("Calculating uv mapping...");
     const uv_map::UvMap uv_map = parameterize_mesh(merged_mesh);
     merged_mesh.uvs = uv_map::decode_uv_map(uv_map, merged_mesh.vertex_count());
 
-    fmt::println("Merging textures...");
+    LOG_INFO("Merging textures...");
     merged_mesh.texture = uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, glm::uvec2(1024));
 
-    fmt::println("Simplifying merged mesh...");
-    TerrainMesh simplified_mesh = simplify::simplify_mesh(merged_mesh);
+    TerrainMesh simplified_mesh;
+     if (args.simplification) {
+        LOG_INFO("Simplifying merged mesh...");
+        simplify::Options options{
+            .stop_ratio = args.simplification->simplification_factor
+        };
+        simplified_mesh = simplify::simplify_mesh(merged_mesh, options);
 
-    fmt::println("Simplifying merged texture...");
-    simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), glm::uvec2(256));
+        LOG_INFO("Simplifying merged texture...");
+        simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), glm::uvec2(256));
+    } else {
+        simplified_mesh = merged_mesh;
+    }
 
-    fmt::println("Saving final mesh...");
+    LOG_INFO("Saving final mesh...");
     io::save_mesh_to_path(args.output_path, simplified_mesh);
 }
 
