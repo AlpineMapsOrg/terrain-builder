@@ -18,6 +18,8 @@ public:
     TerrainMesh() = default;
     TerrainMesh(TerrainMesh &&) = default;
     TerrainMesh &operator=(TerrainMesh &&) = default;
+    TerrainMesh(const TerrainMesh &) = default;
+    TerrainMesh &operator=(const TerrainMesh &) = default;
 
     std::vector<glm::uvec3> triangles;
     std::vector<glm::dvec3> positions;
