@@ -1,12 +1,21 @@
 #include "cli.h"
 
+#include <span>
+#include <algorithm>
+#include <string>
+#include <string_view>
+
 #include <CLI/CLI.hpp>
 #include <spdlog/spdlog.h>
 
-cli::Args cli::parse(int argc, char **argv) {
+using namespace cli;
+
+Args cli::parse(int argc, const char * const * argv) {
+    assert(argc >= 0);
+
     CLI::App app{"Terrain Merger"};
     // app.allow_windows_style_options();
-    argv = app.ensure_utf8(argv);
+    // argv = app.ensure_utf8(argv);
     
     std::vector<std::filesystem::path> input_paths;
     app.add_option("--input", input_paths, "Paths to tiles that should be merged")
@@ -55,7 +64,8 @@ cli::Args cli::parse(int argc, char **argv) {
     args.log_level = log_level;
     if (!no_mesh_simplification) {
         SimplificationArgs simplification_args;
-        simplification_args.simplification_factor = simplification_factor;
+        simplification_args.factor = simplification_factor;
+        simplification_args.max_error = simplification_target_error;
         args.simplification = simplification_args;
     }
 

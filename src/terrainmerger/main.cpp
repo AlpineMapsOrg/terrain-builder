@@ -62,12 +62,9 @@ void run(const cli::Args &args) {
     merged_mesh.texture = uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, glm::uvec2(1024));
 
     TerrainMesh simplified_mesh;
-     if (args.simplification) {
+    if (args.simplification) {
         LOG_INFO("Simplifying merged mesh...");
-        simplify::Options options{
-            .stop_ratio = args.simplification->simplification_factor
-        };
-        simplified_mesh = simplify::simplify_mesh(merged_mesh, options);
+        simplified_mesh = simplify_mesh(merged_mesh, *args.simplification);
 
         LOG_INFO("Simplifying merged texture...");
         simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), glm::uvec2(256));
@@ -80,11 +77,8 @@ void run(const cli::Args &args) {
 }
 
 int main(int argc, char **argv) {
-    // Override argc and argv
-    argc = 8; // Set the desired number of arguments
-    char *new_argv[] = {"./terrainmerger", "--input", "183325_276252.glb", "183325_276253.glb", "183326_276252.glb", "183326_276253.glb", "--output", "./out5.glb"};
-    argv = new_argv;
-
-    const cli::Args args = cli::parse(argc, argv);
+    const std::array<std::string, 10> raw_args = {"./terrainmerger", "--input", "183325_276252.glb", "183325_276253.glb", "183326_276252.glb", "183326_276253.glb", "--output", "./out5.glb", "--verbosity", "trace"};
+    const std::span<const std::string> raw_args_span = raw_args;
+    const cli::Args args = cli::parse(raw_args_span);
     run(args);
 }
