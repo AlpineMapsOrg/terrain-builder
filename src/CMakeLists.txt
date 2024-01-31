@@ -9,6 +9,8 @@ find_package(GDAL REQUIRED)
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(CGAL REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
 
 if(NOT GDAL_CONFIG)
     message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
@@ -58,7 +60,7 @@ endif()
 if(NOT TARGET cgltf)
     FetchContent_Declare(cgltf
         GIT_REPOSITORY https://github.com/jkuhlmann/cgltf
-        GIT_TAG fd3a6184babd6981d5c7195fb8c40faf86652182
+        GIT_TAG 7331a5adf4b0fde15f0e682a5803e4f17137e0ad
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cgltf
     )
     FetchContent_MakeAvailable(cgltf)
@@ -66,10 +68,21 @@ if(NOT TARGET cgltf)
     target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
 endif()
 
+if(NOT TARGET tinygltf)
+    set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+    set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+    FetchContent_Declare(tinygltf
+        GIT_REPOSITORY https://github.com/syoyo/tinygltf
+        GIT_TAG 4fea26f6c8652f545560807bccc934cf0cdd86dd
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/tinygltf
+    )
+    FetchContent_MakeAvailable(tinygltf)
+endif()
+
 if(NOT TARGET stb)
     FetchContent_Declare(stb
         GIT_REPOSITORY https://github.com/nothings/stb
-        GIT_TAG beebb24b945efdea3b9bba23affb8eb3ba8982e7
+        GIT_TAG f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/stb
     )
     FetchContent_MakeAvailable(stb)
@@ -80,14 +93,32 @@ endif()
 if(NOT TARGET cli11)
     if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/cli11)
         FetchContent_Declare(cli11
-            GIT_REPOSITORY https://github.com/CLIUtils/CLI11
-            GIT_TAG f043d0c06b5fc42a5916554819f8392266a64113
+            GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+            GIT_TAG 20de8b73bbbabaf2f94dd07c4ece8ff3590af531
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cli11
         )
         FetchContent_MakeAvailable(cli11)
     else()
         add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/cli11 ${CMAKE_BINARY_DIR}/_deps/cli11-build)
     endif()
+endif()
+
+if(NOT TARGET expected)
+    FetchContent_Declare(expected
+        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
+        GIT_TAG 3f0ca7b19253129700a073abfa6d8638d9f7c80c
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/expected
+    )
+    FetchContent_MakeAvailable(expected)
+endif()
+
+if(NOT TARGET spdlog)
+    FetchContent_Declare(spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG v1.13.0
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/spdlog/expected
+    )
+    FetchContent_MakeAvailable(spdlog)
 endif()
 
 add_library(terrainlib
@@ -158,5 +189,32 @@ endif()
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_include_directories(terrainbuilder PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_include_directories(terrainbuilder PUBLIC ./terrainbuilder ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS})
+
+add_library(terrainmergerlib
+    terrainmerger/cli.h
+    terrainmerger/cli.cpp
+    terrainmerger/io.h
+    terrainmerger/merge.h
+    terrainmerger/merge.cpp
+    terrainmerger/simplify.h
+    terrainmerger/simplify.cpp
+    terrainmerger/uv_map.h
+    terrainmerger/uv_map.cpp
+    terrainmerger/cgal.h
+    terrainmerger/convert.h
+    terrainmerger/convert.cpp
+    terrainmerger/terrain_mesh.h
+    terrainmerger/terrain_mesh.cpp
+    terrainmerger/non_copyable.h
+    terrainmerger/log.h
+    terrainmerger/log.cpp
+)
+target_include_directories(terrainmergerlib PUBLIC ./terrainmerger)
+add_executable(terrainmerger
+    terrainmerger/main.cpp
+)
+target_include_directories(terrainmergerlib PUBLIC ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(terrainmergerlib PUBLIC tinygltf radix spdlog cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL expected)
+target_link_libraries(terrainmerger PUBLIC terrainmergerlib)

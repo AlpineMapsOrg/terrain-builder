@@ -1,0 +1,78 @@
+(19, 285984, 181792)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285984.glb
+	Skipped
+
+(19, 285985, 181792)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285985.glb
+	Skipped
+
+(19, 285984, 181793)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181793/285984.glb
+	Skipped
+
+(19, 285985, 181793)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181793/285985.glb
+	Skipped
+
+(19, 285986, 181792)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285986.glb
+	Skipped
+
+(19, 285987, 181792)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285987.glb
+	Skipped
+
+(19, 285986, 181793)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181793/285986.glb
+	Skipped
+
+(19, 285987, 181793)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181793/285987.glb
+	Skipped
+
+(19, 285984, 181794)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181794/285984.glb
+	Skipped
+
+(19, 285985, 181794)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181794/285985.glb
+	Skipped
+
+(19, 285984, 181795)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181795/285984.glb
+	Skipped
+
+(19, 285985, 181795)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181795/285985.glb
+	Skipped
+
+(19, 285986, 181794)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181794/285986.glb
+	Skipped
+
+(19, 285987, 181794)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181794/285987.glb
+	Skipped
+
+(19, 285986, 181795)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181795/285986.glb
+	Skipped
+
+(19, 285987, 181795)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181795/285987.glb
+	Skipped
+
+(19, 285988, 181792)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285988.glb
+	Skipped
+
+(19, 285989, 181792)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181792/285989.glb
+	Skipped
+
+(19, 285988, 181793)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181793/285988.glb
+	Skipped
+
+(19, 285989, 181793)
+/mnt/e/Code/TU/2023S/Project/meshes/out2/19/181793/285989.glb
