@@ -44,6 +44,26 @@ uv_map::UvMap parameterize_mesh(TerrainMesh &mesh) {
     }
 }
 
+TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs& args) {
+    simplify::Options options{
+        .stop_edge_ratio = args.factor,
+        .error_bound = args.max_error
+    };
+    simplify::Result result = simplify::simplify_mesh(mesh, options);
+    const TerrainMesh &simplified_mesh = result.mesh;
+
+    const size_t initial_vertex_count = mesh.positions.size();
+    const size_t initial_face_count = mesh.triangles.size();
+    const size_t simplified_vertex_count = simplified_mesh.positions.size();
+    const size_t simplified_face_count = simplified_mesh.triangles.size();
+
+    LOG_DEBUG("Simplified mesh to {}/{} vertices and {}/{} faces",
+              simplified_vertex_count, initial_vertex_count,
+              simplified_face_count, initial_face_count);
+    
+    return result.mesh;
+}
+
 void run(const cli::Args &args) {
     Log::init(args.log_level);
 

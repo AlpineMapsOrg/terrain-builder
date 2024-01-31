@@ -3,9 +3,11 @@
 
 #include <vector>
 #include <optional>
+#include <span>
 
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
+#include <radix/geometry.h>
 
 class TerrainMesh {
 public:
@@ -41,5 +43,8 @@ public:
         return this->texture.has_value();
     }
 };
+
+geometry::Aabb<3, double> calculate_bounds(const TerrainMesh &mesh);
+geometry::Aabb<3, double> calculate_bounds(std::span<const TerrainMesh> meshes);
 
 #endif

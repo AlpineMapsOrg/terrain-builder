@@ -205,6 +205,7 @@ add_library(terrainmergerlib
     terrainmerger/convert.h
     terrainmerger/convert.cpp
     terrainmerger/terrain_mesh.h
+    terrainmerger/terrain_mesh.cpp
     terrainmerger/non_copyable.h
     terrainmerger/log.h
     terrainmerger/log.cpp

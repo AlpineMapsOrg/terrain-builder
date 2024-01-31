@@ -25,10 +25,16 @@ enum class Algorithm {
 struct Options {
     Algorithm algorithm = Algorithm::LindstromTurk;
     bool lock_borders = true;
-    double stop_ratio = 0.25;
+    std::optional<double> stop_edge_ratio;
+    std::optional<double> error_bound;
 };
 
-TerrainMesh simplify_mesh(const TerrainMesh &mesh, Options options = Options());
+struct Result {
+    TerrainMesh mesh;
+    double max_absolute_error;
+};
+
+Result simplify_mesh(const TerrainMesh &mesh, Options options = Options());
 
 }
 
