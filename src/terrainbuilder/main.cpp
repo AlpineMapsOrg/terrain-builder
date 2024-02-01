@@ -61,6 +61,7 @@ void build(
     fmt::print("texture stitching took {}s\n", format_secs_since(start));
 
     start = std::chrono::high_resolution_clock::now();
+    // TODO: use a JSON libary instead
     std::unordered_map<std::string, std::string> metadata;
     metadata["mesh_srs"] = mesh_srs.GetAuthorityCode(nullptr);
     metadata["bounds_srs"] = tile_srs.GetAuthorityCode(nullptr);
@@ -75,7 +76,10 @@ void build(
     fmt::print("mesh writing took {}s\n", format_secs_since(start));
 }
 
-int main(int argc, char **argv) {
+int run(std::span<char*> args) {
+    int argc = args.size();
+    char ** argv = args.data();
+
     CLI::App app{"Terrain Builder"};
     app.allow_windows_style_options();
     argv = app.ensure_utf8(argv);
@@ -147,7 +151,7 @@ int main(int argc, char **argv) {
         if (!tile_srs.IsSame(&grid.getSRS())) {
             throw std::runtime_error{"tile id is only allowed for webmercator srs"};
         }
-        
+
         tile_bounds = grid.srsBounds(target_tile, false);
     }
 
@@ -158,8 +162,11 @@ int main(int argc, char **argv) {
         tile_srs,
         texture_srs,
         tile_bounds,
-        output_path
-    );
+        output_path);
 
     return 0;
+}
+
+int main(int argc, char **argv) {
+    return run(std::span{argv, static_cast<size_t>(argc)});
 }
