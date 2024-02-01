@@ -11,6 +11,7 @@ find_package(ZLIB REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(CGAL REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
+find_package(CURL REQUIRED)
 
 if(NOT GDAL_CONFIG)
     message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
@@ -116,13 +117,9 @@ if(NOT TARGET spdlog)
     FetchContent_Declare(spdlog
         GIT_REPOSITORY https://github.com/gabime/spdlog.git
         GIT_TAG v1.13.0
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/expected
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/spdlog
     )
     FetchContent_MakeAvailable(spdlog)
-endif()
-
-if(NOT TARGET curl)
-    find_package(CURL REQUIRED)
 endif()
 
 add_library(terrainlib
@@ -199,6 +196,7 @@ add_library(terrainmergerlib
     terrainmerger/cli.h
     terrainmerger/cli.cpp
     terrainmerger/io.h
+    terrainmerger/io.cpp
     terrainmerger/merge.h
     terrainmerger/merge.cpp
     terrainmerger/simplify.h
