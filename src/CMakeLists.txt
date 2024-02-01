@@ -47,8 +47,8 @@ if(ALP_AUTOUPDATE_RADIX)
 else()
     if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
         FetchContent_Declare(radix
-            GIT_REPOSITORY git@github.com:AlpineMapsOrg/radix.git
-            GIT_TAG main
+            GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
+            GIT_TAG 7ace0d0cab1a6166c196bba5d0f11bbf07381abd
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
         )
         FetchContent_MakeAvailable(radix)
@@ -116,9 +116,13 @@ if(NOT TARGET spdlog)
     FetchContent_Declare(spdlog
         GIT_REPOSITORY https://github.com/gabime/spdlog.git
         GIT_TAG v1.13.0
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/spdlog/expected
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/expected
     )
     FetchContent_MakeAvailable(spdlog)
+endif()
+
+if(NOT TARGET curl)
+    find_package(CURL REQUIRED)
 endif()
 
 add_library(terrainlib
@@ -181,7 +185,6 @@ add_library(terrainlib
 )
 target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL fmt freeimage TBB::tbb)
 target_include_directories(terrainlib PUBLIC ./terrainlib)
-
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
@@ -218,3 +221,9 @@ add_executable(terrainmerger
 target_include_directories(terrainmergerlib PUBLIC ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(terrainmergerlib PUBLIC tinygltf radix spdlog cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL expected)
 target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+
+add_executable(tile-downloader
+    tile_downloader/main.cpp
+)
+target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
+target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
