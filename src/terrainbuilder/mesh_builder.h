@@ -101,6 +101,9 @@ TerrainMesh build_reference_mesh_tile(
         add_border_to_aabb(pixel_bounds, Border(1));
     }
     const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds, true);
+    if (raw_tile_data.size() == 0) {
+        throw std::runtime_error("bounds are fully outside of dataset region");
+    }
 
     // Allocate mesh data structure
     const unsigned int max_vertex_count = raw_tile_data.width() * raw_tile_data.height();
@@ -116,7 +119,6 @@ TerrainMesh build_reference_mesh_tile(
     const std::unique_ptr<OGRCoordinateTransformation> transform_source_texture = srs::transformation(source_srs, texture_srs);
 
     // Preparation for loop
-    const tile::SrsBounds source_bounds_with_border = reader.transform_pixel_bounds_to_srs_bounds(pixel_bounds);
     const double infinity = std::numeric_limits<double>::infinity();
     tile::SrsBounds actual_tile_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
 

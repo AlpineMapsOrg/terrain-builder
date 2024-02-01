@@ -37,8 +37,9 @@ public:
 
     HeightData read_data_in_pixel_bounds(geometry::Aabb2i bounds, const bool clamp_bounds = false) {
         if (clamp_bounds) {
-            bounds.min = glm::max(bounds.min, glm::ivec2(0));
-            bounds.max = glm::min(bounds.max, glm::ivec2(this->dataset_size()) - glm::ivec2(1));
+            const glm::ivec2 max_in_bounds = glm::ivec2(this->dataset_size()) - glm::ivec2(1);
+            bounds.min = glm::clamp(bounds.min, glm::ivec2(0), max_in_bounds);
+            bounds.max = glm::clamp(bounds.max, bounds.min, max_in_bounds);
         }
 
         assert(glm::all(glm::greaterThanEqual(bounds.min, glm::ivec2(0))));
@@ -50,6 +51,9 @@ public:
 
         // Initialize the HeightData for reading
         HeightData height_data(bounds.width(), bounds.height());
+        if (bounds.width() == 0 && bounds.height() == 0) {
+            return height_data;
+        }
 
         // Read data from the heights band into heights_data
         const int read_result = heights_band->RasterIO(
