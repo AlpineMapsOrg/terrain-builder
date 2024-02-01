@@ -182,7 +182,7 @@ void copy_paste_image(
     const glm::ivec2 target_position,
     const bool trim_excess = false,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
-   copy_paste_image(target, source, geometry::Aabb2i(target_position, target_position + glm::ivec2(source.cols, source.rows)), trim_excess);
+   copy_paste_image(target, source, geometry::Aabb2i(target_position, target_position + glm::ivec2(source.cols, source.rows)), trim_excess, rescale_filter);
 }
 
 [[nodiscard]] cv::Mat splatter_tiles_to_texture(
