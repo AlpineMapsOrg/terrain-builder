@@ -93,13 +93,13 @@ int run(std::span<char*> args) {
     app.add_option("--textures", texture_base_path, "Path to a folder containing texture tiles in the format of {zoom}/{col}/{row}.jpeg")
         ->check(CLI::ExistingDirectory);
 
-    unsigned int mesh_srs_code;
-    app.add_option("--mesh-srs", mesh_srs_code, "EPSG code of the target srs of the mesh positions")
-        ->default_val(4978);
+    std::string mesh_srs_input;
+    app.add_option("--mesh-srs", mesh_srs_input, "EPSG code of the target srs of the mesh positions")
+        ->default_val("EPSG:4978");
 
-    unsigned int target_srs_code;
-    app.add_option("--target-srs", target_srs_code, "EPSG code of the srs of the target bounds or tile id")
-        ->default_val(3857);
+    std::string target_srs_input;
+    app.add_option("--target-srs", target_srs_input, "EPSG code of the srs of the target bounds or tile id")
+        ->default_val("EPSG:3857");
 
     auto *target = app.add_option_group("target");
     std::vector<double> target_bounds_data;
@@ -126,11 +126,11 @@ int run(std::span<char*> args) {
     Dataset dataset(dataset_path);
 
     OGRSpatialReference tile_srs;
-    tile_srs.importFromEPSG(target_srs_code);
+    tile_srs.SetFromUserInput(target_srs_input.c_str());
     tile_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
     OGRSpatialReference mesh_srs;
-    mesh_srs.importFromEPSG(mesh_srs_code);
+    mesh_srs.SetFromUserInput(mesh_srs_input.c_str());
     mesh_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
     OGRSpatialReference texture_srs;
