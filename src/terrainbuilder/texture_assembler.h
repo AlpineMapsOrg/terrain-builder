@@ -268,7 +268,7 @@ void copy_paste_image(
     // Start by transforming the input bounds into the srs the tiles are in.
     const tile::SrsBounds encompassing_bounds = srs::encompassing_bounding_box_transfer(target_srs, grid.getSRS(), target_bounds);
     // Then we find the smallest tile (id) that encompasses these bounds.
-    const tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).to(tile::Scheme::SlippyMap);
+    const tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value().to(tile::Scheme::SlippyMap);
 
     if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {
         return std::nullopt;

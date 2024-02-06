@@ -30,6 +30,7 @@
 
 #include "types.hpp"
 #include <radix/tile.h>
+#include <radix/geometry.h>
 
 namespace ctb {
 class Grid;
@@ -78,11 +79,11 @@ public:
         , mExtent(extent)
         , mSRS(srs)
         , mEpsgCode(epsgCode)
-        , mRootTiles(rootTiles)
         , mInitialResolution((extent.size().x / rootTiles.size()) / gridSize)
         , mXOriginShift(extent.size().x / 2)
         , mYOriginShift(extent.size().y / 2)
         , mZoomFactor(zoomFactor)
+        , mRootTiles(rootTiles)
     {
         mSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     }
@@ -179,7 +180,7 @@ public:
     }
 
     // Searches for the smallest tile that encompasses the given bounding box.
-    [[nodiscard]] tile::Id findSmallestEncompassingTile(const tile::SrsBounds &bounds) const {
+    [[nodiscard]] std::optional<tile::Id> findSmallestEncompassingTile(const tile::SrsBounds &bounds) const {
         // We dont want to recurse indefinetely if the bounds are empty.
         if (bounds.width() == 0 || bounds.height() == 0) {
             throw std::invalid_argument("bounds cannot be empty");
@@ -250,9 +251,64 @@ public:
             return current_smallest_encompassing_tile;
         }
 
-        throw std::invalid_argument("bounds are not inside this grid");
+        return std::nullopt;
     }
 
+    // Searches for the smallest tile that encompasses the given bounding box.
+    [[nodiscard]] std::optional<tile::Id> findLargestContainedTile(const tile::SrsBounds &bounds) const {
+        const std::optional<tile::Id> root = this->findSmallestEncompassingTile(bounds);
+        if (!root.has_value()) {
+            return std::nullopt;
+        }
+
+        std::vector<tile::Id> tiles_to_inspect;
+        const std::array<tile::Id, 4> root_children = root->children();
+        tiles_to_inspect.insert(tiles_to_inspect.end(), root_children.begin(), root_children.end());
+
+        std::optional<tile::Id> current_candidate;
+        while (!tiles_to_inspect.empty()) {
+            const tile::Id tile = tiles_to_inspect.back();
+            tiles_to_inspect.pop_back();
+
+            if (current_candidate.has_value() && current_candidate->zoom_level <= tile.zoom_level) {
+                // skip all tiles that dont have a chance of replacing the current candidate
+                continue;
+            }
+
+            const tile::SrsBounds tile_bounds = this->srsBounds(tile, false);
+            const std::array<glm::dvec2, 4> points = {
+                tile_bounds.min,
+                tile_bounds.max,
+                glm::dvec2(tile_bounds.min.x, tile_bounds.max.y),
+                glm::dvec2(tile_bounds.max.x, tile_bounds.min.y)};
+
+            const bool target_bounds_overlapping_tile = geometry::intersect(tile_bounds, bounds);
+            bool target_bounds_fully_inside_tile = false;
+            if (target_bounds_overlapping_tile) {
+                target_bounds_fully_inside_tile = true;
+
+                for (const glm::dvec2 &point : points) {
+                    if (!bounds.contains_inclusive(point)) {
+                        target_bounds_fully_inside_tile = false;
+                        break;
+                    }
+                }
+            }
+
+            if (target_bounds_fully_inside_tile) {
+                assert(!current_candidate.has_value() || current_candidate->zoom_level > tile.zoom_level);
+                current_candidate = tile;
+                continue;
+            }
+
+            if (target_bounds_overlapping_tile) {
+                const std::array<tile::Id, 4> children = tile.children();
+                tiles_to_inspect.insert(tiles_to_inspect.end(), children.begin(), children.end());
+            }
+        }
+
+        return current_candidate;
+    }
 
     /// Get the tile size associated with this grid
     [[nodiscard]] inline i_tile tileSize() const
