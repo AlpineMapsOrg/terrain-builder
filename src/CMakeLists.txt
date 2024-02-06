@@ -186,11 +186,22 @@ if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
 
+add_library(terrainbuilderlib
+    terrainbuilder/gltf_writer.h
+    terrainbuilder/mesh_builder.h
+    terrainbuilder/mesh_builder.cpp
+    terrainbuilder/raw_dataset_reader.h
+    terrainbuilder/terrain_mesh.h
+    terrainbuilder/texture_assembler.h
+    terrainbuilder/main.cpp
+)
+target_include_directories(terrainbuilderlib PUBLIC ./terrainbuilder ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(terrainbuilderlib PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS})
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_include_directories(terrainbuilder PUBLIC ./terrainbuilder ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainbuilder PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS})
+target_include_directories(terrainbuilder PUBLIC ./terrainbuilder)
+target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 
 add_library(terrainmergerlib
     terrainmerger/cli.h

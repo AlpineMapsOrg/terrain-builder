@@ -76,3 +76,9 @@ add_executable(unittests_terrainmerger
     terrainmerger.cpp)
 
 target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2::Catch2)
+
+
+add_executable(unittests_terrainbuilder
+    terrainbuilder/mesh.cpp)
+target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainlib Catch2::Catch2 CGAL::CGAL)
+target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
