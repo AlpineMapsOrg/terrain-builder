@@ -51,7 +51,7 @@ public:
 
         // Initialize the HeightData for reading
         HeightData height_data(bounds.width(), bounds.height());
-        if (bounds.width() == 0 && bounds.height() == 0) {
+        if (bounds.width() == 0 || bounds.height() == 0) {
             return height_data;
         }
 
