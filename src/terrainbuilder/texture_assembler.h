@@ -4,39 +4,30 @@
 #include <chrono>
 #include <filesystem>
 #include <numeric>
-#include <vector>
 #include <span>
+#include <vector>
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
-#include <radix/geometry.h>
 #include <opencv2/opencv.hpp>
+#include <radix/geometry.h>
 
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
 #include "srs.h"
 
-typedef std::function<std::optional<std::filesystem::path>(tile::Id)> TileToPathMapper;
-typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
+#include "tile_provider.h"
 
-/// Checks whether the given tile can be used to assemble the tile texture.
-[[nodiscard]] bool is_usable_tile(
-    tile::Id tile,
-    const TileToPathMapper &tile_to_path_mapper) {
-    const std::optional<std::filesystem::path> tile_path = tile_to_path_mapper(tile);
-    return tile_path.has_value() && !tile_path->empty() && std::filesystem::exists(*tile_path);
-}
-
+/// Estimates the zoom level of the target bounds in relation to some reference tile given by its zoom level and bounds.
 [[nodiscard]] unsigned int estimate_zoom_level(
-    const unsigned int reference_room_level,
+    const unsigned int reference_zoom_level,
     const tile::SrsBounds reference_tile_bounds,
-    const tile::SrsBounds target_bounds
-) {
+    const tile::SrsBounds target_bounds) {
     const glm::dvec2 relative_size = reference_tile_bounds.size() / target_bounds.size();
     const double relative_factor = (relative_size.x + relative_size.y) / 2;
     const int zoom_level_change = std::rint(std::log2(relative_factor));
-    assert(static_cast<int>(reference_room_level) + zoom_level_change >= 0);
-    return reference_room_level + zoom_level_change;
+    assert(static_cast<int>(reference_zoom_level) + zoom_level_change >= 0);
+    return reference_zoom_level + zoom_level_change;
 }
 
 /// Find all the tiles needed to construct the texture for the given target bounds under the root tile.
@@ -49,65 +40,62 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     const ctb::Grid &grid,
     /// The bounds for which texture data should be created.
     const tile::SrsBounds &target_bounds,
-    /// A mapping from tile id to a filesystem path.
-    const TileToPathMapper &tile_to_path_mapper,
-    /// The maximal zoom level to be considered. If not present, this function will use the maximal available.
-    const std::optional<unsigned int> max_zoom = std::nullopt) {
-    if (max_zoom.has_value() && root_tile.zoom_level > max_zoom.value()) {
-        return {};
-    }
-
+    /// Provider class that maps tile ids to their textures.
+    const TileProvider &tile_provider,
+    /// The maximal zoom level to be considered.
+    const std::optional<unsigned int> max_zoom_level_to_consider = std::nullopt,
+    /// The minimum zoom level to be surely examined.
+    std::optional<unsigned int> min_zoom_level_to_examine = std::nullopt) {
     // It can happen that the root tile is very large because the target tile was (slightly) over the tile border
     // at a high zoom level. So we try to estimate the actual zoom level of the target bounds and recurse at least
     // to that level to find relevant textures.
-    const unsigned int min_examine_zoom_level = estimate_zoom_level(root_tile.zoom_level, grid.srsBounds(root_tile, false), target_bounds) + 1;
-
-    // A stack for tiles to be considered for relevancy.
-    std::vector<tile::Id> tile_stack;
+    if (!min_zoom_level_to_examine.has_value()) {
+        min_zoom_level_to_examine = estimate_zoom_level(root_tile.zoom_level, grid.srsBounds(root_tile, false), target_bounds) + 1;
+    }
+    
     // A list of tiles determined to be relevant for the target bounds.
     std::vector<tile::Id> tiles_to_splatter;
-    tile_stack.emplace_back(root_tile);
 
-    while (!tile_stack.empty()) {
-        const tile::Id tile = tile_stack.back();
-        tile_stack.pop_back();
+    const std::function<bool(const tile::Id tile)> helper = [&](const tile::Id tile) {
+        // Check if we have recursed too deep.
+        if (max_zoom_level_to_consider.has_value() && tile.zoom_level > max_zoom_level_to_consider.value()) {
+            return false;
+        }
 
+        // Check if we even require this tile to fill the target region.
         const tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
         if (!geometry::intersect(target_bounds, tile_bounds)) {
-            // If this tile does not intersect our target bounds, we can ignore it.
-            continue;
+            return true;
         }
 
-        constexpr size_t subtile_count = 4;
-        const std::array<tile::Id, subtile_count> subtiles = tile.children();
-
-        std::array<bool, subtile_count> subtile_usable;
-        std::transform(subtiles.begin(), subtiles.end(), subtile_usable.begin(),
-                       [&](auto &subtile) { return is_usable_tile(subtile, tile_to_path_mapper); });
-
-        const bool all_usable = std::all_of(subtile_usable.begin(), subtile_usable.end(), [](bool e) { return e; });
-
-        // If not all children are present we have to include the current tile to avoid empty regions.
-        if (!all_usable) {
-            if (is_usable_tile(tile, tile_to_path_mapper)) {
-                tiles_to_splatter.push_back(tile);
-            }
-        }
-
-        // We recurse for every tile that was present or all the time if we were given a maximum zoom
-        // (to allow for missing intermediates)
-        for (size_t i = 0; i < subtile_count; i++) {
-            if (max_zoom.has_value()) {
-                if (subtiles[i].zoom_level <= max_zoom.value()) {
-                    tile_stack.push_back(subtiles[i]);
-                }
-            } else {
-                if (subtile_usable[i] || subtiles[i].zoom_level <= min_examine_zoom_level) {
-                    tile_stack.push_back(subtiles[i]);
+        // Check the region of this tile can be assembled from its children (or further down)
+        bool all_children_present = false;
+        if (tile.zoom_level + 1 <= min_zoom_level_to_examine.value()) {
+            all_children_present = true;
+            for (const tile::Id subtile : tile.children()) {
+                if (!helper(subtile)) {
+                    all_children_present = false;
                 }
             }
         }
-    }
+
+        if (all_children_present) {
+            return true;
+        }
+
+        // Check if the current tile is available as a replacement.
+        if (!tile_provider.has_tile(tile)) {
+            return false;
+        }
+
+        // If so, add it to the list of accepted tiles.
+        tiles_to_splatter.push_back(tile);
+        return true;
+    };
+
+    helper(root_tile);
+
+    std::reverse(tiles_to_splatter.begin(), tiles_to_splatter.end());
 
     return tiles_to_splatter;
 }
@@ -147,10 +135,9 @@ typedef std::function<std::filesystem::path(tile::Id)> TileToPathMapperChecked;
     return geometry::Aabb2ui(tile_position, tile_position + tile_size);
 }
 
-
 void copy_paste_image(
-    cv::Mat& target,
-    const cv::Mat& source,
+    cv::Mat &target,
+    const cv::Mat &source,
     const geometry::Aabb2i target_bounds,
     const bool trim_excess = false,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
@@ -182,7 +169,7 @@ void copy_paste_image(
     const glm::ivec2 target_position,
     const bool trim_excess = false,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
-   copy_paste_image(target, source, geometry::Aabb2i(target_position, target_position + glm::ivec2(source.cols, source.rows)), trim_excess, rescale_filter);
+    copy_paste_image(target, source, geometry::Aabb2i(target_position, target_position + glm::ivec2(source.cols, source.rows)), trim_excess, rescale_filter);
 }
 
 [[nodiscard]] cv::Mat splatter_tiles_to_texture(
@@ -192,7 +179,7 @@ void copy_paste_image(
     /// The bounds for which texture data should be created.
     const tile::SrsBounds &target_bounds,
     /// A mapping from tile id to a filesystem path.
-    const TileToPathMapperChecked &tile_to_path_mapper,
+    const TileProvider &tile_provider,
     const std::span<const tile::Id> tiles_to_splatter,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
     assert(!tiles_to_splatter.empty());
@@ -202,12 +189,12 @@ void copy_paste_image(
     for (const tile::Id &tile : tiles_to_splatter) {
         max_zoom_level = std::max(tile.zoom_level, max_zoom_level);
     }
+    assert(max_zoom_level >= root_tile.zoom_level);
     const unsigned int zoom_level_range = max_zoom_level - root_tile.zoom_level;
 
     // Choose any tile to load infer like tile size and format to allocate our texture buffer accordingly.
     const tile::Id &any_tile = tiles_to_splatter.front();
-    const std::filesystem::path &any_tile_path = tile_to_path_mapper(any_tile);
-    const cv::Mat any_tile_image = cv::imread(any_tile_path);
+    const cv::Mat any_tile_image = tile_provider.get_tile(any_tile).value();
     const glm::uvec2 tile_image_size(any_tile_image.cols, any_tile_image.rows);
 
     // Calculate the offset and size of the target bounds inside the smallest encompassing tile.
@@ -219,10 +206,15 @@ void copy_paste_image(
     cv::Mat image(image_size.y, image_size.x, any_tile_image.type());
 
     for (const tile::Id &tile : tiles_to_splatter) {
-        const std::filesystem::path &tile_path = tile_to_path_mapper(tile);
-        cv::Mat tile_image = cv::imread(tile_path);
+        cv::Mat tile_image = tile_provider.get_tile(tile).value();
         if (tile_image.empty()) {
-            throw std::runtime_error(fmt::format("failed to load image from path: {}", tile_path.string()));
+            const TilePathProvider *tile_path_provider = dynamic_cast<const TilePathProvider *>(&tile_provider);
+            if (tile_path_provider != nullptr) {
+                const std::filesystem::path tile_path = tile_path_provider->get_tile_path(tile).value();
+                throw std::runtime_error(fmt::format("failed to load image from path: {}", tile_path.string()));
+            } else {
+                throw std::runtime_error("failed to load image");
+            }
         }
 
         const glm::uvec2 current_tile_image_size(tile_image.cols, tile_image.rows);
@@ -255,8 +247,8 @@ void copy_paste_image(
     const OGRSpatialReference &target_srs,
     /// The bounds for which texture data should be created.
     const tile::SrsBounds &target_bounds,
-    /// A mapping from tile id to a filesystem path.
-    const TileToPathMapper tile_to_path_mapper,
+    /// Provider class that maps tile ids to their textures.
+    const TileProvider &tile_provider,
     /// The maximal zoom level to be considered. If not present, this function will use the maximal available.
     const std::optional<unsigned int> max_zoom = std::nullopt,
     /// The filter used to rescale the tile images if required due to missing detail tiles.
@@ -276,25 +268,15 @@ void copy_paste_image(
 
     // Find relevant tiles in bounds
     const std::vector<tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(
-        smallest_encompassing_tile, grid, encompassing_bounds, tile_to_path_mapper, max_zoom);
+        smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, max_zoom);
 
     // If we found to relevant tiles, we are done.
     if (tiles_to_splatter.empty()) {
         return std::nullopt;
     }
 
-    // Setup new tile to path mapper that asserts that the tiles exist, because we already checked them.
-    const TileToPathMapperChecked tile_to_path_mapper_checked = [=](tile::Id tile) {
-#ifdef DEBUG
-        assert(is_tile_usable(tile));
-#endif
-        const auto tile_path = tile_to_path_mapper(tile);
-        assert(tile_path.has_value());
-        return tile_path.value();
-    };
-
     // Splatter tiles into texture buffer
-    return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_to_path_mapper_checked, tiles_to_splatter, rescale_filter);
+    return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter);
 }
 
 #endif

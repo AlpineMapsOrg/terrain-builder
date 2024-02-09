@@ -187,6 +187,7 @@ if(ALP_ENABLE_OVERVIEW_READING)
 endif()
 
 add_library(terrainbuilderlib
+    terrainbuilder/tile_provider.h
     terrainbuilder/gltf_writer.h
     terrainbuilder/mesh_builder.h
     terrainbuilder/mesh_builder.cpp

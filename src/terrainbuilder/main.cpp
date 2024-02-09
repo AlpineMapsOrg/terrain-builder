@@ -16,6 +16,7 @@
 #include "terrain_mesh.h"
 #include "mesh_builder.h"
 #include "texture_assembler.h"
+#include "tile_provider.h"
 
 std::string format_secs_since(const std::chrono::high_resolution_clock::time_point &start) {
     const auto duration = std::chrono::high_resolution_clock::now() - start;
@@ -24,6 +25,18 @@ std::string format_secs_since(const std::chrono::high_resolution_clock::time_poi
     ss << std::fixed << std::setprecision(2) << seconds;
     return ss.str();
 }
+
+class BasemapSchemeTilePathProvider : public TilePathProvider {
+public:
+    BasemapSchemeTilePathProvider(std::filesystem::path base_path) : base_path(base_path) {}
+
+    std::optional<std::filesystem::path> get_tile_path(const tile::Id tile_id) const override {
+        return fmt::format("{}/{}/{}/{}.jpeg", this->base_path.generic_string(), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
+    }
+
+private:
+    std::filesystem::path base_path;
+};
 
 void build(
     Dataset &dataset,
@@ -50,10 +63,7 @@ void build(
     fmt::print("mesh building took {}s\n", format_secs_since(start));
 
     start = std::chrono::high_resolution_clock::now();
-    const auto tile_to_path_mapper = [&](tile::Id tile_id) {
-        return fmt::format("{}/{}/{}/{}.jpeg", std::string(texture_base_path), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
-    };
-    std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, tile_to_path_mapper);
+    std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, BasemapSchemeTilePathProvider(texture_base_path));
     if (!texture.has_value()) {
         throw std::runtime_error{"failed to assemble tile texture"};
     }
