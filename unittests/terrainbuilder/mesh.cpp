@@ -39,6 +39,7 @@
 #include "gltf_writer.h"
 #include "mesh_builder.h"
 #include "terrain_mesh.h"
+#include "merge.h"
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel;
 typedef Kernel::Point_3 Point3;
@@ -167,65 +168,48 @@ TEST_CASE("can build reference mesh tiles", "[terrainbuilder]") {
                 REQUIRE(target_bounds.contains_inclusive(webmercator_position));
             }
 
-            output_tile_bounds = target_bounds;
-            output_texture_bounds = target_bounds;
-            const TerrainMesh mesh_inclusive = build_reference_mesh_tile(
+            // TODO: also test inclusive bounds (but this requires reconstructing the quads of the mesh)
+        }
+    }
+}
+
+TEST_CASE("neighbouring tiles fit together", "[terrainbuilder]") {
+    const ctb::Grid grid = ctb::GlobalMercator();
+    const std::string dataset_suffix = "/austria/pizbuin_1m_epsg3857.tif";
+    const std::array<tile::Id, 4> tiles = tile::Id(20, glm::uvec2(553801, 369497), tile::Scheme::SlippyMap).children();
+
+    std::vector<TerrainMesh> tile_meshes;
+    for (const tile::Id &tile : tiles) {
+        const tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
+        DYNAMIC_SECTION(tile) {
+            const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
+            Dataset dataset(dataset_path);
+
+            OGRSpatialReference webmercator_srs;
+            webmercator_srs.importFromEPSG(3857);
+            webmercator_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+            OGRSpatialReference ecef_srs;
+            ecef_srs.importFromEPSG(4978);
+            ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+            tile::SrsBounds output_tile_bounds;
+            tile::SrsBounds output_texture_bounds;
+
+            output_tile_bounds = tile_bounds;
+            output_texture_bounds = tile_bounds;
+            const TerrainMesh mesh = build_reference_mesh_tile(
                 dataset,
                 ecef_srs,
                 grid.getSRS(), output_tile_bounds,
                 webmercator_srs, output_texture_bounds,
-                Border(0),
+                Border(0, 1, 1, 0),
                 true);
 
-            std::vector<std::vector<glm::uvec3>> vertex_to_triangle_map;
-            vertex_to_triangle_map.resize(mesh_inclusive.vertex_count());
-            for (size_t i = 0; i < mesh_inclusive.vertex_count(); i++) {
-                vertex_to_triangle_map[i] = std::vector<glm::uvec3>();
-            }
-
-            for (const glm::uvec3 triangle : mesh_inclusive.triangles) {
-                for (size_t i = 0; i < triangle.length(); i++) {
-                    const unsigned int vertex_index = triangle[i];
-                    vertex_to_triangle_map[vertex_index].push_back(triangle);
-                }
-            }
-
-            std::vector<bool> is_in_bounds;
-            is_in_bounds.resize(mesh_inclusive.vertex_count());
-            for (size_t i = 0; i < mesh_inclusive.vertex_count(); i++) {
-                const glm::dvec3 ecef_position = mesh_inclusive.positions[i];
-                const glm::dvec3 webmercator_position = apply_transform(transform_ecef_webmercator.get(), ecef_position);
-                is_in_bounds[i] = !target_bounds.contains_inclusive(webmercator_position);
-            }
-
-            for (size_t i = 0; i < mesh_inclusive.vertex_count(); i++) {
-                if (is_in_bounds[i]) {
-                    continue;
-                }
-
-                // this vertex is not in bounds, but this is allowed for the inclusive bounds version
-                // as long as its connected to another vertex that is.
-                bool any_other_in_bounds = false;
-                for (const glm::uvec3 triangle : vertex_to_triangle_map[i]) {
-                    for (size_t i = 0; i < triangle.length(); i++) {
-                        if (is_in_bounds[triangle[i]]) {
-                            any_other_in_bounds = true;
-                            break;
-                        }
-                    }
-                }
-
-                for (const glm::uvec3 triangle : vertex_to_triangle_map[i]) {
-                    for (size_t i = 0; i < triangle.length(); i++) {
-                        if (is_in_bounds[triangle[i]]) {
-                            any_other_in_bounds = true;
-                            break;
-                        }
-                    }
-                }
-
-                // TODO: REQUIRE(any_other_in_bounds);
-            }
+            tile_meshes.push_back(mesh);
         }
     }
+
+    const TerrainMesh merged_mesh = merge::merge_by_distance(tile_meshes, 0.1);
+    check_non_empty(merged_mesh);
+    check_mesh_is_plane(merged_mesh);
 }
