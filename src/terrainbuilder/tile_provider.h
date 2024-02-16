@@ -45,31 +45,29 @@ private:
     }
 };
 
-// TODO: Move this to radix
-template<> struct std::hash<tile::Id> {
-    std::size_t operator()(const tile::Id& tile) const noexcept {
-        // TODO: fix
-        return tile.coords.x;
-    }
-};
-
-class MapBasedTileProvider : public TileProvider {
+class StaticTileProvider : public TileProvider {
 public:
-    const std::unordered_map<tile::Id, cv::Mat> tiles;
+    std::unordered_map<tile::Id, cv::Mat, tile::Id::Hasher> tiles;
 
-    MapBasedTileProvider(std::unordered_map<tile::Id, cv::Mat> tiles) : tiles(tiles) {}
+    StaticTileProvider(const std::unordered_map<tile::Id, cv::Mat, tile::Id::Hasher>& tiles) {
+        // TODO: remove this once the == operator of tile::Id is updated.
+        for (const auto& tile : tiles) {
+            const tile::Id tile_id = tile.first.to(tile::Scheme::SlippyMap);
+            this->tiles[tile_id] = tile.second;
+        }
+    }
 
     virtual std::optional<cv::Mat> get_tile(const tile::Id tile_id) const override {
-        const auto tile = this->tiles.find(tile_id);
+        const auto tile = this->tiles.find(tile_id.to(tile::Scheme::SlippyMap));
         if (tile != this->tiles.end()) {
             return tile->second;
         } else {
             return std::nullopt;
         }
     }
-    
-    virtual bool has_tile(const tile::Id tile) const override {
-        return this->tiles.find(tile) != this->tiles.cend();
+
+    virtual bool has_tile(const tile::Id tile_id) const override {
+        return this->tiles.find(tile_id.to(tile::Scheme::SlippyMap)) != this->tiles.cend();
     }
 };
 

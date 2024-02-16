@@ -123,10 +123,13 @@
 }
 
 [[nodiscard]] geometry::Aabb2ui calculate_pixel_tile_bounds(
-    const tile::Id tile,
+    tile::Id tile,
     const tile::Id root_tile,
     const glm::uvec2 tile_image_pixel_size,
     const unsigned int max_zoom_level) {
+    if (tile.scheme != tile::Scheme::SlippyMap) {
+        tile = tile.to(tile::Scheme::SlippyMap);
+    }
     const size_t relative_zoom_level = tile.zoom_level - root_tile.zoom_level;
     const glm::uvec2 tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
     const glm::uvec2 tile_size = tile_image_pixel_size * tile_size_factor;
@@ -143,7 +146,7 @@ void copy_paste_image(
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
     if (target_bounds.width() != source.cols || target_bounds.height() != source.rows) {
         cv::Mat source_resized;
-        cv::resize(source, source, cv::Size(target_bounds.width(), target_bounds.height()), 0, 0, rescale_filter);
+        cv::resize(source, source_resized, cv::Size(target_bounds.width(), target_bounds.height()), 0, 0, rescale_filter);
         copy_paste_image(target, source_resized, target_bounds, trim_excess);
         return;
     }
@@ -182,7 +185,12 @@ void copy_paste_image(
     const TileProvider &tile_provider,
     const std::span<const tile::Id> tiles_to_splatter,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
-    assert(!tiles_to_splatter.empty());
+    if (tiles_to_splatter.empty()) {
+        return {};
+    }
+    assert(std::is_sorted(tiles_to_splatter.begin(), tiles_to_splatter.end(),
+                          [](const tile::Id &a, const tile::Id &b) { return a.zoom_level < b.zoom_level; }));
+
     const tile::SrsBounds root_tile_bounds = grid.srsBounds(root_tile, false);
 
     unsigned int max_zoom_level = 0;
@@ -203,7 +211,7 @@ void copy_paste_image(
     const glm::uvec2 image_size = target_image_region.size();
 
     // Allocate the image to write all the individual tiles into.
-    cv::Mat image(image_size.y, image_size.x, any_tile_image.type());
+    cv::Mat image = cv::Mat::zeros(image_size.y, image_size.x, any_tile_image.type());
 
     for (const tile::Id &tile : tiles_to_splatter) {
         cv::Mat tile_image = tile_provider.get_tile(tile).value();
@@ -231,7 +239,7 @@ void copy_paste_image(
         const geometry::Aabb2i target_pixel_tile_bounds(tile_target_position, tile_target_position + glm::ivec2(pixel_tile_bounds.size()));
 
         // Resize current tile image and copy into image buffer.
-        copy_paste_image(image, tile_image, tile_target_position, true /* allows und handles overflow */, rescale_filter);
+        copy_paste_image(image, tile_image, target_pixel_tile_bounds, true /* allows und handles overflow */, rescale_filter);
     }
 
     cv::flip(image, image, 0);
