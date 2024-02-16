@@ -38,6 +38,7 @@ static glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const 
 
 /// Builds a mesh from the given height dataset.
 // TODO: split up this monster somehow
+// TODO: return result struct instead of using inout parameters
 TerrainMesh build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
