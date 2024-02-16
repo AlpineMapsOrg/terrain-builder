@@ -73,7 +73,7 @@ target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2)
 
 add_executable(unittests_terrainmerger
     catch2_helpers.h
-    terrainmerger.cpp)
+    terrainmerger/merge.cpp)
 
 target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2::Catch2)
 

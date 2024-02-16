@@ -12,8 +12,8 @@
 #include "ctb/Grid.hpp"
 #include "srs.h"
 
-#include "gltf_writer.h"
-#include "terrain_mesh.h"
+#include "mesh/gltf_writer.h"
+#include "mesh/terrain_mesh.h"
 #include "mesh_builder.h"
 #include "texture_assembler.h"
 #include "tile_provider.h"

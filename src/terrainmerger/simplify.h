@@ -5,7 +5,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "cgal.h"
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 
 namespace simplify {
 // We use a different uv map type here, because we need this one to be attached to the mesh

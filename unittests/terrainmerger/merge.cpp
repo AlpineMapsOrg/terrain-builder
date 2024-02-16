@@ -20,7 +20,7 @@
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
-#include "catch2_helpers.h"
+#include "../catch2_helpers.h"
 #include "merge.h"
 
 TEST_CASE("terrainmerger") {

@@ -10,7 +10,7 @@
 #include <tl/expected.hpp>
 
 #include "cgal.h"
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 #include "merge.h"
 
 typedef cv::Mat Texture;

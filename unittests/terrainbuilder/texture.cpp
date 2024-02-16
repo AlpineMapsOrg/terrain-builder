@@ -25,14 +25,15 @@
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
+#include <fmt/core.h>
+
 #include "../catch2_helpers.h"
 #include "Dataset.h"
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
 #include "srs.h"
-#include <fmt/core.h>
 
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 #include "texture_assembler.h"
 
 TEST_CASE("estimate_zoom_level", "[terrainbuilder]") {

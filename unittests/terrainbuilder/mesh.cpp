@@ -20,6 +20,7 @@
 #include <filesystem>
 
 #include <catch2/catch.hpp>
+#include <fmt/core.h>
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Polygon_mesh_processing/connected_components.h>
@@ -34,11 +35,10 @@
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/Grid.hpp"
 #include "srs.h"
-#include <fmt/core.h>
 
-#include "gltf_writer.h"
+#include "mesh/gltf_writer.h"
 #include "mesh_builder.h"
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 #include "merge.h"
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel;

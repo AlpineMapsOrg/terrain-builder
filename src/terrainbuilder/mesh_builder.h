@@ -7,7 +7,7 @@
 #include "Dataset.h"
 #include "srs.h"
 
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 
 template <typename T>
 class Border {

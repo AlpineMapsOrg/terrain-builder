@@ -8,7 +8,7 @@
 #include <radix/geometry.h>
 #include <glm/glm.hpp>
 
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 
 namespace merge {
 

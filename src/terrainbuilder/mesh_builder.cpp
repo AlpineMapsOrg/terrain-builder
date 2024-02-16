@@ -10,9 +10,9 @@
 #include "Image.h"
 #include "srs.h"
 #include "tntn/gdal_init.h"
+#include "mesh/terrain_mesh.h"
 
 #include "raw_dataset_reader.h"
-#include "terrain_mesh.h"
 #include "mesh_builder.h"
 
 template <typename T>

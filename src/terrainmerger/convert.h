@@ -4,7 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include <glm/glm.hpp>
 
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 #include "cgal.h"
 
 namespace convert {

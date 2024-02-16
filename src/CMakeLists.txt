@@ -125,6 +125,11 @@ endif()
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
+    terrainlib/mesh/io.h terrainlib/mesh/io.cpp
+    terrainlib/mesh/terrain_mesh.h terrainlib/mesh/terrain_mesh.cpp
+    terrainlib/mesh/non_copyable.h
+    terrainlib/mesh/gltf_writer.h
+
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/DatasetReader.h terrainlib/DatasetReader.cpp
     terrainlib/depth_first_tile_traverser.h
@@ -180,35 +185,31 @@ add_library(terrainlib
     terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
     terrainlib/tntn/ZoomRange.h
 )
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL fmt freeimage TBB::tbb)
-target_include_directories(terrainlib PUBLIC ./terrainlib)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL fmt freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
+target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
 
 add_library(terrainbuilderlib
     terrainbuilder/tile_provider.h
-    terrainbuilder/gltf_writer.h
     terrainbuilder/mesh_builder.h
     terrainbuilder/mesh_builder.cpp
     terrainbuilder/raw_dataset_reader.h
-    terrainbuilder/terrain_mesh.h
     terrainbuilder/texture_assembler.h
     terrainbuilder/main.cpp
 )
-target_include_directories(terrainbuilderlib PUBLIC ./terrainbuilder ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainbuilderlib PUBLIC terrainlib cgltf stb CLI11::CLI11 ${OpenCV_LIBS})
+target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
+target_link_libraries(terrainbuilderlib PUBLIC terrainlib CLI11::CLI11)
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_include_directories(terrainbuilder PUBLIC ./terrainbuilder)
+target_include_directories(terrainbuilder PUBLIC terrainbuilder)
 target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 
 add_library(terrainmergerlib
     terrainmerger/cli.h
     terrainmerger/cli.cpp
-    terrainmerger/io.h
-    terrainmerger/io.cpp
     terrainmerger/merge.h
     terrainmerger/merge.cpp
     terrainmerger/simplify.h
@@ -218,18 +219,15 @@ add_library(terrainmergerlib
     terrainmerger/cgal.h
     terrainmerger/convert.h
     terrainmerger/convert.cpp
-    terrainmerger/terrain_mesh.h
-    terrainmerger/terrain_mesh.cpp
-    terrainmerger/non_copyable.h
     terrainmerger/log.h
     terrainmerger/log.cpp
 )
-target_include_directories(terrainmergerlib PUBLIC ./terrainmerger)
+target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
+target_link_libraries(terrainmergerlib PUBLIC terrainlib tinygltf radix spdlog CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
 add_executable(terrainmerger
     terrainmerger/main.cpp
 )
-target_include_directories(terrainmergerlib PUBLIC ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(terrainmergerlib PUBLIC tinygltf radix spdlog cgltf stb CLI11::CLI11 ${OpenCV_LIBS} Eigen3::Eigen CGAL::CGAL expected)
+target_include_directories(terrainmerger PUBLIC terrainmerger)
 target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
 
 add_executable(tile-downloader

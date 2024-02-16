@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
-#include "terrain_mesh.h"
+#include "mesh/terrain_mesh.h"
 #include "merge.h"
 #include "log.h"
 
