@@ -145,7 +145,6 @@ TEST_CASE("texture assembler considers max zoom level", "[terrainbuilder]") {
 }
 
 TEST_CASE("texture assembler works for arbitrary bounds", "[terrainbuilder]") {
-    /*
     const std::set<tile::Id> available_tiles = {
         // {21, {1048576, 1048576}, tile::Scheme::Tms},
         {21, {1048577, 1048576}, tile::Scheme::Tms},
@@ -169,14 +168,8 @@ TEST_CASE("texture assembler works for arbitrary bounds", "[terrainbuilder]") {
         // {20, {524289, 524288}, tile::Scheme::Tms},
         {20, {524290, 524288}, tile::Scheme::Tms},
         // {19, {262144, 262144}, tile::Scheme::Tms},
-        {19, {262145, 262144}, tile::Scheme::Tms}};*/
-    const std::set<tile::Id> available_tiles = {
-        {21, {1048578, 1048576}, tile::Scheme::Tms},
-        {21, {1048579, 1048576}, tile::Scheme::Tms},
-        {20, {524289, 524288}, tile::Scheme::Tms}};
-    const std::set<tile::Id> expected_tiles = {
-        {21, {1048578, 1048576}, tile::Scheme::Tms},
-        {21, {1048579, 1048576}, tile::Scheme::Tms}};
+        // {19, {262145, 262144}, tile::Scheme::Tms}
+    };
 
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
 
@@ -216,17 +209,15 @@ TEST_CASE("texture assembler does not fail if there are not tiles", "[terrainbui
     CHECK(expected_tiles == actual_tiles);
 }
 
-TEST_CASE("texture assembler assembles correctly", "[terrainbuilder]") {
-    const std::unordered_map<tile::Id, cv::Mat> tiles_to_texture = {
-        {tile::Id(0, {0, 0}, tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Scalar(0, 0, 255))},
-        {tile::Id(1, {0, 1}, tile::Scheme::Tms), cv::Mat(1, 1, CV_8UC3, cv::Scalar(0, 255, 0))},
-        {tile::Id(1, {0, 1}, tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Scalar(255, 0, 0))},
+TEST_CASE("texture assembler assembles single tile", "[terrainbuilder]") {
+    const std::unordered_map<tile::Id, cv::Mat, tile::Id::Hasher> tiles_to_texture = {
+        {tile::Id(0, {0, 0}, tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255))},
     };
     std::vector<tile::Id> tiles_to_splatter;
     std::transform(tiles_to_texture.begin(), tiles_to_texture.end(), std::back_inserter(tiles_to_splatter),
                    [](const auto &pair) { return pair.first; });
 
-    const MapBasedTileProvider tile_provider(tiles_to_texture);
+    const StaticTileProvider tile_provider(tiles_to_texture);
 
     const ctb::Grid grid = ctb::GlobalMercator();
     const tile::Id root_tile(0, {0, 0}, tile::Scheme::SlippyMap);
@@ -236,13 +227,71 @@ TEST_CASE("texture assembler assembles correctly", "[terrainbuilder]") {
         grid.srsBounds(root_tile, false),
         tile_provider,
         tiles_to_splatter,
-        cv::INTER_NEAREST);
+        cv::INTER_NEAREST_EXACT);
+
+    REQUIRE(assembled_texture.size() == cv::Size(1, 1));
+    CHECK(assembled_texture.type() == CV_8UC3);
+
+    CHECK(assembled_texture.at<cv::Vec3b>(0, 0) == cv::Vec3b(0, 0, 255));
+}
+
+TEST_CASE("texture assembler assembles two tiles", "[terrainbuilder]") {
+    const std::unordered_map<tile::Id, cv::Mat, tile::Id::Hasher> tiles_to_texture = {
+        {tile::Id(1, {0, 0}, tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255))},
+        {tile::Id(1, {0, 1}, tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 255, 0))},
+    };
+    std::vector<tile::Id> tiles_to_splatter;
+    std::transform(tiles_to_texture.begin(), tiles_to_texture.end(), std::back_inserter(tiles_to_splatter),
+                   [](const auto &pair) { return pair.first; });
+
+    const StaticTileProvider tile_provider(tiles_to_texture);
+
+    const ctb::Grid grid = ctb::GlobalMercator();
+    const tile::Id root_tile(0, {0, 0}, tile::Scheme::SlippyMap);
+    cv::Mat assembled_texture = splatter_tiles_to_texture(
+        root_tile,
+        grid,
+        grid.srsBounds(root_tile, false),
+        tile_provider,
+        tiles_to_splatter,
+        cv::INTER_NEAREST_EXACT);
 
     REQUIRE(assembled_texture.size() == cv::Size(2, 2));
     CHECK(assembled_texture.type() == CV_8UC3);
 
-    CHECK(assembled_texture.at<cv::Scalar>(0, 0) == cv::Scalar(0, 255, 0));
-    CHECK(assembled_texture.at<cv::Scalar>(0, 1) == cv::Scalar(255, 0, 0));
-    CHECK(assembled_texture.at<cv::Scalar>(1, 0) == cv::Scalar(0, 0, 255));
-    CHECK(assembled_texture.at<cv::Scalar>(1, 1) == cv::Scalar(0, 0, 255));
+    CHECK(assembled_texture.at<cv::Vec3b>(0, 0) == cv::Vec3b(0, 255, 0));
+    CHECK(assembled_texture.at<cv::Vec3b>(1, 0) == cv::Vec3b(0, 0, 255));
+}
+
+TEST_CASE("texture assembler correct order of texture writes", "[terrainbuilder]") {
+    const std::unordered_map<tile::Id, cv::Mat, tile::Id::Hasher> tiles_to_texture = {
+        {tile::Id(0, {0, 0}, tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC1, uint8_t(1))},
+        {tile::Id(1, {0, 1}, tile::Scheme::Tms), cv::Mat(1, 1, CV_8UC1, uint8_t(2))},
+        {tile::Id(1, {0, 1}, tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC1, uint8_t(3))},
+    };
+    std::vector<tile::Id> tiles_to_splatter;
+    std::transform(tiles_to_texture.begin(), tiles_to_texture.end(), std::back_inserter(tiles_to_splatter),
+                   [](const auto &pair) { return pair.first; });
+    std::sort(tiles_to_splatter.begin(), tiles_to_splatter.end(),
+        [](const tile::Id &a, const tile::Id &b) { return a.zoom_level < b.zoom_level; });
+
+    const StaticTileProvider tile_provider(tiles_to_texture);
+
+    const ctb::Grid grid = ctb::GlobalMercator();
+    const tile::Id root_tile(0, {0, 0}, tile::Scheme::SlippyMap);
+    cv::Mat assembled_texture = splatter_tiles_to_texture(
+        root_tile,
+        grid,
+        grid.srsBounds(root_tile, false),
+        tile_provider,
+        tiles_to_splatter,
+        cv::INTER_NEAREST_EXACT);
+
+    REQUIRE(assembled_texture.size() == cv::Size(2, 2));
+    CHECK(assembled_texture.type() == CV_8UC1);
+
+    CHECK(assembled_texture.at<uint8_t>(0, 0) == uint8_t(3));
+    CHECK(assembled_texture.at<uint8_t>(1, 0) == uint8_t(2));
+    CHECK(assembled_texture.at<uint8_t>(0, 1) == uint8_t(1));
+    CHECK(assembled_texture.at<uint8_t>(1, 1) == uint8_t(1));
 }
