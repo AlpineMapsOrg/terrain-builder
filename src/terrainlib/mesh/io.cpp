@@ -279,9 +279,9 @@ static void save_mesh_as_gltf2(const TerrainMesh &terrain_mesh, const std::files
 
     std::vector<uint8_t> buffer_data;
     buffer_data.resize(texture_data_end);
-    memcpy(buffer_data.data() + index_data_offset, terrain_mesh.triangles.data(), index_data_byte_count);
-    memcpy(buffer_data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
-    memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
+    std::memcpy(buffer_data.data() + index_data_offset, terrain_mesh.triangles.data(), index_data_byte_count);
+    std::memcpy(buffer_data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
+    std::memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
 
     const bool binary_output = path.extension() == ".glb";
 
@@ -460,7 +460,7 @@ static void save_mesh_as_gltf2(const TerrainMesh &terrain_mesh, const std::files
     const glm::vec3 parent_offset(-parent_parent_offset_error);
     const glm::dvec3 parent_offset_error = glm::dvec3(parent_offset) + glm::dvec3(parent_parent_offset) - average_position;
     const glm::vec3 mesh_offset(-parent_offset_error);
-    std::copy(glm::value_ptr(parent_parent_offset), glm::value_ptr(parent_parent_offset) + parent_parent_offset.length(), parent_node.translation);
+    std::copy(glm::value_ptr(parent_parent_offset), glm::value_ptr(parent_parent_offset) + parent_parent_offset.length(), parent_parent_node.translation);
     std::copy(glm::value_ptr(parent_offset), glm::value_ptr(parent_offset) + parent_offset.length(), parent_node.translation);
     std::copy(glm::value_ptr(mesh_offset), glm::value_ptr(mesh_offset) + mesh_offset.length(), mesh_node.translation);
     const glm::dvec3 full_error = (glm::dvec3(parent_parent_offset) + glm::dvec3(parent_offset) + glm::dvec3(mesh_offset)) - average_position;
