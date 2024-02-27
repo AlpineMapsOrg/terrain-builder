@@ -213,3 +213,50 @@ TEST_CASE("neighbouring tiles fit together", "[terrainbuilder]") {
     check_non_empty(merged_mesh);
     check_mesh_is_plane(merged_mesh);
 }
+
+TEST_CASE("neighbouring tiles fit together repeatedly", "[terrainbuilder]") {
+    const ctb::Grid grid = ctb::GlobalMercator();
+    const std::string dataset_suffix = "/austria/innenstadt_gs_1m_mgi.tif";
+
+    const tile::Id root_tile_id(16, glm::uvec2(35748, 22724), tile::Scheme::SlippyMap);
+    std::vector<TerrainMesh> child_meshes;
+    for (const tile::Id child_tile_id : root_tile_id.children()) {
+        std::vector<TerrainMesh> grand_child_meshes;
+        for (const tile::Id grand_child_tile_id : child_tile_id.children()) {
+            const tile::SrsBounds grand_child_tile_bounds = grid.srsBounds(grand_child_tile_id, false);
+            DYNAMIC_SECTION(grand_child_tile_id) {
+                const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
+                Dataset dataset(dataset_path);
+
+                OGRSpatialReference webmercator_srs;
+                webmercator_srs.importFromEPSG(3857);
+                webmercator_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+                OGRSpatialReference ecef_srs;
+                ecef_srs.importFromEPSG(4978);
+                ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+
+                tile::SrsBounds output_tile_bounds;
+                tile::SrsBounds output_texture_bounds;
+
+                output_tile_bounds = grand_child_tile_bounds;
+                output_texture_bounds = grand_child_tile_bounds;
+                const TerrainMesh grand_child_mesh = build_reference_mesh_tile(
+                    dataset,
+                    ecef_srs,
+                    grid.getSRS(), output_tile_bounds,
+                    webmercator_srs, output_texture_bounds,
+                    Border(0, 1, 1, 0),
+                    true);
+
+                grand_child_meshes.push_back(grand_child_mesh);
+            }
+        }
+
+        const TerrainMesh child_mesh = merge::merge_by_distance(grand_child_meshes, 0.1);
+        child_meshes.push_back(child_mesh);
+    }
+
+    const TerrainMesh mesh = merge::merge_by_distance(child_meshes, 0.1);
+    check_non_empty(mesh);
+    check_mesh_is_plane(mesh);
+}
