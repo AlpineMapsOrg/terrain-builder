@@ -80,6 +80,7 @@ target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2::Ca
 
 add_executable(unittests_terrainbuilder
     catch2_helpers.h
+    terrainbuilder/mesh_io.cpp
     terrainbuilder/mesh.cpp
     terrainbuilder/texture.cpp)
 target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2::Catch2 CGAL::CGAL)
