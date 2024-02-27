@@ -188,8 +188,6 @@ void copy_paste_image(
     if (tiles_to_splatter.empty()) {
         return {};
     }
-    assert(std::is_sorted(tiles_to_splatter.begin(), tiles_to_splatter.end(),
-                          [](const tile::Id &a, const tile::Id &b) { return a.zoom_level < b.zoom_level; }));
 
     const tile::SrsBounds root_tile_bounds = grid.srsBounds(root_tile, false);
 
