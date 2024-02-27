@@ -232,7 +232,7 @@ TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, c
             max_vertex_index = std::max(max_vertex_index, mapped_index);
         }
     }
-    assert(max_vertex_index < merged_mesh.vertex_count());
+    assert(max_vertex_index < merged_mesh.vertex_count() || max_vertex_index == 0);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {
         merged_mesh.uvs.resize(max_vertex_index + 1);
