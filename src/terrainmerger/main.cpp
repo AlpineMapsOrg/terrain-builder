@@ -1,10 +1,10 @@
 #include "cli.h"
-#include "io.h"
 #include "merge.h"
 #include "simplify.h"
 #include "uv_map.h"
 #include "convert.h"
 #include "log.h"
+#include "mesh/io.h"
 
 #include <CGAL/boost/graph/IO/OBJ.h>
 
