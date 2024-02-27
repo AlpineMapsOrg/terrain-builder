@@ -243,8 +243,8 @@ static void save_mesh_as_gltf2(const TerrainMesh &terrain_mesh, const std::files
     // This is dont to preserve our double accuracy, as gltf cannot store them directly.
     std::vector<float> vertices;
     vertices.reserve((vectorsizeof(terrain_mesh.positions) + vectorsizeof(terrain_mesh.uvs)) / sizeof(float));
-    glm::vec3 max_position(std::numeric_limits<float>::min());
-    glm::vec3 min_position(std::numeric_limits<float>::max());
+    glm::vec3 max_position(-std::numeric_limits<float>::infinity());
+    glm::vec3 min_position(std::numeric_limits<float>::infinity());
     for (size_t i = 0; i < vertex_count; i++) {
         const glm::vec3 normalized_position = terrain_mesh.positions[i] - average_position;
 
