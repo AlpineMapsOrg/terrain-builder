@@ -36,7 +36,7 @@
 #include "ctb/Grid.hpp"
 #include "srs.h"
 
-#include "mesh/gltf_writer.h"
+#include "mesh/io.h"
 #include "mesh_builder.h"
 #include "mesh/terrain_mesh.h"
 #include "merge.h"

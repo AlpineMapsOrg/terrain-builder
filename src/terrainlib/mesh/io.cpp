@@ -228,7 +228,7 @@ static size_t align(std::size_t alignment, size_t offset) noexcept {
 }
 
 /// Saves the mesh as a .gltf or .glb file at the given path.
-static void save_mesh_as_gltf2(const TerrainMesh &terrain_mesh, const std::filesystem::path &path, const std::unordered_map<std::string, std::string> extra_metadata = {}) {
+static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesystem::path &path, const std::unordered_map<std::string, std::string> extra_metadata = {}) {
     // ********************* Preprocessing ********************* //
 
     // Calculate the average vertex position for later normalization.
@@ -529,8 +529,11 @@ static void save_mesh_as_gltf2(const TerrainMesh &terrain_mesh, const std::files
     }
 }
 
-// TODO: return errors
-tl::expected<void, SaveMeshError> io::save_mesh_to_path(const std::filesystem::path &path, TerrainMesh &mesh) {
-    save_mesh_as_gltf2(mesh, path);
+tl::expected<void, SaveMeshError> io::save_mesh_to_path(
+    const std::filesystem::path &path,
+    TerrainMesh &mesh,
+    const std::unordered_map<std::string, std::string> extra_metadata) {
+    // TODO: return errors
+    save_mesh_as_gltf(mesh, path, extra_metadata);
     return {};
 }

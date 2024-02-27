@@ -12,7 +12,7 @@
 #include "ctb/Grid.hpp"
 #include "srs.h"
 
-#include "mesh/gltf_writer.h"
+#include "mesh/io.h"
 #include "mesh/terrain_mesh.h"
 #include "mesh_builder.h"
 #include "texture_assembler.h"
@@ -79,10 +79,12 @@ void build(
     metadata["tile_bounds"] = fmt::format(
         "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
         tile_bounds.min.x, tile_bounds.min.y, tile_bounds.max.x, tile_bounds.max.y);
-    metadata["texture_srs"] = fmt::format(
+    metadata["texture_bounds"] = fmt::format(
         "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
         texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
-    save_mesh_as_gltf(mesh, output_path, metadata);
+    if (!io::save_mesh_to_path(output_path, mesh, metadata).has_value()) {
+        throw std::runtime_error{"failed to save tile mesh"};
+    }
     fmt::print("mesh writing took {}s\n", format_secs_since(start));
 }
 

@@ -133,9 +133,7 @@ private:
     SaveMeshErrorKind kind;
 };
 
-// TODO: return errors
-tl::expected<void, SaveMeshError> save_mesh_to_path(const std::filesystem::path &path, TerrainMesh &mesh);
-
+tl::expected<void, SaveMeshError> save_mesh_to_path(const std::filesystem::path &path, TerrainMesh &mesh, const std::unordered_map<std::string, std::string> extra_metadata = {});
 }
 
 #endif
