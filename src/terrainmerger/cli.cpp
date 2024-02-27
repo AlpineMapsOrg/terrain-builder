@@ -30,13 +30,13 @@ Args cli::parse(int argc, const char * const * argv) {
     bool no_mesh_simplification = false;
     app.add_flag("--no-simplify", no_mesh_simplification, "Disable mesh simplification");
 
-    float simplification_factor = 0.25f;
-    app.add_option("--simplify-factor", simplification_factor, "Mesh index simplification factor")
+    std::optional<double> simplification_factor;
+    app.add_option("--simplify-factor", *simplification_factor, "Mesh index simplification factor")
         ->check(CLI::Range(0.0f, 1.0f))
         ->excludes("--no-simplify");
 
-    float simplification_target_error = 0.01f;
-    app.add_option("--simplify-error", simplification_target_error, "Mesh simplification target error")
+    std::optional<double> simplification_target_error;
+    app.add_option("--simplify-error", *simplification_target_error, "Mesh simplification target error")
         ->check(CLI::Range(0.0f, 1.0f))
         ->excludes("--no-simplify");
 
@@ -56,6 +56,10 @@ Args cli::parse(int argc, const char * const * argv) {
         app.parse(argc, argv);
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
+    }
+
+    if (!simplification_factor.has_value() && !simplification_target_error.has_value()) {
+        simplification_factor = 0.25;
     }
 
     Args args;
