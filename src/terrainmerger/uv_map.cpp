@@ -128,7 +128,7 @@ static void warp_triangle(const cv::Mat &source_image, cv::Mat &target_image, st
         source_triangle_cropped[i] = cv::Point2f(source_triangle[i].x - source_rect.x, source_triangle[i].y - source_rect.y);
         target_triangle_cropped[i] = cv::Point2f(target_triangle[i].x - target_rect.x, target_triangle[i].y - target_rect.y);
     }
-    
+
     // Convert points to int triangles as fillConvexPoly needs a vector of Point and not Point2f
     std::array<cv::Point2i, 3> target_triangle_cropped_int;
     for (size_t i = 0; i < 3; i++) {
@@ -138,6 +138,7 @@ static void warp_triangle(const cv::Mat &source_image, cv::Mat &target_image, st
     // Read source region from source image
     cv::Mat source_image_cropped;
     source_image(source_rect).copyTo(source_image_cropped);
+    source_image_cropped.convertTo(source_image_cropped, CV_32FC3);
 
     // Given a pair of triangles, find the affine transform.
     const cv::Mat warp_tranform = cv::getAffineTransform(source_triangle_cropped, target_triangle_cropped);
@@ -151,8 +152,8 @@ static void warp_triangle(const cv::Mat &source_image, cv::Mat &target_image, st
     cv::fillConvexPoly(mask, target_triangle_cropped_int, cv::Scalar(1.0, 1.0, 1.0), 16, 0);
 
     // Copy triangular region of the rectangular patch to the output image
-    cv::multiply(target_image_cropped, mask, target_image_cropped);
-    cv::multiply(target_image(target_rect), cv::Scalar(1.0, 1.0, 1.0) - mask, target_image(target_rect));
+    cv::multiply(target_image_cropped, mask, target_image_cropped, 1, CV_32FC3);
+    cv::multiply(target_image(target_rect), cv::Scalar(1.0, 1.0, 1.0) - mask, target_image(target_rect), 1, CV_32FC3);
     target_image(target_rect) = target_image(target_rect) + target_image_cropped;
 }
 
