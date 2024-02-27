@@ -56,7 +56,7 @@ static std::vector<uint8_t> write_texture_to_encoded_buffer(const cv::Mat& image
 
 TerrainMesh io::load_mesh_from_raw(const RawGltfMesh &raw) {
     const cgltf_data &data = *raw.data;
-    assert(data.file_type == cgltf_file_type::cgltf_file_type_glb);
+    // assert(data.file_type == cgltf_file_type::cgltf_file_type_glb);
 
     assert(data.meshes_count == 1);
     cgltf_mesh &mesh = data.meshes[0];
