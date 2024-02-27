@@ -128,7 +128,6 @@ add_library(terrainlib
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/terrain_mesh.h terrainlib/mesh/terrain_mesh.cpp
     terrainlib/mesh/non_copyable.h
-    terrainlib/mesh/gltf_writer.h
 
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/DatasetReader.h terrainlib/DatasetReader.cpp
