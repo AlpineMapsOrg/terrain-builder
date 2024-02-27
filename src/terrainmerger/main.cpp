@@ -97,8 +97,6 @@ void run(const cli::Args &args) {
 }
 
 int main(int argc, char **argv) {
-    const std::array<std::string, 10> raw_args = {"./terrainmerger", "--input", "183325_276252.glb", "183325_276253.glb", "183326_276252.glb", "183326_276253.glb", "--output", "./out5.glb", "--verbosity", "trace"};
-    const std::span<const std::string> raw_args_span = raw_args;
-    const cli::Args args = cli::parse(raw_args_span);
+    const cli::Args args = cli::parse(argc, argv);
     run(args);
 }
