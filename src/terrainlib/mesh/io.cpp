@@ -40,7 +40,7 @@ static cgltf_attribute *find_attribute_with_type(cgltf_attribute *attributes, si
 static cv::Mat read_texture_from_encoded_bytes(std::span<const uint8_t> buffer) {
     cv::Mat raw_data = cv::Mat(1, buffer.size(), CV_8UC1, const_cast<uint8_t*>(buffer.data()));
     cv::Mat mat = cv::imdecode(raw_data, cv::IMREAD_UNCHANGED);
-    mat.convertTo(mat, CV_32FC3);
+    mat.convertTo(mat, CV_8UC3);
     return mat;
 }
 static void write_texture_to_encoded_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer) {
