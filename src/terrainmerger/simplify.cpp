@@ -101,10 +101,12 @@ static void _simplify_mesh_with_cost_and_placement(
     const Cost &cost,
     const Placement &placement,
     const SimplificationArgs args) {
+    if (args.stop_edge_ratio > 0.999) {
+        return;
+    }
+    
     typedef typename CGAL::Surface_mesh_simplification::Constrained_placement<Placement, Border_is_constrained_edge_map> ConstrainedPlacement;
-
     Border_is_constrained_edge_map bem(mesh, args.lock_borders);
-
     const ConstrainedPlacement constrained_placement(bem, placement);
 
     const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop_predicate(args.stop_edge_ratio);
