@@ -31,7 +31,7 @@ include(FetchContent)
 if(NOT TARGET fmt::fmt)
     FetchContent_Declare(fmt
         GIT_REPOSITORY https://github.com/fmtlib/fmt
-        GIT_TAG 6b0082e6c799c42c41596c008b2891fb6b786143
+        GIT_TAG 10.2.1
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
     )
     FetchContent_MakeAvailable(fmt)
@@ -114,6 +114,7 @@ if(NOT TARGET expected)
 endif()
 
 if(NOT TARGET spdlog)
+    set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
     FetchContent_Declare(spdlog
         GIT_REPOSITORY https://github.com/gabime/spdlog.git
         GIT_TAG v1.13.0
@@ -128,6 +129,8 @@ add_library(terrainlib
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/terrain_mesh.h terrainlib/mesh/terrain_mesh.cpp
     terrainlib/mesh/non_copyable.h
+    terrainlib/log.h
+    terrainlib/log.cpp
 
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/DatasetReader.h terrainlib/DatasetReader.cpp
@@ -184,7 +187,7 @@ add_library(terrainlib
     terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
     terrainlib/tntn/ZoomRange.h
 )
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL fmt freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
 target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -199,7 +202,7 @@ add_library(terrainbuilderlib
     terrainbuilder/main.cpp
 )
 target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
-target_link_libraries(terrainbuilderlib PUBLIC terrainlib CLI11::CLI11)
+target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11)
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
@@ -218,11 +221,9 @@ add_library(terrainmergerlib
     terrainmerger/cgal.h
     terrainmerger/convert.h
     terrainmerger/convert.cpp
-    terrainmerger/log.h
-    terrainmerger/log.cpp
 )
 target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib tinygltf radix spdlog CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
+target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
 add_executable(terrainmerger
     terrainmerger/main.cpp
 )

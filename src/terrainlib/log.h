@@ -1,8 +1,11 @@
-#pragma once
+#ifndef LOG_H
+#define LOG_H
 
 #ifndef SPDLOG_FMT_EXTERNAL
 #define SPDLOG_FMT_EXTERNAL
+#define FMT_HEADER_ONLY
 #endif
+#include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
 class Log {
@@ -25,3 +28,5 @@ public:
 #define LOG_WARN(...)  ::Log::get_logger()->warn(__VA_ARGS__)
 #define LOG_ERROR(...) ::Log::get_logger()->error(__VA_ARGS__)
 #define LOG_FATAL(...) ::Log::get_logger()->critical(__VA_ARGS__)
+
+#endif
