@@ -28,7 +28,7 @@ const int GL_TEXTURE_MIN_FILTER = 0x2801;
 const int GL_REPEAT = 0x2901;
 const int GL_CLAMP_TO_EDGE = 0x812F;
 const int GL_MIRRORED_REPEAT = 0x8370;
-}
+} // namespace
 
 using namespace io;
 
@@ -44,17 +44,17 @@ static cgltf_attribute *find_attribute_with_type(cgltf_attribute *attributes, si
 }
 
 cv::Mat io::read_texture_from_encoded_bytes(std::span<const uint8_t> buffer) {
-    cv::Mat raw_data = cv::Mat(1, buffer.size(), CV_8UC1, const_cast<uint8_t*>(buffer.data()));
+    cv::Mat raw_data = cv::Mat(1, buffer.size(), CV_8UC1, const_cast<uint8_t *>(buffer.data()));
     cv::Mat mat = cv::imdecode(raw_data, cv::IMREAD_UNCHANGED);
     mat.convertTo(mat, CV_8UC3);
     return mat;
 }
-void io::write_texture_to_encoded_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer, const std::string extension) {
+void io::write_texture_to_encoded_buffer(const cv::Mat &image, std::vector<uint8_t> &buffer, const std::string extension) {
     cv::Mat converted;
     image.convertTo(converted, CV_8UC3);
     cv::imencode(extension, image, buffer);
 }
-std::vector<uint8_t> io::write_texture_to_encoded_buffer(const cv::Mat& image, const std::string extension) {
+std::vector<uint8_t> io::write_texture_to_encoded_buffer(const cv::Mat &image, const std::string extension) {
     std::vector<uint8_t> buffer;
     io::write_texture_to_encoded_buffer(image, buffer, extension);
     return buffer;
@@ -63,7 +63,7 @@ std::vector<uint8_t> io::write_texture_to_encoded_buffer(const cv::Mat& image, c
 static glm::mat4 get_node_transform_local(const cgltf_node &node) {
     if (node.has_matrix) {
         return glm::make_mat4(node.matrix);
-    } 
+    }
 
     glm::mat4 transform(1);
 
@@ -115,7 +115,7 @@ static const cgltf_node *find_mesh_node_under_node(const cgltf_node &node, const
 
     return nullptr;
 }
-static const cgltf_node* find_mesh_node_in_scene(const cgltf_scene &scene, const cgltf_mesh &mesh) {
+static const cgltf_node *find_mesh_node_in_scene(const cgltf_scene &scene, const cgltf_mesh &mesh) {
     for (cgltf_size i = 0; i < scene.nodes_count; i++) {
         const cgltf_node &node = *scene.nodes[i];
         const cgltf_node *mesh_node = find_mesh_node_under_node(node, mesh);
@@ -126,7 +126,7 @@ static const cgltf_node* find_mesh_node_in_scene(const cgltf_scene &scene, const
 
     return nullptr;
 }
-static const cgltf_node* find_mesh_node(const cgltf_data &data, const cgltf_mesh &mesh) {
+static const cgltf_node *find_mesh_node(const cgltf_data &data, const cgltf_mesh &mesh) {
     if (data.scenes_count == 0) {
         LOG_WARN("file contains no scenes");
         return nullptr;
@@ -160,19 +160,18 @@ static std::optional<cv::Mat> load_texture_from_material(const cgltf_material &m
     cgltf_texture &albedo_texture = *material.pbr_metallic_roughness.base_color_texture.texture;
     cgltf_image &albedo_image = *albedo_texture.image;
 
-    const std::span<const uint8_t> raw_texture {cgltf_buffer_view_data(albedo_image.buffer_view), albedo_image.buffer_view->size};
+    const std::span<const uint8_t> raw_texture{cgltf_buffer_view_data(albedo_image.buffer_view), albedo_image.buffer_view->size};
     cv::Mat texture = read_texture_from_encoded_bytes(raw_texture);
     return texture;
 }
 
-#define GET_OR_INVALID_FORMAT(var, opt)              \
-    do {                                             \
-        if (!(opt).has_value()) {                   \
+#define GET_OR_INVALID_FORMAT(var, opt)                              \
+    do {                                                             \
+        if (!(opt).has_value()) {                                    \
             return tl::unexpected(LoadMeshErrorKind::InvalidFormat); \
-        }                                            \
-        else {                                       \
-            var = opt.value();                                      \
-        }                                            \
+        } else {                                                     \
+            var = opt.value();                                       \
+        }                                                            \
     } while (false)
 
 tl::expected<TerrainMesh, LoadMeshError> io::load_mesh_from_raw(const RawGltfMesh &raw, const LoadOptions _options) {
@@ -182,7 +181,7 @@ tl::expected<TerrainMesh, LoadMeshError> io::load_mesh_from_raw(const RawGltfMes
     if (!mesh_opt.has_value()) {
         return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
-    const cgltf_mesh& mesh = mesh_opt.value();
+    const cgltf_mesh &mesh = mesh_opt.value();
 
     const auto mesh_primitive_opt = get_single_element("mesh primitive", mesh.primitives_count, mesh.primitives);
     if (!mesh_primitive_opt.has_value()) {
@@ -271,7 +270,7 @@ static size_t vectorsizeof(const typename std::vector<T> &vec) {
 /// Encodes the data at the given pointer into base64.
 // from https://github.com/syoyo/tinygltf/blob/5e8a7fd602af22aa9619ccd3baeaeeaff0ecb6f3/tiny_gltf.h#L2297
 static std::string base64_encode(unsigned char const *bytes_to_encode,
-                          unsigned int in_len) {
+                                 unsigned int in_len) {
     std::string ret;
     int i = 0;
     int j = 0;
@@ -363,12 +362,14 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     glm::vec3 min_position(std::numeric_limits<float>::infinity());
     for (size_t i = 0; i < vertex_count; i++) {
         const glm::vec3 normalized_position = terrain_mesh.positions[i] - average_position;
-        
+
         vertices.push_back(normalized_position.x);
         vertices.push_back(normalized_position.y);
         vertices.push_back(normalized_position.z);
-        vertices.push_back(terrain_mesh.uvs[i].x);
-        vertices.push_back(terrain_mesh.uvs[i].y);
+        if (terrain_mesh.has_uvs()) {
+            vertices.push_back(terrain_mesh.uvs[i].x);
+            vertices.push_back(terrain_mesh.uvs[i].y);
+        }
 
         max_position = glm::max(max_position, normalized_position);
         min_position = glm::min(min_position, normalized_position);
@@ -440,7 +441,7 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     vertex_buffer_view.buffer = &buffer;
     vertex_buffer_view.offset = vertex_data_offset;
     vertex_buffer_view.size = vertex_data_byte_count;
-    vertex_buffer_view.stride = 5 * sizeof(float);
+    vertex_buffer_view.stride = (terrain_mesh.has_uvs() ? 5 : 3) * sizeof(float);
     vertex_buffer_view.type = cgltf_buffer_view_type_vertices;
 
     cgltf_buffer_view &texture_buffer_view = buffer_views[2] = {};
@@ -476,17 +477,19 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     std::copy(glm::value_ptr(min_position), glm::value_ptr(min_position) + min_position.length(), position_accessor.min);
     std::copy(glm::value_ptr(max_position), glm::value_ptr(max_position) + max_position.length(), position_accessor.max);
 
-    // Create an accessor for vertex uvs
     cgltf_accessor &uv_accessor = accessors[2] = {};
-    uv_accessor.buffer_view = &vertex_buffer_view;
-    uv_accessor.component_type = cgltf_component_type_r_32f;
-    uv_accessor.type = cgltf_type_vec2;
-    uv_accessor.offset = 3 * sizeof(float);
-    uv_accessor.count = vertex_count;
-    uv_accessor.has_min = true;
-    uv_accessor.has_max = true;
-    std::fill(uv_accessor.min, uv_accessor.min + 2, 0);
-    std::fill(uv_accessor.max, uv_accessor.max + 2, 1);
+    if (terrain_mesh.has_uvs()) {
+        // Create an accessor for vertex uvs
+        uv_accessor.buffer_view = &vertex_buffer_view;
+        uv_accessor.component_type = cgltf_component_type_r_32f;
+        uv_accessor.type = cgltf_type_vec2;
+        uv_accessor.offset = 3 * sizeof(float);
+        uv_accessor.count = vertex_count;
+        uv_accessor.has_min = true;
+        uv_accessor.has_max = true;
+        std::fill(uv_accessor.min, uv_accessor.min + 2, 0);
+        std::fill(uv_accessor.max, uv_accessor.max + 2, 1);
+    }
 
     // Create a mesh primitive.
     std::array<cgltf_attribute, 2> primitive_attributes;
@@ -498,10 +501,12 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     position_attribute.data = &position_accessor;
     cgltf_attribute &uv_attribute = primitive_attributes[1] = {};
     std::string uv_attribute_name = "TEXCOORD_0\0";
-    uv_attribute.name = uv_attribute_name.data();
-    uv_attribute.type = cgltf_attribute_type::cgltf_attribute_type_texcoord;
-    uv_attribute.index = 0;
-    uv_attribute.data = &uv_accessor;
+    if (terrain_mesh.has_uvs()) {
+        uv_attribute.name = uv_attribute_name.data();
+        uv_attribute.type = cgltf_attribute_type::cgltf_attribute_type_texcoord;
+        uv_attribute.index = 0;
+        uv_attribute.data = &uv_accessor;
+    }
 
     // Create a gltf texture
     std::array<cgltf_image, 1> images;
@@ -543,6 +548,9 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     primitive.indices = &index_accessor;
     primitive.attributes_count = primitive_attributes.size();
     primitive.attributes = primitive_attributes.data();
+    if (!terrain_mesh.has_uvs()) {
+        primitive.attributes_count -= 1;
+    }
     primitive.material = &material;
 
     // Build the actual mesh
@@ -605,6 +613,9 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     data.buffer_views = buffer_views.data();
     data.accessors_count = accessors.size();
     data.accessors = accessors.data();
+    if (!terrain_mesh.has_uvs()) {
+        data.accessors_count -= 1;
+    }
     data.materials_count = materials.size();
     data.materials = materials.data();
     if (has_texture) {
@@ -620,7 +631,7 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
 
     // Set up extra metadata
     std::string extras_str;
-    const auto& extra_metadata = options.metadata;
+    const auto &extra_metadata = options.metadata;
     if (!extra_metadata.empty()) {
         std::stringstream extras = {};
         extras << "{";
@@ -676,7 +687,7 @@ static tl::expected<std::vector<uint8_t>, SaveMeshError> write_mesh_to_buffer(co
     return data;
 }
 
-static tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<const uint8_t> bytes, const std::filesystem::path& path) {
+static tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<const uint8_t> bytes, const std::filesystem::path &path) {
     LOG_TRACE("Writing bytes to path {}", path.string());
 
     std::ofstream ofs(path, std::ios::out | std::ios::binary);
@@ -808,5 +819,3 @@ tl::expected<void, SaveMeshError> io::save_mesh_to_path(
     }
     return {};
 }
-
-
