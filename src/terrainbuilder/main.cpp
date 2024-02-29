@@ -82,7 +82,7 @@ void build(
     metadata["texture_bounds"] = fmt::format(
         "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
         texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
-    if (!io::save_mesh_to_path(output_path, mesh, metadata).has_value()) {
+    if (!io::save_mesh_to_path(output_path, mesh, io::SaveOptions { .metadata = metadata }).has_value()) {
         throw std::runtime_error{"failed to save tile mesh"};
     }
     fmt::print("mesh writing took {}s\n", format_secs_since(start));

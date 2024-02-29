@@ -1,3 +1,6 @@
+#include <fstream>
+#include <system_error>
+
 #define CGLTF_IMPLEMENTATION
 #define CGLTF_WRITE_IMPLEMENTATION
 // #define CGLTF_VALIDATE_ENABLE_ASSERTS
@@ -7,8 +10,11 @@
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <zpp_bits.h>
 
 #include "io.h"
+#include "log.h"
 
 namespace {
 const int GL_NEAREST = 0x2600;
@@ -37,90 +43,193 @@ static cgltf_attribute *find_attribute_with_type(cgltf_attribute *attributes, si
     return nullptr;
 }
 
-static cv::Mat read_texture_from_encoded_bytes(std::span<const uint8_t> buffer) {
+cv::Mat io::read_texture_from_encoded_bytes(std::span<const uint8_t> buffer) {
     cv::Mat raw_data = cv::Mat(1, buffer.size(), CV_8UC1, const_cast<uint8_t*>(buffer.data()));
     cv::Mat mat = cv::imdecode(raw_data, cv::IMREAD_UNCHANGED);
     mat.convertTo(mat, CV_8UC3);
     return mat;
 }
-static void write_texture_to_encoded_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer) {
+void io::write_texture_to_encoded_buffer(const cv::Mat& image, std::vector<uint8_t>& buffer, const std::string extension) {
     cv::Mat converted;
     image.convertTo(converted, CV_8UC3);
-    cv::imencode(".png", image, buffer);
+    cv::imencode(extension, image, buffer);
 }
-static std::vector<uint8_t> write_texture_to_encoded_buffer(const cv::Mat& image) {
+std::vector<uint8_t> io::write_texture_to_encoded_buffer(const cv::Mat& image, const std::string extension) {
     std::vector<uint8_t> buffer;
-    write_texture_to_encoded_buffer(image, buffer);
+    io::write_texture_to_encoded_buffer(image, buffer, extension);
     return buffer;
 }
 
-TerrainMesh io::load_mesh_from_raw(const RawGltfMesh &raw) {
-    const cgltf_data &data = *raw.data;
-    // assert(data.file_type == cgltf_file_type::cgltf_file_type_glb);
+static glm::mat4 get_node_transform_local(const cgltf_node &node) {
+    if (node.has_matrix) {
+        return glm::make_mat4(node.matrix);
+    } 
 
-    assert(data.meshes_count == 1);
-    cgltf_mesh &mesh = data.meshes[0];
+    glm::mat4 transform(1);
 
-    assert(mesh.primitives_count == 1);
-    cgltf_primitive &mesh_primitive = mesh.primitives[0];
-    assert(mesh_primitive.type == cgltf_primitive_type::cgltf_primitive_type_triangles);
-
-    cgltf_attribute *position_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_position);
-    cgltf_attribute *uv_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_texcoord);
-    assert(position_attr != nullptr);
-    assert(uv_attr != nullptr);
-
-    assert(data.buffers_count > 0);
-    cgltf_buffer &first_buffer = data.buffers[0];
-    if (first_buffer.data == nullptr) {
-        first_buffer.data = const_cast<void *>(data.bin);
-        first_buffer.size = data.bin_size;
+    if (node.has_translation) {
+        const glm::vec3 translation(node.translation[0], node.translation[1], node.translation[2]);
+        transform = glm::translate(transform, translation);
     }
 
-    cgltf_accessor &index_accessor = *mesh_primitive.indices;
-    std::vector<glm::uvec3> indices;
-    indices.resize(index_accessor.count / 3);
-    cgltf_accessor_unpack_indices(&index_accessor, reinterpret_cast<unsigned int *>(indices.data()), cgltf_component_size(index_accessor.component_type), indices.size() * 3);
+    if (node.has_rotation) {
+        glm::quat rotation(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
+        transform = transform * glm::toMat4(rotation);
+    }
 
-    cgltf_accessor &position_accessor = *position_attr->data;
-    cgltf_accessor &uv_accessor = *uv_attr->data;
-    assert(position_accessor.buffer_view == uv_accessor.buffer_view);
-    std::vector<glm::vec3> positions;
-    positions.resize(position_accessor.count);
-    cgltf_accessor_unpack_floats(&position_accessor, reinterpret_cast<float *>(positions.data()), positions.size() * 3);
-    std::vector<glm::vec2> uvs;
-    uvs.resize(uv_accessor.count);
-    cgltf_accessor_unpack_floats(&uv_accessor, reinterpret_cast<float *>(uvs.data()), uvs.size() * 2);
+    if (node.has_scale) {
+        glm::vec3 scaling(node.scale[0], node.scale[1], node.scale[2]);
+        transform = glm::scale(transform, scaling);
+    }
 
-    assert(data.scenes_count == 1);
-    assert(data.scenes[0].nodes_count == 1);
-    cgltf_node &root_node = *data.scenes[0].nodes[0];
-    assert(root_node.has_translation);
-    assert(root_node.children_count == 1);
-    cgltf_node &intermediate_node = *root_node.children[0];
-    assert(intermediate_node.has_translation);
-    assert(intermediate_node.children_count == 1);
-    cgltf_node &mesh_node = *intermediate_node.children[0];
-    assert(mesh_node.has_translation);
-    assert(mesh_node.children_count == 0);
-    glm::dvec3 offset =
-        glm::dvec3(root_node.translation[0], root_node.translation[1], root_node.translation[2]) +
-        glm::dvec3(intermediate_node.translation[0], intermediate_node.translation[1], intermediate_node.translation[2]) +
-        glm::dvec3(mesh_node.translation[0], mesh_node.translation[1], mesh_node.translation[2]);
+    return transform;
+}
 
-    cgltf_material &material = *mesh_primitive.material;
-    assert(material.has_pbr_metallic_roughness);
-    assert(material.pbr_metallic_roughness.base_color_texture.texture != nullptr);
+static glm::dmat4 get_node_transform_world(const cgltf_node &node) {
+    glm::dmat4 transform = get_node_transform_local(node);
+
+    const cgltf_node *parent = node.parent;
+    while (parent != nullptr) {
+        const glm::dmat4 parent_transform = get_node_transform_local(*parent);
+        transform *= parent_transform;
+        parent = parent->parent;
+    }
+
+    return transform;
+}
+
+static const cgltf_node *find_mesh_node_under_node(const cgltf_node &node, const cgltf_mesh &target_mesh) {
+    if (node.mesh != nullptr) {
+        if (std::addressof(target_mesh) == node.mesh) {
+            return &node;
+        }
+    }
+
+    for (cgltf_size child_index = 0; child_index < node.children_count; child_index++) {
+        const cgltf_node &child = *node.children[child_index];
+        const cgltf_node *child_result = find_mesh_node_under_node(child, target_mesh);
+        if (child_result != nullptr) {
+            return child_result;
+        }
+    }
+
+    return nullptr;
+}
+static const cgltf_node* find_mesh_node_in_scene(const cgltf_scene &scene, const cgltf_mesh &mesh) {
+    for (cgltf_size i = 0; i < scene.nodes_count; i++) {
+        const cgltf_node &node = *scene.nodes[i];
+        const cgltf_node *mesh_node = find_mesh_node_under_node(node, mesh);
+        if (mesh_node != nullptr) {
+            return mesh_node;
+        }
+    }
+
+    return nullptr;
+}
+static const cgltf_node* find_mesh_node(const cgltf_data &data, const cgltf_mesh &mesh) {
+    if (data.scenes_count == 0) {
+        LOG_WARN("file contains no scenes");
+        return nullptr;
+    }
+
+    for (cgltf_size i = 0; i < data.scenes_count; i++) {
+        const cgltf_scene &scene = data.scenes[i];
+        const cgltf_node *mesh_node = find_mesh_node_in_scene(scene, mesh);
+        if (mesh_node != nullptr) {
+            return mesh_node;
+        }
+    }
+
+    return nullptr;
+}
+
+static glm::dmat4 get_mesh_transform(const cgltf_data &data, const cgltf_mesh &mesh) {
+    const cgltf_node *mesh_node = find_mesh_node(data, mesh);
+    if (mesh_node == nullptr) {
+        return glm::dmat4(1);
+    }
+    return get_node_transform_world(*mesh_node);
+}
+
+static std::optional<cv::Mat> load_texture_from_material(const cgltf_material &material) {
+    if (!material.has_pbr_metallic_roughness || material.pbr_metallic_roughness.base_color_texture.texture == nullptr) {
+        LOG_WARN("mesh material has no texture");
+        return std::nullopt;
+    }
+
     cgltf_texture &albedo_texture = *material.pbr_metallic_roughness.base_color_texture.texture;
     cgltf_image &albedo_image = *albedo_texture.image;
 
     const std::span<const uint8_t> raw_texture {cgltf_buffer_view_data(albedo_image.buffer_view), albedo_image.buffer_view->size};
     cv::Mat texture = read_texture_from_encoded_bytes(raw_texture);
+    return texture;
+}
 
+#define GET_OR_INVALID_FORMAT(var, opt)              \
+    do {                                             \
+        if (!(opt).has_value()) {                   \
+            return tl::unexpected(LoadMeshErrorKind::InvalidFormat); \
+        }                                            \
+        else {                                       \
+            var = opt.value();                                      \
+        }                                            \
+    } while (false)
+
+tl::expected<TerrainMesh, LoadMeshError> io::load_mesh_from_raw(const RawGltfMesh &raw, const LoadOptions _options) {
+    const cgltf_data &data = *raw.data;
+
+    const auto mesh_opt = get_single_element("mesh", data.meshes_count, data.meshes);
+    if (!mesh_opt.has_value()) {
+        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+    }
+    const cgltf_mesh& mesh = mesh_opt.value();
+
+    const auto mesh_primitive_opt = get_single_element("mesh primitive", mesh.primitives_count, mesh.primitives);
+    if (!mesh_primitive_opt.has_value()) {
+        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+    }
+    const cgltf_primitive &mesh_primitive = mesh_primitive_opt.value();
+    if (mesh_primitive.type != cgltf_primitive_type::cgltf_primitive_type_triangles) {
+        LOG_ERROR("mesh has invalid primitive type");
+        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+    }
+
+    // indices
+    cgltf_accessor &index_accessor = *mesh_primitive.indices;
+    std::vector<glm::uvec3> indices;
+    indices.resize(index_accessor.count / 3);
+    cgltf_accessor_unpack_indices(&index_accessor, reinterpret_cast<unsigned int *>(indices.data()), cgltf_component_size(index_accessor.component_type), indices.size() * 3);
+
+    // positions
+    cgltf_attribute *position_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_position);
+    if (position_attr == nullptr) {
+        LOG_ERROR("mesh has no position attribute");
+        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+    }
+
+    cgltf_accessor &position_accessor = *position_attr->data;
+    std::vector<glm::vec3> positions;
+    positions.resize(position_accessor.count);
+    cgltf_accessor_unpack_floats(&position_accessor, reinterpret_cast<float *>(positions.data()), positions.size() * 3);
+
+    // uvs
+    cgltf_attribute *uv_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_texcoord);
+    std::vector<glm::vec2> uvs;
+    if (uv_attr == nullptr) {
+        LOG_WARN("mesh has no uv attribute");
+    } else {
+        cgltf_accessor &uv_accessor = *uv_attr->data;
+        uvs.resize(uv_accessor.count);
+        cgltf_accessor_unpack_floats(&uv_accessor, reinterpret_cast<float *>(uvs.data()), uvs.size() * 2);
+    }
+
+    glm::dmat4 transform = get_mesh_transform(data, mesh);
     std::vector<glm::dvec3> positionsd;
     positionsd.resize(positions.size());
-    for (unsigned int i = 0; i < positionsd.size(); i++) {
-        positionsd[i] = glm::dvec3(positions[i]) + offset;
+    for (unsigned int i = 0; i < positions.size(); i++) {
+        const glm::dvec4 positiond = glm::dvec4(positions[i], 1);
+        const glm::dvec4 transformed = transform * positiond;
+        positionsd[i] = glm::dvec3(transformed) / transformed.w;
     }
 
     std::vector<glm::dvec2> uvsd;
@@ -128,6 +237,8 @@ TerrainMesh io::load_mesh_from_raw(const RawGltfMesh &raw) {
     for (unsigned int i = 0; i < uvsd.size(); i++) {
         uvsd[i] = glm::dvec2(uvs[i]);
     }
+
+    std::optional<cv::Mat> texture = load_texture_from_material(*mesh_primitive.material);
 
     return TerrainMesh(indices, positionsd, uvsd, texture);
 }
@@ -149,15 +260,6 @@ static LoadMeshError map_cgltf_error(cgltf_result result) {
         assert(false);
         break;
     }
-}
-
-tl::expected<TerrainMesh, LoadMeshError> io::load_mesh_from_path(const std::filesystem::path &path) {
-    tl::expected<RawGltfMesh, cgltf_result> raw_mesh = RawGltfMesh::load_from_path(path);
-    if (!raw_mesh) {
-        return tl::unexpected(map_cgltf_error(raw_mesh.error()));
-    }
-    TerrainMesh mesh = load_mesh_from_raw(*raw_mesh);
-    return mesh;
 }
 
 /// Calculates the size of the data of a vector in bytes.
@@ -227,8 +329,22 @@ static size_t align(std::size_t alignment, size_t offset) noexcept {
     return aligned;
 }
 
+static std::string image_ext_to_mime(std::string_view extension) {
+    if (extension.starts_with(".")) {
+        extension = extension.substr(1);
+    }
+
+    return fmt::format("image/{}", extension);
+}
+
+static std::filesystem::path create_parent_directories(const std::filesystem::path &path) {
+    const std::filesystem::path parent_path = std::filesystem::absolute(path).parent_path();
+    std::filesystem::create_directories(parent_path);
+    return parent_path;
+}
+
 /// Saves the mesh as a .gltf or .glb file at the given path.
-static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesystem::path &path, const std::unordered_map<std::string, std::string> extra_metadata = {}) {
+static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesystem::path &path, const SaveOptions options) {
     // ********************* Preprocessing ********************* //
 
     // Calculate the average vertex position for later normalization.
@@ -247,7 +363,7 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     glm::vec3 min_position(std::numeric_limits<float>::infinity());
     for (size_t i = 0; i < vertex_count; i++) {
         const glm::vec3 normalized_position = terrain_mesh.positions[i] - average_position;
-
+        
         vertices.push_back(normalized_position.x);
         vertices.push_back(normalized_position.y);
         vertices.push_back(normalized_position.z);
@@ -262,7 +378,7 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     const bool has_texture = terrain_mesh.has_texture();
     std::vector<uint8_t> texture_bytes;
     if (has_texture) {
-        texture_bytes = write_texture_to_encoded_buffer(terrain_mesh.texture.value());
+        texture_bytes = write_texture_to_encoded_buffer(terrain_mesh.texture.value(), options.texture_format);
     }
 
     // Create a single buffer that holds all binary data (indices, vertices, textures)
@@ -391,7 +507,7 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     std::array<cgltf_image, 1> images;
     cgltf_image &image = images[0] = {};
     image.buffer_view = &texture_buffer_view;
-    std::string image_mime_type = "image/jpeg\0";
+    std::string image_mime_type = image_ext_to_mime(options.texture_format);
     image.mime_type = image_mime_type.data();
 
     std::array<cgltf_sampler, 1> samplers;
@@ -464,7 +580,11 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     std::copy(glm::value_ptr(parent_offset), glm::value_ptr(parent_offset) + parent_offset.length(), parent_node.translation);
     std::copy(glm::value_ptr(mesh_offset), glm::value_ptr(mesh_offset) + mesh_offset.length(), mesh_node.translation);
     const glm::dvec3 full_error = (glm::dvec3(parent_parent_offset) + glm::dvec3(parent_offset) + glm::dvec3(mesh_offset)) - average_position;
-    assert(glm::length(full_error) == 0);
+    // assert(glm::length(full_error) == 0);
+    if (full_error != glm::dvec3(0)) {
+        LOG_ERROR("Float transform trick failed (error: {})", glm::length(full_error));
+    }
+
     // Create a scene
     std::array<cgltf_scene, 1> scenes;
     cgltf_scene &scene = scenes[0] = {};
@@ -500,6 +620,7 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
 
     // Set up extra metadata
     std::string extras_str;
+    const auto& extra_metadata = options.metadata;
     if (!extra_metadata.empty()) {
         std::stringstream extras = {};
         extras << "{";
@@ -519,21 +640,173 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     }
 
     // ********************* Save the GLTF data to a file ********************* //
-    std::filesystem::create_directories(path.parent_path());
-    cgltf_options options;
+    create_parent_directories(path);
+    cgltf_options gltf_options;
     if (binary_output) {
-        options.type = cgltf_file_type_glb;
+        gltf_options.type = cgltf_file_type_glb;
     }
-    if (cgltf_write_file(&options, path.c_str(), &data) != cgltf_result_success) {
+    if (cgltf_write_file(&gltf_options, path.c_str(), &data) != cgltf_result_success) {
         throw std::runtime_error("Failed to save GLTF file");
+    }
+}
+
+static tl::expected<std::vector<uint8_t>, SaveMeshError> write_mesh_to_buffer(const TerrainMesh &mesh) {
+    LOG_TRACE("Serializing mesh to buffer");
+
+    // TODO: this ignores the texture format in SaveOptions
+    std::vector<uint8_t> data;
+    zpp::bits::out out(data);
+    auto result = out(mesh);
+    if (zpp::bits::failure(result)) {
+        std::error_code error_code = std::make_error_code(result);
+        LOG_ERROR("Error while writing tile: {}", error_code.message());
+
+        switch (result) {
+        case std::errc::no_buffer_space:
+        case std::errc::message_size:
+        case std::errc::result_out_of_range:
+            return tl::unexpected(SaveMeshErrorKind::OutOfMemory);
+            break;
+        default:
+            throw std::runtime_error("unreachable");
+            break;
+        }
+    }
+
+    return data;
+}
+
+static tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<const uint8_t> bytes, const std::filesystem::path& path) {
+    LOG_TRACE("Writing bytes to path {}", path.string());
+
+    std::ofstream ofs(path, std::ios::out | std::ios::binary);
+    if (!ofs.is_open()) {
+        LOG_ERROR("Failed to open file {}", path.string());
+        return tl::unexpected(SaveMeshErrorKind::OpenFile);
+    }
+
+    const unsigned long data_size = bytes.size();
+    // ofs.write(reinterpret_cast<const char *>(&data_size), sizeof(unsigned long));
+    ofs.write(reinterpret_cast<const char *>(bytes.data()), data_size);
+
+    if (!ofs.good()) {
+        LOG_ERROR("Failed to write to file {}", path.string());
+        ofs.close();
+        return tl::unexpected(SaveMeshErrorKind::WriteFile);
+    }
+
+    ofs.close();
+
+    return {};
+}
+
+static tl::expected<void, SaveMeshError> save_mesh_as_bin(const TerrainMesh &mesh, const std::filesystem::path &path, const SaveOptions _options) {
+    const auto result = write_mesh_to_buffer(mesh);
+    if (!result.has_value()) {
+        return tl::unexpected(result.error());
+    }
+    const std::vector<uint8_t> bytes = result.value();
+
+    create_parent_directories(path);
+
+    return write_bytes_to_path(bytes, path);
+}
+
+static tl::expected<std::vector<uint8_t>, LoadMeshError> read_bytes_from_path(const std::filesystem::path &path) {
+    LOG_TRACE("Reading bytes from path {}", path.string());
+
+    std::ifstream ifs(path, std::ios::in | std::ios::binary);
+    if (!ifs.is_open()) {
+        LOG_ERROR("Failed to open file {}", path.string());
+        return tl::unexpected(LoadMeshErrorKind::FileNotFound);
+    }
+
+    std::vector<uint8_t> data;
+
+    // get length of file
+    ifs.seekg(0, ifs.end);
+    const size_t length = ifs.tellg();
+    ifs.seekg(0, ifs.beg);
+
+    // read file
+    if (length > 0) {
+        data.resize(length);
+        ifs.read(reinterpret_cast<char *>(data.data()), length);
+    }
+    ifs.close();
+
+    return data;
+}
+
+static tl::expected<TerrainMesh, LoadMeshError> read_mesh_from_buffer(const std::span<const uint8_t> bytes) {
+    LOG_TRACE("Deserializing mesh from buffer");
+
+    zpp::bits::in in(bytes);
+    TerrainMesh mesh;
+    auto result = in(mesh);
+    if (zpp::bits::failure(result)) {
+        std::error_code error_code = std::make_error_code(result);
+        LOG_ERROR("error while reading tile: {}", error_code.message());
+
+        switch (result) {
+        case std::errc::no_buffer_space:
+        case std::errc::message_size:
+            return tl::unexpected(LoadMeshErrorKind::OutOfMemory);
+        case std::errc::value_too_large:
+        case std::errc::bad_message:
+        case std::errc::protocol_error:
+        case std::errc::result_out_of_range:
+            return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        case std::errc::not_supported:
+        case std::errc::invalid_argument:
+            throw std::runtime_error("unreachable");
+        default:
+            throw std::runtime_error("unexpected error");
+        }
+    }
+
+    return mesh;
+}
+
+static tl::expected<TerrainMesh, LoadMeshError> load_mesh_from_bin(const std::filesystem::path &path, const LoadOptions _options) {
+    const auto result = read_bytes_from_path(path);
+    if (!result.has_value()) {
+        return tl::unexpected(result.error());
+    }
+    const std::vector<uint8_t> bytes = result.value();
+
+    return read_mesh_from_buffer(bytes);
+}
+
+tl::expected<TerrainMesh, LoadMeshError> io::load_mesh_from_path(const std::filesystem::path &path, const LoadOptions options) {
+    const std::filesystem::path extension = path.extension();
+    if (extension == ".glb" || extension == ".gltf") {
+        tl::expected<RawGltfMesh, cgltf_result> raw_mesh = RawGltfMesh::load_from_path(path);
+        if (!raw_mesh) {
+            return tl::unexpected(map_cgltf_error(raw_mesh.error()));
+        }
+        return load_mesh_from_raw(*raw_mesh, options);
+    } else if (extension == ".tile") {
+        return load_mesh_from_bin(path, options);
+    } else {
+        return tl::unexpected(LoadMeshErrorKind::UnsupportedFormat);
     }
 }
 
 tl::expected<void, SaveMeshError> io::save_mesh_to_path(
     const std::filesystem::path &path,
-    TerrainMesh &mesh,
-    const std::unordered_map<std::string, std::string> extra_metadata) {
-    // TODO: return errors
-    save_mesh_as_gltf(mesh, path, extra_metadata);
+    const TerrainMesh &mesh,
+    const SaveOptions options) {
+    const std::filesystem::path extension = path.extension();
+    if (extension == ".glb" || extension == ".gltf") {
+        // TODO: return errors
+        save_mesh_as_gltf(mesh, path, options);
+    } else if (extension == ".tile") {
+        save_mesh_as_bin(mesh, path, options);
+    } else {
+        return tl::unexpected(SaveMeshErrorKind::UnsupportedFormat);
+    }
     return {};
 }
+
+

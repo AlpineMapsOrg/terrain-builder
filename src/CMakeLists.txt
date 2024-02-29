@@ -123,10 +123,22 @@ if(NOT TARGET spdlog)
     FetchContent_MakeAvailable(spdlog)
 endif()
 
+if(NOT TARGET zpp_bits)
+    FetchContent_Declare(zpp_bits
+        GIT_REPOSITORY https://github.com/eyalz800/zpp_bits.git
+        GIT_TAG v4.4.20
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/zpp_bits
+    )
+    FetchContent_MakeAvailable(zpp_bits)
+    add_library(zpp_bits INTERFACE)
+    target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
+endif()
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
+    terrainlib/mesh/raw_gltf.h terrainlib/mesh/raw_gltf.cpp
     terrainlib/mesh/terrain_mesh.h terrainlib/mesh/terrain_mesh.cpp
     terrainlib/mesh/non_copyable.h
     terrainlib/log.h
@@ -235,3 +247,9 @@ add_executable(tile-downloader
 )
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
+
+add_executable(terrainconvert
+    terrainconvert/main.cpp
+)
+target_include_directories(terrainconvert PUBLIC terrainlib)
+target_link_libraries(terrainconvert PUBLIC terrainlib CLI11::CLI11)

@@ -8,9 +8,12 @@
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
+#include <zpp_bits.h>
 
 class TerrainMesh {
 public:
+    using serialize = zpp::bits::members<4>;
+
     TerrainMesh(std::vector<glm::uvec3> triangles, std::vector<glm::dvec3> positions, std::vector<glm::dvec2> uvs) :
         TerrainMesh(triangles, positions, uvs, std::nullopt) {}
     TerrainMesh(std::vector<glm::uvec3> triangles, std::vector<glm::dvec3> positions, std::vector<glm::dvec2> uvs, cv::Mat texture)

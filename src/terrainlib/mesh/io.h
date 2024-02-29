@@ -12,58 +12,16 @@
 #include <tl/expected.hpp>
 
 #include "terrain_mesh.h"
-#include "non_copyable.h"
+#include "log.h"
+#include "raw_gltf.h"
 
 namespace io {
-class RawGltfMesh : public NonCopyable {
-public:
-    cgltf_data *data;
 
-    ~RawGltfMesh() {
-        if (this->data != nullptr) {
-            cgltf_free(this->data);
-        }
-    }
-
-    // Move constructor
-    RawGltfMesh(RawGltfMesh &&other) {
-        this->data = other.data;
-        other.data = nullptr;
-    }
-
-    // Move assignment operator
-    RawGltfMesh &operator=(RawGltfMesh &&other) {
-        if (this != &other) {
-            this->data = other.data;
-            other.data = nullptr;
-        }
-        return *this;
-    }
-
-    static tl::expected<RawGltfMesh, cgltf_result> load_from_path(const std::filesystem::path &path) {
-        cgltf_options options = {};
-        cgltf_data *data = NULL;
-        const std::string path_str = path.string();
-        const char* path_ptr = path_str.c_str();
-        cgltf_result result = cgltf_parse_file(&options, path_ptr, &data);
-        if (result != cgltf_result::cgltf_result_success) {
-            return tl::unexpected(result);
-        }
-        result = cgltf_load_buffers(&options, data, path_ptr);
-        if (result != cgltf_result::cgltf_result_success) {
-            return tl::unexpected(result);
-        }
-        return RawGltfMesh(data);
-    }
-
-private:
-    RawGltfMesh(cgltf_data *data)
-        : data(data) {}
+struct LoadOptions {
 };
 
-TerrainMesh load_mesh_from_raw(const RawGltfMesh &raw);
-
 enum class LoadMeshErrorKind {
+    UnsupportedFormat,
     FileNotFound,
     InvalidFormat,
     OutOfMemory
@@ -87,6 +45,8 @@ public:
 
     std::string description() const {
         switch (kind) {
+        case LoadMeshErrorKind::UnsupportedFormat:
+            return "format not supported";
         case LoadMeshErrorKind::FileNotFound:
             return "file not found";
         case LoadMeshErrorKind::InvalidFormat:
@@ -102,9 +62,20 @@ private:
     LoadMeshErrorKind kind;
 };
 
-tl::expected<TerrainMesh, LoadMeshError> load_mesh_from_path(const std::filesystem::path &path);
+tl::expected<TerrainMesh, LoadMeshError> load_mesh_from_raw(const RawGltfMesh &raw, const LoadOptions = {});
+tl::expected<TerrainMesh, LoadMeshError> load_mesh_from_path(const std::filesystem::path &path, const LoadOptions = {});
 
-enum class SaveMeshErrorKind { };
+struct SaveOptions {
+    std::string texture_format = ".jpeg";
+    std::unordered_map<std::string, std::string> metadata = {};
+};
+
+enum class SaveMeshErrorKind {
+    UnsupportedFormat,
+    OpenFile,
+    WriteFile,
+    OutOfMemory
+};
 
 class SaveMeshError {
 public:
@@ -124,6 +95,14 @@ public:
 
     std::string description() const {
         switch (kind) {
+        case SaveMeshErrorKind::UnsupportedFormat:
+            return "format not supported";
+        case SaveMeshErrorKind::OpenFile:
+            return "failed to open output file";
+        case SaveMeshErrorKind::WriteFile:
+            return "failed to write to output file";
+        case SaveMeshErrorKind::OutOfMemory:
+            return "out of memory";
         default:
             return "undefined error";
         }
@@ -133,7 +112,65 @@ private:
     SaveMeshErrorKind kind;
 };
 
-tl::expected<void, SaveMeshError> save_mesh_to_path(const std::filesystem::path &path, TerrainMesh &mesh, const std::unordered_map<std::string, std::string> extra_metadata = {});
+tl::expected<void, SaveMeshError> save_mesh_to_path(const std::filesystem::path &path, const TerrainMesh &mesh, const SaveOptions options = {});
+
+cv::Mat read_texture_from_encoded_bytes(std::span<const uint8_t> buffer);
+void write_texture_to_encoded_buffer(const cv::Mat &image, std::vector<uint8_t> &buffer, const std::string extension = ".png");
+std::vector<uint8_t> write_texture_to_encoded_buffer(const cv::Mat &image, const std::string extension = ".png");
+
+namespace {
+// helper for io.cpp
+template<typename T>
+static std::optional<std::reference_wrapper<const T>> get_single_element(const char* name, cgltf_size count, T const* items) {
+    if (count == 0) {
+        LOG_ERROR("file contains no {}", name);
+        return std::nullopt;
+    }
+    if (count > 1) {
+        LOG_WARN("file contains more than one {}", name);
+        return std::nullopt;
+    }
+
+    const T& ref = items[0];
+
+    return ref;
 }
+} // namespace
+} // namespace io
+
+// custom serialization
+namespace zpp::bits {
+template<typename T>
+constexpr auto serialize(auto &archive, glm::tvec2<T> &v) {
+    return archive(v.x, v.y);
+}
+
+template<typename T>
+constexpr auto serialize(auto &archive, const glm::tvec2<T> &v) {
+    return archive(v.x, v.y);
+}
+
+template <typename T>
+constexpr auto serialize(auto &archive, glm::tvec3<T> &v) {
+    return archive(v.x, v.y, v.z);
+}
+
+template <typename T>
+constexpr auto serialize(auto &archive, const glm::tvec3<T> &v) {
+    return archive(v.x, v.y, v.z);
+}
+
+auto serialize(auto &archive, cv::Mat &v) {
+    std::vector<uint8_t> buf;
+    auto result = archive(buf);
+    v = io::read_texture_from_encoded_bytes(buf);
+    return result;
+}
+
+auto serialize(auto &archive, const cv::Mat &v) {
+    return archive(io::write_texture_to_encoded_buffer(v));
+}
+} // namespace zpp::bits
+
 
 #endif

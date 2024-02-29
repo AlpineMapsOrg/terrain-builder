@@ -12,7 +12,7 @@ def get_children(tile_x, tile_y):
 	return children
 
 def build_command(terrainbuilder_path, tile_x, tile_y, zoom, output_dir, force_rebuild, args):
-	output_path = os.path.join(output_dir, str(zoom), str(tile_y), f"{tile_x}.glb")
+	output_path = os.path.join(output_dir, str(zoom), str(tile_y), f"{tile_x}.tile")
 	# print(output_path)
 	if (not force_rebuild) and os.path.exists(output_path):
 		# print("\tSkipped")

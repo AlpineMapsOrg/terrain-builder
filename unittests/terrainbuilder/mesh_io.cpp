@@ -73,7 +73,50 @@ TEST_CASE("io roundtrip") {
             std::filesystem::remove(mesh_path);
             REQUIRE(!std::filesystem::exists(mesh_path));
 
-            io::save_mesh_to_path(mesh_path, mesh);
+            io::save_mesh_to_path(mesh_path, mesh, io::SaveOptions {.texture_format = ".png"});
+            REQUIRE(std::filesystem::exists(mesh_path));
+
+            const tl::expected<TerrainMesh, io::LoadMeshError> result = io::load_mesh_from_path(mesh_path);
+            if (!result.has_value()) {
+                FAIL(result.error().description());
+            }
+            std::filesystem::remove(mesh_path);
+            const TerrainMesh roundtrip_mesh = result.value();
+            REQUIRE(roundtrip_mesh.positions == mesh.positions);
+            REQUIRE(roundtrip_mesh.uvs == mesh.uvs);
+            REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
+            REQUIRE(roundtrip_mesh.texture.has_value());
+            REQUIRE(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
+        }
+    }
+}
+
+TEST_CASE("io roundtrip high precision") {
+    for (const auto& format : {"tile"}) {
+        DYNAMIC_SECTION(format) {
+            TerrainMesh mesh;
+
+            const double pi = std::numbers::pi_v<double>;
+            REQUIRE((double)(float)pi != pi);
+
+            mesh.positions.push_back(glm::dvec3(0, 0, 0));
+            mesh.positions.push_back(glm::dvec3(pi, 0, 0));
+            mesh.positions.push_back(glm::dvec3(0, pi, 0));
+
+            mesh.triangles.push_back(glm::uvec3(0, 2, 1));
+
+            mesh.uvs.push_back(glm::dvec2(0, 0));
+            mesh.uvs.push_back(glm::dvec2(1, 0));
+            mesh.uvs.push_back(glm::dvec2(0, 1));
+
+            mesh.texture = cv::Mat3b(100, 100);
+            cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
+
+            const std::filesystem::path mesh_path = fmt::format("./unittest_tiles/mesh.{}", format);
+            std::filesystem::remove(mesh_path);
+            REQUIRE(!std::filesystem::exists(mesh_path));
+
+            io::save_mesh_to_path(mesh_path, mesh, io::SaveOptions {.texture_format = ".png"});
             REQUIRE(std::filesystem::exists(mesh_path));
 
             const tl::expected<TerrainMesh, io::LoadMeshError> result = io::load_mesh_from_path(mesh_path);
