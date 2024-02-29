@@ -22,6 +22,7 @@
 
 #include "../catch2_helpers.h"
 #include "merge.h"
+#include "utils.hpp"
 
 TEST_CASE("terrainmerger") {
     SECTION("two tris") {
@@ -48,6 +49,9 @@ TEST_CASE("terrainmerger") {
         expected.positions.push_back(glm::dvec3(0, 1, 0));
         expected.triangles.push_back(glm::uvec3(0, 1, 2));
         expected.triangles.push_back(glm::uvec3(2, 1, 3));
+
+        sort_triangles(actual.triangles);
+        sort_triangles(expected.triangles);
 
         REQUIRE(expected.positions == actual.positions);
         REQUIRE(expected.uvs == actual.uvs);
@@ -88,6 +92,9 @@ TEST_CASE("terrainmerger") {
         expected.uvs.push_back(glm::dvec2(0, 1));
         expected.triangles.push_back(glm::uvec3(0, 1, 2));
         expected.triangles.push_back(glm::uvec3(2, 1, 3));
+
+        sort_triangles(actual.triangles);
+        sort_triangles(expected.triangles);
 
         REQUIRE(expected.positions == actual.positions);
         REQUIRE(expected.uvs == actual.uvs);
@@ -130,6 +137,9 @@ TEST_CASE("terrainmerger") {
 
         expected.triangles.push_back(glm::uvec3(1, 5, 4));
         expected.triangles.push_back(glm::uvec3(4, 5, 6));
+
+        sort_triangles(actual.triangles);
+        sort_triangles(expected.triangles);
 
         REQUIRE(expected.positions == actual.positions);
         REQUIRE(expected.uvs == actual.uvs);

@@ -42,10 +42,8 @@ SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
         assert(face != SurfaceMesh::null_face());
     }
 
-#if DEBUG
     assert(cgal_mesh.is_valid(true));
     assert(CGAL::is_triangle_mesh(cgal_mesh));
-#endif
 
     return cgal_mesh;
 }
@@ -55,7 +53,6 @@ TerrainMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
     const size_t face_count = CGAL::num_faces(cgal_mesh);
     mesh.positions.resize(vertex_count);
-    mesh.uvs.resize(vertex_count);
     mesh.triangles.reserve(face_count);
 
     for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
