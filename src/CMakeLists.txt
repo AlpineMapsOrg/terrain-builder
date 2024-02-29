@@ -199,7 +199,7 @@ add_library(terrainlib
     terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
     terrainlib/tntn/ZoomRange.h
 )
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
 target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
