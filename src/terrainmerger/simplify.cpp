@@ -28,6 +28,7 @@
 
 using namespace simplify;
 
+
 // We use a different uv map type here, because we need this one to be attached to the mesh
 // as otherwise the entries for removed vertices are not removed during garbage collection.
 // We could use the same type as in uv_map but this would require a custom visitor or similar.
@@ -163,7 +164,21 @@ static double measure_max_absolute_error(const SurfaceMesh &original, const Surf
 }
 
 Result simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
-    SurfaceMesh cgal_mesh = convert::mesh2cgal(mesh);
+    // simplification fails with large numerical values so we normalize the values here.
+    // TODO: Try to use EPECK instead
+    const size_t vertex_count = mesh.positions.size();
+    glm::dvec3 average_position(0, 0, 0);
+    for (size_t i = 0; i < vertex_count; i++) {
+        average_position += mesh.positions[i] / static_cast<double>(vertex_count);
+    }
+
+    TerrainMesh normalized_mesh = mesh;
+    for (size_t i = 0; i < vertex_count; i++) {
+        const glm::vec3 normalized_position = mesh.positions[i] - average_position;
+        normalized_mesh.positions[i] = normalized_position;
+    }
+
+    SurfaceMesh cgal_mesh = convert::mesh2cgal(normalized_mesh);
     const SurfaceMesh original_mesh(cgal_mesh);
 
     AttachedUvPropertyMap uv_map = cgal_mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
@@ -235,6 +250,9 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
     simplified_mesh.uvs.resize(simplified_mesh.vertex_count());
     for (size_t i = 0; i < CGAL::num_vertices(cgal_mesh); i++) {
         simplified_mesh.uvs[i] = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(i)]);
+    }
+    for (size_t i = 0; i < CGAL::num_vertices(cgal_mesh); i++) {
+        simplified_mesh.positions[i] += average_position;
     }
 
     return Result{
