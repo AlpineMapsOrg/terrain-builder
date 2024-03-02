@@ -6,12 +6,6 @@
 #include "log.h"
 #include "mesh/io.h"
 
-#include <CGAL/boost/graph/IO/OBJ.h>
-
-#ifndef DEBUG
-#define DEBUG !NDEBUG
-#endif
-
 std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::path> paths, const bool print_errors = true) {
     std::vector<TerrainMesh> meshes;
     meshes.reserve(paths.size());
@@ -72,7 +66,13 @@ void run(const cli::Args &args) {
 
     LOG_INFO("Merging meshes...");
     merge::VertexMapping vertex_mapping;
-    TerrainMesh merged_mesh = merge::merge_by_distance(meshes, 0.1, vertex_mapping);
+    // TODO: adaptive merge distance or at least single connected component assert
+    TerrainMesh merged_mesh = merge::merge_by_distance(meshes, 0.001, vertex_mapping);
+    if (args.save_intermediate_meshes) {
+        const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".merged.glb");
+        LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path.string());
+        io::save_mesh_to_path(merged_mesh_path, merged_mesh, io::SaveOptions { .name = "merged" });
+    }
 
     LOG_INFO("Calculating uv mapping...");
     const uv_map::UvMap uv_map = parameterize_mesh(merged_mesh);
@@ -88,6 +88,12 @@ void run(const cli::Args &args) {
 
         LOG_INFO("Simplifying merged texture...");
         simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), glm::uvec2(256));
+
+        if (args.save_intermediate_meshes) {
+            const std::filesystem::path simplified_mesh_path = std::filesystem::path(args.output_path).replace_extension(".simplified.glb");
+            LOG_DEBUG("Saving simplified mesh to {}", simplified_mesh_path.string());
+            io::save_mesh_to_path(simplified_mesh_path, simplified_mesh, io::SaveOptions { .name = "simplified" });
+        }
     } else {
         simplified_mesh = merged_mesh;
     }

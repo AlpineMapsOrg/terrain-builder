@@ -21,6 +21,7 @@ namespace cli {
         std::vector<std::filesystem::path> input_paths;
         std::optional<SimplificationArgs> simplification;
         spdlog::level::level_enum log_level;
+        bool save_intermediate_meshes;
     };
 
     Args parse(int argc, const char *const *argv);

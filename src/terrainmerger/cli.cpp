@@ -40,6 +40,9 @@ Args cli::parse(int argc, const char * const * argv) {
         ->check(CLI::Range(0.0f, 1.0f))
         ->excludes("--no-simplify");
 
+    bool save_intermediate_meshes = false;
+    app.add_option("--save-debug-meshes", save_intermediate_meshes, "Output intermediate meshes");
+
     spdlog::level::level_enum log_level = spdlog::level::level_enum::info;
     const std::map<std::string, spdlog::level::level_enum> log_level_names{
         {"off", spdlog::level::level_enum::off},
@@ -66,6 +69,7 @@ Args cli::parse(int argc, const char * const * argv) {
     args.input_paths = input_paths;
     args.output_path = output_path;
     args.log_level = log_level;
+    args.save_intermediate_meshes = save_intermediate_meshes;
     if (!no_mesh_simplification) {
         SimplificationArgs simplification_args;
         simplification_args.factor = simplification_factor;
