@@ -47,10 +47,9 @@ std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh) {
     return isolated;
 }
 
-bool remove_isolated_vertices(TerrainMesh& mesh) {
+size_t remove_isolated_vertices(TerrainMesh& mesh) {
     const std::vector<size_t> isolated = find_isolated_vertices(mesh);
 
-    size_t removed_count = 0;
     std::vector<size_t> index_offset;
     for (size_t i : isolated | std::views::reverse) {
         const size_t last_index = mesh.positions.size() - 1;
@@ -66,5 +65,75 @@ bool remove_isolated_vertices(TerrainMesh& mesh) {
         }
     }
 
-    return !isolated.empty();
+    return isolated.size();
+}
+
+size_t remove_triangles_of_negligible_size(TerrainMesh& mesh, const double threshold_percentage_of_average) {
+    std::vector<double> areas;
+    areas.reserve(mesh.triangles.size());
+    for (glm::uvec3 &triangle : mesh.triangles) {
+        const std::array<glm::dvec3, triangle.length()> points{
+            mesh.positions[triangle.x],
+            mesh.positions[triangle.y],
+            mesh.positions[triangle.z]};
+
+        // const double area = Kernel().compute_area_3_object()(cgal_points[0], cgal_points[1], cgal_points[2]);
+        const double area = 0.5 * std::abs(
+                                      points[0].x * (points[1].y - points[2].y) +
+                                      points[1].x * (points[2].y - points[0].y) +
+                                      points[2].x * (points[0].y - points[1].y));
+
+        areas.push_back(area);
+    }
+
+    const double average_area = std::reduce(areas.begin(), areas.end()) / static_cast<double>(areas.size());
+    const size_t erased_count = std::erase_if(mesh.triangles, [&](const glm::uvec3 &triangle) {
+        const size_t index = &triangle - &*mesh.triangles.begin();
+        const double area = areas[index];
+        return area < average_area * threshold_percentage_of_average;
+    });
+
+    return erased_count;
+}
+
+void sort_triangles(TerrainMesh& mesh) {
+    sort_triangles(mesh);
+}
+
+void sort_triangles(std::span<glm::uvec3> triangles) {
+    // sort vertices in triangles
+    for (glm::uvec3 &triangle : triangles) {
+        unsigned int min_index = 0;
+        for (size_t k = 1; k < static_cast<size_t>(triangle.length()); k++) {
+            if (triangle[min_index] > triangle[k]) {
+                min_index = k;
+            }
+        }
+        if (min_index == 0) {
+            continue;
+        }
+
+        glm::uvec3 new_triangle;
+        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+            new_triangle[k] = triangle[(min_index + k) % triangle.length()];
+        }
+
+        triangle = new_triangle;
+    }
+
+    // sort triangle vector
+    std::sort(triangles.begin(), triangles.end(), [](const glm::uvec3 a, const glm::uvec3 b) {
+        // First, compare by x
+        if (a.x != b.x) {
+            return a.x < b.x;
+        }
+
+        // If x is equal, compare by y
+        if (a.y != b.y) {
+            return a.y < b.y;
+        }
+
+        // If x and y are equal, compare by z
+        return a.z < b.z;
+    });
 }

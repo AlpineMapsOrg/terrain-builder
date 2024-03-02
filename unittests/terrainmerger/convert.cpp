@@ -3,7 +3,6 @@
 
 #include "../catch2_helpers.h"
 #include "mesh/io.h"
-#include "utils.hpp"
 #include "convert.h"
 #include "cgal.h"
 

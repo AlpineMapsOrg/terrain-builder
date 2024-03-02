@@ -22,7 +22,6 @@
 
 #include "../catch2_helpers.h"
 #include "merge.h"
-#include "utils.hpp"
 
 TEST_CASE("terrainmerger") {
     SECTION("two tris") {
