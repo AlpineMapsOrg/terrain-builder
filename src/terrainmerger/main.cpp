@@ -1,22 +1,11 @@
 #include "cli.h"
-#include "merge.h"
-#include "simplify.h"
-#include "uv_map.h"
 #include "convert.h"
 #include "log.h"
+#include "merge.h"
 #include "mesh/io.h"
-
-#ifndef NDEBUG
-#define NDEBUG false
-#else
-#define NDEBUG true
-#endif
-
-#ifndef DEBUG
-#define DEBUG !NDEBUG
-#endif
-
-#define VALIDATE_MESHES DEBUG
+#include "simplify.h"
+#include "uv_map.h"
+#include "validate.h"
 
 std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::path> paths, const bool print_errors = true) {
     std::vector<TerrainMesh> meshes;
@@ -30,10 +19,11 @@ std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::
             }
             exit(EXIT_FAILURE);
         }
-        
-        TerrainMesh mesh = std::move(result.value());
+
+        const TerrainMesh mesh = std::move(result.value());
         validate_mesh(mesh);
-        meshes.push_back(std::move(mesh));
+        validate_mesh(convert::mesh2cgal(mesh));
+        meshes.push_back(mesh);
     }
 
     return meshes;

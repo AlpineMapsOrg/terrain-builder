@@ -182,7 +182,7 @@ static void validate_sorted_mesh(const TerrainMesh &mesh) {
 }
 
 void validate_mesh(const TerrainMesh &mesh) {
-#if !VALIDATE_MESHES
+#if NDEBUG
     return;
 #endif
     TerrainMesh sorted(mesh);

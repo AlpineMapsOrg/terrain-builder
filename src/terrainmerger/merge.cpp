@@ -11,6 +11,7 @@
 #include "log.h"
 #include "merge.h"
 #include "mesh/terrain_mesh.h"
+#include "validate.h"
 
 using namespace merge;
 
@@ -265,6 +266,7 @@ TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, c
     }
 
     validate_mesh(merged_mesh);
+    validate_mesh(convert::mesh2cgal(merged_mesh));
 
     return merged_mesh;
 }

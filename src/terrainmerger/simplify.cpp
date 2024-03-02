@@ -29,6 +29,7 @@
 #include "log.h"
 #include "simplify.h"
 #include "uv_map.h"
+#include "validate.h"
 
 using namespace simplify;
 
@@ -323,6 +324,9 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
     }
 
     remove_isolated_vertices(simplified_mesh);
+
+    validate_mesh(simplified_mesh);
+    validate_mesh(convert::mesh2cgal(simplified_mesh));
 
     return Result{
         .mesh = simplified_mesh,
