@@ -50,4 +50,7 @@ public:
 geometry::Aabb<3, double> calculate_bounds(const TerrainMesh &mesh);
 geometry::Aabb<3, double> calculate_bounds(std::span<const TerrainMesh> meshes);
 
+std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh);
+bool remove_isolated_vertices(TerrainMesh& mesh);
+
 #endif

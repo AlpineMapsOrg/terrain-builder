@@ -292,6 +292,8 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
         simplified_mesh.positions[i] += average_position;
     }
 
+    remove_isolated_vertices(simplified_mesh);
+
     return Result{
         .mesh = simplified_mesh,
         .max_absolute_error = simplification_error};
