@@ -126,24 +126,10 @@ struct Border_is_constrained_edge_map {
             return false;
         }
 
-        const HalfedgeDescriptor halfedge1 = CGAL::halfedge(edge, mesh);
-        const HalfedgeDescriptor halfedge2 = CGAL::opposite(halfedge1, mesh);
-        for (const HalfedgeDescriptor halfedge : {halfedge1, halfedge2}) {
-            if (CGAL::face(halfedge, mesh) == SurfaceMesh::null_face()) {
-                continue;
-            }
-
-            HalfedgeDescriptor current = halfedge;
-            // we can skip the first edge as we have already checked it above
-            current = mesh.next(current);
-            do {
-                const EdgeDescriptor edge = CGAL::edge(current, mesh);
-                if (CGAL::is_border(edge, mesh)) {
-                    return true;
-                }
-
-                current = mesh.next(current);
-            } while (current != halfedge);
+        const VertexDescriptor v0 = mesh.vertex(edge, 0);
+        const VertexDescriptor v1 = mesh.vertex(edge, 1);
+        if (CGAL::is_border(v0, mesh).has_value() || CGAL::is_border(y1, mesh).has_value()) {
+            return true;
         }
 
         return false;
