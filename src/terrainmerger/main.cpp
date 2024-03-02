@@ -41,11 +41,10 @@ uv_map::UvMap parameterize_mesh(TerrainMesh &mesh) {
     }
 }
 
-TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs& args) {
+TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs &args) {
     simplify::Options options{
         .stop_edge_ratio = args.factor,
-        .error_bound = args.max_error
-    };
+        .error_bound = args.max_error};
     simplify::Result result = simplify::simplify_mesh(mesh, options);
     const TerrainMesh &simplified_mesh = result.mesh;
 
@@ -57,7 +56,7 @@ TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs
     LOG_DEBUG("Simplified mesh to {}/{} vertices and {}/{} faces",
               simplified_vertex_count, initial_vertex_count,
               simplified_face_count, initial_face_count);
-    
+
     return result.mesh;
 }
 
@@ -72,7 +71,7 @@ void run(const cli::Args &args) {
     if (args.save_intermediate_meshes) {
         const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".merged.glb");
         LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path.string());
-        io::save_mesh_to_path(merged_mesh_path, merged_mesh, io::SaveOptions { .name = "merged" });
+        io::save_mesh_to_path(merged_mesh_path, merged_mesh, io::SaveOptions{.name = "merged"});
     }
 
     LOG_INFO("Calculating uv mapping...");
@@ -93,7 +92,7 @@ void run(const cli::Args &args) {
         if (args.save_intermediate_meshes) {
             const std::filesystem::path simplified_mesh_path = std::filesystem::path(args.output_path).replace_extension(".simplified.glb");
             LOG_DEBUG("Saving simplified mesh to {}", simplified_mesh_path.string());
-            io::save_mesh_to_path(simplified_mesh_path, simplified_mesh, io::SaveOptions { .name = "simplified" });
+            io::save_mesh_to_path(simplified_mesh_path, simplified_mesh, io::SaveOptions{.name = "simplified"});
         }
     } else {
         simplified_mesh = merged_mesh;
@@ -108,11 +107,10 @@ int main(int argc, char **argv) {
     Log::init(args.log_level);
 
     const std::string arg_str = std::accumulate(argv, argv + argc, std::string(),
-                                                    [](const std::string &acc, const char *arg) {
-                                                        return acc + (acc.empty() ? "" : " ") + arg;
-                                                    });
+                                                [](const std::string &acc, const char *arg) {
+                                                    return acc + (acc.empty() ? "" : " ") + arg;
+                                                });
     LOG_DEBUG("Running with: {}", arg_str);
 
     run(args);
-
 }
