@@ -16,6 +16,8 @@
 #include <CGAL/Surface_mesh_simplification/edge_collapse.h>
 #include <CGAL/tags.h>
 
+#include <CGAL/Polygon_mesh_processing/repair_self_intersections.h>
+
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
@@ -175,6 +177,7 @@ static void _simplify_mesh_with_cost_and_placement(
                                                                                         .get_placement(constrained_placement)
                                                                                         .get_cost(cost)
                                                                                         .visitor(visitor));
+
     LOG_TRACE("Removed {} edges from simplified mesh", removed_edge_count);
 
     // Actually remove the vertices, edges and faces
@@ -303,6 +306,10 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
         simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh);
     } else {
         throw std::invalid_argument("either an error bound or stop ratio is required");
+    }
+
+    if (!CGAL::Polygon_mesh_processing::experimental::remove_self_intersections(cgal_mesh)) {
+        LOG_WARN("Failed to remove self intersections after simplification");
     }
 
     TerrainMesh simplified_mesh = convert::cgal2mesh(cgal_mesh);
