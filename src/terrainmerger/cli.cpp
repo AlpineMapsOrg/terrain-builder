@@ -41,7 +41,7 @@ Args cli::parse(int argc, const char * const * argv) {
         ->excludes("--no-simplify");
 
     bool save_intermediate_meshes = false;
-    app.add_option("--save-debug-meshes", save_intermediate_meshes, "Output intermediate meshes");
+    app.add_flag("--save-debug-meshes", save_intermediate_meshes, "Output intermediate meshes");
 
     spdlog::level::level_enum log_level = spdlog::level::level_enum::info;
     const std::map<std::string, spdlog::level::level_enum> log_level_names{

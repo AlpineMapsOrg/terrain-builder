@@ -20,7 +20,7 @@ Point2 convert::glm2cgal(glm::dvec2 point) {
 }
 
 SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
-    LOG_TRACE("Converting terrain mesh to cgal mesh");
+    // LOG_TRACE("Converting terrain mesh to cgal mesh");
 
     SurfaceMesh cgal_mesh;
 
@@ -40,7 +40,7 @@ SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
     return cgal_mesh;
 }
 TerrainMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
-    LOG_TRACE("Converting cgal mesh to terrain mesh");
+    // LOG_TRACE("Converting cgal mesh to terrain mesh");
 
     TerrainMesh mesh;
 

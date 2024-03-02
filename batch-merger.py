@@ -20,7 +20,7 @@ def build_command(terrainmerger_path, tile_x, tile_y, zoom, children_to_merge, o
     command = [
         terrainmerger_path,
         "--input"
-    ] + children_to_merge + ["--output", output_path, "--verbosity", "trace"]
+    ] + children_to_merge + ["--output", output_path, "--verbosity", "trace", "--save-debug-meshes"]
     print(command)
     try:
         subprocess.run(command, check=False)

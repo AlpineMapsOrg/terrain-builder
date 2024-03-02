@@ -17,12 +17,12 @@ inline size_t count_connected_components(const CGAL::Surface_mesh<Point> &mesh) 
 template<typename Point>
 inline void validate_mesh(const CGAL::Surface_mesh<Point> &mesh) {
 #if !NDEBUG
-    // return;
+    return;
 #endif
 
-    assert(mesh.is_valid(true)); 
+    assert(mesh.is_valid()); 
     assert(CGAL::is_triangle_mesh(mesh));
-    assert(CGAL::is_valid_polygon_mesh(mesh, true));
+    assert(CGAL::is_valid_polygon_mesh(mesh));
     assert(count_connected_components(mesh) == 1);
     assert(!CGAL::Polygon_mesh_processing::does_self_intersect(mesh));
 }
