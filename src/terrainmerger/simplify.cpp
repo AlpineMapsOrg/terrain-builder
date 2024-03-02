@@ -3,7 +3,8 @@
 
 // required before distance.h due to a bug in cgal
 // https://github.com/CGAL/cgal/issues/8009
-#include <CGAL/Simple_cartesian.h> 
+#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#include <CGAL/Exact_predicates_exact_constructions_kernel_with_sqrt.h>
 
 #include <CGAL/Polygon_mesh_processing/distance.h>
 #include <CGAL/Surface_mesh_simplification/Edge_collapse_visitor_base.h>

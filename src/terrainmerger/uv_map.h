@@ -47,14 +47,14 @@ private:
     int code;
 };
 
-typedef CGAL::Unique_hash_map<VertexDescriptor, Point2> UvMap;
+typedef CGAL::Unique_hash_map<VertexDescriptor_, Point2_> UvMap;
 typedef boost::associative_property_map<UvMap> UvPropertyMap;
 
 std::vector<glm::dvec2> decode_uv_map(const UvMap& uv_map, size_t number_of_vertices);
 std::vector<glm::dvec2> decode_uv_map(const UvPropertyMap& uv_map, size_t number_of_vertices);
 
 tl::expected<UvMap, UvParameterizationError> parameterize_mesh(
-    SurfaceMesh &mesh,
+    SurfaceMesh_ &mesh,
     Algorithm algorithm,
     Border border);
 
