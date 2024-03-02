@@ -174,7 +174,25 @@ static std::optional<cv::Mat> load_texture_from_material(const cgltf_material &m
         }                                                            \
     } while (false)
 
+template<typename T>
+static std::optional<std::reference_wrapper<const T>> get_single_element(const char* name, cgltf_size count, T const* items) {
+    if (count == 0) {
+        LOG_ERROR("file contains no {}", name);
+        return std::nullopt;
+    }
+    if (count > 1) {
+        LOG_WARN("file contains more than one {}", name);
+        return std::nullopt;
+    }
+
+    const T& ref = items[0];
+
+    return ref;
+}
+
 tl::expected<TerrainMesh, LoadMeshError> io::load_mesh_from_raw(const RawGltfMesh &raw, const LoadOptions _options) {
+    LOG_TRACE("Loading mesh from gltf data");
+
     const cgltf_data &data = *raw.data;
 
     const auto mesh_opt = get_single_element("mesh", data.meshes_count, data.meshes);
@@ -344,6 +362,8 @@ static std::filesystem::path create_parent_directories(const std::filesystem::pa
 
 /// Saves the mesh as a .gltf or .glb file at the given path.
 static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesystem::path &path, const SaveOptions options) {
+    LOG_TRACE("Saving mesh as gltf/glb");
+
     // ********************* Preprocessing ********************* //
 
     // Calculate the average vertex position for later normalization.
@@ -355,7 +375,8 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
 
     // Create vertex data vector from positions and uvs.
     // We also normalize vertex position by extracting their average position and storing the offsets.
-    // This is dont to preserve our double accuracy, as gltf cannot store them directly.
+    // This is to preserve more of our double accuracy, as gltf cannot store them directly.
+    // This helps but does not fully preserve the accuracy.
     std::vector<float> vertices;
     vertices.reserve((vectorsizeof(terrain_mesh.positions) + vectorsizeof(terrain_mesh.uvs)) / sizeof(float));
     glm::vec3 max_position(-std::numeric_limits<float>::infinity());
@@ -562,18 +583,22 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
     // Create the node hierachy.
     // We create parent nodes to offset the position by the average calculate above.
     // We need multiple parents to ensure that we dont lose our double precision accurary.
+    char *node_name = const_cast<char *>(options.name.data());
     std::array<cgltf_node, 3> nodes;
     cgltf_node &mesh_node = nodes[2] = {};
+    mesh_node.name = node_name;
     mesh_node.has_translation = true;
     mesh_node.mesh = &mesh;
 
     cgltf_node &parent_node = nodes[1] = {};
+    parent_node.name = node_name;
     std::array<cgltf_node *, 1> parent_node_children = {&mesh_node};
     parent_node.children_count = parent_node_children.size();
     parent_node.children = parent_node_children.data();
     parent_node.has_translation = true;
 
     cgltf_node &parent_parent_node = nodes[0] = {};
+    parent_parent_node.name = node_name;
     std::array<cgltf_node *, 1> parent_parent_node_children = {&parent_node};
     parent_parent_node.children_count = parent_parent_node_children.size();
     parent_parent_node.children = parent_parent_node_children.data();
@@ -626,7 +651,10 @@ static void save_mesh_as_gltf(const TerrainMesh &terrain_mesh, const std::filesy
         data.samplers_count = samplers.size();
         data.samplers = samplers.data();
     } else {
-        data.buffer_views_count = 2;
+        data.textures_count = 0;
+        data.images_count = 0;
+        data.samplers_count = 0;
+        data.buffer_views_count -= 1;
     }
 
     // Set up extra metadata
@@ -712,6 +740,8 @@ static tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<con
 }
 
 static tl::expected<void, SaveMeshError> save_mesh_as_bin(const TerrainMesh &mesh, const std::filesystem::path &path, const SaveOptions _options) {
+    LOG_TRACE("Saving mesh as high precision tile");
+
     const auto result = write_mesh_to_buffer(mesh);
     if (!result.has_value()) {
         return tl::unexpected(result.error());
@@ -808,6 +838,8 @@ tl::expected<void, SaveMeshError> io::save_mesh_to_path(
     const std::filesystem::path &path,
     const TerrainMesh &mesh,
     const SaveOptions options) {
+    LOG_TRACE("Saving mesh to path {}", path.string());
+
     const std::filesystem::path extension = path.extension();
     if (extension == ".glb" || extension == ".gltf") {
         // TODO: return errors

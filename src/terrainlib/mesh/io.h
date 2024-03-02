@@ -67,6 +67,7 @@ tl::expected<TerrainMesh, LoadMeshError> load_mesh_from_path(const std::filesyst
 
 struct SaveOptions {
     std::string texture_format = ".jpeg";
+    std::string name = "Tile";
     std::unordered_map<std::string, std::string> metadata = {};
 };
 
@@ -118,25 +119,7 @@ cv::Mat read_texture_from_encoded_bytes(std::span<const uint8_t> buffer);
 void write_texture_to_encoded_buffer(const cv::Mat &image, std::vector<uint8_t> &buffer, const std::string extension = ".png");
 std::vector<uint8_t> write_texture_to_encoded_buffer(const cv::Mat &image, const std::string extension = ".png");
 
-namespace {
-// helper for io.cpp
-template<typename T>
-static std::optional<std::reference_wrapper<const T>> get_single_element(const char* name, cgltf_size count, T const* items) {
-    if (count == 0) {
-        LOG_ERROR("file contains no {}", name);
-        return std::nullopt;
-    }
-    if (count > 1) {
-        LOG_WARN("file contains more than one {}", name);
-        return std::nullopt;
-    }
-
-    const T& ref = items[0];
-
-    return ref;
 }
-} // namespace
-} // namespace io
 
 // custom serialization
 namespace zpp::bits {
