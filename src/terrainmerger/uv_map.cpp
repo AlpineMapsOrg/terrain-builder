@@ -94,6 +94,11 @@ tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(SurfaceMe
         return tl::unexpected(UvParameterizationError(result));
     }
 
+    for (size_t i = 0; i < CGAL::num_vertices(mesh); i++) {
+        Point2_ &uv = uv_map[CGAL::SM_Vertex_index(i)];
+        uv = convert::glm2cgal_(glm::clamp(convert::cgal2glm_(uv), glm::dvec2(0), glm::dvec2(1)));
+    }
+
     return uv_uhm;
 }
 
@@ -172,8 +177,8 @@ Texture uv_map::merge_textures(
     for (const glm::uvec3 &mapped_triangle : merged_mesh.triangles) {
         std::array<cv::Point2f, 3> mapped_uv_triangle;
         for (size_t i = 0; i < static_cast<size_t>(mapped_triangle.length()); i++) {
-            const auto uv = uv_map[CGAL::SM_Vertex_index(mapped_triangle[i])];
-            mapped_uv_triangle[i] = cv::Point2f(uv.x() * merged_texture_size.x, uv.y() * merged_texture_size.y);
+            const glm::dvec2 uv = convert::cgal2glm_(uv_map[CGAL::SM_Vertex_index(mapped_triangle[i])]);
+            mapped_uv_triangle[i] = cv::Point2f(uv.x * merged_texture_size.x, uv.y * merged_texture_size.y);
         }
 
         const merge::TriangleInMesh source_mesh_and_triangle = mapping.find_source_triangle(mapped_triangle);
