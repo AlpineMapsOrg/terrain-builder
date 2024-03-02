@@ -137,3 +137,51 @@ void sort_triangles(std::span<glm::uvec3> triangles) {
         return a.z < b.z;
     });
 }
+
+static void validate_sorted_mesh(const TerrainMesh &mesh) {
+    // check correct count of uvs
+    assert(!mesh.has_uvs() || mesh.positions.size() == mesh.uvs.size());
+    
+    // check uvs between 0 and 1
+    for (const glm::dvec2 &uv : mesh.uvs) {
+        for (size_t k = 0; k < static_cast<size_t>(uv.length()); k++) {
+            assert(uv[k] >= 0);
+            assert(uv[k] < 1);
+        }
+    }
+
+    // check for vertex indices in triangles outside valid range
+    for (const glm::uvec3 &triangle : mesh.triangles) {
+        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+            const size_t vertex_index = triangle[k];
+            assert(vertex_index < mesh.vertex_count());
+        }
+    }
+
+    // check for degenerate triangles
+    for (const glm::uvec3 &triangle : mesh.triangles) {
+        assert(triangle.x != triangle.y);
+        assert(triangle.y != triangle.z);
+    }
+
+    // check for duplicated triangles
+    // assert(mesh.triangles.end() == std::adjacent_find(mesh.triangles.begin(), mesh.triangles.end()));
+
+    // check for duplicated triangles with different orientation
+    std::vector<glm::uvec3> triangles_ignore_orientation(mesh.triangles);
+    // sort vertices in triangles
+    for (glm::uvec3 &triangle : triangles_ignore_orientation) {
+        std::sort(&triangle.x, &triangle.z);
+    }
+    sort_triangles(triangles_ignore_orientation);
+    assert(mesh.triangles.end() == std::adjacent_find(mesh.triangles.begin(), mesh.triangles.end()));
+
+    // check for isolated vertices
+    assert(find_isolated_vertices(mesh).empty());
+}
+
+void validate_mesh(const TerrainMesh &mesh) {
+    TerrainMesh sorted(mesh);
+    sort_triangles(sorted);
+    validate_sorted_mesh(sorted);
+}

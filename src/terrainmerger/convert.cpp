@@ -4,6 +4,7 @@
 
 #include "convert.h"
 #include "log.h"
+#include "validate.h"
     
 glm::dvec3 convert::cgal2glm(Point3 point) {
     return glm::dvec3(point[0], point[1], point[2]);
@@ -19,6 +20,8 @@ Point2 convert::glm2cgal(glm::dvec2 point) {
 }
 
 SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
+    validate_mesh(mesh);
+
     SurfaceMesh cgal_mesh;
 
     for (const glm::dvec3 &position : mesh.positions) {
@@ -27,27 +30,20 @@ SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
     }
 
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        CGAL::SM_Face_index face = cgal_mesh.add_face(
+        const CGAL::SM_Face_index face = cgal_mesh.add_face(
             CGAL::SM_Vertex_index(triangle.x),
             CGAL::SM_Vertex_index(triangle.y),
             CGAL::SM_Vertex_index(triangle.z));
-
-        if (face == SurfaceMesh::null_face()) {
-            LOG_WARN("Adding face failed, trying again with different order");
-            face = cgal_mesh.add_face(
-                CGAL::SM_Vertex_index(triangle.x),
-                CGAL::SM_Vertex_index(triangle.z),
-                CGAL::SM_Vertex_index(triangle.y));
-        }
-        assert(face != SurfaceMesh::null_face());
+        assert(face != SurfaceMesh_::null_face());
     }
 
-    assert(cgal_mesh.is_valid(true));
-    assert(CGAL::is_triangle_mesh(cgal_mesh));
+    validate_mesh(cgal_mesh);
 
     return cgal_mesh;
 }
 TerrainMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
+    validate_mesh(cgal_mesh);
+
     TerrainMesh mesh;
 
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);

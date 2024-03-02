@@ -51,6 +51,7 @@ typedef boost::graph_traits<SurfaceMesh>::face_descriptor FaceDescriptor;
 Point3 glm2cgal(glm::dvec3 point) {
     return Point3(point[0], point[1], point[2]);
 }
+
 SurfaceMesh mesh2cgal(const TerrainMesh &mesh) {
     SurfaceMesh cgal_mesh;
 
@@ -91,6 +92,7 @@ void check_mesh_is_plane(const TerrainMesh &mesh) {
     const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
     REQUIRE(cgal_mesh.is_valid(true));
     REQUIRE(CGAL::is_triangle_mesh(cgal_mesh));
+    REQUIRE(CGAL::is_valid_polygon_mesh(cgal_mesh, true));
     REQUIRE(count_connected_components(cgal_mesh) == 1);
     REQUIRE(!CGAL::Polygon_mesh_processing::does_self_intersect(cgal_mesh));
 }

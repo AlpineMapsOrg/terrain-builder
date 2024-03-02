@@ -57,4 +57,6 @@ size_t remove_triangles_of_negligible_size(TerrainMesh& mesh, const double thres
 void sort_triangles(TerrainMesh &mesh);
 void sort_triangles(std::span<glm::uvec3> triangles);
 
+void validate_mesh(const TerrainMesh &mesh);
+
 #endif

@@ -233,6 +233,7 @@ add_library(terrainmergerlib
     terrainmerger/cgal.h
     terrainmerger/convert.h
     terrainmerger/convert.cpp
+    terrainmerger/validate.h
 )
 target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
 target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
