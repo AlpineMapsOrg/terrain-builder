@@ -38,4 +38,9 @@ Result simplify_mesh(const TerrainMesh &mesh, Options options = Options());
 
 }
 
+// fmt support
+template <> struct fmt::formatter<simplify::Algorithm>: formatter<string_view> {
+    auto format(const simplify::Algorithm& algorithm, format_context& ctx) const;
+};
+
 #endif

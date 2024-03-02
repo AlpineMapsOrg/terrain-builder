@@ -42,7 +42,8 @@ struct Uv_update_edge_collapse_visitor : CGAL::Surface_mesh_simplification::Edge
     // If placement is absent the edge is left uncollapsed.
     void OnCollapsing(const Profile &profile,
                       boost::optional<Point> placement) {
-        assert(!profile.is_v0_v1_a_border() && !profile.is_v1_v0_a_border());
+        // only valid if restrict_border_triangles=false
+        // assert(!profile.is_v0_v1_a_border() && !profile.is_v1_v0_a_border());
 
         if (!placement) {
             return;
@@ -81,12 +82,48 @@ struct Border_is_constrained_edge_map {
 
     const SurfaceMesh *mesh;
     const bool active = true;
+    const bool restrict_border_triangles = true;
 
     Border_is_constrained_edge_map(const SurfaceMesh &mesh, const bool active = true)
         : mesh(&mesh), active(active) {}
 
     friend value_type get(const Border_is_constrained_edge_map &map, const key_type &edge) {
-        return map.active && CGAL::is_border(edge, *map.mesh);
+        if (!map.active) {
+            return false;
+        }
+
+        const SurfaceMesh &mesh = *map.mesh;
+
+        // return CGAL::is_border(edge, mesh); // old version
+        if (CGAL::is_border(edge, mesh)) {
+            return true;
+        }
+
+        if (!map.restrict_border_triangles) {
+            return false;
+        }
+
+        const HalfedgeDescriptor halfedge1 = CGAL::halfedge(edge, mesh);
+        const HalfedgeDescriptor halfedge2 = CGAL::opposite(halfedge1, mesh);
+        for (const HalfedgeDescriptor halfedge : {halfedge1, halfedge2}) {
+            if (CGAL::face(halfedge, mesh) == SurfaceMesh::null_face()) {
+                continue;
+            }
+
+            HalfedgeDescriptor current = halfedge;
+            // we can skip the first edge as we have already checked it above
+            current = mesh.next(current);
+            do {
+                const EdgeDescriptor edge = CGAL::edge(current, mesh);
+                if (CGAL::is_border(edge, mesh)) {
+                    return true;
+                }
+
+                current = mesh.next(current);
+            } while (current != halfedge);
+        }
+
+        return false;
     }
 };
 
