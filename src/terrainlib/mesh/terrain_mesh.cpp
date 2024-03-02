@@ -48,6 +48,7 @@ std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh) {
 }
 
 size_t remove_isolated_vertices(TerrainMesh& mesh) {
+    const bool has_uvs = mesh.has_uvs();
     const std::vector<size_t> isolated = find_isolated_vertices(mesh);
 
     std::vector<size_t> index_offset;
@@ -55,6 +56,10 @@ size_t remove_isolated_vertices(TerrainMesh& mesh) {
         const size_t last_index = mesh.positions.size() - 1;
         std::swap(mesh.positions[i], mesh.positions[last_index]);
         mesh.positions.pop_back();
+        if (has_uvs) {
+            std::swap(mesh.uvs[i], mesh.uvs[last_index]);
+        }
+        mesh.uvs.pop_back();
 
         for (glm::uvec3 &triangle : mesh.triangles) {
             for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
