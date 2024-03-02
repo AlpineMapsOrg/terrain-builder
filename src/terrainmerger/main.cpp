@@ -64,6 +64,9 @@ void run(const cli::Args &args) {
     LOG_INFO("Loading meshes...");
     std::vector<TerrainMesh> meshes = load_meshes_from_path(args.input_paths);
 
+    const bool meshes_have_uvs = std::all_of(meshes.begin(), meshes.end(), [](const TerrainMesh &mesh) { return mesh.has_uvs(); });
+    const bool meshes_have_textures = std::all_of(meshes.begin(), meshes.end(), [](const TerrainMesh &mesh) { return mesh.has_texture(); });
+
     LOG_INFO("Merging meshes...");
     merge::VertexMapping vertex_mapping;
     // TODO: adaptive merge distance or at least single connected component assert
@@ -74,20 +77,26 @@ void run(const cli::Args &args) {
         io::save_mesh_to_path(merged_mesh_path, merged_mesh, io::SaveOptions{.name = "merged"});
     }
 
-    LOG_INFO("Calculating uv mapping...");
-    const uv_map::UvMap uv_map = parameterize_mesh(merged_mesh);
-    merged_mesh.uvs = uv_map::decode_uv_map(uv_map, merged_mesh.vertex_count());
+    if (meshes_have_uvs) {
+        LOG_INFO("Calculating uv mapping...");
+        const uv_map::UvMap uv_map = parameterize_mesh(merged_mesh);
+        merged_mesh.uvs = uv_map::decode_uv_map(uv_map, merged_mesh.vertex_count());
 
-    LOG_INFO("Merging textures...");
-    merged_mesh.texture = uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, glm::uvec2(1024));
+        if (meshes_have_textures) {
+            LOG_INFO("Merging textures...");
+            merged_mesh.texture = uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, glm::uvec2(1024));
+        }
+    }
 
     TerrainMesh simplified_mesh;
     if (args.simplification) {
         LOG_INFO("Simplifying merged mesh...");
         simplified_mesh = simplify_mesh(merged_mesh, *args.simplification);
 
-        LOG_INFO("Simplifying merged texture...");
-        simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), glm::uvec2(256));
+        if (merged_mesh.texture.has_value()) {
+            LOG_INFO("Simplifying merged texture...");
+            simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), glm::uvec2(256));
+        }
 
         if (args.save_intermediate_meshes) {
             const std::filesystem::path simplified_mesh_path = std::filesystem::path(args.output_path).replace_extension(".simplified.glb");
@@ -100,6 +109,8 @@ void run(const cli::Args &args) {
 
     LOG_INFO("Saving final mesh...");
     io::save_mesh_to_path(args.output_path, simplified_mesh);
+
+    LOG_INFO("Done");
 }
 
 int main(int argc, char **argv) {
