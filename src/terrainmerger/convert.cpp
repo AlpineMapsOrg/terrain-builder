@@ -20,6 +20,8 @@ Point2 convert::glm2cgal(glm::dvec2 point) {
 }
 
 SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
+    LOG_TRACE("Converting terrain mesh to cgal mesh");
+
     validate_mesh(mesh);
 
     SurfaceMesh cgal_mesh;
@@ -42,6 +44,8 @@ SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
     return cgal_mesh;
 }
 TerrainMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
+    LOG_TRACE("Converting cgal mesh to terrain mesh");
+
     validate_mesh(cgal_mesh);
 
     TerrainMesh mesh;
@@ -85,6 +89,7 @@ Point2_ convert::glm2cgal_(glm::dvec2 point) {
 }
 
 SurfaceMesh_ convert::mesh2cgal_(const TerrainMesh &mesh) {
+    LOG_TRACE("Converting terrain mesh to cgal mesh");
     validate_mesh(mesh);
 
     SurfaceMesh_ cgal_mesh;
@@ -102,13 +107,13 @@ SurfaceMesh_ convert::mesh2cgal_(const TerrainMesh &mesh) {
         assert(face != SurfaceMesh_::null_face());
     }
 
-    
     validate_mesh(cgal_mesh);
 
     return cgal_mesh;
 }
 
 TerrainMesh convert::cgal2mesh_(const SurfaceMesh_ &cgal_mesh) {
+    LOG_TRACE("Converting cgal mesh to terrain mesh");
     validate_mesh(cgal_mesh);
 
     TerrainMesh mesh;

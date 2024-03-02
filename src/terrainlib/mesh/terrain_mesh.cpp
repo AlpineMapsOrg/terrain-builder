@@ -97,7 +97,7 @@ size_t remove_triangles_of_negligible_size(TerrainMesh& mesh, const double thres
 }
 
 void sort_triangles(TerrainMesh& mesh) {
-    sort_triangles(mesh);
+    sort_triangles(mesh.triangles);
 }
 
 void sort_triangles(std::span<glm::uvec3> triangles) {
@@ -146,7 +146,7 @@ static void validate_sorted_mesh(const TerrainMesh &mesh) {
     for (const glm::dvec2 &uv : mesh.uvs) {
         for (size_t k = 0; k < static_cast<size_t>(uv.length()); k++) {
             assert(uv[k] >= 0);
-            assert(uv[k] < 1);
+            assert(uv[k] <= 1);
         }
     }
 
@@ -165,7 +165,7 @@ static void validate_sorted_mesh(const TerrainMesh &mesh) {
     }
 
     // check for duplicated triangles
-    // assert(mesh.triangles.end() == std::adjacent_find(mesh.triangles.begin(), mesh.triangles.end()));
+    assert(mesh.triangles.end() == std::adjacent_find(mesh.triangles.begin(), mesh.triangles.end()));
 
     // check for duplicated triangles with different orientation
     std::vector<glm::uvec3> triangles_ignore_orientation(mesh.triangles);
@@ -173,14 +173,18 @@ static void validate_sorted_mesh(const TerrainMesh &mesh) {
     for (glm::uvec3 &triangle : triangles_ignore_orientation) {
         std::sort(&triangle.x, &triangle.z);
     }
+    std::vector<glm::uvec3> triangles_ignore_orientation2(triangles_ignore_orientation);
     sort_triangles(triangles_ignore_orientation);
-    assert(mesh.triangles.end() == std::adjacent_find(mesh.triangles.begin(), mesh.triangles.end()));
+    assert(triangles_ignore_orientation.end() == std::adjacent_find(triangles_ignore_orientation.begin(), triangles_ignore_orientation.end()));
 
     // check for isolated vertices
     assert(find_isolated_vertices(mesh).empty());
 }
 
 void validate_mesh(const TerrainMesh &mesh) {
+#if !VALIDATE_MESHES
+    return;
+#endif
     TerrainMesh sorted(mesh);
     sort_triangles(sorted);
     validate_sorted_mesh(sorted);

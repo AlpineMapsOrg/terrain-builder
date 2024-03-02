@@ -264,6 +264,8 @@ TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, c
         }
     }
 
+    validate_mesh(merged_mesh);
+
     return merged_mesh;
 }
 

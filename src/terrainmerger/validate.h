@@ -14,7 +14,11 @@ inline size_t count_connected_components(const SurfaceMesh &mesh) {
     return num;
 }
 
-inline void validate_mesh(const SurfaceMesh& mesh) {
+inline void validate_mesh(const SurfaceMesh &mesh) {
+#if !VALIDATE_MESHES
+    return;
+#endif
+
     assert(mesh.is_valid()); 
     assert(CGAL::is_triangle_mesh(mesh));
     assert(CGAL::is_valid_polygon_mesh(mesh));
@@ -33,6 +37,10 @@ inline size_t count_connected_components(const SurfaceMesh_ &mesh) {
 }
 
 inline void validate_mesh(const SurfaceMesh_& mesh) {
+#if !VALIDATE_MESHES
+    return;
+#endif
+
     assert(mesh.is_valid()); 
     assert(CGAL::is_triangle_mesh(mesh));
     assert(CGAL::is_valid_polygon_mesh(mesh));

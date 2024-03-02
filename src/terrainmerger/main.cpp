@@ -6,6 +6,18 @@
 #include "log.h"
 #include "mesh/io.h"
 
+#ifndef NDEBUG
+#define NDEBUG false
+#else
+#define NDEBUG true
+#endif
+
+#ifndef DEBUG
+#define DEBUG !NDEBUG
+#endif
+
+#define VALIDATE_MESHES DEBUG
+
 std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::path> paths, const bool print_errors = true) {
     std::vector<TerrainMesh> meshes;
     meshes.reserve(paths.size());
@@ -20,6 +32,7 @@ std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::
         }
         
         TerrainMesh mesh = std::move(result.value());
+        validate_mesh(mesh);
         meshes.push_back(std::move(mesh));
     }
 
@@ -59,8 +72,6 @@ TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs
 }
 
 void run(const cli::Args &args) {
-    Log::init(args.log_level);
-
     LOG_INFO("Loading meshes...");
     std::vector<TerrainMesh> meshes = load_meshes_from_path(args.input_paths);
 
@@ -104,5 +115,14 @@ void run(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
+    Log::init(args.log_level);
+
+    const std::string arg_str = std::accumulate(argv, argv + argc, std::string(),
+                                                    [](const std::string &acc, const char *arg) {
+                                                        return acc + (acc.empty() ? "" : " ") + arg;
+                                                    });
+    LOG_DEBUG("Running with: {}", arg_str);
+
     run(args);
+
 }
