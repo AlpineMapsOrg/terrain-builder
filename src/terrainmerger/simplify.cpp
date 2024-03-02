@@ -20,6 +20,7 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 #include <tl/expected.hpp>
+#include <fmt/format.h>
 
 #include "convert.h"
 #include "log.h"
@@ -72,6 +73,24 @@ struct Uv_update_edge_collapse_visitor : CGAL::Surface_mesh_simplification::Edge
     AttachedUvPropertyMap uv_map;
     Point2 new_uv;
 };
+
+auto fmt::formatter<Algorithm>::format(const Algorithm& algorithm, format_context& ctx) const {
+    string_view name = "unknown";
+    switch (algorithm) {
+    case Algorithm::GarlandHeckbert:
+        name = "GarlandHeckbert";
+        break;
+    case Algorithm::LindstromTurk:
+        name = "LindstromTurk";
+        break;
+    }
+    return formatter<string_view>::format(name, ctx);
+}
+
+std::ostream& operator<<(std::ostream& os, const Algorithm& algorithm) {
+    os << fmt::format("{}", algorithm);
+    return os;
+}
 
 // Property map that indicates whether an edge is marked as non-removable.
 struct Border_is_constrained_edge_map {
@@ -140,6 +159,7 @@ static void _simplify_mesh_with_cost_and_placement(
     const Placement &placement,
     const SimplificationArgs args) {
     if (args.stop_edge_ratio > 0.999) {
+        LOG_DEBUG("Skipped simplification due to stop ratio being almost 100% ({})", args.stop_edge_ratio);
         return;
     }
     
@@ -181,6 +201,8 @@ static void _simplify_mesh(
     AttachedUvPropertyMap &uv_map,
     const Algorithm algorithm,
     const SimplificationArgs args) {
+    LOG_TRACE("Simplifying mesh (stop ratio={}, borders={}, algorithm={})", args.stop_edge_ratio, args.lock_borders ? "Locked" : "Unlocked", algorithm);
+
     switch (algorithm) {
     case Algorithm::GarlandHeckbert:
         typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<SurfaceMesh, Kernel> GH_policies;
