@@ -6,9 +6,11 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
-#include "mesh/terrain_mesh.h"
-#include "merge.h"
+#include "cgal.h"
+#include "convert.h"
 #include "log.h"
+#include "merge.h"
+#include "mesh/terrain_mesh.h"
 
 using namespace merge;
 
@@ -153,6 +155,8 @@ static geometry::Aabb<3, double> pad_bounds(const geometry::Aabb<3, double> &bou
 }
 
 VertexMapping merge::create_merge_mapping(std::span<const TerrainMesh> meshes, double distance_epsilon) {
+    LOG_TRACE("Finding shared vertices between {} meshes (epsilon={})", meshes.size(), distance_epsilon);
+
     const geometry::Aabb<3, double> bounds = calculate_bounds(meshes);
     const geometry::Aabb<3, double> padded_bounds = pad_bounds(bounds, 0.01);
 
@@ -195,14 +199,15 @@ VertexMapping merge::create_merge_mapping(std::span<const TerrainMesh> meshes, d
         }
     }
 
-#if DEBUG
+    LOG_DEBUG("Identified {} shared and {} unique vertices", maximal_merged_mesh_size - unique_vertices, unique_vertices);
     mapping.validate();
-#endif
 
     return mapping;
 }
 
 TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, const merge::VertexMapping &mapping) {
+    LOG_TRACE("Merging meshes based on mapping");
+
     TerrainMesh merged_mesh;
 
     size_t max_combined_vertex_count = 0;
@@ -232,7 +237,7 @@ TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, c
             max_vertex_index = std::max(max_vertex_index, mapped_index);
         }
     }
-    assert(max_vertex_index < merged_mesh.vertex_count() || max_vertex_index == 0);
+    assert(max_vertex_index < max_combined_vertex_count || max_vertex_index == 0);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {
         merged_mesh.uvs.resize(max_vertex_index + 1);
@@ -251,7 +256,7 @@ TerrainMesh merge::merge_mased_on_mapping(std::span<const TerrainMesh> meshes, c
             if (new_triangle[0] == new_triangle[1] ||
                 new_triangle[1] == new_triangle[2] ||
                 new_triangle[2] == new_triangle[0]) {
-                LOG_INFO("Skipping illegal triangle...");
+                LOG_WARN("Skipping illegal triangle while merging");
                 continue;
             }
 
