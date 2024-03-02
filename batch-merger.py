@@ -40,7 +40,7 @@ def process_tile(terrainmerger_path, tile_x, tile_y, zoom, output_dir, force_reb
         print(f"{parent_indent}[{zoom},{tile_x},{tile_y}]", end="")
         if not force_rebuild and os.path.exists(output_path):
             print(" SKIPPING COPY")
-            return;
+            return
         
         print(f" PROCESSING")
         
@@ -61,7 +61,7 @@ def process_tile(terrainmerger_path, tile_x, tile_y, zoom, output_dir, force_reb
         print(parent_output_path)
         if not force_rebuild and os.path.exists(parent_output_path):
             print(" SKIPPING")
-            return;
+            return
         
         print(f" PROCESSING")
     
