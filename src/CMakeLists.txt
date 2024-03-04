@@ -134,6 +134,102 @@ if(NOT TARGET zpp_bits)
     target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 endif()
 
+if(NOT TARGET metis)
+    FetchContent_Declare(
+        gklib
+        GIT_REPOSITORY https://github.com/KarypisLab/GKlib.git
+        GIT_TAG a7f8172703cf6e999dd0710eb279bba513da4fec
+    )
+
+    FetchContent_GetProperties(gklib)
+
+    if(NOT gklib_POPULATED)
+        FetchContent_Populate(gklib)
+    endif()
+
+    file(GLOB INC_FILES "${gklib_SOURCE_DIR}/*.h")
+    file(GLOB SRC_FILES "${gklib_SOURCE_DIR}/*.c")
+
+    if(NOT MSVC)
+        list(REMOVE_ITEM SRC_FILES "${gklib_SOURCE_DIR}/gkregex.c")
+    endif()
+
+    add_library(GKlib STATIC ${INC_FILES} ${SRC_FILES})
+    add_library(GKlib::GKlib ALIAS GKlib)
+
+    if(MSVC)
+        target_compile_definitions(GKlib PUBLIC USE_GKREGEX)
+        target_compile_definitions(GKlib PUBLIC "__thread=__declspec(thread)")
+    endif()
+
+    include(GNUInstallDirs)
+    target_include_directories(GKlib SYSTEM PUBLIC
+        "$<BUILD_INTERFACE:${gklib_SOURCE_DIR}>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+    )
+
+    # Until [1] is merged, workaround this by making a copying the missing header so it can be found
+    # during compilation.
+    # [1]: https://github.com/KarypisLab/GKlib/pull/19
+    file(MAKE_DIRECTORY "${gklib_BINARY_DIR}/include/gklib")
+    configure_file("${gklib_SOURCE_DIR}/gk_ms_stdint.h" "${gklib_BINARY_DIR}/include/gklib/ms_stdint.h" COPYONLY)
+    target_include_directories(GKlib SYSTEM PUBLIC "$<BUILD_INTERFACE:${gklib_BINARY_DIR}/include/gklib>")
+
+    set_target_properties(GKlib PROPERTIES FOLDER third_party)
+
+
+    FetchContent_Declare(metis
+        GIT_REPOSITORY https://github.com/KarypisLab/METIS.git
+        GIT_TAG v5.2.1
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/metis
+    )
+
+    FetchContent_GetProperties(metis)
+    if(NOT metis_POPULATED)
+        FetchContent_Populate(metis)
+    endif()
+
+    # Create metis target
+    file(GLOB INC_FILES "${metis_SOURCE_DIR}/libmetis/*.h")
+    file(GLOB SRC_FILES "${metis_SOURCE_DIR}/libmetis/*.c")
+
+    add_library(metis STATIC ${INC_FILES} ${SRC_FILES})
+    add_library(metis::metis ALIAS metis)
+
+    target_link_libraries(metis PRIVATE GKlib::GKlib)
+
+    target_include_directories(metis PRIVATE ${metis_SOURCE_DIR}/libmetis)
+
+    include(GNUInstallDirs)
+    target_include_directories(metis SYSTEM PUBLIC
+        "$<BUILD_INTERFACE:${metis_SOURCE_DIR}/include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+    )
+
+    target_compile_definitions(metis PUBLIC -DIDXTYPEWIDTH=64)
+    target_compile_definitions(metis PUBLIC -DREALTYPEWIDTH=64)
+
+    set_target_properties(metis PROPERTIES FOLDER third_party)
+
+    if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang" OR
+        "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+        target_compile_options(metis PRIVATE
+            "-Wno-unused-variable"
+            "-Wno-sometimes-uninitialized"
+            "-Wno-absolute-value"
+            "-Wno-shadow"
+        )
+    elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+        target_compile_options(metis PRIVATE
+            "-w" # Disallow all warnings from metis.
+        )
+    elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "MSVC")
+        target_compile_options(metis PRIVATE
+            "/w" # Disable all warnings from metis!
+        )
+    endif()
+endif()
+
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
 
@@ -242,6 +338,22 @@ add_executable(terrainmerger
 )
 target_include_directories(terrainmerger PUBLIC terrainmerger)
 target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+
+add_library(terrainsplitterlib
+    terrainsplitter/cli.h
+    terrainsplitter/cli.cpp
+    terrainsplitter/cgal.h
+    terrainsplitter/convert.h
+    terrainsplitter/convert.cpp
+    terrainsplitter/validate.h
+)
+target_include_directories(terrainsplitterlib PUBLIC terrainsplitter terrainlib)
+target_link_libraries(terrainsplitterlib PUBLIC terrainlib metis GKlib radix CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
+add_executable(terrainsplitter
+    terrainsplitter/main.cpp
+)
+target_include_directories(terrainsplitter PUBLIC terrainsplitter)
+target_link_libraries(terrainsplitter PUBLIC terrainsplitterlib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp
