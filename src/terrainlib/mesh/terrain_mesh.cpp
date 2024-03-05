@@ -101,52 +101,181 @@ size_t remove_triangles_of_negligible_size(TerrainMesh& mesh, const double thres
     return erased_count;
 }
 
-void sort_triangles(TerrainMesh& mesh) {
-    sort_triangles(mesh.triangles);
+static glm::uvec3 normalize_triangle(const glm::uvec3 &triangle) {
+    unsigned int min_index = 0;
+    for (size_t k = 1; k < static_cast<size_t>(triangle.length()); k++) {
+        if (triangle[min_index] > triangle[k]) {
+            min_index = k;
+        }
+    }
+    if (min_index == 0) {
+        return triangle;
+    }
+
+    glm::uvec3 normalized_triangle;
+    for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+        normalized_triangle[k] = triangle[(min_index + k) % triangle.length()];
+    }
+
+    return normalized_triangle;
 }
 
-void sort_triangles(std::span<glm::uvec3> triangles) {
-    // sort vertices in triangles
-    for (glm::uvec3 &triangle : triangles) {
-        unsigned int min_index = 0;
-        for (size_t k = 1; k < static_cast<size_t>(triangle.length()); k++) {
-            if (triangle[min_index] > triangle[k]) {
-                min_index = k;
-            }
+template <typename T>
+void erase_by_index(std::vector<T> &vec, std::size_t pos) {
+    typename std::vector<T>::iterator it = vec.begin();
+    std::advance(it, pos);
+    vec.erase(it);
+}
+
+bool compare_triangles(const glm::uvec3 &t1, const glm::uvec3 &t2) {
+    // First, compare by x
+    if (t1.x != t2.x) {
+        return t1.x < t2.x;
+    }
+
+    // If x is equal, compare by y
+    if (t1.y != t2.y) {
+        return t1.y < t2.y;
+    }
+
+    // If x and y are equal, compare by z
+    return t1.z < t2.z;
+}
+bool compare_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3 &t2) {
+    glm::uvec3 t1s(t1);
+    glm::uvec3 t2s(t2);
+
+    std::sort(&t1s.x, &t1s.z + 1);
+    std::sort(&t2s.x, &t2s.z + 1);
+
+    return compare_triangles(t1s, t2s);
+}
+
+bool compare_equality_triangles(const glm::uvec3 &t1, const glm::uvec3 &t2) {
+    return normalize_triangle(t1) == normalize_triangle(t2);
+}
+bool compare_equality_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3 &t2) {
+    return std::is_permutation(&t1.x, &t1.z + 1, &t2.x);
+}
+
+void remove_duplicate_triangles(TerrainMesh &mesh, bool ignore_orientation) {
+    remove_duplicate_triangles(mesh.triangles, ignore_orientation);
+}
+void remove_duplicate_triangles(std::vector<glm::uvec3> &triangles, bool ignore_orientation) {
+    triangles.erase(find_duplicate_triangles(triangles, ignore_orientation), triangles.end());
+}
+
+std::unordered_map<glm::uvec2, std::vector<size_t>> create_edge_to_triangle_index_mapping(const TerrainMesh &mesh) {
+    std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles;
+    for (size_t i = 0; i < mesh.face_count(); i++) {
+        glm::uvec3 triangle = mesh.triangles[i];
+        std::sort(&triangle.x, &triangle.z + 1);
+
+        const std::array<glm::uvec2, 3> edges{
+            glm::uvec2(triangle.x, triangle.y),
+            glm::uvec2(triangle.y, triangle.z),
+            glm::uvec2(triangle.x, triangle.z)};
+
+        for (const glm::uvec2 edge : edges) {
+            auto result = edges_to_triangles.try_emplace(edge, std::vector<size_t>()).first;
+            std::vector<size_t> &list = result->second;
+            list.push_back(i);
         }
-        if (min_index == 0) {
+    }
+    return edges_to_triangles;
+}
+
+std::vector<size_t> count_vertex_adjacent_triangles(const TerrainMesh& mesh) {
+    std::vector<size_t> adjacent_triangle_count(mesh.vertex_count(), 0);
+
+    for (const glm::uvec3& triangle : mesh.triangles) {
+        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+            adjacent_triangle_count[triangle[k]]++;
+        }
+    }
+
+    return adjacent_triangle_count;
+}
+
+std::vector<glm::uvec2> find_non_manifold_edges(const TerrainMesh& mesh) {
+    std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles = create_edge_to_triangle_index_mapping(mesh);
+    std::vector<glm::uvec2> non_manifold_edges;
+
+    for (auto entry : edges_to_triangles) {
+        const glm::uvec2 edge = entry.first;
+        const std::vector<size_t> &triangle_indices = entry.second;
+
+        if (triangle_indices.size() > 2) {
+            non_manifold_edges.push_back(edge);
+        }
+    }
+
+    return non_manifold_edges;
+}
+
+std::vector<size_t> find_single_non_manifold_triangle_indices(const TerrainMesh &mesh) {
+    const std::vector<size_t> adjacent_triangle_count = count_vertex_adjacent_triangles(mesh);
+    const std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles = create_edge_to_triangle_index_mapping(mesh);
+
+    std::vector<size_t> non_manifold_triangles;
+    for (auto entry : edges_to_triangles) {
+        const glm::uvec2 edge = entry.first;
+        const std::vector<size_t> &triangle_indices = entry.second;
+
+        if (triangle_indices.size() <= 2) {
             continue;
         }
 
-        glm::uvec3 new_triangle;
-        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
-            new_triangle[k] = triangle[(min_index + k) % triangle.length()];
-        }
+        for (const size_t triangle_index : triangle_indices) {
+            const glm::uvec3 triangle = mesh.triangles[triangle_index];
+            for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+                if (triangle[k] == edge[0] || triangle[k] == edge[1]) {
+                    continue;
+                }
 
-        triangle = new_triangle;
+                // We check if the third vertex of the triangle with the non-manifold edge is unconnected
+                // as we can be sure in this case that its a flap.
+                // TODO: a general flap detection method would need to change this part.
+                if (adjacent_triangle_count[triangle[k]] <= 1) {
+                    non_manifold_triangles.push_back(triangle_index);
+                    break;
+                }
+            }
+        }
+    }
+
+    return non_manifold_triangles;
+}
+
+void remove_single_non_manifold_triangles(TerrainMesh& mesh) {
+    std::vector<size_t> non_manifold_triangles = find_single_non_manifold_triangle_indices(mesh);
+
+    std::sort(non_manifold_triangles.begin(), non_manifold_triangles.end(), std::greater<size_t>());
+
+    for (const size_t triangle_index : non_manifold_triangles) {
+        erase_by_index(mesh.triangles, triangle_index);
+    }
+
+    remove_isolated_vertices(mesh);
+}
+
+void sort_and_normalize_triangles(TerrainMesh& mesh) {
+    sort_and_normalize_triangles(mesh.triangles);
+}
+void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
+    // sort vertices in triangles
+    for (glm::uvec3 &triangle : triangles) {
+        triangle = normalize_triangle(triangle);
     }
 
     // sort triangle vector
-    std::sort(triangles.begin(), triangles.end(), [](const glm::uvec3 a, const glm::uvec3 b) {
-        // First, compare by x
-        if (a.x != b.x) {
-            return a.x < b.x;
-        }
-
-        // If x is equal, compare by y
-        if (a.y != b.y) {
-            return a.y < b.y;
-        }
-
-        // If x and y are equal, compare by z
-        return a.z < b.z;
-    });
+    std::sort(triangles.begin(), triangles.end(), compare_triangles);
 }
 
-static void validate_sorted_mesh(const TerrainMesh &mesh) {
+static void validate_sorted_normalized_mesh(const TerrainMesh &mesh) {
     // check correct count of uvs
     assert(!mesh.has_uvs() || mesh.positions.size() == mesh.uvs.size());
-    
+
     // check uvs between 0 and 1
     for (const glm::dvec2 &uv : mesh.uvs) {
         for (size_t k = 0; k < static_cast<size_t>(uv.length()); k++) {
@@ -179,7 +308,7 @@ static void validate_sorted_mesh(const TerrainMesh &mesh) {
         std::sort(&triangle.x, &triangle.z);
     }
     std::vector<glm::uvec3> triangles_ignore_orientation2(triangles_ignore_orientation);
-    sort_triangles(triangles_ignore_orientation);
+    sort_and_normalize_triangles(triangles_ignore_orientation);
     assert(triangles_ignore_orientation.end() == std::adjacent_find(triangles_ignore_orientation.begin(), triangles_ignore_orientation.end()));
 
     // check for isolated vertices
@@ -191,6 +320,6 @@ void validate_mesh(const TerrainMesh &mesh) {
     return;
 #endif
     TerrainMesh sorted(mesh);
-    sort_triangles(sorted);
-    validate_sorted_mesh(sorted);
+    sort_and_normalize_triangles(sorted);
+    validate_sorted_normalized_mesh(sorted);
 }
