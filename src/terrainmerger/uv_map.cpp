@@ -23,8 +23,8 @@ std::vector<glm::dvec2> uv_map::decode_uv_map(const UvMap &uv_map, size_t number
     std::vector<glm::dvec2> uvs;
     uvs.reserve(number_of_vertices);
     for (size_t i = 0; i < number_of_vertices; i++) {
-        const Point2_ &uv = uv_map[CGAL::SM_Vertex_index(i)];
-        uvs.push_back(convert::cgal2glm_(uv));
+        const Point2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
+        uvs.push_back(convert::cgal2glm(uv));
     }
     return uvs;
 }
@@ -33,24 +33,24 @@ std::vector<glm::dvec2> uv_map::decode_uv_map(const UvPropertyMap &uv_map, size_
     std::vector<glm::dvec2> uvs;
     uvs.reserve(number_of_vertices);
     for (size_t i = 0; i < number_of_vertices; i++) {
-        const Point2_ &uv = uv_map[CGAL::SM_Vertex_index(i)];
-        uvs.push_back(convert::cgal2glm_(uv));
+        const Point2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
+        uvs.push_back(convert::cgal2glm(uv));
     }
     return uvs;
 }
 
-tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(SurfaceMesh_ &mesh, Algorithm algorithm, Border border) {
-    typedef CGAL::Surface_mesh_parameterization::Circular_border_uniform_parameterizer_3<SurfaceMesh_> CircleBorderParameterizer;
-    typedef CGAL::Surface_mesh_parameterization::Square_border_uniform_parameterizer_3<SurfaceMesh_> SquareBorderParameterizer;
+tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(SurfaceMesh &mesh, Algorithm algorithm, Border border) {
+    typedef CGAL::Surface_mesh_parameterization::Circular_border_uniform_parameterizer_3<SurfaceMesh> CircleBorderParameterizer;
+    typedef CGAL::Surface_mesh_parameterization::Square_border_uniform_parameterizer_3<SurfaceMesh> SquareBorderParameterizer;
 
-    typedef CGAL::Surface_mesh_parameterization::Barycentric_mapping_parameterizer_3<SurfaceMesh_, CircleBorderParameterizer> TutteBarycentricMappingParameterizerCircularBorder;
-    typedef CGAL::Surface_mesh_parameterization::Barycentric_mapping_parameterizer_3<SurfaceMesh_, SquareBorderParameterizer> TutteBarycentricMappingParameterizerSquareBorder;
-    typedef CGAL::Surface_mesh_parameterization::Discrete_authalic_parameterizer_3<SurfaceMesh_, CircleBorderParameterizer> DiscreteAuthalicParameterizerCircularBorder;
-    typedef CGAL::Surface_mesh_parameterization::Discrete_authalic_parameterizer_3<SurfaceMesh_, SquareBorderParameterizer> DiscreteAuthalicParameterizerSquareBorder;
-    typedef CGAL::Surface_mesh_parameterization::Discrete_conformal_map_parameterizer_3<SurfaceMesh_, CircleBorderParameterizer> DiscreteConformalMapParameterizerCircularBorder;
-    typedef CGAL::Surface_mesh_parameterization::Discrete_conformal_map_parameterizer_3<SurfaceMesh_, SquareBorderParameterizer> DiscreteConformalMapParameterizerSquareBorder;
-    typedef CGAL::Surface_mesh_parameterization::Mean_value_coordinates_parameterizer_3<SurfaceMesh_, CircleBorderParameterizer> FloaterMeanValueCoordinatesParameterizerCircularBorder;
-    typedef CGAL::Surface_mesh_parameterization::Mean_value_coordinates_parameterizer_3<SurfaceMesh_, SquareBorderParameterizer> FloaterMeanValueCoordinatesParameterizerSquareBorder;
+    typedef CGAL::Surface_mesh_parameterization::Barycentric_mapping_parameterizer_3<SurfaceMesh, CircleBorderParameterizer> TutteBarycentricMappingParameterizerCircularBorder;
+    typedef CGAL::Surface_mesh_parameterization::Barycentric_mapping_parameterizer_3<SurfaceMesh, SquareBorderParameterizer> TutteBarycentricMappingParameterizerSquareBorder;
+    typedef CGAL::Surface_mesh_parameterization::Discrete_authalic_parameterizer_3<SurfaceMesh, CircleBorderParameterizer> DiscreteAuthalicParameterizerCircularBorder;
+    typedef CGAL::Surface_mesh_parameterization::Discrete_authalic_parameterizer_3<SurfaceMesh, SquareBorderParameterizer> DiscreteAuthalicParameterizerSquareBorder;
+    typedef CGAL::Surface_mesh_parameterization::Discrete_conformal_map_parameterizer_3<SurfaceMesh, CircleBorderParameterizer> DiscreteConformalMapParameterizerCircularBorder;
+    typedef CGAL::Surface_mesh_parameterization::Discrete_conformal_map_parameterizer_3<SurfaceMesh, SquareBorderParameterizer> DiscreteConformalMapParameterizerSquareBorder;
+    typedef CGAL::Surface_mesh_parameterization::Mean_value_coordinates_parameterizer_3<SurfaceMesh, CircleBorderParameterizer> FloaterMeanValueCoordinatesParameterizerCircularBorder;
+    typedef CGAL::Surface_mesh_parameterization::Mean_value_coordinates_parameterizer_3<SurfaceMesh, SquareBorderParameterizer> FloaterMeanValueCoordinatesParameterizerSquareBorder;
 
     const HalfedgeDescriptor bhd = CGAL::Polygon_mesh_processing::longest_border(mesh).first;
 
@@ -95,15 +95,15 @@ tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(SurfaceMe
     }
 
     for (size_t i = 0; i < CGAL::num_vertices(mesh); i++) {
-        Point2_ &uv = uv_map[CGAL::SM_Vertex_index(i)];
-        uv = convert::glm2cgal_(glm::clamp(convert::cgal2glm_(uv), glm::dvec2(0), glm::dvec2(1)));
+        Point2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
+        uv = convert::glm2cgal(glm::clamp(convert::cgal2glm(uv), glm::dvec2(0), glm::dvec2(1)));
     }
 
     return uv_uhm;
 }
 
 tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(const TerrainMesh &mesh, Algorithm algorithm, Border border) {
-    SurfaceMesh_ cgal_mesh = convert::mesh2cgal_(mesh);
+    SurfaceMesh cgal_mesh = convert::mesh2cgal(mesh);
     return parameterize_mesh(cgal_mesh, algorithm, border);
 }
 
@@ -177,7 +177,7 @@ Texture uv_map::merge_textures(
     for (const glm::uvec3 &mapped_triangle : merged_mesh.triangles) {
         std::array<cv::Point2f, 3> mapped_uv_triangle;
         for (size_t i = 0; i < static_cast<size_t>(mapped_triangle.length()); i++) {
-            const glm::dvec2 uv = convert::cgal2glm_(uv_map[CGAL::SM_Vertex_index(mapped_triangle[i])]);
+            const glm::dvec2 uv = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(mapped_triangle[i])]);
             mapped_uv_triangle[i] = cv::Point2f(uv.x * merged_texture_size.x, uv.y * merged_texture_size.y);
         }
 

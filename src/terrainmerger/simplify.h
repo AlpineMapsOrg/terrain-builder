@@ -7,6 +7,7 @@
 #include "cgal.h"
 #include "mesh/terrain_mesh.h"
 
+using namespace kernel::epick;
 namespace simplify {
 // We use a different uv map type here, because we need this one to be attached to the mesh
 // as otherwise the entries for removed vertices are not removed during garbage collection.
