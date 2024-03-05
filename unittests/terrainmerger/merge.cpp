@@ -49,8 +49,8 @@ TEST_CASE("terrainmerger") {
         expected.triangles.push_back(glm::uvec3(0, 1, 2));
         expected.triangles.push_back(glm::uvec3(2, 1, 3));
 
-        sort_triangles(actual.triangles);
-        sort_triangles(expected.triangles);
+        sort_and_normalize_triangles(actual.triangles);
+        sort_and_normalize_triangles(expected.triangles);
 
         REQUIRE(expected.positions == actual.positions);
         REQUIRE(expected.uvs == actual.uvs);
@@ -92,8 +92,8 @@ TEST_CASE("terrainmerger") {
         expected.triangles.push_back(glm::uvec3(0, 1, 2));
         expected.triangles.push_back(glm::uvec3(2, 1, 3));
 
-        sort_triangles(actual.triangles);
-        sort_triangles(expected.triangles);
+        sort_and_normalize_triangles(actual.triangles);
+        sort_and_normalize_triangles(expected.triangles);
 
         REQUIRE(expected.positions == actual.positions);
         REQUIRE(expected.uvs == actual.uvs);
@@ -137,8 +137,8 @@ TEST_CASE("terrainmerger") {
         expected.triangles.push_back(glm::uvec3(1, 5, 4));
         expected.triangles.push_back(glm::uvec3(4, 5, 6));
 
-        sort_triangles(actual.triangles);
-        sort_triangles(expected.triangles);
+        sort_and_normalize_triangles(actual.triangles);
+        sort_and_normalize_triangles(expected.triangles);
 
         REQUIRE(expected.positions == actual.positions);
         REQUIRE(expected.uvs == actual.uvs);

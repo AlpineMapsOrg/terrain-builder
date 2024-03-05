@@ -21,8 +21,8 @@ TEST_CASE("convert rountrip keeps precision") {
     const SurfaceMesh cgal_mesh = convert::mesh2cgal(mesh);
     TerrainMesh roundtrip_mesh = convert::cgal2mesh(cgal_mesh);
 
-    sort_triangles(mesh.triangles);
-    sort_triangles(roundtrip_mesh.triangles);
+    sort_and_normalize_triangles(mesh.triangles);
+    sort_and_normalize_triangles(roundtrip_mesh.triangles);
 
     REQUIRE(roundtrip_mesh.positions == mesh.positions);
     REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
