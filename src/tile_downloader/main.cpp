@@ -136,7 +136,7 @@ private:
 };
 
 static std::string format_tile(const tile::Id tile) {
-    return fmt::format("Tile[Zoom={}, Row={}, Col={}]", tile.zoom_level, tile.coords.x, tile.coords.y);
+    return fmt::format("Tile[Zoom={}, X={}, Y={}]", tile.zoom_level, tile.coords.x, tile.coords.y);
 }
 
 void print_tile(const tile::Id tile) {
@@ -469,7 +469,7 @@ int main(int argc, char *argv[]) {
     const unsigned int zoom = svtoui(map_get_required(arg_map, "zoom"));
     const unsigned int row = svtoui(map_get_required(arg_map, "row"));
     const unsigned int col = svtoui(map_get_required(arg_map, "col"));
-    const tile::Id root_id = {zoom, {row, col}, scheme};
+    const tile::Id root_id = {zoom, {col, row}, scheme};
 
     // Download tile and subtiles recursively.
     TileDownloader downloader(url_builder.get(), arg_map);
