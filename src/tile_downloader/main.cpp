@@ -109,7 +109,10 @@ public:
     }
 
     std::string build_url(const tile::Id &tile_id) const {
-        return fmt::format("https://mapsneu.wien.gv.at/basemap/{}/{}/google3857/{}/{}/{}.jpeg", layer, style, tile_id.zoom_level, tile_id.coords.x, tile_id.coords.y);
+        const tile::Id google_tile_id = tile_id.to(tile::Scheme::SlippyMap);
+        return fmt::format(
+            "https://mapsneu.wien.gv.at/basemap/{}/{}/google3857/{}/{}/{}.jpeg",
+            layer, style, google_tile_id.zoom_level, google_tile_id.coords.x, google_tile_id.coords.y);
     }
 
 private:
@@ -123,7 +126,10 @@ public:
     GatakiTileUrlBuilder(const std::map<std::string_view, std::string_view> &args) {}
 
     std::string build_url(const tile::Id &tile_id) const {
-        return fmt::format("https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{}/{}/{}.jpeg", tile_id.zoom_level, tile_id.coords.x, tile_id.coords.y);
+        const tile::Id google_tile_id = tile_id.to(tile::Scheme::SlippyMap);
+        return fmt::format(
+            "https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{}/{}/{}.jpeg",
+            google_tile_id.zoom_level, google_tile_id.coords.x, google_tile_id.coords.y);
     }
 
 private:
