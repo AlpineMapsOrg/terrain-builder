@@ -201,8 +201,7 @@ enum class ContentType {
     Unknown,
 };
 
-ContentType read_content_type(CURL *curl)
-{
+ContentType read_content_type(CURL *curl) {
     char *content_type = NULL;
     const auto res = curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &content_type);
     if (res != CURLE_OK || content_type == nullptr)
@@ -227,7 +226,7 @@ public:
     TileDownloader(TileUrlBuilder *url_builder, const std::map<std::string_view, std::string_view> &args) {
         this->url_builder = url_builder;
         this->output_path = map_get_or_default(args,
-                                               "filename"sv,
+                                               "output"sv,
                                                "tiles/{zoom}/{row}/{col}.{ext}"sv);
         this->early_skip = stob(map_get_or_default(args, "early-skip"sv, "true"sv));
 
@@ -348,8 +347,7 @@ public:
         return this->download_tile_by_url(tile, url, path);
     }
 
-    DownloadResult download_tile_by_id_recursive(const tile::Id root_id) const
-    {
+    DownloadResult download_tile_by_id_recursive(const tile::Id root_id) const {
         const std::string url = this->url_builder->build_url(root_id);
         const DownloadResult result = this->download_tile_by_id(root_id);
 
