@@ -3,6 +3,32 @@ import subprocess
 import os
 import shutil
 
+def get_target_error(zoom_level):
+    meters_per_pixel = [
+        156_543,
+        78_272,
+        39_136,
+        19_568,
+        9_784,
+        4_892,
+        2_446,
+        1_223,
+        611.496,
+        305.748,
+        152.874,
+        76.437,
+        38.219,
+        19.109,
+        9.555,
+        4.777,
+        2.389,
+        1.194,
+        0.597,
+        0.299,
+        0.149
+    ]
+    return meters_per_pixel[zoom_level]
+
 def get_children(tile_x, tile_y):
     children = []
     for i in range(4):
@@ -20,7 +46,7 @@ def build_command(terrainmerger_path, tile_x, tile_y, zoom, children_to_merge, o
     command = [
         terrainmerger_path,
         "--input"
-    ] + children_to_merge + ["--output", output_path, "--verbosity", "trace", "--save-debug-meshes"]
+    ] + children_to_merge + ["--output", output_path, "--verbosity", "trace", "--save-debug-meshes", "--simplify-error-absolute", str(get_target_error(zoom))]
     print(command)
     try:
         subprocess.run(command, check=False)
