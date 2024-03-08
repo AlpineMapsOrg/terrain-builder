@@ -23,11 +23,21 @@ enum class Algorithm {
     LindstromTurk
 };
 
+struct EdgeRatio {
+    double ratio = 1;
+};
+struct AbsoluteError {
+    double error_bound;
+};
+struct RelativeError {
+    double error_bound;
+};
+
+using StopCondition = std::variant<EdgeRatio, AbsoluteError, RelativeError>;
+
 struct Options {
     Algorithm algorithm = Algorithm::LindstromTurk;
     bool lock_borders = true;
-    std::optional<double> stop_edge_ratio;
-    std::optional<double> error_bound;
 };
 
 struct Result {
@@ -35,7 +45,7 @@ struct Result {
     double max_absolute_error;
 };
 
-Result simplify_mesh(const TerrainMesh &mesh, Options options = Options());
+Result simplify_mesh(const TerrainMesh &mesh, StopCondition stop_condition, Options options = Options());
 
 }
 

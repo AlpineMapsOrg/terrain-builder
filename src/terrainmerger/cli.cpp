@@ -14,7 +14,7 @@ Args cli::parse(int argc, const char * const * argv) {
     assert(argc >= 0);
 
     CLI::App app{"Terrain Merger"};
-    // app.allow_windows_style_options();
+    app.allow_windows_style_options();
     // argv = app.ensure_utf8(argv);
     
     std::vector<std::filesystem::path> input_paths;
@@ -31,14 +31,29 @@ Args cli::parse(int argc, const char * const * argv) {
     app.add_flag("--no-simplify", no_mesh_simplification, "Disable mesh simplification");
 
     std::optional<double> simplification_factor;
-    app.add_option("--simplify-factor", *simplification_factor, "Mesh index simplification factor")
-        ->check(CLI::Range(0.0f, 1.0f))
-        ->excludes("--no-simplify");
+    auto simplify_ratio_option = app.add_option("--simplify-ratio", simplification_factor, "Target mesh edge simplification factor")
+                   ->check(CLI::Range(0.0, 1.0))
+                   ->excludes("--no-simplify");
 
-    std::optional<double> simplification_target_error;
-    app.add_option("--simplify-error", *simplification_target_error, "Mesh simplification target error")
-        ->check(CLI::Range(0.0f, 1.0f))
-        ->excludes("--no-simplify");
+    std::optional<double> simplification_target_error_relative;
+    auto simplify_error_relative_option = app.add_option("--simplify-error-relative", simplification_target_error_relative, "Relative mesh simplification error bound")
+                                              ->check(CLI::Range(0.0, 1.0))
+                                              ->excludes("--no-simplify");
+
+    std::optional<double> simplification_target_error_absolute;
+    auto simplify_error_absolute_option = app.add_option("--simplify-error-absolute", simplification_target_error_absolute, "Absolute mesh simplification error bound")
+                                              ->check(CLI::PositiveNumber)
+                                              ->excludes("--no-simplify");
+
+    simplify_ratio_option
+        ->excludes("--simplify-error-relative")
+        ->excludes("--simplify-error-absolute");
+    simplify_error_relative_option
+        ->excludes("--simplify-ratio")
+        ->excludes("--simplify-error-absolute");
+    simplify_error_absolute_option
+        ->excludes("--simplify-ratio")
+        ->excludes("--simplify-error-relative");
 
     bool save_intermediate_meshes = false;
     app.add_flag("--save-debug-meshes", save_intermediate_meshes, "Output intermediate meshes");
@@ -60,11 +75,6 @@ Args cli::parse(int argc, const char * const * argv) {
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }
-
-    if (!simplification_factor.has_value() && !simplification_target_error.has_value()) {
-        simplification_factor = 0.25;
-    }
-
     Args args;
     args.input_paths = input_paths;
     args.output_path = output_path;
@@ -72,8 +82,15 @@ Args cli::parse(int argc, const char * const * argv) {
     args.save_intermediate_meshes = save_intermediate_meshes;
     if (!no_mesh_simplification) {
         SimplificationArgs simplification_args;
-        simplification_args.factor = simplification_factor;
-        simplification_args.max_error = simplification_target_error;
+        if (simplification_factor.has_value()) {
+            simplification_args.stop_condition = simplify::EdgeRatio { .ratio=simplification_factor.value() };
+        } else if (simplification_target_error_relative.has_value()) {
+            simplification_args.stop_condition = simplify::RelativeError { .error_bound = simplification_target_error_relative.value() };
+        } else if (simplification_target_error_absolute.has_value()) {
+            simplification_args.stop_condition = simplify::AbsoluteError { .error_bound=simplification_target_error_absolute.value() };
+        } else {
+            simplification_args.stop_condition = simplify::EdgeRatio { .ratio=1.0/args.input_paths.size() };
+        }
         args.simplification = simplification_args;
     }
 

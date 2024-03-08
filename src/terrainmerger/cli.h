@@ -10,10 +10,11 @@
 
 #include <spdlog/spdlog.h>
 
+#include "simplify.h"
+
 namespace cli {
     struct SimplificationArgs {
-        std::optional<double> factor;
-        std::optional<double> max_error;
+        simplify::StopCondition stop_condition;
     };
 
     struct Args {

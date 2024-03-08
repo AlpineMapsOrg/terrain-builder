@@ -7,6 +7,7 @@
 #include <CGAL/Exact_predicates_exact_constructions_kernel_with_sqrt.h>
 
 #include <CGAL/Polygon_mesh_processing/distance.h>
+#include <CGAL/Polygon_mesh_processing/repair_self_intersections.h>
 #include <CGAL/Surface_mesh_simplification/Edge_collapse_visitor_base.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Bounded_normal_change_placement.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Constrained_placement.h>
@@ -17,13 +18,11 @@
 #include <CGAL/Surface_mesh_simplification/edge_collapse.h>
 #include <CGAL/tags.h>
 
-#include <CGAL/Polygon_mesh_processing/repair_self_intersections.h>
-
 #include <fmt/core.h>
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 #include <tl/expected.hpp>
-#include <fmt/format.h>
 
 #include "convert.h"
 #include "log.h"
@@ -33,6 +32,10 @@
 
 using namespace simplify;
 
+template <class... Ts>
+struct overloaded : Ts... {
+    using Ts::operator()...;
+};
 
 // We use a different uv map type here, because we need this one to be attached to the mesh
 // as otherwise the entries for removed vertices are not removed during garbage collection.
@@ -78,7 +81,7 @@ struct Uv_update_edge_collapse_visitor : CGAL::Surface_mesh_simplification::Edge
     Point2 new_uv;
 };
 
-auto fmt::formatter<Algorithm>::format(const Algorithm& algorithm, format_context& ctx) const {
+auto fmt::formatter<Algorithm>::format(const Algorithm &algorithm, format_context &ctx) const {
     string_view name = "unknown";
     switch (algorithm) {
     case Algorithm::GarlandHeckbert:
@@ -91,7 +94,7 @@ auto fmt::formatter<Algorithm>::format(const Algorithm& algorithm, format_contex
     return formatter<string_view>::format(name, ctx);
 }
 
-std::ostream& operator<<(std::ostream& os, const Algorithm& algorithm) {
+std::ostream &operator<<(std::ostream &os, const Algorithm &algorithm) {
     os << fmt::format("{}", algorithm);
     return os;
 }
@@ -142,17 +145,17 @@ struct SimplificationArgs {
 };
 
 template <class Cost, class Placement>
-static void _simplify_mesh_with_cost_and_placement(
+static size_t _simplify_mesh_with_cost_and_placement(
     SurfaceMesh &mesh,
     AttachedUvPropertyMap &uv_map,
     const Cost &cost,
     const Placement &placement,
     const SimplificationArgs args) {
     if (args.stop_edge_ratio > 0.999) {
-        LOG_DEBUG("Skipped simplification due to stop ratio being almost 100% ({})", args.stop_edge_ratio);
-        return;
+        LOG_DEBUG("Skipped simplification due to stop ratio being almost 100% ({:g})", args.stop_edge_ratio);
+        return 0;
     }
-    
+
     typedef typename CGAL::Surface_mesh_simplification::Constrained_placement<Placement, Border_is_constrained_edge_map> ConstrainedPlacement;
     Border_is_constrained_edge_map bem(mesh, args.lock_borders);
     const ConstrainedPlacement constrained_placement(bem, placement);
@@ -160,20 +163,22 @@ static void _simplify_mesh_with_cost_and_placement(
     const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop_predicate(args.stop_edge_ratio);
     Uv_update_edge_collapse_visitor visitor(uv_map);
 
-    const int removed_edge_count = CGAL::Surface_mesh_simplification::edge_collapse(mesh, stop_predicate,
-                                                                                    CGAL::parameters::edge_is_constrained_map(bem)
-                                                                                        .get_placement(constrained_placement)
-                                                                                        .get_cost(cost)
-                                                                                        .visitor(visitor));
+    const size_t removed_edge_count = CGAL::Surface_mesh_simplification::edge_collapse(mesh, stop_predicate,
+                                                                                       CGAL::parameters::edge_is_constrained_map(bem)
+                                                                                           .get_placement(constrained_placement)
+                                                                                           .get_cost(cost)
+                                                                                           .visitor(visitor));
 
     LOG_TRACE("Removed {} edges from simplified mesh", removed_edge_count);
 
     // Actually remove the vertices, edges and faces
     mesh.collect_garbage();
+
+    return removed_edge_count;
 }
 
 template <class Policies>
-static void _simplify_mesh_with_policies(
+static size_t _simplify_mesh_with_policies(
     SurfaceMesh &mesh,
     AttachedUvPropertyMap &uv_map,
     const Policies &policies,
@@ -184,27 +189,27 @@ static void _simplify_mesh_with_policies(
     const Cost &cost = policies.get_cost();
     const Placement &placement = policies.get_placement();
 
-    _simplify_mesh_with_cost_and_placement(mesh, uv_map, cost, placement, args);
+    return _simplify_mesh_with_cost_and_placement(mesh, uv_map, cost, placement, args);
 }
 
-static void _simplify_mesh(
+static size_t _simplify_mesh(
     SurfaceMesh &mesh,
     AttachedUvPropertyMap &uv_map,
     const Algorithm algorithm,
     const SimplificationArgs args) {
-    LOG_TRACE("Simplifying mesh (stop ratio={}, borders={}, algorithm={})", args.stop_edge_ratio, args.lock_borders ? "Locked" : "Unlocked", algorithm);
+    LOG_TRACE("Simplifying mesh (stop ratio={:g}, borders={}, algorithm={})", args.stop_edge_ratio, args.lock_borders ? "Locked" : "Unlocked", algorithm);
 
     switch (algorithm) {
     case Algorithm::GarlandHeckbert:
         typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<SurfaceMesh, Kernel> GH_policies;
-        _simplify_mesh_with_policies<GH_policies>(mesh, uv_map, GH_policies(mesh), args);
-        break;
+        return _simplify_mesh_with_policies<GH_policies>(mesh, uv_map, GH_policies(mesh), args);
     case Algorithm::LindstromTurk:
         typedef CGAL::Surface_mesh_simplification::LindstromTurk_cost<SurfaceMesh> LT_cost;
         typedef CGAL::Surface_mesh_simplification::LindstromTurk_placement<SurfaceMesh> LT_placement;
-        _simplify_mesh_with_cost_and_placement<LT_cost, LT_placement>(mesh, uv_map, LT_cost(), LT_placement(), args);
-        break;
+        return _simplify_mesh_with_cost_and_placement<LT_cost, LT_placement>(mesh, uv_map, LT_cost(), LT_placement(), args);
     }
+
+    throw std::invalid_argument("invalid algorithm specified");
 }
 
 static double measure_max_absolute_error(const SurfaceMesh &original, const SurfaceMesh &simplified, const double bound_on_error = 0.0001) {
@@ -213,7 +218,7 @@ static double measure_max_absolute_error(const SurfaceMesh &original, const Surf
     return error + bound_on_error;
 }
 
-Result simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
+Result simplify::simplify_mesh(const TerrainMesh &mesh, const StopCondition stop_condition, Options options) {
     // simplification fails with large numerical values so we normalize the values here.
     // TODO: Try to use EPECK instead
     const size_t vertex_count = mesh.positions.size();
@@ -236,65 +241,81 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, Options options) {
         uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
     }
 
-    double simplification_error;
-    if (options.error_bound.has_value()) {
-        // Repeatedly simplify the mesh until we overstep the target error or understep the min stop ratio.
-        // use something like https://github.com/afabri/cgal/blob/SMS-undo_example-GF/Surface_mesh_simplification/examples/Surface_mesh_simplification/undo_edge_collapse_surface_mesh.cpp
-        const double max_error = options.error_bound.value();
-        const double min_stop_ratio = options.stop_edge_ratio.value_or(0);
+    double simplification_error = 0;
+    // TODO: refactor this
+    std::visit(overloaded{
+                   [&](EdgeRatio edge_ratio) {
+                       // Just simplify until we reach the target primitive count.
+                       const SimplificationArgs args{
+                           .lock_borders = options.lock_borders,
+                           .stop_edge_ratio = edge_ratio.ratio};
+                       _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
+                       simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh);
+                   },
+                   [&](RelativeError relative_error) {
+                       // TODO: implement this
+                       throw std::runtime_error("not yet implemented");
+                   },
+                   [&](AbsoluteError absolute_error) {
+                       // TODO: Repeatedly simplify the mesh until we overstep the target error or understep the min stop ratio.
+                       // TODO: use something like https://github.com/afabri/cgal/blob/SMS-undo_example-GF/Surface_mesh_simplification/examples/Surface_mesh_simplification/undo_edge_collapse_surface_mesh.cpp
 
-        LOG_DEBUG("Simplifying with max error of {:g}", max_error);
+                       const double max_error = absolute_error.error_bound;
+                       const double min_stop_ratio = 0;
 
-        double last_safe_stop_ratio = 1.0;
-        double compound_stop_ratio = 1.0;
-        while (true) {
-            const SimplificationArgs args{
-                .lock_borders = options.lock_borders,
-                .stop_edge_ratio = 0.9};
-            compound_stop_ratio *= args.stop_edge_ratio;
+                       LOG_DEBUG("Simplifying with max error of {:g}", max_error);
 
-            LOG_DEBUG("Trying stop ratio of {:g}", compound_stop_ratio);
+                       double last_safe_stop_ratio = 1.0;
+                       double compound_stop_ratio = 1.0;
+                       // TODO: binary search like strategy
+                       while (true) {
+                           const SimplificationArgs args{
+                               .lock_borders = options.lock_borders,
+                               .stop_edge_ratio = 0.9};
+                           compound_stop_ratio *= args.stop_edge_ratio;
 
-            if (compound_stop_ratio < min_stop_ratio) {
-                break;
-            }
+                           LOG_DEBUG("Trying stop ratio of {:g}", compound_stop_ratio);
 
-            _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
-            const double current_simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh, max_error * 0.1);
+                           if (compound_stop_ratio < min_stop_ratio) {
+                               break;
+                           }
 
-            // TODO: use CGAL::Polygon_mesh_processing::is_Hausdorff_distance_larger() instead
-            LOG_DEBUG("Stop ratio of {:g} achieved error of {:g}", compound_stop_ratio, current_simplification_error);
-            if (current_simplification_error > max_error) {
-                break;
-            }
+                           const size_t removed_edge_count = _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
+                           if (removed_edge_count == 0) {
+                               LOG_DEBUG("No edges were removed using final stop ratio of {:g}", compound_stop_ratio);
+                               break;
+                           }
 
-            last_safe_stop_ratio = compound_stop_ratio;
-        }
+                            // TODO: smarter error bound?
+                           const double current_simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh, max_error * 0.1);
 
-        cgal_mesh.clear();
-        cgal_mesh.collect_garbage();
-        cgal_mesh = original_mesh;
-        uv_map = cgal_mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
-        for (size_t i = 0; i < mesh.uvs.size(); i++) {
-            uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
-        }
+                        // TODO: consider accumulated error
+                           // TODO: use CGAL::Polygon_mesh_processing::is_Hausdorff_distance_larger() instead
+                           LOG_DEBUG("Stop ratio of {:g} achieved error of {:g}", compound_stop_ratio, current_simplification_error);
+                           if (current_simplification_error > max_error) {
+                               LOG_DEBUG("Max error exceeded, using {:g} as final stop ratio", last_safe_stop_ratio);
+                               break;
+                           }
 
-        const SimplificationArgs args{
-            .lock_borders = options.lock_borders,
-            .stop_edge_ratio = last_safe_stop_ratio};
-        _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
+                           last_safe_stop_ratio = compound_stop_ratio;
+                       }
 
-        simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh, max_error * 0.01);
-    } else if (options.stop_edge_ratio.has_value()) {
-        // Just simplify until we reach the target primitive count.
-        const SimplificationArgs args{
-            .lock_borders = options.lock_borders,
-            .stop_edge_ratio = options.stop_edge_ratio.value()};
-        _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
-        simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh);
-    } else {
-        throw std::invalid_argument("either an error bound or stop ratio is required");
-    }
+                       cgal_mesh.clear();
+                       cgal_mesh.collect_garbage();
+                       cgal_mesh = original_mesh;
+                       uv_map = cgal_mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
+                       for (size_t i = 0; i < mesh.uvs.size(); i++) {
+                           uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
+                       }
+
+                       const SimplificationArgs args{
+                           .lock_borders = options.lock_borders,
+                           .stop_edge_ratio = last_safe_stop_ratio};
+                       _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
+
+                       simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh, max_error * 0.01);
+                   }},
+               stop_condition);
 
     if (!CGAL::Polygon_mesh_processing::experimental::remove_self_intersections(cgal_mesh)) {
         LOG_WARN("Failed to remove self intersections after simplification");

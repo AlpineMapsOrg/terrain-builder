@@ -42,10 +42,7 @@ uv_map::UvMap parameterize_mesh(TerrainMesh &mesh) {
 }
 
 TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs &args) {
-    simplify::Options options{
-        .stop_edge_ratio = args.factor,
-        .error_bound = args.max_error};
-    simplify::Result result = simplify::simplify_mesh(mesh, options);
+    const simplify::Result result = simplify::simplify_mesh(mesh, args.stop_condition);
     const TerrainMesh &simplified_mesh = result.mesh;
 
     const size_t initial_vertex_count = mesh.positions.size();
@@ -91,7 +88,7 @@ void run(const cli::Args &args) {
     TerrainMesh simplified_mesh;
     if (args.simplification) {
         LOG_INFO("Simplifying merged mesh...");
-        simplified_mesh = simplify_mesh(merged_mesh, *args.simplification);
+        simplified_mesh = simplify_mesh(merged_mesh, args.simplification.value());
 
         if (merged_mesh.texture.has_value()) {
             LOG_INFO("Simplifying merged texture...");
