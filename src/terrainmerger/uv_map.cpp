@@ -162,6 +162,7 @@ static void warp_triangle(const cv::Mat &source_image, cv::Mat &target_image, st
     target_image(target_rect) = target_image(target_rect) + target_image_cropped;
 }
 
+// TODO: reproject triangles
 Texture uv_map::merge_textures(
     const std::span<const TerrainMesh> original_meshes,
     const TerrainMesh &merged_mesh,
@@ -177,7 +178,9 @@ Texture uv_map::merge_textures(
     for (const glm::uvec3 &mapped_triangle : merged_mesh.triangles) {
         std::array<cv::Point2f, 3> mapped_uv_triangle;
         for (size_t i = 0; i < static_cast<size_t>(mapped_triangle.length()); i++) {
-            const glm::dvec2 uv = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(mapped_triangle[i])]);
+            glm::dvec2 uv = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(mapped_triangle[i])]);
+            // Fix for black borders
+            uv = (uv - 0.5) * 1.01 + 0.5;
             mapped_uv_triangle[i] = cv::Point2f(uv.x * merged_texture_size.x, uv.y * merged_texture_size.y);
         }
 
