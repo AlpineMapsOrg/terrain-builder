@@ -22,11 +22,11 @@ public:
 	}
 };
 
-#define LOG_TRACE(...) ::Log::get_logger()->trace(__VA_ARGS__)
-#define LOG_DEBUG(...) ::Log::get_logger()->debug(__VA_ARGS__)
-#define LOG_INFO(...)  ::Log::get_logger()->info(__VA_ARGS__)
-#define LOG_WARN(...)  ::Log::get_logger()->warn(__VA_ARGS__)
-#define LOG_ERROR(...) ::Log::get_logger()->error(__VA_ARGS__)
-#define LOG_FATAL(...) ::Log::get_logger()->critical(__VA_ARGS__)
+#define LOG_TRACE(...) SPDLOG_LOGGER_TRACE(::Log::get_logger(), __VA_ARGS__)
+#define LOG_DEBUG(...) SPDLOG_LOGGER_DEBUG(::Log::get_logger(), __VA_ARGS__)
+#define LOG_INFO(...)  SPDLOG_LOGGER_INFO (::Log::get_logger(), __VA_ARGS__)
+#define LOG_WARN(...)  SPDLOG_LOGGER_WARN (::Log::get_logger(), __VA_ARGS__)
+#define LOG_ERROR(...) SPDLOG_LOGGER_ERROR(::Log::get_logger(), __VA_ARGS__)
+#define LOG_FATAL(...) SPDLOG_LOGGER_FATAL(::Log::get_logger(), __VA_ARGS__)
 
 #endif
