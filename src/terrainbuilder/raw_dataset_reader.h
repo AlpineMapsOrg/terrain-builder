@@ -7,6 +7,10 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
+#include "log.h"
+
+namespace terrainbuilder {
+
 class RawDatasetReader {
 public:
     RawDatasetReader(Dataset &target_dataset)
@@ -35,7 +39,7 @@ public:
         return glm::uvec2(heights_band->GetXSize(), heights_band->GetYSize());
     }
 
-    HeightData read_data_in_pixel_bounds(geometry::Aabb2i bounds, const bool clamp_bounds = false) {
+    std::optional<HeightData> read_data_in_pixel_bounds(geometry::Aabb2i bounds, const bool clamp_bounds = false) {
         if (clamp_bounds) {
             const glm::ivec2 max_in_bounds = glm::ivec2(this->dataset_size()) - glm::ivec2(1);
             bounds.min = glm::clamp(bounds.min, glm::ivec2(0), max_in_bounds);
@@ -53,6 +57,11 @@ public:
         // Initialize the HeightData for reading
         HeightData height_data(bounds.width(), bounds.height());
         if (bounds.width() == 0 || bounds.height() == 0) {
+            if (clamp_bounds) {
+                LOG_WARN("Target dataset bounds are empty (clamped)");
+            } else {
+                LOG_WARN("Target dataset bounds are empty");
+            }
             return height_data;
         }
 
@@ -62,13 +71,15 @@ public:
             static_cast<void *>(height_data.data()), bounds.width(), bounds.height(), GDT_Float32, 0, 0);
 
         if (read_result != CE_None) {
-            throw std::runtime_error("Failed to read data");
+            const char * message = CPLGetLastErrorMsg();
+            LOG_ERROR("Failed to read height data from {}: [{}] {}", dataset->GetDescription(), read_result, message);
+            return std::nullopt;
         }
 
         return height_data;
     }
 
-    HeightData read_data_in_srs_bounds(const tile::SrsBounds &bounds, const bool clamp_bounds = false) {
+    std::optional<HeightData> read_data_in_srs_bounds(const tile::SrsBounds &bounds, const bool clamp_bounds = false) {
         // Transform the SrsBounds to pixel space
         const geometry::Aabb2i pixel_bounds = this->transform_srs_bounds_to_pixel_bounds(bounds);
 
@@ -133,5 +144,7 @@ private:
     mutable std::array<double, 6> geo_transform;     // transform from pixel space to source srs.
     mutable std::array<double, 6> inv_geo_transform; // transform from source srs to pixel space.
 };
+
+}
 
 #endif

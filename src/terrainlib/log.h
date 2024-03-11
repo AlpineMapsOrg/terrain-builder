@@ -27,6 +27,5 @@ public:
 #define LOG_INFO(...)  SPDLOG_LOGGER_INFO (::Log::get_logger(), __VA_ARGS__)
 #define LOG_WARN(...)  SPDLOG_LOGGER_WARN (::Log::get_logger(), __VA_ARGS__)
 #define LOG_ERROR(...) SPDLOG_LOGGER_ERROR(::Log::get_logger(), __VA_ARGS__)
-#define LOG_FATAL(...) SPDLOG_LOGGER_FATAL(::Log::get_logger(), __VA_ARGS__)
 
 #endif

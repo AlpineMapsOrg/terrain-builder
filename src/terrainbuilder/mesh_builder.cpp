@@ -14,6 +14,9 @@
 
 #include "raw_dataset_reader.h"
 #include "mesh_builder.h"
+#include "log.h"
+
+namespace terrainbuilder::mesh {
 
 template <typename T>
 static glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
@@ -39,7 +42,7 @@ static glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const 
 /// Builds a mesh from the given height dataset.
 // TODO: split up this monster somehow
 // TODO: return result struct instead of using inout parameters
-TerrainMesh build_reference_mesh_tile(
+tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs, tile::SrsBounds &tile_bounds,
@@ -58,10 +61,12 @@ TerrainMesh build_reference_mesh_tile(
     if (inclusive_bounds) {
         add_border_to_aabb(pixel_bounds, Border(1));
     }
-    const HeightData raw_tile_data = reader.read_data_in_pixel_bounds(pixel_bounds, true);
-    if (raw_tile_data.size() == 0) {
-        throw std::runtime_error("bounds are fully outside of dataset region");
+    const std::optional<HeightData> read_result = reader.read_data_in_pixel_bounds(pixel_bounds, true);
+    if (!read_result.has_value() || read_result->size() == 0) {
+        return tl::unexpected(BuildError::NotInDataset);
     }
+    const HeightData raw_tile_data = read_result.value();
+    
 
     // Allocate mesh data structure
     const unsigned int max_vertex_count = raw_tile_data.width() * raw_tile_data.height();
@@ -95,6 +100,9 @@ TerrainMesh build_reference_mesh_tile(
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
             const unsigned int vertex_index = j * raw_tile_data.width() + i;
             const double height = raw_tile_data.pixel(j, i);
+            if (isnan(height) || isinf(height) || height == -999999 /* padding */) {
+                continue;
+            }
 
             // Convert pixel coordinates into a point in the dataset's srs.
             const glm::dvec2 coords_raster_relative = glm::dvec2(i, j) + point_offset_in_raster;
@@ -290,4 +298,6 @@ TerrainMesh build_reference_mesh_tile(
     texture_bounds = actual_texture_bounds;
 
     return mesh;
+}
+
 }

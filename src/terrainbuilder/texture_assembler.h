@@ -17,6 +17,9 @@
 #include "srs.h"
 
 #include "tile_provider.h"
+#include "log.h"
+
+namespace terrainbuilder::texture {
 
 /// Estimates the zoom level of the target bounds in relation to some reference tile given by its zoom level and bounds.
 [[nodiscard]] unsigned int estimate_zoom_level(
@@ -175,6 +178,16 @@ void copy_paste_image(
     copy_paste_image(target, source, geometry::Aabb2i(target_position, target_position + glm::ivec2(source.cols, source.rows)), trim_excess, rescale_filter);
 }
 
+namespace {
+std::optional<std::filesystem::path> try_get_tile_path(const tile::Id tile, const TileProvider &tile_provider) {
+    const TilePathProvider *tile_path_provider = dynamic_cast<const TilePathProvider *>(&tile_provider);
+    if (tile_path_provider != nullptr) {
+        return tile_path_provider->get_tile_path(tile).value();
+    }
+    return std::nullopt;
+}
+}
+
 [[nodiscard]] cv::Mat splatter_tiles_to_texture(
     const tile::Id root_tile,
     /// Specifes the grid used to organize the image tiles.
@@ -214,18 +227,22 @@ void copy_paste_image(
     for (const tile::Id &tile : tiles_to_splatter) {
         cv::Mat tile_image = tile_provider.get_tile(tile).value();
         if (tile_image.empty()) {
-            const TilePathProvider *tile_path_provider = dynamic_cast<const TilePathProvider *>(&tile_provider);
-            if (tile_path_provider != nullptr) {
-                const std::filesystem::path tile_path = tile_path_provider->get_tile_path(tile).value();
-                throw std::runtime_error(fmt::format("failed to load image from path: {}", tile_path.string()));
+            const std::optional<std::filesystem::path> tile_path = try_get_tile_path(tile, tile_provider);
+            if (tile_path.has_value()) {
+                LOG_ERROR("Failed to load image from path {}", tile_path.value().string());
             } else {
-                throw std::runtime_error("failed to load image");
+                LOG_ERROR("Failed to load tile texture");
             }
+            throw std::runtime_error("failed to load image");
         }
 
         const glm::uvec2 current_tile_image_size(tile_image.cols, tile_image.rows);
         if (current_tile_image_size != tile_image_size) {
-            throw std::runtime_error{"tiles have inconsistent sizes"};
+            LOG_WARN("Tiles have inconsistent sizes: tile [{}, ({}, {})] is {}x{} and tile [{}, ({}, {})] is {}x{}",
+                tile.zoom_level, tile.coords.x, tile.coords.y,
+                current_tile_image_size.x, current_tile_image_size.y,
+                any_tile.zoom_level, any_tile.coords.x, any_tile.coords.y,
+                tile_image_size.x, tile_image_size.y);
         }
 
         // Pixel bounds of this image relative to the root tile.
@@ -260,6 +277,7 @@ void copy_paste_image(
     /// The filter used to rescale the tile images if required due to missing detail tiles.
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
     if (target_bounds.width() == 0 || target_bounds.height() == 0) {
+        LOG_WARN("Texture target bounds are empty");
         return std::nullopt;
     }
 
@@ -267,6 +285,8 @@ void copy_paste_image(
     const tile::SrsBounds encompassing_bounds = srs::encompassing_bounding_box_transfer(target_srs, grid.getSRS(), target_bounds);
     // Then we find the smallest tile (id) that encompasses these bounds.
     const tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value().to(tile::Scheme::SlippyMap);
+    LOG_TRACE("Smallest encompassing tile for texture bounds is [{}, ({}, {})]",
+        smallest_encompassing_tile.zoom_level, smallest_encompassing_tile.coords.x, smallest_encompassing_tile.coords.y);
 
     if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {
         return std::nullopt;
@@ -278,11 +298,14 @@ void copy_paste_image(
 
     // If we found to relevant tiles, we are done.
     if (tiles_to_splatter.empty()) {
+        LOG_WARN("Found no tile textures to assemble.");
         return std::nullopt;
     }
 
     // Splatter tiles into texture buffer
     return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter);
+}
+
 }
 
 #endif

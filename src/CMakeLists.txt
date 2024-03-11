@@ -121,6 +121,7 @@ if(NOT TARGET spdlog)
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/spdlog
     )
     FetchContent_MakeAvailable(spdlog)
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 endif()
 
 if(NOT TARGET zpp_bits)
@@ -211,10 +212,12 @@ add_library(terrainbuilderlib
     terrainbuilder/mesh_builder.cpp
     terrainbuilder/raw_dataset_reader.h
     terrainbuilder/texture_assembler.h
-    terrainbuilder/main.cpp
+    terrainbuilder/border.h
+    terrainbuilder/terrainbuilder.h
+    terrainbuilder/terrainbuilder.cpp
 )
 target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
-target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11)
+target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 expected)
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )

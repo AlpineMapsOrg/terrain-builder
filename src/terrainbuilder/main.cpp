@@ -1,6 +1,7 @@
 #include <chrono>
 #include <filesystem>
 #include <vector>
+#include <span>
 
 #include <CLI/CLI.hpp>
 #include <fmt/core.h>
@@ -12,81 +13,8 @@
 #include "ctb/Grid.hpp"
 #include "srs.h"
 
-#include "mesh/io.h"
-#include "mesh/terrain_mesh.h"
-#include "mesh_builder.h"
-#include "texture_assembler.h"
-#include "tile_provider.h"
-
-std::string format_secs_since(const std::chrono::high_resolution_clock::time_point &start) {
-    const auto duration = std::chrono::high_resolution_clock::now() - start;
-    const double seconds = std::chrono::duration<double>(duration).count();
-    std::stringstream ss;
-    ss << std::fixed << std::setprecision(2) << seconds;
-    return ss.str();
-}
-
-class BasemapSchemeTilePathProvider : public TilePathProvider {
-public:
-    BasemapSchemeTilePathProvider(std::filesystem::path base_path) : base_path(base_path) {}
-
-    std::optional<std::filesystem::path> get_tile_path(const tile::Id tile_id) const override {
-        return fmt::format("{}/{}/{}/{}.jpeg", this->base_path.generic_string(), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
-    }
-
-private:
-    std::filesystem::path base_path;
-};
-
-void build(
-    Dataset &dataset,
-    const std::filesystem::path &texture_base_path,
-    const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs,
-    const OGRSpatialReference &texture_srs,
-    const tile::SrsBounds &tile_bounds,
-    const std::filesystem::path &output_path) {
-    const ctb::Grid grid = ctb::GlobalMercator();
-
-    tile::SrsBounds target_tile_bounds(tile_bounds);
-    tile::SrsBounds texture_bounds;
-
-    std::chrono::high_resolution_clock::time_point start;
-    start = std::chrono::high_resolution_clock::now();
-    TerrainMesh mesh = build_reference_mesh_tile(
-        dataset,
-        mesh_srs,
-        tile_srs, target_tile_bounds,
-        texture_srs, texture_bounds,
-        Border(0, 1, 1, 0),
-        true);
-    fmt::print("mesh building took {}s\n", format_secs_since(start));
-
-    start = std::chrono::high_resolution_clock::now();
-    std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, BasemapSchemeTilePathProvider(texture_base_path));
-    if (!texture.has_value()) {
-        throw std::runtime_error{"failed to assemble tile texture"};
-    }
-    mesh.texture = texture;
-    fmt::print("texture stitching took {}s\n", format_secs_since(start));
-
-    start = std::chrono::high_resolution_clock::now();
-    // TODO: use a JSON libary instead
-    std::unordered_map<std::string, std::string> metadata;
-    metadata["mesh_srs"] = mesh_srs.GetAuthorityCode(nullptr);
-    metadata["bounds_srs"] = tile_srs.GetAuthorityCode(nullptr);
-    metadata["texture_srs"] = texture_srs.GetAuthorityCode(nullptr);
-    metadata["tile_bounds"] = fmt::format(
-        "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
-        tile_bounds.min.x, tile_bounds.min.y, tile_bounds.max.x, tile_bounds.max.y);
-    metadata["texture_bounds"] = fmt::format(
-        "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
-        texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
-    if (!io::save_mesh_to_path(output_path, mesh, io::SaveOptions { .metadata = metadata }).has_value()) {
-        throw std::runtime_error{"failed to save tile mesh"};
-    }
-    fmt::print("mesh writing took {}s\n", format_secs_since(start));
-}
+#include "terrainbuilder.h"
+#include "log.h"
 
 int run(std::span<char*> args) {
     int argc = args.size();
@@ -101,7 +29,7 @@ int run(std::span<char*> args) {
         ->required()
         ->check(CLI::ExistingFile);
 
-    std::filesystem::path texture_base_path;
+    std::optional<std::filesystem::path> texture_base_path;
     app.add_option("--textures", texture_base_path, "Path to a folder containing texture tiles in the format of {zoom}/{col}/{row}.jpeg")
         ->check(CLI::ExistingDirectory);
 
@@ -131,9 +59,24 @@ int run(std::span<char*> args) {
         ->transform(CLI::CheckedTransformer(scheme_str_map, CLI::ignore_case));
 
     std::filesystem::path output_path;
-    app.add_option("--output", output_path, "Path to which the reference mesh til will be written to (extension can be .gltf or .glb)");
+    app.add_option("--output", output_path, "Path to which the reference mesh will be written to (extension can be .tile, .gltf or .glb)")
+        ->required();
+
+    spdlog::level::level_enum log_level = spdlog::level::level_enum::trace;
+    const std::map<std::string, spdlog::level::level_enum> log_level_names{
+        {"off", spdlog::level::level_enum::off},
+        {"critical", spdlog::level::level_enum::critical},
+        {"error", spdlog::level::level_enum::err},
+        {"warn", spdlog::level::level_enum::warn},
+        {"info", spdlog::level::level_enum::info},
+        {"debug", spdlog::level::level_enum::debug},
+        {"trace", spdlog::level::level_enum::trace}};
+    app.add_option("--verbosity", log_level, "Verbosity level of logging")
+        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case));
 
     CLI11_PARSE(app, argc, argv);
+
+    Log::init(log_level);
 
     Dataset dataset(dataset_path);
 
@@ -161,13 +104,14 @@ int run(std::span<char*> args) {
         const glm::uvec2 tile_coords(target_tile_data[1], target_tile_data[2]);
         const tile::Id target_tile(zoom_level, tile_coords, target_tile_scheme);
         if (!tile_srs.IsSame(&grid.getSRS())) {
-            throw std::runtime_error{"tile id is only allowed for webmercator srs"};
+            LOG_ERROR("Target tile id is only supported for webmercator reference system");
+            exit(1);
         }
 
         tile_bounds = grid.srsBounds(target_tile, false);
     }
 
-    build(
+    terrainbuilder::build(
         dataset,
         texture_base_path,
         mesh_srs,

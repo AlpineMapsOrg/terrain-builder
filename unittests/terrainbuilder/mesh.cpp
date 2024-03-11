@@ -151,13 +151,14 @@ TEST_CASE("can build reference mesh tiles", "[terrainbuilder]") {
 
             output_tile_bounds = target_bounds;
             output_texture_bounds = target_bounds;
-            const TerrainMesh mesh = build_reference_mesh_tile(
-                dataset,
-                ecef_srs,
-                grid.getSRS(), output_tile_bounds,
-                webmercator_srs, output_texture_bounds,
-                Border(0),
-                false);
+            const TerrainMesh mesh = terrainbuilder::mesh::build_reference_mesh_tile(
+                                         dataset,
+                                         ecef_srs,
+                                         grid.getSRS(), output_tile_bounds,
+                                         webmercator_srs, output_texture_bounds,
+                                         terrainbuilder::Border(0),
+                                         false)
+                                         .value();
 
             check_non_empty(mesh);
             check_uvs(mesh);
@@ -199,13 +200,13 @@ TEST_CASE("neighbouring tiles fit together", "[terrainbuilder]") {
 
             output_tile_bounds = tile_bounds;
             output_texture_bounds = tile_bounds;
-            const TerrainMesh mesh = build_reference_mesh_tile(
+            const TerrainMesh mesh = terrainbuilder::mesh::build_reference_mesh_tile(
                 dataset,
                 ecef_srs,
                 grid.getSRS(), output_tile_bounds,
                 webmercator_srs, output_texture_bounds,
-                Border(0, 1, 1, 0),
-                true);
+                terrainbuilder::Border(0, 1, 1, 0),
+                true).value();
 
             tile_meshes.push_back(mesh);
         }
@@ -242,13 +243,13 @@ TEST_CASE("neighbouring tiles fit together repeatedly", "[terrainbuilder]") {
 
                 output_tile_bounds = grand_child_tile_bounds;
                 output_texture_bounds = grand_child_tile_bounds;
-                const TerrainMesh grand_child_mesh = build_reference_mesh_tile(
+                const TerrainMesh grand_child_mesh = terrainbuilder::mesh::build_reference_mesh_tile(
                     dataset,
                     ecef_srs,
                     grid.getSRS(), output_tile_bounds,
                     webmercator_srs, output_texture_bounds,
-                    Border(0, 1, 1, 0),
-                    true);
+                    terrainbuilder::Border(0, 1, 1, 0),
+                    true).value();
 
                 grand_child_meshes.push_back(grand_child_mesh);
             }
