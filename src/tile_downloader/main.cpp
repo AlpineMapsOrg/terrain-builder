@@ -112,7 +112,7 @@ public:
         const tile::Id google_tile_id = tile_id.to(tile::Scheme::SlippyMap);
         return fmt::format(
             "https://mapsneu.wien.gv.at/basemap/{}/{}/google3857/{}/{}/{}.jpeg",
-            layer, style, google_tile_id.zoom_level, google_tile_id.coords.x, google_tile_id.coords.y);
+            layer, style, google_tile_id.zoom_level, google_tile_id.coords.y, google_tile_id.coords.x);
     }
 
 private:
@@ -129,7 +129,7 @@ public:
         const tile::Id google_tile_id = tile_id.to(tile::Scheme::SlippyMap);
         return fmt::format(
             "https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{}/{}/{}.jpeg",
-            google_tile_id.zoom_level, google_tile_id.coords.x, google_tile_id.coords.y);
+            google_tile_id.zoom_level, google_tile_id.coords.y, google_tile_id.coords.x);
     }
 
 private:
