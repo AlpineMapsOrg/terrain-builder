@@ -1,5 +1,5 @@
-#include <vector>
 #include <numeric>
+#include <vector>
 
 #include <gdal.h>
 #include <gdal_priv.h>
@@ -8,13 +8,13 @@
 
 #include "Dataset.h"
 #include "Image.h"
+#include "mesh/terrain_mesh.h"
 #include "srs.h"
 #include "tntn/gdal_init.h"
-#include "mesh/terrain_mesh.h"
 
-#include "raw_dataset_reader.h"
-#include "mesh_builder.h"
 #include "log.h"
+#include "mesh_builder.h"
+#include "raw_dataset_reader.h"
 
 namespace terrainbuilder::mesh {
 
@@ -66,7 +66,6 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
         return tl::unexpected(BuildError::NotInDataset);
     }
     const HeightData raw_tile_data = read_result.value();
-    
 
     // Allocate mesh data structure
     const unsigned int max_vertex_count = raw_tile_data.width() * raw_tile_data.height();
@@ -92,6 +91,10 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     is_in_bounds.resize(max_vertex_count);
     std::fill(is_in_bounds.begin(), is_in_bounds.end(), false);
 
+    std::vector<bool> is_valid;
+    is_valid.resize(max_vertex_count);
+    std::fill(is_valid.begin(), is_valid.end(), true);
+
     // Pixel values represent the average over their area, or a value at their center.
     const glm::dvec2 point_offset_in_raster(0.5);
 
@@ -100,7 +103,10 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
             const unsigned int vertex_index = j * raw_tile_data.width() + i;
             const double height = raw_tile_data.pixel(j, i);
+
+            // Check if pixel is valid.
             if (isnan(height) || isinf(height) || height == -999999 /* padding */) {
+                is_valid[vertex_index] = false;
                 continue;
             }
 
@@ -185,7 +191,9 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
 
                 for (const unsigned int border_vertex : border_vertices) {
                     assert(border_vertex < is_in_bounds.size());
-                    is_in_bounds[border_vertex] = true;
+                    if (is_valid[border_vertex]) {
+                        is_in_bounds[border_vertex] = true;
+                    }
                 }
 
                 assert(border_vertices.size() <= max_border_vertices);
@@ -300,4 +308,4 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     return mesh;
 }
 
-}
+} // namespace terrainbuilder::mesh
