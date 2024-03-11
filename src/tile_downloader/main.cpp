@@ -233,7 +233,7 @@ public:
         this->url_builder = url_builder;
         this->output_path = map_get_or_default(args,
                                                "output"sv,
-                                               "tiles/{zoom}/{row}/{col}.{ext}"sv);
+                                               "tiles/{zoom}/{y}/{x}.{ext}"sv);
         this->early_skip = stob(map_get_or_default(args, "early-skip"sv, "true"sv));
 
         if (args.contains("max-zoom-level")) {
@@ -398,8 +398,8 @@ private:
     std::string get_tile_path(const tile::Id tile) const {
         std::string file_path(this->output_path);
         string_replace_all(file_path, "{zoom}"sv, std::to_string(tile.zoom_level));
-        string_replace_all(file_path, "{row}"sv, std::to_string(tile.coords.x));
-        string_replace_all(file_path, "{col}"sv, std::to_string(tile.coords.y));
+        string_replace_all(file_path, "{x}"sv, std::to_string(tile.coords.x));
+        string_replace_all(file_path, "{y}"sv, std::to_string(tile.coords.y));
         string_replace_all(file_path, "{ext}"sv, "jpeg"sv);
         return file_path;
     }
@@ -467,9 +467,9 @@ int main(int argc, char *argv[]) {
 
     // Construct root tile
     const unsigned int zoom = svtoui(map_get_required(arg_map, "zoom"));
-    const unsigned int row = svtoui(map_get_required(arg_map, "row"));
-    const unsigned int col = svtoui(map_get_required(arg_map, "col"));
-    const tile::Id root_id = {zoom, {col, row}, scheme};
+    const unsigned int x = svtoui(map_get_required(arg_map, "x"));
+    const unsigned int y = svtoui(map_get_required(arg_map, "y"));
+    const tile::Id root_id = {zoom, {x, y}, scheme};
 
     // Download tile and subtiles recursively.
     TileDownloader downloader(url_builder.get(), arg_map);
