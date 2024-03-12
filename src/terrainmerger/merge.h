@@ -106,6 +106,21 @@ public:
         return this->backward.size();
     }
 
+    size_t find_max_merged_index() const {
+        size_t max_index = 0;
+        for (size_t i = 0; i < this->mesh_count(); i++) {
+            if (this->forward[i].empty()) {
+                continue;
+            }
+            max_index = std::max(max_index, *std::max_element(this->forward[i].begin(), this->forward[i].end()));
+        }
+        return max_index;
+    }
+
+    size_t mesh_vertex_count(const size_t mesh_index) const {
+        return this->forward[mesh_index].size();
+    }
+
     void validate() const {
         for (size_t i = 0; i < this->mesh_count(); i++) {
             assert(this->forward[i].size() == this->backward[i].size());
@@ -131,12 +146,16 @@ public:
         std::vector<std::unordered_map<size_t, size_t>> backward;
 };
 
+TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes);
+TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes, VertexMapping &mapping);
+TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes, double distance_epsilon);
+TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes, double distance_epsilon, VertexMapping &mapping);
+
+TerrainMesh apply_mapping(std::span<const TerrainMesh> meshes, const VertexMapping &mapping);
+
+VertexMapping create_merge_mapping(std::span<const TerrainMesh> meshes);
 VertexMapping create_merge_mapping(std::span<const TerrainMesh> meshes, double distance_epsilon);
 
-TerrainMesh merge_mased_on_mapping(std::span<const TerrainMesh> meshes, const VertexMapping &mapping);
-
-TerrainMesh merge_by_distance(std::span<const TerrainMesh> meshes, double distance_epsilon, VertexMapping &mapping);
-TerrainMesh merge_by_distance(std::span<const TerrainMesh> meshes, double distance_epsilon);
 
 }
 

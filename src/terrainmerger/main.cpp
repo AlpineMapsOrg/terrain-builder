@@ -66,8 +66,7 @@ void run(const cli::Args &args) {
 
     LOG_INFO("Merging meshes...");
     merge::VertexMapping vertex_mapping;
-    // TODO: adaptive merge distance or at least single connected component assert
-    TerrainMesh merged_mesh = merge::merge_by_distance(meshes, 0.001, vertex_mapping);
+    TerrainMesh merged_mesh = merge::merge_meshes(meshes, vertex_mapping);
     if (args.save_intermediate_meshes) {
         const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".merged.glb");
         LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path.string());
