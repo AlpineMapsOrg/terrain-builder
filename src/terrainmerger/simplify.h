@@ -23,8 +23,14 @@ enum class Algorithm {
     LindstromTurk
 };
 
+struct VertexRatio {
+    double ratio;
+};
 struct EdgeRatio {
-    double ratio = 1;
+    double ratio;
+};
+struct FaceRatio {
+    double ratio;
 };
 struct AbsoluteError {
     double error_bound;
@@ -33,7 +39,7 @@ struct RelativeError {
     double error_bound;
 };
 
-using StopCondition = std::variant<EdgeRatio, AbsoluteError, RelativeError>;
+using StopCondition = std::variant<VertexRatio, EdgeRatio, FaceRatio, AbsoluteError, RelativeError>;
 
 struct Options {
     Algorithm algorithm = Algorithm::LindstromTurk;

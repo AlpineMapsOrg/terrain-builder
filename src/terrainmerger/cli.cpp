@@ -30,20 +30,30 @@ Args cli::parse(int argc, const char * const * argv) {
     bool no_mesh_simplification = false;
     app.add_flag("--no-simplify", no_mesh_simplification, "Disable mesh simplification");
 
-    std::optional<double> simplification_factor;
-    auto simplify_ratio_option = app.add_option("--simplify-ratio", simplification_factor, "Target mesh edge simplification factor")
-                   ->check(CLI::Range(0.0, 1.0))
-                   ->excludes("--no-simplify");
+    std::optional<double> simplification_vertex_ratio;
+    app.add_option("--simplify-vertex-ratio", simplification_vertex_ratio, "Target mesh vertex simplification factor")
+        ->check(CLI::Range(0.0, 1.0))
+        ->excludes("--no-simplify");
+
+    std::optional<double> simplification_edge_ratio;
+    app.add_option("--simplify-edge-ratio", simplification_edge_ratio, "Target mesh edge simplification factor")
+        ->check(CLI::Range(0.0, 1.0))
+        ->excludes("--no-simplify");
+
+    std::optional<double> simplification_face_ratio;
+    app.add_option("--simplify-face-ratio", simplification_face_ratio, "Target mesh face simplification factor")
+        ->check(CLI::Range(0.0, 1.0))
+        ->excludes("--no-simplify");
 
     std::optional<double> simplification_target_error_relative;
-    auto simplify_error_relative_option = app.add_option("--simplify-error-relative", simplification_target_error_relative, "Relative mesh simplification error bound")
-                                              ->check(CLI::Range(0.0, 1.0))
-                                              ->excludes("--no-simplify");
+    app.add_option("--simplify-error-relative", simplification_target_error_relative, "Relative mesh simplification error bound")
+        ->check(CLI::Range(0.0, 1.0))
+        ->excludes("--no-simplify");
 
     std::optional<double> simplification_target_error_absolute;
-    auto simplify_error_absolute_option = app.add_option("--simplify-error-absolute", simplification_target_error_absolute, "Absolute mesh simplification error bound")
-                                              ->check(CLI::PositiveNumber)
-                                              ->excludes("--no-simplify");
+    app.add_option("--simplify-error-absolute", simplification_target_error_absolute, "Absolute mesh simplification error bound")
+        ->check(CLI::PositiveNumber)
+        ->excludes("--no-simplify");
 
     bool save_intermediate_meshes = false;
     app.add_flag("--save-debug-meshes", save_intermediate_meshes, "Output intermediate meshes");
@@ -72,8 +82,14 @@ Args cli::parse(int argc, const char * const * argv) {
     args.save_intermediate_meshes = save_intermediate_meshes;
     if (!no_mesh_simplification) {
         SimplificationArgs simplification_args = {};
-        if (simplification_factor.has_value()) {
-            simplification_args.stop_condition.push_back(simplify::EdgeRatio { .ratio=simplification_factor.value() });
+        if (simplification_vertex_ratio.has_value()) {
+            simplification_args.stop_condition.push_back(simplify::VertexRatio { .ratio=simplification_vertex_ratio.value() });
+        } 
+        if (simplification_edge_ratio.has_value()) {
+            simplification_args.stop_condition.push_back(simplify::EdgeRatio { .ratio=simplification_edge_ratio.value() });
+        } 
+        if (simplification_face_ratio.has_value()) {
+            simplification_args.stop_condition.push_back(simplify::FaceRatio { .ratio=simplification_face_ratio.value() });
         } 
         if (simplification_target_error_relative.has_value()) {
             simplification_args.stop_condition.push_back(simplify::RelativeError { .error_bound = simplification_target_error_relative.value() });
