@@ -14,7 +14,7 @@
 
 namespace cli {
     struct SimplificationArgs {
-        simplify::StopCondition stop_condition;
+        std::vector<simplify::StopCondition> stop_condition;
     };
 
     struct Args {

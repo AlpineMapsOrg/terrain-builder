@@ -1,5 +1,6 @@
 #include <optional>
 #include <vector>
+#include <ranges>
 
 // required before distance.h due to a bug in cgal
 // https://github.com/CGAL/cgal/issues/8009
@@ -9,7 +10,7 @@
 #include <CGAL/Polygon_mesh_processing/distance.h>
 #include <CGAL/Polygon_mesh_processing/repair_self_intersections.h>
 #include <CGAL/Surface_mesh_simplification/Edge_collapse_visitor_base.h>
-#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Bounded_normal_change_placement.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Bounded_normal_change_filter.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Constrained_placement.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Count_ratio_stop_predicate.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/GarlandHeckbert_policies.h>
@@ -42,17 +43,152 @@ struct overloaded : Ts... {
 // We could use the same type as in uv_map but this would require a custom visitor or similar.
 typedef SurfaceMesh::Property_map<VertexDescriptor, Point2> AttachedUvPropertyMap;
 
-struct Uv_update_edge_collapse_visitor : CGAL::Surface_mesh_simplification::Edge_collapse_visitor_base<SurfaceMesh> {
-    Uv_update_edge_collapse_visitor(AttachedUvPropertyMap uv_map)
+static std::vector<glm::dvec2> decode_uv_map(const AttachedUvPropertyMap &uv_map, size_t number_of_vertices) {
+    std::vector<glm::dvec2> uvs;
+    uvs.reserve(number_of_vertices);
+    for (size_t i = 0; i < number_of_vertices; i++) {
+        const Point2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
+        uvs.push_back(convert::cgal2glm(uv));
+    }
+    return uvs;
+}
+
+struct SurfaceMeshSnapshot {
+    SurfaceMesh mesh;
+    std::vector<glm::dvec2> uv_map;
+};
+
+template <class T>
+T clone(const T &orig) {
+    return T{orig};
+}
+
+static double measure_max_absolute_error(const SurfaceMesh &original, const SurfaceMesh &simplified, const double bound_on_error = 0.0001) {
+    const double error = CGAL::Polygon_mesh_processing::bounded_error_Hausdorff_distance<CGAL::Parallel_if_available_tag, SurfaceMesh, SurfaceMesh>(
+        original, simplified, bound_on_error);
+    return error + bound_on_error;
+}
+
+class ExpensiveStopPredicate {
+public:
+    ExpensiveStopPredicate(SurfaceMesh &mesh, AttachedUvPropertyMap& uv_map) : mesh_ref(mesh), uv_map_ref(uv_map) {
+        last_snapshot = {
+            .mesh = clone(mesh),
+            .uv_map = decode_uv_map(uv_map, CGAL::num_vertices(mesh))
+        };
+    }
+
+    template <typename F, typename Profile>
+    bool operator()(const F& /*current_cost*/,
+                    const Profile& profile,
+                    std::size_t /*initial_edge_count*/,
+                    std::size_t current_edge_count) const {
+        const SurfaceMesh &mesh = profile.surface_mesh();
+
+        if (this->has_stopped) {
+            return true;
+        }
+
+        if (!this->should_check(mesh, current_edge_count)) {
+            return false;
+        }
+
+        if (!this->should_stop(mesh, current_edge_count)) {
+            LOG_TRACE("Making new snapshot of current geometry");
+            this->last_snapshot.mesh = clone(mesh);
+            this->last_snapshot.uv_map = decode_uv_map(uv_map_ref, CGAL::num_vertices(mesh));
+            return false;
+        }
+
+        LOG_TRACE("Stopping simplification and restoring last valid snapshot");
+        this->mesh_ref = this->last_snapshot.mesh;
+        this->mesh_ref.remove_property_map(this->uv_map_ref);
+        this->uv_map_ref = this->mesh_ref.add_property_map<VertexDescriptor, Point2>("h:uv").first;
+        for (size_t i = 0; i < this->last_snapshot.uv_map.size(); i++) {
+            this->uv_map_ref[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(this->last_snapshot.uv_map[i]);
+        }
+        this->has_stopped = true;
+        return true;
+    }
+
+    virtual bool should_check(const SurfaceMesh &mesh, const size_t current_edge_count) const = 0;
+    virtual bool should_stop(const SurfaceMesh &mesh, const size_t current_edge_count) const = 0;
+
+    mutable SurfaceMeshSnapshot last_snapshot;
+
+private:
+    mutable bool has_stopped = false;
+    SurfaceMesh &mesh_ref;
+    AttachedUvPropertyMap &uv_map_ref;
+};
+
+class StopConditionStopPredicate : public ExpensiveStopPredicate {
+public:
+    StopConditionStopPredicate(SurfaceMesh &mesh, AttachedUvPropertyMap &uv_map, const std::span<const StopCondition> stop_conditions)
+        : ExpensiveStopPredicate(mesh, uv_map), original_mesh(mesh), stop_conditions(stop_conditions) {
+        this->next_check_edge_count = CGAL::num_edges(mesh) * 0.9;
+    }
+
+    bool should_check(const SurfaceMesh &mesh, const size_t current_edge_count) const override {
+        if (this->next_check_edge_count >= current_edge_count) {
+            LOG_TRACE("Current edge count threshold of {} reached", this->next_check_edge_count);
+            this->next_check_edge_count *= 0.9;
+            LOG_TRACE("Next stop condition check is at edge count of {}", this->next_check_edge_count);
+            return true;
+        }
+        return false;
+    }
+
+    bool should_stop(const SurfaceMesh &mesh, const size_t current_edge_count) const override {
+        LOG_TRACE("Checking stop conditions");
+
+        const bool will_stop = std::any_of(this->stop_conditions.begin(), this->stop_conditions.end(), [&](const StopCondition &stop_condition) {
+            // TODO: optimize this by caching
+            return std::visit(overloaded{
+                                  [&](EdgeRatio edge_ratio) {
+                                      const double current_ratio = static_cast<double>(current_edge_count) / CGAL::num_edges(original_mesh);
+                                      LOG_TRACE("Current edge ratio is {:g}% with target {:g}%", current_ratio*100, edge_ratio.ratio*100);
+                                      return current_ratio <= edge_ratio.ratio;
+                                  },
+                                  [&](RelativeError relative_error) {
+                                      /*
+                                        // TODO: use CGAL::Polygon_mesh_processing::is_Hausdorff_distance_larger() instead
+                                        const double current_absolute_error = measure_max_absolute_error(original_mesh, mesh, relative_error.error_bound * 0.1);
+                                        const glm::dvec3 original_mesh_size = calculate_bounds(original_mesh).size();
+                                        const double original_mesh_max_size = std::max(original_mesh_size[0], original_mesh_size[1], original_mesh_size[2]);
+                                        const double current_relative_error = current_absolute_error / original_mesh_max_size;
+                                        return current_relative_error >= relative_error.error_bound;
+                                        */
+                                      return true;
+                                  },
+                                  [&](AbsoluteError absolute_error) {
+                                      // TODO: use CGAL::Polygon_mesh_processing::is_Hausdorff_distance_larger() instead
+                                      const double current_absolute_error = measure_max_absolute_error(original_mesh, mesh, absolute_error.error_bound * 0.1);
+                                      LOG_TRACE("Current absolute error is {:g}% with target {:g}%", current_absolute_error, absolute_error.error_bound);
+                                      return current_absolute_error >= absolute_error.error_bound;
+                                  }},
+                              stop_condition); 
+                    });
+        if (will_stop) {
+            LOG_TRACE("Stop conditions triggered");
+        }
+
+        return will_stop;
+    }
+
+private:
+    const SurfaceMesh &original_mesh;
+    mutable size_t next_check_edge_count;
+    const std::span<const StopCondition> stop_conditions;
+};
+
+struct UvMapUpdateEdgeCollapseVisitor : CGAL::Surface_mesh_simplification::Edge_collapse_visitor_base<SurfaceMesh> {
+    UvMapUpdateEdgeCollapseVisitor(AttachedUvPropertyMap& uv_map)
         : uv_map(uv_map) {}
 
     // Called during the processing phase for each edge being collapsed.
     // If placement is absent the edge is left uncollapsed.
-    void OnCollapsing(const Profile &profile,
-                      boost::optional<Point> placement) {
-        // only valid if restrict_border_triangles=false
-        // assert(!profile.is_v0_v1_a_border() && !profile.is_v1_v0_a_border());
-
+    void OnCollapsing(const Profile &profile, boost::optional<Point> placement) {
         if (!placement) {
             return;
         }
@@ -77,12 +213,13 @@ struct Uv_update_edge_collapse_visitor : CGAL::Surface_mesh_simplification::Edge
         uv_map[vd] = new_uv;
     }
 
-    AttachedUvPropertyMap uv_map;
+    AttachedUvPropertyMap& uv_map;
     Point2 new_uv;
 };
 
 auto fmt::formatter<Algorithm>::format(const Algorithm &algorithm, format_context &ctx) const {
     string_view name = "unknown";
+
     switch (algorithm) {
     case Algorithm::GarlandHeckbert:
         name = "GarlandHeckbert";
@@ -91,6 +228,7 @@ auto fmt::formatter<Algorithm>::format(const Algorithm &algorithm, format_contex
         name = "LindstromTurk";
         break;
     }
+
     return formatter<string_view>::format(name, ctx);
 }
 
@@ -100,7 +238,7 @@ std::ostream &operator<<(std::ostream &os, const Algorithm &algorithm) {
 }
 
 // Property map that indicates whether an edge is marked as non-removable.
-struct Border_is_constrained_edge_map {
+struct BorderIsConstrainedEdgeMap {
     typedef EdgeDescriptor key_type;
     typedef bool value_type;
     typedef value_type reference;
@@ -110,10 +248,10 @@ struct Border_is_constrained_edge_map {
     const bool active = true;
     const bool restrict_border_triangles = true;
 
-    Border_is_constrained_edge_map(const SurfaceMesh &mesh, const bool active = true)
+    BorderIsConstrainedEdgeMap(const SurfaceMesh &mesh, const bool active = true)
         : mesh(&mesh), active(active) {}
 
-    friend value_type get(const Border_is_constrained_edge_map &map, const key_type &edge) {
+    friend value_type get(const BorderIsConstrainedEdgeMap &map, const key_type &edge) {
         if (!map.active) {
             return false;
         }
@@ -141,7 +279,7 @@ struct Border_is_constrained_edge_map {
 
 struct SimplificationArgs {
     bool lock_borders;
-    double stop_edge_ratio;
+    std::span<const StopCondition> stop_conditions;
 };
 
 template <class Cost, class Placement>
@@ -151,22 +289,20 @@ static size_t _simplify_mesh_with_cost_and_placement(
     const Cost &cost,
     const Placement &placement,
     const SimplificationArgs args) {
-    if (args.stop_edge_ratio > 0.999) {
-        LOG_DEBUG("Skipped simplification due to stop ratio being almost 100% ({:g})", args.stop_edge_ratio);
-        return 0;
-    }
-
-    typedef typename CGAL::Surface_mesh_simplification::Constrained_placement<Placement, Border_is_constrained_edge_map> ConstrainedPlacement;
-    Border_is_constrained_edge_map bem(mesh, args.lock_borders);
+    typedef typename CGAL::Surface_mesh_simplification::Constrained_placement<Placement, BorderIsConstrainedEdgeMap> ConstrainedPlacement;
+    BorderIsConstrainedEdgeMap bem(mesh, args.lock_borders);
     const ConstrainedPlacement constrained_placement(bem, placement);
 
-    const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop_predicate(args.stop_edge_ratio);
-    Uv_update_edge_collapse_visitor visitor(uv_map);
+    // const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop_predicate(args.stop_edge_ratio);
+    const StopConditionStopPredicate stop_predicate(mesh, uv_map, args.stop_conditions);
+    UvMapUpdateEdgeCollapseVisitor visitor(uv_map);
+    const CGAL::Surface_mesh_simplification::Bounded_normal_change_filter<> filter;
 
     const size_t removed_edge_count = CGAL::Surface_mesh_simplification::edge_collapse(mesh, stop_predicate,
                                                                                        CGAL::parameters::edge_is_constrained_map(bem)
                                                                                            .get_placement(constrained_placement)
                                                                                            .get_cost(cost)
+                                                                                           .filter(filter)
                                                                                            .visitor(visitor));
 
     LOG_TRACE("Removed {} edges from simplified mesh", removed_edge_count);
@@ -197,7 +333,7 @@ static size_t _simplify_mesh(
     AttachedUvPropertyMap &uv_map,
     const Algorithm algorithm,
     const SimplificationArgs args) {
-    LOG_TRACE("Simplifying mesh (stop ratio={:g}, borders={}, algorithm={})", args.stop_edge_ratio, args.lock_borders ? "Locked" : "Unlocked", algorithm);
+    // LOG_TRACE("Simplifying mesh (stop ratio={:g}, borders={}, algorithm={})", args.stop_edge_ratio, args.lock_borders ? "Locked" : "Unlocked", algorithm);
 
     switch (algorithm) {
     case Algorithm::GarlandHeckbert:
@@ -211,16 +347,9 @@ static size_t _simplify_mesh(
 
     throw std::invalid_argument("invalid algorithm specified");
 }
-
-static double measure_max_absolute_error(const SurfaceMesh &original, const SurfaceMesh &simplified, const double bound_on_error = 0.0001) {
-    const double error = CGAL::Polygon_mesh_processing::bounded_error_Hausdorff_distance<CGAL::Parallel_if_available_tag, SurfaceMesh, SurfaceMesh>(
-        original, simplified, bound_on_error);
-    return error + bound_on_error;
-}
-
-Result simplify::simplify_mesh(const TerrainMesh &mesh, const StopCondition stop_condition, Options options) {
+Result simplify::simplify_mesh(const TerrainMesh &mesh, std::span<const StopCondition> stop_conditions, Options options) {
     // simplification fails with large numerical values so we normalize the values here.
-    // TODO: Try to use EPECK instead
+    // EPECK is way too slow
     const size_t vertex_count = mesh.positions.size();
     glm::dvec3 average_position(0, 0, 0);
     for (size_t i = 0; i < vertex_count; i++) {
@@ -241,81 +370,12 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, const StopCondition stop
         uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
     }
 
-    double simplification_error = 0;
-    // TODO: refactor this
-    std::visit(overloaded{
-                   [&](EdgeRatio edge_ratio) {
-                       // Just simplify until we reach the target primitive count.
-                       const SimplificationArgs args{
+    const SimplificationArgs args{
                            .lock_borders = options.lock_borders,
-                           .stop_edge_ratio = edge_ratio.ratio};
-                       _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
-                       simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh);
-                   },
-                   [&](RelativeError relative_error) {
-                       // TODO: implement this
-                       throw std::runtime_error("not yet implemented");
-                   },
-                   [&](AbsoluteError absolute_error) {
-                       // TODO: Repeatedly simplify the mesh until we overstep the target error or understep the min stop ratio.
-                       // TODO: use something like https://github.com/afabri/cgal/blob/SMS-undo_example-GF/Surface_mesh_simplification/examples/Surface_mesh_simplification/undo_edge_collapse_surface_mesh.cpp
+                           .stop_conditions = stop_conditions};
 
-                       const double max_error = absolute_error.error_bound;
-                       const double min_stop_ratio = 0;
-
-                       LOG_DEBUG("Simplifying with max error of {:g}", max_error);
-
-                       double last_safe_stop_ratio = 1.0;
-                       double compound_stop_ratio = 1.0;
-                       // TODO: binary search like strategy
-                       while (true) {
-                           const SimplificationArgs args{
-                               .lock_borders = options.lock_borders,
-                               .stop_edge_ratio = 0.9};
-                           compound_stop_ratio *= args.stop_edge_ratio;
-
-                           LOG_DEBUG("Trying stop ratio of {:g}", compound_stop_ratio);
-
-                           if (compound_stop_ratio < min_stop_ratio) {
-                               break;
-                           }
-
-                           const size_t removed_edge_count = _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
-                           if (removed_edge_count == 0) {
-                               LOG_DEBUG("No edges were removed using final stop ratio of {:g}", compound_stop_ratio);
-                               break;
-                           }
-
-                            // TODO: smarter error bound?
-                           const double current_simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh, max_error * 0.1);
-
-                        // TODO: consider accumulated error
-                           // TODO: use CGAL::Polygon_mesh_processing::is_Hausdorff_distance_larger() instead
-                           LOG_DEBUG("Stop ratio of {:g} achieved error of {:g}", compound_stop_ratio, current_simplification_error);
-                           if (current_simplification_error > max_error) {
-                               LOG_DEBUG("Max error exceeded, using {:g} as final stop ratio", last_safe_stop_ratio);
-                               break;
-                           }
-
-                           last_safe_stop_ratio = compound_stop_ratio;
-                       }
-
-                       cgal_mesh.clear();
-                       cgal_mesh.collect_garbage();
-                       cgal_mesh = original_mesh;
-                       uv_map = cgal_mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
-                       for (size_t i = 0; i < mesh.uvs.size(); i++) {
-                           uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
-                       }
-
-                       const SimplificationArgs args{
-                           .lock_borders = options.lock_borders,
-                           .stop_edge_ratio = last_safe_stop_ratio};
-                       _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
-
-                       simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh, max_error * 0.01);
-                   }},
-               stop_condition);
+    const size_t removed_edge_count = _simplify_mesh(cgal_mesh, uv_map, options.algorithm, args);
+    const double simplification_error = measure_max_absolute_error(original_mesh, cgal_mesh, 0.01);
 
     if (!CGAL::Polygon_mesh_processing::experimental::remove_self_intersections(cgal_mesh)) {
         LOG_WARN("Failed to remove self intersections after simplification");

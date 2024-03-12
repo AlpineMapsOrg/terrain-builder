@@ -45,8 +45,10 @@ struct Result {
     double max_absolute_error;
 };
 
-Result simplify_mesh(const TerrainMesh &mesh, StopCondition stop_condition, Options options = Options());
-
+Result simplify_mesh(const TerrainMesh &mesh, std::span<const StopCondition> stop_conditions, Options options = Options());
+inline Result simplify_mesh(const TerrainMesh &mesh, const StopCondition& stop_condition, Options options = Options()) {
+    return simplify_mesh(mesh, std::span<const StopCondition>{&stop_condition, 1}, options);
+}
 }
 
 // fmt support

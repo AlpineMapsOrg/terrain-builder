@@ -45,16 +45,6 @@ Args cli::parse(int argc, const char * const * argv) {
                                               ->check(CLI::PositiveNumber)
                                               ->excludes("--no-simplify");
 
-    simplify_ratio_option
-        ->excludes("--simplify-error-relative")
-        ->excludes("--simplify-error-absolute");
-    simplify_error_relative_option
-        ->excludes("--simplify-ratio")
-        ->excludes("--simplify-error-absolute");
-    simplify_error_absolute_option
-        ->excludes("--simplify-ratio")
-        ->excludes("--simplify-error-relative");
-
     bool save_intermediate_meshes = false;
     app.add_flag("--save-debug-meshes", save_intermediate_meshes, "Output intermediate meshes");
 
@@ -81,15 +71,18 @@ Args cli::parse(int argc, const char * const * argv) {
     args.log_level = log_level;
     args.save_intermediate_meshes = save_intermediate_meshes;
     if (!no_mesh_simplification) {
-        SimplificationArgs simplification_args;
+        SimplificationArgs simplification_args = {};
         if (simplification_factor.has_value()) {
-            simplification_args.stop_condition = simplify::EdgeRatio { .ratio=simplification_factor.value() };
-        } else if (simplification_target_error_relative.has_value()) {
-            simplification_args.stop_condition = simplify::RelativeError { .error_bound = simplification_target_error_relative.value() };
-        } else if (simplification_target_error_absolute.has_value()) {
-            simplification_args.stop_condition = simplify::AbsoluteError { .error_bound=simplification_target_error_absolute.value() };
-        } else {
-            simplification_args.stop_condition = simplify::EdgeRatio { .ratio=1.0/args.input_paths.size() };
+            simplification_args.stop_condition.push_back(simplify::EdgeRatio { .ratio=simplification_factor.value() });
+        } 
+        if (simplification_target_error_relative.has_value()) {
+            simplification_args.stop_condition.push_back(simplify::RelativeError { .error_bound = simplification_target_error_relative.value() });
+        }
+        if (simplification_target_error_absolute.has_value()) {
+            simplification_args.stop_condition.push_back(simplify::AbsoluteError { .error_bound=simplification_target_error_absolute.value() });
+        }
+        if (simplification_args.stop_condition.empty()) {
+            simplification_args.stop_condition.push_back(simplify::EdgeRatio { .ratio=1.0/args.input_paths.size() });
         }
         args.simplification = simplification_args;
     }
