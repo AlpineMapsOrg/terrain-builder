@@ -63,7 +63,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     }
     const std::optional<HeightData> read_result = reader.read_data_in_pixel_bounds(pixel_bounds, true);
     if (!read_result.has_value() || read_result->size() == 0) {
-        return tl::unexpected(BuildError::NotInDataset);
+        return tl::unexpected(BuildError::OutOfBounds);
     }
     const HeightData raw_tile_data = read_result.value();
 
@@ -149,6 +149,10 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
             // If we arrive here the point is inside the bounds.
             is_in_bounds[vertex_index] = true;
         }
+    }
+
+    if (!std::any_of(is_in_bounds.begin(), is_in_bounds.end(), std::identity())) {
+        return tl::unexpected(BuildError::EmptyRegion);
     }
 
     // Mark all border vertices as inside bounds.

@@ -65,28 +65,34 @@ void build(
         Border(0, 1, 1, 0),
         true);
     if (!mesh_result.has_value()) {
-        const tile::SrsBounds dataset_bounds = dataset.bounds();
-        const tile::Id dataset_largest_tile = grid.findLargestContainedTile(dataset_bounds).value().to(tile::Scheme::SlippyMap);
-        const tile::Id dataset_encompassing_tile = grid.findSmallestEncompassingTile(dataset_bounds).value().to(tile::Scheme::SlippyMap);
-        const tile::Id target_largest_tile = grid.findLargestContainedTile(tile_bounds).value().to(tile::Scheme::SlippyMap);
-        const tile::Id target_encompassing_tile = grid.findSmallestEncompassingTile(tile_bounds).value().to(tile::Scheme::SlippyMap);
-        LOG_ERROR("Target bounds are fully outside of dataset region\n"
-                  "Dataset {{\n"
-                  "\tBounds {{x={}, y={}, w={}, h={}}}.\n"
-                  "\tLargest Contained Tile {{zoom={}, x={}, y={}}}.\n"
-                  "\tSmallest Encompassing Tile {{zoom={}, x={}, y={}}}.\n"
-                  "}}\n"
-                  "Target {{\n"
-                  "\tBounds {{x={}, y={}, w={}, h={}}}.\n"
-                  "\tLargest Contained Tile {{zoom={}, x={}, y={}}}.\n"
-                  "\tSmallest Encompassing Tile {{zoom={}, x={}, y={}}}.\n"
-                  "}}",
-                  dataset_bounds.min.x, dataset_bounds.min.y, dataset_bounds.width(), dataset_bounds.height(),
-                  dataset_largest_tile.zoom_level, dataset_largest_tile.coords.x, dataset_largest_tile.coords.y,
-                  dataset_encompassing_tile.zoom_level, dataset_encompassing_tile.coords.x, dataset_encompassing_tile.coords.y,
-                  tile_bounds.min.x, tile_bounds.min.y, tile_bounds.width(), tile_bounds.height(),
-                  target_largest_tile.zoom_level, target_largest_tile.coords.x, target_largest_tile.coords.y,
-                  target_encompassing_tile.zoom_level, target_encompassing_tile.coords.x, target_encompassing_tile.coords.y);
+        const mesh::BuildError error = mesh_result.error();
+        if (error == mesh::BuildError::OutOfBounds) {
+            const tile::SrsBounds dataset_bounds = dataset.bounds();
+            const tile::Id dataset_largest_tile = grid.findLargestContainedTile(dataset_bounds).value().to(tile::Scheme::SlippyMap);
+            const tile::Id dataset_encompassing_tile = grid.findSmallestEncompassingTile(dataset_bounds).value().to(tile::Scheme::SlippyMap);
+            const tile::Id target_largest_tile = grid.findLargestContainedTile(tile_bounds).value().to(tile::Scheme::SlippyMap);
+            const tile::Id target_encompassing_tile = grid.findSmallestEncompassingTile(tile_bounds).value().to(tile::Scheme::SlippyMap);
+            LOG_ERROR("Target bounds are fully outside of dataset region\n"
+                      "Dataset {{\n"
+                      "\tBounds {{x={}, y={}, w={}, h={}}}.\n"
+                      "\tLargest Contained Tile {{zoom={}, x={}, y={}}}.\n"
+                      "\tSmallest Encompassing Tile {{zoom={}, x={}, y={}}}.\n"
+                      "}}\n"
+                      "Target {{\n"
+                      "\tBounds {{x={}, y={}, w={}, h={}}}.\n"
+                      "\tLargest Contained Tile {{zoom={}, x={}, y={}}}.\n"
+                      "\tSmallest Encompassing Tile {{zoom={}, x={}, y={}}}.\n"
+                      "}}",
+                      dataset_bounds.min.x, dataset_bounds.min.y, dataset_bounds.width(), dataset_bounds.height(),
+                      dataset_largest_tile.zoom_level, dataset_largest_tile.coords.x, dataset_largest_tile.coords.y,
+                      dataset_encompassing_tile.zoom_level, dataset_encompassing_tile.coords.x, dataset_encompassing_tile.coords.y,
+                      tile_bounds.min.x, tile_bounds.min.y, tile_bounds.width(), tile_bounds.height(),
+                      target_largest_tile.zoom_level, target_largest_tile.coords.x, target_largest_tile.coords.y,
+                      target_encompassing_tile.zoom_level, target_encompassing_tile.coords.x, target_encompassing_tile.coords.y);
+        } else if (error == mesh::BuildError::EmptyRegion) {
+            LOG_ERROR("Target bounds are inside dataset, but the region is empty (only made up of padding)");
+        }
+
         exit(1);
     }
     TerrainMesh mesh = mesh_result.value();

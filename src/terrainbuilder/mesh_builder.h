@@ -12,7 +12,8 @@
 namespace terrainbuilder::mesh {
 
 enum class BuildError {
-    NotInDataset
+    OutOfBounds,
+    EmptyRegion
 };
 
 /// Builds a mesh from the given height dataset.
