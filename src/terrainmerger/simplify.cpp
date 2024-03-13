@@ -60,28 +60,41 @@ T clone(const T &orig) {
 
 class ExpensiveStopPredicate {
 public:
+    ExpensiveStopPredicate(SurfaceMesh& mesh) : mesh(mesh), original_mesh(clone(mesh)) {
+        if (this->has_expensive_checks()) {
+            this->make_snapshot(std::move(clone(mesh)));
+        }
+    }
+
     template <typename F, typename Profile>
     bool operator()(const F & /*current_cost*/,
-                    const Profile &profile,
-                    std::size_t /*initial_edge_count*/,
-                    std::size_t /*current_edge_count*/) const {
-        const SurfaceMesh &mesh = profile.surface_mesh();
-
+                    const Profile &/*profile*/,
+                    size_t /*initial_edge_count*/,
+                    size_t /*current_edge_count*/) const {
         if (this->has_stopped) {
             return true;
         }
 
-        bool check_expensive = this->has_expensive_checks() && this->should_check_expensive(mesh);
-        if (this->should_stop(mesh, check_expensive)) {
-            if (check_expensive) {
-                this->restore_snapshot();
+        if (this->has_expensive_checks() && this->should_check_expensive(this->original_mesh, this->mesh)) {
+            // At this point we know that we will perform expensive checks
+            // and thus want to clean up the removed geometry.
+            SurfaceMesh mesh_clone = clone(this->mesh);
+            mesh_clone.collect_garbage();
+
+            if (this->should_stop(this->original_mesh, mesh_clone, true)) {
+                this->restore_snapshot(this->mesh);
+                this->has_stopped = true;
+                return true;
+            } else {
+                this->make_snapshot(std::move(mesh_clone));
+                return false;
             }
+        }
+
+        if (this->should_stop(this->original_mesh, this->mesh, false)) {
             this->has_stopped = true;
             return true;
         } else {
-            if (check_expensive) {
-                this->make_snapshot(mesh);
-            }
             return false;
         }
     }
@@ -91,14 +104,21 @@ protected:
         return true;
     };
 
-    virtual bool should_check_expensive(const SurfaceMesh &mesh) const = 0;
-    virtual bool should_stop(const SurfaceMesh &mesh, const bool check_expensive) const = 0;
+    virtual bool should_check_expensive(const SurfaceMesh &original, const SurfaceMesh &simplified) const = 0;
+    virtual bool should_stop(const SurfaceMesh &original, const SurfaceMesh &simplified, const bool check_expensive) const = 0;
 
-    virtual void make_snapshot(const SurfaceMesh &) const {}
-    virtual void restore_snapshot() const {}
+    virtual void make_snapshot(SurfaceMesh &&mesh) const {
+        this->mesh_snapshot = mesh;
+    }
+    virtual void restore_snapshot(SurfaceMesh& mesh) const {
+        this->mesh = this->mesh_snapshot;
+    }
 
 private:
     mutable bool has_stopped = false;
+    SurfaceMesh &mesh;
+    mutable SurfaceMesh mesh_snapshot;
+    mutable SurfaceMesh original_mesh;
 };
 
 static double measure_max_absolute_error(const SurfaceMesh &original, const SurfaceMesh &simplified, const double bound_on_error = 0.0001) {
@@ -197,31 +217,27 @@ static bool is_evaluation_expensive(const StopCondition &stop_condition) {
 }
 
 struct SurfaceMeshSnapshot {
-    SurfaceMesh mesh;
     std::vector<glm::dvec2> uv_map;
 };
 
 class StopConditionStopPredicate : public ExpensiveStopPredicate {
 public:
     StopConditionStopPredicate(SurfaceMesh &mesh, AttachedUvPropertyMap &uv_map, const std::span<const StopCondition> stop_conditions)
-        : original_mesh(mesh), stop_conditions(stop_conditions), mesh_ref(mesh), uv_map_ref(uv_map) {
+        : ExpensiveStopPredicate(mesh), stop_conditions(stop_conditions), uv_map_ref(uv_map) {
         this->has_expensive_condition = std::any_of(this->stop_conditions.begin(), this->stop_conditions.end(), is_evaluation_expensive);
         this->next_check_edge_count = CGAL::num_edges(mesh) * 0.9;
-        if (this->has_expensive_condition) {
-            this->make_snapshot(mesh);
-        }
     }
 
 protected:
     bool has_expensive_checks() const override {
         return this->has_expensive_condition;
     }
-    bool should_check_expensive(const SurfaceMesh &mesh) const override {
+    bool should_check_expensive(const SurfaceMesh &original, const SurfaceMesh &simplified) const override {
         if (!this->has_expensive_condition) {
             return false;
         }
 
-        const double current_edge_count = mesh.num_edges() - mesh.number_of_removed_edges();
+        const double current_edge_count = simplified.num_edges() - simplified.number_of_removed_edges();
         if (this->next_check_edge_count >= current_edge_count) {
             LOG_TRACE("Current edge count threshold of {} reached", this->next_check_edge_count);
             this->next_check_edge_count *= 0.9;
@@ -231,38 +247,37 @@ protected:
         return false;
     }
 
-    bool should_stop(const SurfaceMesh &mesh, const bool check_expensive) const override {
+    bool should_stop(const SurfaceMesh &original, const SurfaceMesh &simplified, const bool check_expensive) const override {
         return std::any_of(this->stop_conditions.begin(), this->stop_conditions.end(), [&](const StopCondition &stop_condition) {
             if (is_evaluation_expensive(stop_condition) && !check_expensive) {
                 return false;
             }
-            return check_condition(stop_condition, mesh, original_mesh);
+            return check_condition(stop_condition, simplified, original);
         });
     }
 
-    void make_snapshot(const SurfaceMesh &mesh) const override {
+    void make_snapshot(SurfaceMesh &&mesh) const override {
         LOG_TRACE("Making new snapshot of current geometry");
-        this->last_snapshot.mesh = clone(mesh);
+        ExpensiveStopPredicate::make_snapshot(std::move(mesh));
         this->last_snapshot.uv_map = decode_uv_map(uv_map_ref, CGAL::num_vertices(mesh));
     }
 
-    void restore_snapshot() const override {
+    void restore_snapshot(SurfaceMesh& mesh) const override {
         LOG_TRACE("Restoring last valid snapshot");
-        this->mesh_ref = this->last_snapshot.mesh;
-        this->mesh_ref.remove_property_map(this->uv_map_ref);
-        this->uv_map_ref = this->mesh_ref.add_property_map<VertexDescriptor, Point2>("h:uv").first;
+        ExpensiveStopPredicate::restore_snapshot(mesh);
+
+        mesh.remove_property_map(this->uv_map_ref);
+        this->uv_map_ref = mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
         for (size_t i = 0; i < this->last_snapshot.uv_map.size(); i++) {
             this->uv_map_ref[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(this->last_snapshot.uv_map[i]);
         }
     }
 
 private:
-    const SurfaceMesh &original_mesh;
-    mutable size_t next_check_edge_count;
     const std::span<const StopCondition> stop_conditions;
-    bool has_expensive_condition;
-    SurfaceMesh &mesh_ref;
     AttachedUvPropertyMap &uv_map_ref;
+    mutable size_t next_check_edge_count;
+    bool has_expensive_condition;
     mutable SurfaceMeshSnapshot last_snapshot;
 };
 
