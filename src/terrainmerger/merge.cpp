@@ -1,13 +1,6 @@
 #include <numeric>
-#include <span>
 #include <unordered_map>
-#include <vector>
 
-#include <glm/glm.hpp>
-#include <glm/gtx/norm.hpp>
-#include <radix/geometry.h>
-
-#include "cgal.h"
 #include "convert.h"
 #include "log.h"
 #include "merge.h"

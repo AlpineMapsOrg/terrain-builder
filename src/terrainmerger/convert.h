@@ -1,11 +1,7 @@
 #ifndef CONVERT_H
 #define CONVERT_H
 
-#include <opencv2/opencv.hpp>
-#include <glm/glm.hpp>
-
-#include "mesh/terrain_mesh.h"
-#include "cgal.h"
+#include "pch.h"
 
 namespace convert {
 

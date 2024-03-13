@@ -1,11 +1,7 @@
 #ifndef SIMPLIFY_H
 #define SIMPLIFY_H
 
-#include <glm/glm.hpp>
-#include <opencv2/opencv.hpp>
-
-#include "cgal.h"
-#include "mesh/terrain_mesh.h"
+#include "pch.h"
 
 using namespace kernel::epick;
 namespace simplify {

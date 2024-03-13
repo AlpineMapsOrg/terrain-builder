@@ -1,14 +1,9 @@
 #ifndef MERGE_H
 #define MERGE_H
 
-#include <span>
-#include <vector>
+#include "pch.h"
+
 #include <unordered_map>
-
-#include <radix/geometry.h>
-#include <glm/glm.hpp>
-
-#include "mesh/terrain_mesh.h"
 
 namespace merge {
 

@@ -1,7 +1,8 @@
+#include "pch.h"
+
 #include <CGAL/Polygon_mesh_processing/connected_components.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 #include <CGAL/Unique_hash_map.h>
-#include <CGAL/Surface_mesh/Surface_mesh.h>
 
 template<typename Point>
 inline size_t count_connected_components(const CGAL::Surface_mesh<Point> &mesh) {

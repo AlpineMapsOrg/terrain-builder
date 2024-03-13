@@ -1,16 +1,11 @@
 #ifndef UV_MAP_H
 #define UV_MAP_H
 
-#include <span>
+#include "pch.h"
 
 #include <CGAL/Surface_mesh_parameterization/Error_code.h>
 #include <CGAL/Unique_hash_map.h>
 
-#include <glm/glm.hpp>
-#include <tl/expected.hpp>
-
-#include "cgal.h"
-#include "mesh/terrain_mesh.h"
 #include "merge.h"
 
 typedef cv::Mat Texture;

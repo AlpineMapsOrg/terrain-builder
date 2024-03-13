@@ -1,12 +1,7 @@
 #ifndef CLI_H
 #define CLI_H
 
-#include <filesystem>
-#include <vector>
-#include <optional>
-#include <span>
-#include <string>
-#include <string_view>
+#include "pch.h"
 
 #include <spdlog/spdlog.h>
 
