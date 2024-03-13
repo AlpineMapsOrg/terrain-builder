@@ -238,6 +238,7 @@ add_library(terrainmergerlib
     terrainmerger/convert.cpp
     terrainmerger/validate.h
 )
+target_precompile_headers(terrainmergerlib PRIVATE terrainmerger/pch.h)
 target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
 target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
 add_executable(terrainmerger
@@ -253,6 +254,8 @@ target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
 
 add_executable(terrainconvert
+    terrainconvert/cli.h
+    terrainconvert/cli.cpp
     terrainconvert/main.cpp
 )
 target_include_directories(terrainconvert PUBLIC terrainlib)
