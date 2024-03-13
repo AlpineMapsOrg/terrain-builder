@@ -212,7 +212,7 @@ TEST_CASE("neighbouring tiles fit together", "[terrainbuilder]") {
         }
     }
 
-    const TerrainMesh merged_mesh = merge::merge_by_distance(tile_meshes, 0.1);
+    const TerrainMesh merged_mesh = merge::merge_meshes(tile_meshes, 0.1);
     check_non_empty(merged_mesh);
     check_mesh_is_plane(merged_mesh);
 }
@@ -255,11 +255,11 @@ TEST_CASE("neighbouring tiles fit together repeatedly", "[terrainbuilder]") {
             }
         }
 
-        const TerrainMesh child_mesh = merge::merge_by_distance(grand_child_meshes, 0.1);
+        const TerrainMesh child_mesh = merge::merge_meshes(grand_child_meshes, 0.1);
         child_meshes.push_back(child_mesh);
     }
 
-    const TerrainMesh mesh = merge::merge_by_distance(child_meshes, 0.1);
+    const TerrainMesh mesh = merge::merge_meshes(child_meshes, 0.1);
     check_non_empty(mesh);
     check_mesh_is_plane(mesh);
 }

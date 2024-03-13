@@ -39,7 +39,7 @@ TEST_CASE("terrainmerger") {
 
         std::array<TerrainMesh, 2> meshes = { std::move(mesh1), std::move(mesh2) };
 
-        TerrainMesh actual = merge::merge_by_distance(meshes, 0.1);
+        TerrainMesh actual = merge::merge_meshes(meshes, 0.1);
 
         TerrainMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -78,7 +78,7 @@ TEST_CASE("terrainmerger") {
 
         std::array<TerrainMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
 
-        TerrainMesh actual = merge::merge_by_distance(meshes, 0.1);
+        TerrainMesh actual = merge::merge_meshes(meshes, 0.1);
 
         TerrainMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -119,7 +119,7 @@ TEST_CASE("terrainmerger") {
 
         std::array<TerrainMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
 
-        TerrainMesh actual = merge::merge_by_distance(meshes, 0.1);
+        TerrainMesh actual = merge::merge_meshes(meshes, 0.1);
 
         TerrainMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
