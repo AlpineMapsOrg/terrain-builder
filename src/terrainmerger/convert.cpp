@@ -63,3 +63,11 @@ TerrainMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
 
     return mesh;
 }
+
+glm::uvec2 convert::cv2glm(const cv::Size size) {
+    return glm::uvec2(size.width, size.height);
+}
+
+cv::Size convert::glm2cv(const glm::uvec2 size) {
+    return cv::Size(size.x, size.y);
+}

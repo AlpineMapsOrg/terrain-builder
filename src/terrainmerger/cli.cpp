@@ -55,6 +55,11 @@ Args cli::parse(int argc, const char * const * argv) {
         ->check(CLI::PositiveNumber)
         ->excludes("--no-simplify");
 
+    std::vector<unsigned int> target_texture_resolution;
+    app.add_option("--texture-resolution", target_texture_resolution, "Resolution of merged mesh texture")
+        ->check(CLI::PositiveNumber)
+        ->expected(2);
+
     bool save_intermediate_meshes = false;
     app.add_flag("--save-debug-meshes", save_intermediate_meshes, "Output intermediate meshes");
 
@@ -80,6 +85,9 @@ Args cli::parse(int argc, const char * const * argv) {
     args.output_path = output_path;
     args.log_level = log_level;
     args.save_intermediate_meshes = save_intermediate_meshes;
+    if (target_texture_resolution.size() == 2) {
+        args.target_texture_resolution = {target_texture_resolution[0], target_texture_resolution[1]};
+    }
     if (!no_mesh_simplification) {
         SimplificationArgs simplification_args = {};
         if (simplification_vertex_ratio.has_value()) {

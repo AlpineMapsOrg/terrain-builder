@@ -63,6 +63,12 @@ void run(const cli::Args &args) {
 
     const bool meshes_have_uvs = std::all_of(meshes.begin(), meshes.end(), [](const TerrainMesh &mesh) { return mesh.has_uvs(); });
     const bool meshes_have_textures = std::all_of(meshes.begin(), meshes.end(), [](const TerrainMesh &mesh) { return mesh.has_texture(); });
+    
+    const std::optional<glm::uvec2> texture_size = (!meshes.empty() && meshes[0].texture.has_value())
+                                                       ? std::optional<glm::uvec2>{convert::cv2glm(meshes[0].texture.value().size())}
+                                                       : std::nullopt;
+    const glm::uvec2 target_texture_size = args.target_texture_resolution.has_value() ?
+        args.target_texture_resolution.value() : (texture_size.has_value() ? texture_size.value() : glm::uvec2(256));
 
     LOG_INFO("Merging meshes...");
     merge::VertexMapping vertex_mapping;
@@ -80,7 +86,13 @@ void run(const cli::Args &args) {
 
         if (meshes_have_textures) {
             LOG_INFO("Merging textures...");
-            merged_mesh.texture = uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, glm::uvec2(1024));
+            merged_mesh.texture = uv_map::merge_textures(meshes, merged_mesh, vertex_mapping, uv_map, target_texture_size * glm::uvec2(2));
+
+            if (args.save_intermediate_meshes) {
+                const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".textured.glb");
+                LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path.string());
+                io::save_mesh_to_path(merged_mesh_path, merged_mesh, io::SaveOptions{.name = "textured"});
+            }
         }
     }
 
@@ -91,7 +103,7 @@ void run(const cli::Args &args) {
 
         if (merged_mesh.texture.has_value()) {
             LOG_INFO("Simplifying merged texture...");
-            simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), glm::uvec2(256));
+            simplified_mesh.texture = simplify::simplify_texture(merged_mesh.texture.value(), target_texture_size);
         }
 
         if (args.save_intermediate_meshes) {

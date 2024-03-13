@@ -23,6 +23,7 @@ namespace cli {
         std::optional<SimplificationArgs> simplification;
         spdlog::level::level_enum log_level;
         bool save_intermediate_meshes;
+        std::optional<glm::uvec2> target_texture_resolution;
     };
 
     Args parse(int argc, const char *const *argv);
@@ -43,7 +44,7 @@ namespace cli {
                         [](const T &str) { return str.data(); });
         return cli::parse(raw_args.size(), raw_args.data());
     }
-    } // namespace
+    }
 
     template <std::size_t Extent>
     Args cli::parse(const std::span<const std::string, Extent> args) {
