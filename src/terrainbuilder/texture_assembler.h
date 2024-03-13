@@ -295,6 +295,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const tile::Id tile, cons
     // Find relevant tiles in bounds
     const std::vector<tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(
         smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, max_zoom);
+    LOG_TRACE("Found {} relevant texture tiles", tiles_to_splatter.size());
 
     // If we found to relevant tiles, we are done.
     if (tiles_to_splatter.empty()) {

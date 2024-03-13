@@ -56,7 +56,7 @@ void build(
 
     std::chrono::high_resolution_clock::time_point start;
     start = std::chrono::high_resolution_clock::now();
-    LOG_INFO("Building mesh");
+    LOG_INFO("Building mesh...");
     tl::expected<TerrainMesh, mesh::BuildError> mesh_result = mesh::build_reference_mesh_tile(
         dataset,
         mesh_srs,
@@ -97,6 +97,7 @@ void build(
     }
     TerrainMesh mesh = mesh_result.value();
     LOG_DEBUG("Mesh building took {}s", format_secs_since(start));
+    LOG_INFO("Finished building mesh geometry");
 
     if (texture_base_path.has_value()) {
         start = std::chrono::high_resolution_clock::now();
@@ -109,10 +110,13 @@ void build(
         }
         mesh.texture = texture;
         LOG_DEBUG("Assembling mesh texture took {}s", format_secs_since(start));
+        LOG_INFO("Finished assembling mesh texture");
+
     } else {
         LOG_INFO("Skipped assembling texture");
     }
 
+    LOG_INFO("Writing mesh to output path {}", output_path.string());
     start = std::chrono::high_resolution_clock::now();
     // TODO: use a JSON libary instead
     std::unordered_map<std::string, std::string> metadata;
@@ -130,6 +134,7 @@ void build(
         exit(2);
     }
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
+    LOG_INFO("Done", output_path.string());
 }
 
 }

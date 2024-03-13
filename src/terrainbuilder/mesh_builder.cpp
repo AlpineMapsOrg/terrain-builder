@@ -61,6 +61,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     if (inclusive_bounds) {
         add_border_to_aabb(pixel_bounds, Border(1));
     }
+    LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
     const std::optional<HeightData> read_result = reader.read_data_in_pixel_bounds(pixel_bounds, true);
     if (!read_result.has_value() || read_result->size() == 0) {
         return tl::unexpected(BuildError::OutOfBounds);
@@ -98,6 +99,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     // Pixel values represent the average over their area, or a value at their center.
     const glm::dvec2 point_offset_in_raster(0.5);
 
+    LOG_TRACE("Transforming pixels to vertices");
     // Iterate over height map and calculate vertex positions for each pixel and whether they are inside the requested bounds.
     for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
         for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
@@ -158,6 +160,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     // Mark all border vertices as inside bounds.
     // TODO: This code is rather inefficient for larger borders.
     if (!vertex_border.is_empty()) {
+        LOG_TRACE("Adding border vertices");
         std::vector<unsigned int> border_vertices;
         const unsigned int max_border_vertices = std::max(raw_tile_data.width(), raw_tile_data.height()); // for each step, assuming convexity
         border_vertices.reserve(max_border_vertices);
@@ -231,6 +234,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     }
 
     // Calculate absolute texture coordinates for every vertex.
+    LOG_TRACE("Calculating uv coordinates");
     tile::SrsBounds actual_texture_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
     std::vector<glm::dvec2> texture_positions;
     texture_positions.reserve(max_vertex_count);
@@ -249,6 +253,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     assert(mesh.uvs.size() == actual_vertex_count);
 
     // Add triangles
+    LOG_TRACE("Generating triangles");
     for (unsigned int j = 0; j < raw_tile_data.height() - 1; j++) {
         for (unsigned int i = 0; i < raw_tile_data.width() - 1; i++) {
             const unsigned int vertex_index = j * raw_tile_data.width() + i;
