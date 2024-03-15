@@ -40,7 +40,19 @@ static glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const 
 }
 
 /// Builds a mesh from the given height dataset.
-// TODO: split up this monster somehow
+// TODO: split this up: Grid class, Mask class/alias, mask filter method/utils
+// steps (each a method):
+// - read data (height)
+// - filter invalid values (create mask)
+// - calculate positions in source srs
+// - filter by bounds (considering inclusivity and invalid values)
+// - extend mask by border
+// - compact vertices
+// - check if empty
+// - calculate position in texture srs and normalize
+// - generate actual triangles
+//   (shouldnt require reindexing of vertices; use an interface that combines this and inclusivity filtering)
+// - validate final mesh
 // TODO: return result struct instead of using inout parameters
 tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     Dataset &dataset,
@@ -107,7 +119,8 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
             const double height = raw_tile_data.pixel(j, i);
 
             // Check if pixel is valid.
-            if (isnan(height) || isinf(height) || height == -999999 /* padding */) {
+            if (isnan(height) || isinf(height) /* <- invalid values */
+                || height < -20000 || height > 20000) /* <- padding */ {
                 is_valid[vertex_index] = false;
                 continue;
             }
@@ -151,10 +164,6 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
             // If we arrive here the point is inside the bounds.
             is_in_bounds[vertex_index] = true;
         }
-    }
-
-    if (!std::any_of(is_in_bounds.begin(), is_in_bounds.end(), std::identity())) {
-        return tl::unexpected(BuildError::EmptyRegion);
     }
 
     // Mark all border vertices as inside bounds.
@@ -211,6 +220,10 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
 
     // Compact the vertex array to exclude all vertices out of bounds.
     const unsigned int actual_vertex_count = std::accumulate(is_in_bounds.begin(), is_in_bounds.end(), 0);
+    // Check if we even have any valid vertices. Can happen if all of the region is padding.
+    if (actual_vertex_count == 0) {
+        return tl::unexpected(BuildError::EmptyRegion);
+    }
     // Marks entries that are not present in the new vector (not inside bounds or border)
     const unsigned int no_new_index = max_vertex_count + 1;
     // Index in old vector mapped to the index in the new one.
@@ -221,6 +234,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
         unsigned int write_index = 0;
         for (unsigned int read_index = 0; read_index < max_vertex_count; read_index++) {
             if (is_in_bounds[read_index]) {
+                assert(is_valid[read_index]);
                 new_vertex_indices.push_back(write_index);
                 source_positions[write_index] = source_positions[read_index];
                 write_index += 1;
@@ -310,6 +324,14 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
         position = apply_transform(transform_source_mesh.get(), position);
     }
     assert(mesh.positions.size() == actual_vertex_count);
+
+    // Sadly all that work above trying to only include vertices that will appear in a triangle
+    // is not enough for some configurations with non inclusive bounds or when there are invalid vertices.
+    // Thus we have to filter any loose vertices here.
+    remove_isolated_vertices(mesh);
+
+    // Now validate the final mesh
+    validate_mesh(mesh);
 
     tile_bounds = actual_tile_bounds;
     texture_bounds = actual_texture_bounds;
