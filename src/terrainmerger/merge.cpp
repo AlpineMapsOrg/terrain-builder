@@ -174,7 +174,7 @@ static geometry::Aabb<3, double> pad_bounds(const geometry::Aabb<3, double> &bou
 }
 
 template <typename T>
-static Grid3d<T> _construct_grid_for_meshes(const geometry::Aabb<3, double>& bounds, const size_t vertex_count) {
+static Grid3d<T> _construct_grid_for_meshes(const geometry::Aabb<3, double> &bounds, const size_t vertex_count) {
     const geometry::Aabb<3, double> padded_bounds = pad_bounds(bounds, 0.01);
 
     const double max_extends = max_component(padded_bounds.size());
@@ -186,7 +186,7 @@ static Grid3d<T> _construct_grid_for_meshes(const geometry::Aabb<3, double>& bou
 }
 
 template <typename T>
-static Grid3d<T> construct_grid_for_mesh(const TerrainMesh& mesh) {
+static Grid3d<T> construct_grid_for_mesh(const TerrainMesh &mesh) {
     const geometry::Aabb<3, double> bounds = calculate_bounds(mesh);
     const size_t vertex_count = mesh.vertex_count();
     return _construct_grid_for_meshes<T>(bounds, vertex_count);
@@ -200,37 +200,89 @@ static Grid3d<T> construct_grid_for_meshes(const std::span<const TerrainMesh> me
     return _construct_grid_for_meshes<T>(bounds, maximal_merged_mesh_size);
 }
 
-static double find_min_distance_between_meshes(std::span<const TerrainMesh> meshes) {
-    Grid3d<size_t> grid = construct_grid_for_meshes<size_t>(meshes);
-
-    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
-        const TerrainMesh &mesh = meshes[mesh_index];
-        for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
-            const glm::dvec3 &position = mesh.positions[vertex_index];
-            grid.insert(position, mesh_index);
-        }
-    }
-
-    double smallest_squared_distance_between_meshes_in_cell = std::numeric_limits<double>::infinity();
-    for (const Grid3d<size_t>::GridCell &cell : grid.cells()) {
+static double estimate_min_vertex_separation_between_meshes_after_merge(const Grid3d<VertexId> &grid, const VertexMapping &mapping) {
+    double min_squared_distance = std::numeric_limits<double>::infinity();
+    for (const Grid3d<VertexId>::GridCell &cell : grid.cells()) {
         for (auto first = cell.items.begin(); first != cell.items.end(); ++first) {
             for (auto second = first + 1; second != cell.items.end(); ++second) {
-                const glm::dvec3 &point1 = first->point;
-                const size_t mesh1 = first->value;
-                const glm::dvec3 &point2 = second->point;
-                const size_t mesh2 = second->value;
+                const size_t mesh1 = first->value.mesh_index;
+                const size_t mesh2 = second->value.mesh_index;
 
                 if (mesh1 == mesh2) {
                     continue;
                 }
 
+                const glm::dvec3 &point1 = first->point;
+                const glm::dvec3 &point2 = second->point;
+
                 const double squared_distance = glm::distance2(point1, point2);
-                smallest_squared_distance_between_meshes_in_cell = std::min(smallest_squared_distance_between_meshes_in_cell, squared_distance);
+                min_squared_distance = std::min(min_squared_distance, squared_distance);
             }
         }
     }
 
-    return std::sqrt(smallest_squared_distance_between_meshes_in_cell);
+    return std::sqrt(min_squared_distance);
+}
+
+static double estimate_min_vertex_separation_between_meshes_after_merge(const std::span<const TerrainMesh> meshes, const VertexMapping &mapping) {
+    Grid3d<VertexId> grid = construct_grid_for_meshes<VertexId>(meshes);
+
+    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+        const TerrainMesh &mesh = meshes[mesh_index];
+        for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
+            const glm::dvec3 &position = mesh.positions[vertex_index];
+            grid.insert(position, VertexId {mesh_index, vertex_index});
+        }
+    }
+
+    double min_squared_distance = std::numeric_limits<double>::infinity();
+    for (const Grid3d<VertexId>::GridCell &cell : grid.cells()) {
+        for (auto first = cell.items.begin(); first != cell.items.end(); ++first) {
+            for (auto second = first + 1; second != cell.items.end(); ++second) {
+                const size_t mesh1 = first->value.mesh_index;
+                const size_t mesh2 = second->value.mesh_index;
+
+                if (mesh1 == mesh2) {
+                    // Both vertices from the same mesh
+                    continue;
+                }
+
+                const size_t mapped1 = mapping.map(first->value);
+                const size_t mapped2 = mapping.map(second->value);
+                if (mapped1 == mapped2) {
+                    // Vertices were already merged
+                    continue;
+                }
+
+                const glm::dvec3 &point1 = first->point;
+                const glm::dvec3 &point2 = second->point;
+                const double squared_distance = glm::distance2(point1, point2);
+                min_squared_distance = std::min(min_squared_distance, squared_distance);
+            }
+        }
+    }
+
+    return std::sqrt(min_squared_distance);
+}
+
+static double estimate_average_vertex_separation(const TerrainMesh &mesh, const size_t sample_size = 1000) {
+    std::vector<glm::uvec3> triangles = mesh.triangles;
+    std::random_shuffle(triangles.begin(), triangles.end());
+
+    size_t count = std::min(triangles.size(), sample_size);
+    double average_distance = 0;
+    for (size_t i = 0; i < count; i++) {
+        const glm::uvec3 &triangle = triangles[i];
+
+        const size_t first_index_in_triangle = i % triangle.length();
+        const size_t first_index = triangle[first_index_in_triangle];
+        const size_t second_index = triangle[(first_index_in_triangle + 1) % triangle.length()];
+
+        const double distance2 = glm::distance(mesh.positions[first_index], mesh.positions[second_index]);
+        average_distance += distance2 / count;
+    }
+
+    return std::sqrt(average_distance);
 }
 
 static double estimate_average_vertex_seperation(const TerrainMesh &mesh, const size_t sample_size = 1000) {
@@ -271,6 +323,34 @@ static double estimate_min_edge_length(const TerrainMesh &mesh) {
     }
 
     return std::sqrt(min_edge_length);
+}
+
+static double measure_min_edge_length(const TerrainMesh &mesh) {
+    const auto min = [](const auto a, const auto b) { return std::min(a, b); };
+
+    const double min_squared_edge_length = std::transform_reduce(
+        mesh.triangles.begin(), mesh.triangles.end(),
+        std::numeric_limits<double>::infinity(), min,
+        [&](const glm::uvec3 &triangle) {
+            const std::array<glm::dvec3, 3> positions{
+                mesh.positions[triangle[0]],
+                mesh.positions[triangle[1]],
+                mesh.positions[triangle[2]],
+            };
+
+            const size_t begin = 0;
+            const size_t end = positions.size();
+            return std::transform_reduce(
+                &begin, &end,
+                std::numeric_limits<double>::infinity(), min,
+                [&](const size_t i) {
+                    const glm::dvec3 v1 = positions[i];
+                    const glm::dvec3 v2 = positions[(i + 1) % positions.size()];
+                    return glm::distance2(v1, v2);
+                });
+        });
+
+    return std::sqrt(min_squared_edge_length);
 }
 
 class UnionFind {
@@ -360,22 +440,30 @@ static bool are_all_meshes_merged(const VertexMapping &mapping) {
 VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> meshes) {
     LOG_DEBUG("Finding shared vertices between {} meshes (epsilon=auto)", meshes.size());
 
-    const double estimated_min_edge_length = std::transform_reduce(
+    const double min_edge_length = std::transform_reduce(
         meshes.begin(),
         meshes.end(),
         std::numeric_limits<double>::infinity(),
-        [](const double a, const double b){ return std::min(a, b); },
-        estimate_min_edge_length);
-    double distance_epsilon = estimated_min_edge_length / 1000;
+        [](const double a, const double b) { return std::min(a, b); },
+        measure_min_edge_length); // XXX: use approximate_min_edge_length in Release?
+    double distance_epsilon = min_edge_length / 1000;
     LOG_TRACE("Starting with distance epsilon of {:g}", distance_epsilon);
 
     VertexMapping mapping;
     bool success = false;
     for (size_t i = 0; i < 10; i++) {
         mapping = create_merge_mapping(meshes, distance_epsilon);
+
         if (are_all_meshes_merged(mapping)) {
             LOG_TRACE("Found distance epsilon that connects all meshes");
-            success = true;
+
+            const double min_vertex_separation_after_merge = estimate_min_vertex_separation_between_meshes_after_merge(meshes, mapping);
+            if (min_vertex_separation_after_merge > min_edge_length / 2) {
+                LOG_TRACE("Found vertices in merged mesh that are much closer than in the source meshes, suggesting and incomplete merge");
+                continue;
+            }
+
+                success = true;
             break;
         }
         distance_epsilon *= 10;
@@ -390,7 +478,7 @@ VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> mes
 }
 
 static bool are_all_bounds_connected(const std::span<const TerrainMesh> meshes) {
-    if (meshes.size() <= 1){
+    if (meshes.size() <= 1) {
         return true;
     }
 
@@ -455,7 +543,7 @@ VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> mes
                 .vertex_index = vertex_index};
 
             const std::optional<std::reference_wrapper<VertexId>> other_vertex = grid.find(position, distance_epsilon);
-            if (!has_warned && other_vertex.has_value() && other_vertex->get().mesh_index  == current_vertex.mesh_index) {
+            if (!has_warned && other_vertex.has_value() && other_vertex->get().mesh_index == current_vertex.mesh_index) {
                 LOG_WARN("Merge distance epsilon is large and would perform intra-mesh merges");
                 has_warned = true;
             }
@@ -556,14 +644,14 @@ TerrainMesh merge::merge_meshes(std::span<const TerrainMesh> meshes) {
 
 TerrainMesh merge::merge_meshes(std::span<const TerrainMesh> meshes, merge::VertexMapping &mapping) {
     switch (meshes.size()) {
-        case 0:
-            return {};
-        case 1:
-            mapping = VertexMapping::identity(meshes[0].vertex_count());
-            return meshes[0];
-        default:
-            mapping = merge::create_merge_mapping(meshes);
-            return merge::apply_mapping(meshes, mapping);
+    case 0:
+        return {};
+    case 1:
+        mapping = VertexMapping::identity(meshes[0].vertex_count());
+        return meshes[0];
+    default:
+        mapping = merge::create_merge_mapping(meshes);
+        return merge::apply_mapping(meshes, mapping);
     }
 }
 
