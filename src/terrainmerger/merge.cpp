@@ -338,13 +338,11 @@ static double measure_min_edge_length(const TerrainMesh &mesh) {
                 mesh.positions[triangle[2]],
             };
 
-            const size_t begin = 0;
-            const size_t end = positions.size();
             return std::transform_reduce(
-                &begin, &end,
+                positions.begin(), positions.end(),
                 std::numeric_limits<double>::infinity(), min,
-                [&](const size_t i) {
-                    const glm::dvec3 v1 = positions[i];
+                [&](const glm::dvec3 &v1) {
+                    const size_t i = std::distance(positions.begin(), &v1);
                     const glm::dvec3 v2 = positions[(i + 1) % positions.size()];
                     return glm::distance2(v1, v2);
                 });
