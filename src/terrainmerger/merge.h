@@ -19,6 +19,15 @@ struct TriangleInMesh {
 
 class VertexMapping {
 public:
+    static VertexMapping identity(const size_t vertex_count) {
+        VertexMapping mapping;
+        mapping.init({&vertex_count, 1});
+        for (size_t i = 0; i < vertex_count; i++) {
+            mapping.add_bidirectional(VertexId{.mesh_index = 0, .vertex_index = i}, i);
+        }
+        return mapping;
+    }
+
     void init(std::span<const size_t> vertex_counts) {
         this->forward.resize(vertex_counts.size());
         for (size_t i = 0; i < vertex_counts.size(); i++) {

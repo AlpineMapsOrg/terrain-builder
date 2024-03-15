@@ -390,6 +390,10 @@ VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> mes
 }
 
 static bool are_all_bounds_connected(const std::span<const TerrainMesh> meshes) {
+    if (meshes.size() <= 1){
+        return true;
+    }
+
     std::vector<geometry::Aabb<3, double>> mesh_bounds;
     mesh_bounds.reserve(meshes.size());
     std::transform(meshes.begin(), meshes.end(),
@@ -417,8 +421,12 @@ static bool are_all_bounds_connected(const std::span<const TerrainMesh> meshes) 
 }
 
 VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> meshes, double distance_epsilon) {
-    assert(!meshes.empty());
-    assert(are_all_bounds_connected(meshes));
+    if (meshes.empty()) {
+        return {};
+    }
+    if (meshes.size() == 1) {
+        return VertexMapping::identity(meshes[0].vertex_count());
+    }
 
     LOG_TRACE("Finding shared vertices between {} meshes (epsilon={:g})", meshes.size(), distance_epsilon);
 
@@ -437,6 +445,7 @@ VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> mes
     Grid3d<VertexId> grid = construct_grid_for_meshes<VertexId>(meshes);
 
     size_t unique_vertices = 0;
+    bool has_warned = false;
     for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const TerrainMesh &mesh = meshes[mesh_index];
         for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
@@ -446,7 +455,11 @@ VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> mes
                 .vertex_index = vertex_index};
 
             const std::optional<std::reference_wrapper<VertexId>> other_vertex = grid.find(position, distance_epsilon);
-            if (other_vertex.has_value()) {
+            if (!has_warned && other_vertex.has_value() && other_vertex->get().mesh_index  == current_vertex.mesh_index) {
+                LOG_WARN("Merge distance epsilon is large and would perform intra-mesh merges");
+                has_warned = true;
+            }
+            if (other_vertex.has_value() && other_vertex->get().mesh_index != current_vertex.mesh_index) {
                 // duplicated
                 mapping.add_bidirectional(current_vertex, mapping.map(other_vertex.value()));
             } else {
@@ -466,6 +479,9 @@ VertexMapping merge::create_merge_mapping(const std::span<const TerrainMesh> mes
 
 TerrainMesh merge::apply_mapping(std::span<const TerrainMesh> meshes, const merge::VertexMapping &mapping) {
     LOG_TRACE("Merging meshes based on mapping");
+    if (meshes.empty()) {
+        return {};
+    }
 
     TerrainMesh merged_mesh;
 
@@ -539,8 +555,16 @@ TerrainMesh merge::merge_meshes(std::span<const TerrainMesh> meshes) {
 }
 
 TerrainMesh merge::merge_meshes(std::span<const TerrainMesh> meshes, merge::VertexMapping &mapping) {
-    mapping = merge::create_merge_mapping(meshes);
-    return merge::apply_mapping(meshes, mapping);
+    switch (meshes.size()) {
+        case 0:
+            return {};
+        case 1:
+            mapping = VertexMapping::identity(meshes[0].vertex_count());
+            return meshes[0];
+        default:
+            mapping = merge::create_merge_mapping(meshes);
+            return merge::apply_mapping(meshes, mapping);
+    }
 }
 
 TerrainMesh merge::merge_meshes(std::span<const TerrainMesh> meshes, double distance_epsilon) {
@@ -549,7 +573,14 @@ TerrainMesh merge::merge_meshes(std::span<const TerrainMesh> meshes, double dist
 }
 
 TerrainMesh merge::merge_meshes(std::span<const TerrainMesh> meshes, double distance_epsilon, merge::VertexMapping &mapping) {
-    mapping = merge::create_merge_mapping(meshes, distance_epsilon);
-    return merge::apply_mapping(meshes, mapping);
+    switch (meshes.size()) {
+    case 0:
+        return {};
+    case 1:
+        mapping = VertexMapping::identity(meshes[0].vertex_count());
+        return meshes[0];
+    default:
+        mapping = merge::create_merge_mapping(meshes, distance_epsilon);
+        return merge::apply_mapping(meshes, mapping);
+    }
 }
-
