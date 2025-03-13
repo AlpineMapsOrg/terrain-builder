@@ -69,9 +69,9 @@ python3 batch-converter.py --terrainconverter ./terrainconvert --dir ./hierarchy
 ```
 
 ### 6. Deployment
-To make the tiles accessible to the [demo renderer](https://github.com/polskus/renderer-alpinite) just serve the final hierarchy via a http(s) server, which the computer running the [demo renderer](https://github.com/polskus/renderer-alpinite) can access. The default url format used by the [demo renderer](https://github.com/polskus/renderer-alpinite) is `/{zoom}/{Y}/{X}.simplified.glb`.
+To make the tiles accessible to the [demo renderer](https://github.com/polskus/renderer-alpinite) just serve the final hierarchy via a http(s) server, which the computer running the [demo renderer](https://github.com/polskus/renderer-alpinite) can access. The default URL format used by the [demo renderer](https://github.com/polskus/renderer-alpinite) is `/{zoom}/{Y}/{X}.simplified.glb`.
 
-See [Modifying the tile server url](https://github.com/polskus/renderer-alpinite/blob/main/README.md#modifying-the-tile-server-url) for information on how to change the server url, file structure and suffix.
+See [Modifying the tile server URL](https://github.com/polskus/renderer-alpinite/blob/main/README.md#modifying-the-tile-server-url) for information on how to change the server URL, file structure and suffix.
 
 ## building
 In order to build, you need to install:
