@@ -40,7 +40,8 @@ namespace octree
             if (current_ratio <= refining_ratio && current.has_children())
             {
                 // Split node into 8 children, and add them to the refining list
-                for (Id child : current.children().value())
+                std::array<octree::Id, 8> children = current.children().value();
+                for (Id child : children)
                 {
                     refining_ids.push_back(child);
                 }
