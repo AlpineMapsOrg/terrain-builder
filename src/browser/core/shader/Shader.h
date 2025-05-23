@@ -2,7 +2,8 @@
 #include <glad/gl.h>
 #include <string>
 
-class Shader {
+class Shader
+{
 public:
 	Shader(GLenum type);
 	void compile(std::string_view code);

@@ -1,12 +1,14 @@
 #pragma once
-#include <glad/gl.h>
 #include "GLUniformAbstractions.h"
+#include <glad/gl.h>
 
 template <typename T>
-class Uniform {
+class Uniform
+{
 public:
 	Uniform(GLint location) : m_location(location) {}
-	void set(const T& value) {
+	void set(const T &value)
+	{
 		glUniform(m_location, value);
 	}
 

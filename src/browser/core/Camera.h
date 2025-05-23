@@ -3,7 +3,8 @@
 #include <glm/gtc/quaternion.hpp>
 #include <optional>
 
-struct CameraConfig {
+struct CameraConfig
+{
 	float fov_deg = 60.0f;
 	float aspect_ratio = 16.0f / 9.0f;
 	float near_plane = 0.1f;
@@ -14,7 +15,8 @@ struct CameraConfig {
 	glm::dvec3 up = glm::dvec3(0.0f, 1.0f, 0.0f);
 };
 
-class Camera {
+class Camera
+{
 public:
 	Camera(CameraConfig config);
 
@@ -22,7 +24,7 @@ public:
 	void move_local(glm::dvec3 local_movement_delta);
 	void set_near(float near);
 	void set_far(float far);
-	
+
 	float get_aspect_ratio();
 	void set_aspect_ratio(float new_aspect_ratio);
 
