@@ -1,5 +1,12 @@
 #pragma once
 
+#include <functional>
+#include <queue>
+
+#include "octree/Id.h"
+#include "octree/Storage.h"
+#include "log.h"
+
 namespace octree {
 
 enum class TraversalOrder {
@@ -11,51 +18,61 @@ template <
     typename VisitFn,
     typename RefineFn = std::function<bool(const Id &)>>
 void traverse(
-    const Storage &storage,
-    VisitFn visit_fn,
-    TraversalOrder order = TraversalOrder::DepthFirst,
-    RefineFn refine_fn = [](const Id &) { return true; },
-    const Id &root = Id::root()) {
-    if (!storage.has_node(root)) {
+    const IndexMap& index,
+    VisitFn&& visit_fn,
+    RefineFn&& refine_fn = [](const Id &) { return true; },
+    const Id &root = Id::root(),
+    TraversalOrder order = TraversalOrder::DepthFirst) {
+    if (!index.is_present(root)) {
         return;
     }
 
     if (order == TraversalOrder::DepthFirst) {
         std::function<void(const Id&)> dfs;
-        dfs = [&](const Id& id) {
-            if (!storage.has_node(id) || !filter_fn(id)) return;
+        dfs = [&](const Id& current) {
+            auto current_status_opt = index.get(current);
+            if (!current_status_opt) {
+                return;
+            }
+            const auto current_status = current_status_opt.value();
+            
+            visit_fn(current, current_status);
 
-            visit_fn(id);
-
-            if (refine_fn(id)) {
-                for (const auto& child_id : id.children()) {
-                    dfs(child_id);
+            if (current.has_children() && refine_fn(current)) {
+                const auto children = current.children().value();
+                for (const auto& child : children) {
+                    dfs(child);
                 }
             }
         };
-        dfs(root_id);
-
-    } else { // BreadthFirst
+        dfs(root);
+    } else if (order == TraversalOrder::BreadthFirst) {
         std::queue<Id> queue;
-        queue.push(root_id);
+        queue.push(root);
 
         while (!queue.empty()) {
             Id current = queue.front();
             queue.pop();
 
-            if (!storage.has_node(current) || !filter_fn(current)) {
-                continue;
+            auto current_status_opt = index.get(current);
+            if (!current_status_opt) {
+                return;
             }
+            const auto current_status = current_status_opt.value();
 
-            visit_fn(current);
+            visit_fn(current, current_status);
 
-            if (refine_fn(current)) {
-                for (const auto& child_id : current.children()) {
-                    queue.push(child_id);
+            if (current.has_children() && refine_fn(current)) {
+                const auto children = current.children().value();
+                for (const auto& child : children) {
+                    queue.push(child);
                 }
             }
         }
+    } else {
+        UNREACHABLE();
     }
 }
+
 
 } // namespace octree

@@ -12,6 +12,7 @@ find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
+
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
 alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
 
@@ -74,7 +75,7 @@ add_subdirectory("${glad_SOURCE_DIR}/cmake" glad_cmake)
 glad_add_library(glad_gl_core_46 REPRODUCIBLE API gl:core=4.6)
 
 alp_add_git_repository(resources-lib URL https://github.com/vector-of-bool/cmrc.git COMMITISH 952ffddba731fc110bd50409e8d2b8a06abbd237 NOT_SYSTEM)
-add_subdirectory(browser/res)
+add_subdirectory(browser/res resources-lib)
 
 alp_add_git_repository(imgui URL https://github.com/ocornut/imgui.git COMMITISH 5f0acadf7db1b6d469f0771284e2e3f7818443ce DO_NOT_ADD_SUBPROJECT)
 add_library(imgui STATIC
@@ -111,6 +112,9 @@ add_library(terrainlib
     terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
     terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
 
+    terrainlib/mesh/cgal.h
+    terrainlib/mesh/convert.h
+    terrainlib/mesh/convert.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/SimpleMesh.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
@@ -123,9 +127,9 @@ add_library(terrainlib
     terrainlib/octree/disk/Layout.h
     terrainlib/octree/Id.h
     terrainlib/octree/Storage.h terrainlib/octree/Storage.cpp
-    terrainlib/octree/IndexMap.h
+    terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
     terrainlib/octree/NodeStatus.h
-    terrainlib/octree/Space.h
+    terrainlib/octree/Space.h terrainlib/octree/Space.cpp
     terrainlib/octree/traverse.h
     terrainlib/octree/utils.h
 
@@ -138,11 +142,47 @@ add_library(terrainlib
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
+
+
+add_library(tilebuilderlib
+    tilebuilder/alpine_raster.h tilebuilder/alpine_raster.cpp
+    tilebuilder/DatasetReader.h tilebuilder/DatasetReader.cpp
+    tilebuilder/depth_first_tile_traverser.h
+    tilebuilder/Exception.h
+    tilebuilder/Image.h tilebuilder/Image.cpp
+    tilebuilder/ParallelTileGenerator.h tilebuilder/ParallelTileGenerator.cpp
+    tilebuilder/ParallelTiler.h tilebuilder/ParallelTiler.cpp
+    tilebuilder/srs.h
+    tilebuilder/TileHeightsGenerator.h tilebuilder/TileHeightsGenerator.cpp
+    tilebuilder/Tiler.h tilebuilder/Tiler.cpp
+    tilebuilder/TopDownTiler.h tilebuilder/TopDownTiler.cpp
+    tilebuilder/algorithms/primitives.h
+    tilebuilder/algorithms/raster_triangle_scanline.h
+)
+target_include_directories(tilebuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/tilebuilder)
+target_link_libraries(tilebuilderlib PUBLIC terrainlib radix ZLIB::ZLIB GDAL::GDAL fmt)
+add_executable(tilebuilder
+    tilebuilder/main.cpp
+)
+target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
+
+
+add_library(terrainmergerlib
+    terrainmerger/merge.h
+)
+target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
+target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
+add_executable(terrainmerger
+    terrainmerger/main.cpp
+    terrainmerger/cli.h terrainmerger/cli.cpp
+)
+target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+
 
 add_library(terrainbuilderlib
     terrainbuilder/tile_provider.h
@@ -162,27 +202,25 @@ add_executable(terrainbuilder
 )
 target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 
-add_library(terrainmergerlib
-    terrainmerger/cli.h
-    terrainmerger/cli.cpp
-    terrainmerger/merge.h
-    terrainmerger/merge.cpp
-    terrainmerger/simplify.h
-    terrainmerger/simplify.cpp
-    terrainmerger/uv_map.h
-    terrainmerger/uv_map.cpp
-    terrainmerger/cgal.h
-    terrainmerger/convert.h
-    terrainmerger/convert.cpp
-    terrainmerger/validate.h
+
+add_library(terrainsimplifylib
+    terrainsimplify/cli.h
+    terrainsimplify/cli.cpp
+    terrainsimplify/merge.h
+    terrainsimplify/merge.cpp
+    terrainsimplify/simplify.h
+    terrainsimplify/simplify.cpp
+    terrainsimplify/uv_map.h
+    terrainsimplify/uv_map.cpp
+    terrainsimplify/validate.h
 )
-target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
-target_precompile_headers(terrainmergerlib PRIVATE terrainmerger/pch.h)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
-add_executable(terrainmerger
-    terrainmerger/main.cpp
+target_include_directories(terrainsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainsimplify)
+target_precompile_headers(terrainsimplifylib PRIVATE terrainsimplify/pch.h)
+target_link_libraries(terrainsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
+add_executable(terrainsimplify
+    terrainsimplify/main.cpp
 )
-target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+target_link_libraries(terrainsimplify PUBLIC terrainsimplifylib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp

@@ -21,6 +21,11 @@ Storage::Storage(IndexMap map, disk::Layout layout)
     : _index(std::move(map)), _layout(std::move(layout)) {}
 
 std::optional<Node> Storage::read_node(const Id &id) const {
+    if (const auto* index = this->_index.get()) {
+        if (index->is_absent(id)) {
+            return std::nullopt;
+        }
+    }
     const auto node_path = this->get_node_path(id);
     const auto result = mesh::io::load_from_path(node_path);
     if (result.has_value()) {
@@ -30,15 +35,34 @@ std::optional<Node> Storage::read_node(const Id &id) const {
     }
 }
 
-bool Storage::write_node(const Id &id, const Node &node) const {
+bool Storage::write_node(const Id &id, const Node &node) {
     const auto node_path = this->get_node_path(id);
     const auto result = mesh::io::save_to_path(node, node_path);
+    if (result.has_value()) {
+        if (auto* index = this->_index.get()) {
+            index->add(id);
+        }
+    }
     return result.has_value();
 }
 
+bool Storage::remove_node(const Id &id) {
+    if (const auto* index = this->_index.get()) {
+        if (index->is_absent(id)) {
+            return false;
+        }
+    }
+    const auto node_path = this->get_node_path(id);
+    const bool result = std::filesystem::remove(node_path);
+    if (auto* index = this->_index.get()) {
+        index->remove(id);
+    }
+    return result;
+}
+
 bool Storage::has_node(const Id &id) const {
-    if (this->_index.has_value()) {
-        return this->_index->is_present(id);
+    if (const auto* index = this->_index.get()) {
+        return index->is_present(id);
     } else {
         return std::filesystem::exists(this->get_node_path(id));
     }
@@ -48,13 +72,21 @@ std::filesystem::path Storage::get_node_path(const Id &id) const {
     return this->_layout.get_node_path(id);
 }
 
+const IndexMap* Storage::index() const {
+    return this->_index.get();
+}
+
+bool Storage::has_index() const {
+    return this->_index.is_initialized();
+}
+
 bool Storage::save_index() const {
     const auto index_path = this->_layout.base_path() / disk::v1::index_file_name();
     LOG_TRACE("Saving octree storage index to {}", index_path);
 
     disk::v1::IndexFile index_file;
-    if (this->_index.has_value()) {
-        index_file.map = this->_index.value();
+    if (const auto* index = this->_index.get()) {
+        index_file.map = *index;
     }
     index_file.preferred_extension = this->_layout.extension_with_dot();
     index_file.layout_strategy_id = disk::layout::StrategyRegister::instance().get_id(this->_layout.strategy());
@@ -147,7 +179,7 @@ void update_index(IndexMap &index, const disk::Layout &layout) {
         }
 
         const Id id = *id_opt;
-        index.set(id, NodeStatus::Leaf);
+        index.set_raw(id, NodeStatus::Leaf);
     }
 
     std::unordered_set<Id> visited;
@@ -160,9 +192,9 @@ void update_index(IndexMap &index, const disk::Layout &layout) {
             visited.insert(*parent);
 
             if (index.get(*parent)) {
-                index.set(*parent, NodeStatus::Inner);
+                index.set_raw(*parent, NodeStatus::Inner);
             } else {
-                index.set(*parent, NodeStatus::Virtual);
+                index.set_raw(*parent, NodeStatus::Virtual);
             }
             parent = parent->parent();
         }
@@ -176,6 +208,15 @@ Storage open_folder(
     const std::string extension_with_dot,
     bool save_index) {
     LOG_TRACE("Opening storage folder {}", base_path);
+
+    if (!std::filesystem::is_directory(base_path)) {
+        if (std::filesystem::exists(base_path)) {
+            LOG_ERROR_AND_EXIT("Base path {} exists but is not a directory", base_path);
+        }
+        
+        LOG_TRACE("Base path {} does not exist, creating it", base_path);
+        std::filesystem::create_directories(base_path);
+    }
 
     const std::filesystem::path index_path = base_path / disk::v1::index_file_name();
     auto storage_opt = load_index(index_path);
@@ -204,6 +245,18 @@ Storage open_folder(
     }
 
     return storage;
+}
+
+const IndexMap& Storage::ensure_indexed() const {
+    if (const auto* index = this->_index.get()) {
+        return *index;
+    }
+
+    LOG_TRACE("Index not present, creating empty index");
+    IndexMap index;
+    update_index(index, this->_layout);
+    LOG_TRACE("Index created with {} entries", index.size());
+    return this->_index.set(std::move(index));
 }
 
 } // namespace octree

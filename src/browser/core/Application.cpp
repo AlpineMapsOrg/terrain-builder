@@ -15,7 +15,7 @@
 #include "Buffer.h"
 #include "Camera.h"
 #include "geometry/UnitCube.h"
-#include "octree/space.h"
+#include "octree/Space.h"
 #include "rendering/OctreeRenderManager.h"
 #include "shader/Shader.h"
 #include "shader/ShaderProgram.h"

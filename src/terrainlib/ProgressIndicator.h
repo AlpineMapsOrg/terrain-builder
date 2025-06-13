@@ -33,6 +33,6 @@ public:
 
     void task_finished();
     [[nodiscard]] std::jthread start_monitoring() const; // join on the returned thread after the work is done!!
-    [[nodiscard]] std::string progress_bar() const;
+    [[nodiscard]] std::string progress_bar(const uint32_t bar_width=50) const;
     [[nodiscard]] std::string x_of_y_done_message() const;
 };
