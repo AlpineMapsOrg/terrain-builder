@@ -21,6 +21,9 @@ bool OctreeNodeRepository::register_index_folder(std::filesystem::path path_to_i
     }
 
     m_registered_storages[path_to_index_folder] = std::make_unique<octree::Storage>(octree::open_folder(path_to_index_folder));
+
+    // Clear the node cache when adding input locations
+    m_node_cache.clear();
     return true;
 }
 
@@ -46,6 +49,9 @@ bool OctreeNodeRepository::register_file(std::filesystem::path path, octree::Id 
     }
 
     m_registered_files[id] = path;
+
+    // Clear the node cache when adding input locations
+    m_node_cache.clear();
     return true;
 }
 
@@ -63,6 +69,9 @@ void OctreeNodeRepository::unregister(const std::filesystem::path &path)
     }
 
     m_registered_storages.erase(clean_path);
+
+    // Clear the node cache when removing input locations
+    m_node_cache.clear();
 }
 
 std::vector<std::filesystem::path> OctreeNodeRepository::get_registered_paths()
@@ -118,7 +127,8 @@ std::optional<octree::NodeStatus> OctreeNodeRepository::get_node_status(const oc
     if (m_registered_files.contains(id))
     {
         // LOAD FROM FILE
-        LOG_WARN("Can't determine node status of node {} directly from file {}. Try using an index instead.", id, m_registered_files[id]);
+        // LOG_WARN("Can't determine node status of node {} directly from file {}. Try using an index instead.", id, m_registered_files[id]);
+        // Cant get node status without index
         return std::nullopt;
     }
 
