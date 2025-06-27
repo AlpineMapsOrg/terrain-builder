@@ -259,13 +259,8 @@ void OctreeNodeRepository::store_in_cache(const octree::Id &id, std::shared_ptr<
         std::sort(cache_entries.begin(), cache_entries.end(), [](std::pair<octree::Id, std::chrono::time_point<std::chrono::system_clock>> &a, std::pair<octree::Id, std::chrono::time_point<std::chrono::system_clock>> &b)
                   { return a.second < b.second; });
 
-        for (auto &entry : cache_entries)
+        while (m_node_cache.size() >= m_max_cache_entries)
         {
-            if (m_node_cache.size() < m_max_cache_entries)
-            {
-                break;
-            }
-
             m_node_cache.erase(cache_entries.front().first);
         }
     }

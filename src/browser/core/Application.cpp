@@ -841,7 +841,7 @@ void Application::draw_rendering_settings_section()
 
     if (ImGui::BeginCombo("Render Mode", modes[selected_idx].c_str()))
     {
-        for (int i = 0; i < modes.size(); i++)
+        for (size_t i = 0; i < modes.size(); i++)
         {
             bool selected = selected_idx == i;
 
