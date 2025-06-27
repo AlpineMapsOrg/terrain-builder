@@ -54,7 +54,8 @@ namespace octree
         Wireframe,
         Textured,
         Clay,
-        FlatNormals
+        FlatNormals,
+        UVs
     };
 
     class OctreeRenderManager

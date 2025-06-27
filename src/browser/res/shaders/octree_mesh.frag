@@ -57,6 +57,9 @@ void main() {
     } else if (render_mode == 3) {
         // FLAT NORMALS
         c = vec4(N_world, 1.0f);
+    } else if (render_mode == 4) {
+        // FLAT NORMALS
+        c = vec4(fs_in.uvs, 0.0f, 1.0f);
     }
 
     FragColor = c;

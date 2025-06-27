@@ -23,7 +23,7 @@ namespace octree
         init_node_cube_rendering();
         init_node_mesh_rendering();
 
-        set_render_mode(RenderMode::Wireframe);
+        set_render_mode(RenderMode::Clay);
     }
 
     void OctreeRenderManager::set_render_mode(RenderMode new_render_mode)
@@ -64,6 +64,14 @@ namespace octree
 
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             U_mesh_render_mode->set(3);
+        }
+        else if (m_render_mode == RenderMode::UVs)
+        {
+            glDisable(GL_CULL_FACE);
+            // glCullFace(GL_BACK);
+
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            U_mesh_render_mode->set(4);
         }
     }
 
