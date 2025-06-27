@@ -18,12 +18,12 @@ Window::Window(WindowConfig config) : m_width(config.width), m_height(config.hei
     glfwWindowHint(GLFW_RESIZABLE, config.resizeable ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_SAMPLES, config.msaa_samples);
 
-#ifdef _DEBUG
+    // #ifdef _DEBUG
     // enable debug mode
     LOG_DEBUG("Setting OpenGL Debug Context");
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
     glfwWindowHint(GLFW_CONTEXT_NO_ERROR, GLFW_FALSE);
-#endif // _DEBUG
+    // #endif // _DEBUG
 
     m_handle = glfwCreateWindow(m_width, m_height, m_title.c_str(), NULL, NULL);
     if (m_handle == NULL)
@@ -127,7 +127,6 @@ glm::dvec2 Window::get_accumulated_cursor_delta()
 void Window::clear_accumulated_cursor_delta()
 {
     m_last_fetched_cursor_pos = m_current_unfetched_cursor_pos;
-    ;
 }
 
 glm::dvec2 Window::get_cursor_position()
@@ -178,6 +177,18 @@ void Window::register_key_event(int action, int key, std::function<void()> callb
     auto callbacks = m_key_callbacks.find({action, key});
 
     if (callbacks != m_key_callbacks.end())
+    {
+        callbacks->second.push_back(callback);
+    }
+}
+
+void Window::register_mouse_button_event(int action, int button, std::function<void()> callback)
+{
+    m_mouse_button_callbacks.try_emplace({action, button}, std::vector<std::function<void()>>(0));
+
+    auto callbacks = m_mouse_button_callbacks.find({action, button});
+
+    if (callbacks != m_mouse_button_callbacks.end())
     {
         callbacks->second.push_back(callback);
     }
@@ -250,6 +261,18 @@ void Window::mouse_button_callback(GLFWwindow *window, int button, int action, i
     else if (action == GLFW_RELEASE)
     {
         w->m_mouse_button_states[button] = false;
+    }
+
+    w->m_mouse_button_callbacks.try_emplace({action, button}, std::vector<std::function<void()>>(0));
+
+    auto callbacks = w->m_mouse_button_callbacks.find({action, button});
+
+    if (callbacks != w->m_mouse_button_callbacks.end())
+    {
+        for (auto callback : callbacks->second)
+        {
+            callback();
+        }
     }
 }
 

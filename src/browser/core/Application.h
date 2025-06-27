@@ -4,9 +4,12 @@
 #include <GLFW/glfw3.h>
 
 #include "Camera.h"
+#include "io/OctreeNodeRepository.h"
+#include "rendering/OctreeRenderManager.h"
 #include "shader/Uniform.h"
 #include "window/Window.h"
 #include <memory>
+#include <octree/Storage.h>
 #include <string>
 
 class Application
@@ -14,8 +17,8 @@ class Application
 public:
     Application(std::string title, int width, int height);
 
-    void run();
-    void update_camera(float frame_delta_time, Uniform<glm::mat4> U_view);
+    void run(const std::vector<std::filesystem::path> &octree_indices);
+    void update_camera(float frame_delta_time);
 
     ~Application();
 
@@ -24,7 +27,11 @@ private:
     int m_width, m_height;
 
     std::unique_ptr<Window> m_window;
-    std::unique_ptr<Camera> m_camera;
+    std::shared_ptr<Camera> m_camera;
+
+    octree::Space m_space;
+    std::shared_ptr<OctreeNodeRepository> m_octree_repo;
+    std::shared_ptr<octree::OctreeRenderManager> m_octree_render_manager;
 
     float m_movement_speed, m_roll_speed, m_mouse_sensitivity;
 
@@ -34,6 +41,28 @@ private:
 
     size_t m_last_draw_amount;
 
+    // Temporary user input variables
+    // related to octree path inputs
+    std::string m_tmp_new_path;
+    bool m_tmp_path_is_file;
+    bool m_tmp_path_is_valid;
+
+    octree::Id::Level m_tmp_octree_zoom;
+    octree::Id::Index m_tmp_octree_index;
+    octree::Id::Coords m_tmp_octree_coords;
+    std::optional<octree::Id> m_tmp_octree_id;
+
+    // temporary node selector octree id input
+    octree::Id::Level m_tmp_nsel_octree_zoom;
+    octree::Id::Index m_tmp_nsel_octree_index;
+    octree::Id::Coords m_tmp_nsel_octree_coords;
+    std::optional<octree::Id> m_tmp_nsel_octree_id;
+    bool m_tmp_nsel_octree_id_dirty;
+
+    bool m_tmp_nsel_node_exists;
+    std::optional<std::filesystem::path> m_tmp_nsel_node_path;
+    std::optional<octree::NodeStatus> m_tmp_nsel_node_status;
+
     void toggle_nav_mode();
 
     void init_glad();
@@ -42,6 +71,7 @@ private:
     void draw_settings_window();
     void draw_camera_settings_section();
     void draw_octree_settings_section();
+    void draw_rendering_settings_section();
 
     static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                                   GLenum severity, GLsizei length,

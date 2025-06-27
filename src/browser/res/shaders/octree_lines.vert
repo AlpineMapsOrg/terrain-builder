@@ -18,7 +18,7 @@ out VS_OUT {
 void main()
 {
     vs_out.world_pos = model * vec4(pos, 1.0);
-    vs_out.color = mix(vec4(0.1f, 0.1f, 0.1f, 0.5f), vec4(1.0f, 1.0f, 0.0f, 1.0f), instance_active);
+    vs_out.color = mix(vec4(1.0f, 1.0f, 1.0f, 1.0f), vec4(1.0f, 1.0f, 0.0f, 1.0f), instance_active);
 
     vec4 view_space = view * vs_out.world_pos;
     view_space.z += 0.001f * instance_active;

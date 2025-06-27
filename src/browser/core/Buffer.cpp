@@ -12,7 +12,7 @@ GLuint Buffer::handle()
 	{
 		LOG_ERROR_AND_EXIT("Tried getting handle of Buffer with invalid handle!");
 	}
-	return GLuint();
+	return m_handle;
 }
 
 void Buffer::bind()

@@ -72,7 +72,8 @@ Dataset::Dataset(std::filesystem::path path) {
 
 Dataset::Dataset(GDALDataset *dataset) {
     m_gdal_dataset.reset(dataset);
-    if (!m_gdal_dataset) {
+    if (!m_gdal_dataset)
+    {
         LOG_ERROR("Dataset is null.\n");
         throw std::runtime_error("Dataset is null.");
     }
@@ -81,8 +82,10 @@ Dataset::Dataset(const std::filesystem::path path, GDALDataset *dataset) : Datas
     m_path = path;
 }
 
-Dataset Dataset::clone() {
-    if (!m_path.has_value()) {
+Dataset Dataset::clone()
+{
+    if (!m_path.has_value())
+    {
         LOG_ERROR("Cannot clone dataset.\n");
         throw std::runtime_error("Cannot clone dataset.");
     }
@@ -107,7 +110,8 @@ std::string Dataset::name() const {
 
 Dataset::~Dataset() = default;
 
-radix::tile::SrsBounds Dataset::bounds() const {
+radix::tile::SrsBounds Dataset::bounds() const
+{
     std::array<double, 6> adfGeoTransform = {};
     if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None)
         throw std::runtime_error("Could not get transformation information from source dataset");
@@ -147,7 +151,8 @@ radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
     return bounds3d;
 }
 
-radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) const {
+radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) const
+{
     const auto l_bounds = bounds();
     const auto west = l_bounds.min.x;
     const auto east = l_bounds.max.x;
@@ -166,19 +171,22 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     // hey, check out inline virtual int TransformBounds(const double xmin, const double ymin, const double xmax, const double ymax, double *out_xmin, double *out_ymin, double *out_xmax, double *out_ymax, const int densify_pts)
     std::vector<double> x;
     std::vector<double> y;
-    auto addCoordinate = [&](double xv, double yv) { x.emplace_back(xv); y.emplace_back(yv); };
+    auto addCoordinate = [&](double xv, double yv)
+    { x.emplace_back(xv); y.emplace_back(yv); };
 
     const auto deltaX = l_bounds.width() / 2000.0;
     if (deltaX <= 0.0)
         throw std::runtime_error("west coordinate > east coordinate. This is not supported.");
-    for (double s = west; s < east; s += deltaX) {
+    for (double s = west; s < east; s += deltaX)
+    {
         addCoordinate(s, south);
         addCoordinate(s, north);
     }
     const auto deltaY = (north - south) / 2000.0;
     if (deltaY <= 0.0)
         throw std::runtime_error("south coordinate > north coordinate. This is not supported.");
-    for (double s = south; s < north; s += deltaY) {
+    for (double s = south; s < north; s += deltaY)
+    {
         addCoordinate(west, s);
         addCoordinate(east, s);
     }
@@ -186,7 +194,8 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     addCoordinate(east, north);
 
     const auto transformer = srs::transformation(srs(), targetSrs);
-    if (!transformer->Transform(int(x.size()), x.data(), y.data())) {
+    if (!transformer->Transform(int(x.size()), x.data(), y.data()))
+    {
         throw std::string("Could not transform dataset bounds to target SRS");
     }
 
@@ -199,7 +208,8 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     return {{target_minX, target_minY}, {target_maxX, target_maxY}};
 }
 
-OGRSpatialReference Dataset::srs() const {
+OGRSpatialReference Dataset::srs() const
+{
     const char *srcWKT = m_gdal_dataset->GetProjectionRef();
     if (!strlen(srcWKT))
         throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
@@ -208,43 +218,52 @@ OGRSpatialReference Dataset::srs() const {
     return srs;
 }
 
-unsigned Dataset::widthInPixels() const {
+unsigned Dataset::widthInPixels() const
+{
     return ctb::i_pixel(m_gdal_dataset->GetRasterXSize());
 }
 
-unsigned Dataset::heightInPixels() const {
+unsigned Dataset::heightInPixels() const
+{
     return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
 }
 
-double Dataset::widthInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const {
+double Dataset::widthInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const
+{
     return bounds.width() / pixelWidthIn(bounds_srs);
 }
 
-double Dataset::heightInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const {
+double Dataset::heightInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const
+{
     return bounds.height() / pixelHeightIn(bounds_srs);
 }
 
-unsigned Dataset::n_bands() const {
+unsigned Dataset::n_bands() const
+{
     const auto n = m_gdal_dataset->GetRasterCount();
     assert(n >= 0);
     return unsigned(n);
 }
 
-GDALDataset *Dataset::gdalDataset() {
+GDALDataset *Dataset::gdalDataset()
+{
     return m_gdal_dataset.get();
 }
 
-double Dataset::gridResolution(const OGRSpatialReference &target_srs) const {
+double Dataset::gridResolution(const OGRSpatialReference &target_srs) const
+{
     return std::min(pixelWidthIn(target_srs), pixelHeightIn(target_srs));
 }
 
-double Dataset::pixelWidthIn(const OGRSpatialReference &target_srs) const {
+double Dataset::pixelWidthIn(const OGRSpatialReference &target_srs) const
+{
     const auto b0 = bounds();
     const auto b1 = srs::non_exact_bounds_transform(b0, srs(), target_srs);
     return b1.width() / widthInPixels();
 }
 
-double Dataset::pixelHeightIn(const OGRSpatialReference &target_srs) const {
+double Dataset::pixelHeightIn(const OGRSpatialReference &target_srs) const
+{
     const auto b = srs::non_exact_bounds_transform(bounds(), srs(), target_srs);
     return b.height() / heightInPixels();
 }

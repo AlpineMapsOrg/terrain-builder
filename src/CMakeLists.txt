@@ -8,7 +8,12 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-find_package(TBB REQUIRED)
+set(TBB_TEST OFF)
+# set(TBB_ENABLE_IPO OFF)
+set(TBB_STRICT OFF)
+set(TBB_FIND_PACKAGE OFF)
+alp_add_git_repository(tbb URL https://github.com/uxlfoundation/oneTBB COMMITISH v2021.11.0)
+
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
@@ -85,6 +90,7 @@ add_library(imgui STATIC
    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+   ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
 )
 target_include_directories(imgui PUBLIC
    ${imgui_SOURCE_DIR}
@@ -142,7 +148,7 @@ add_library(terrainlib
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -200,6 +206,7 @@ target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
+target_compile_options(terrainbuilder PRIVATE -DTBB_ENABLE_IPO=OFF)
 target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 
 
@@ -249,11 +256,16 @@ add_executable(browser
     browser/core/Camera.cpp
 
     browser/core/geometry/UnitCube.h
+    browser/core/geometry/RadixExtensions.h
 
     browser/core/rendering/OctreeRenderManager.cpp
+    browser/core/rendering/GPUOctreeNode.cpp
+    browser/core/rendering/ImGuiExtensions.cpp
+
+    browser/core/io/OctreeNodeRepository.cpp
 )
 
 #target_compile_features(browser PRIVATE cxx_std_20)
 #target_compile_options(browser PRIVATE /utf-8)
 target_include_directories(browser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/browser)
-target_link_libraries(browser PUBLIC terrainlib glfw glad_gl_core_46 resources-lib imgui)
+target_link_libraries(browser PUBLIC terrainlib glfw glad_gl_core_46 resources-lib imgui CLI11::CLI11)

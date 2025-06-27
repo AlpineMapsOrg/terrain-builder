@@ -5,25 +5,22 @@
 
 #include <glm/glm.hpp>
 
-// CMRC Resource Compiler
-#include <cmrc/cmrc.hpp>
-
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <misc/cpp/imgui_stdlib.h>
 
 #include "Buffer.h"
 #include "Camera.h"
 #include "geometry/UnitCube.h"
 #include "octree/Space.h"
-#include "rendering/OctreeRenderManager.h"
+#include "rendering/GPUOctreeNode.h"
+#include "rendering/ImGuiExtensions.h"
 #include "shader/Shader.h"
 #include "shader/ShaderProgram.h"
 
-CMRC_DECLARE(res);
-
 Application::Application(std::string title, int width, int height)
-    : m_title(title), m_width(width), m_height(height)
+    : m_title(title), m_width(width), m_height(height), m_space(octree::Space::earth())
 {
 
     m_nav_mode = false;
@@ -59,15 +56,24 @@ Application::Application(std::string title, int width, int height)
         glEnable(GL_MULTISAMPLE);
     }
 
-    m_movement_speed = 100000.0f;
+    m_movement_speed = 50.0f;
     m_roll_speed = 0.02f;
     m_mouse_sensitivity = 50.0f;
+
+    m_tmp_path_is_file = false;
+    m_tmp_path_is_valid = false;
+
+    m_tmp_octree_id = octree::Id::root();
+    m_tmp_octree_coords = m_tmp_octree_id.value().coords();
+    m_tmp_octree_index = m_tmp_octree_id.value().index_on_level();
+    m_tmp_octree_zoom = m_tmp_octree_id.value().level();
+
+    m_tmp_nsel_octree_id = octree::Id::root();
+    m_tmp_nsel_octree_id_dirty = true;
 }
 
-void Application::run()
+void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 {
-    auto RES = cmrc::res::get_filesystem();
-
     double last_frame_time = glfwGetTime();
 
     LOG_INFO("Setting up key event callbacks");
@@ -76,136 +82,104 @@ void Application::run()
 
     m_window->register_key_event(GLFW_PRESS, GLFW_KEY_ESCAPE, [this]()
                                  {
-        if (m_nav_mode) {
-            toggle_nav_mode();
-        } else {
-            m_window->set_should_close(true);
-        } });
+                                     if (m_nav_mode)
+                                     {
+                                         toggle_nav_mode();
+                                     }
+                                     else
+                                     {
+                                         m_window->set_should_close(true);
+                                     } });
 
     m_window->register_scroll_event([this](glm::dvec2 scroll)
                                     {
-        float old_speed = m_movement_speed;
+                                        if (!m_nav_mode)
+                                        {
+                                            return;
+                                        }
+                                        float old_speed = m_movement_speed;
 
-        double factor = 1.0f;
+                                        double factor = 1.0f;
 
-        if (scroll.y > 0) {
-            factor = 1.2f;
-        } else if (scroll.y < 0) {
-            factor = 0.8f;
-        }
+                                        if (scroll.y > 0)
+                                        {
+                                            factor = 1.2f;
+                                        }
+                                        else if (scroll.y < 0)
+                                        {
+                                            factor = 0.8f;
+                                        }
 
-        m_movement_speed = glm::max(1.0f, m_movement_speed * (float)factor);
-        LOG_DEBUG("Movement Speed: {} >> {}", old_speed, m_movement_speed); });
+                                        m_movement_speed = glm::max(1.0f, m_movement_speed * (float)factor);
+                                        LOG_DEBUG("Movement Speed: {} >> {}", old_speed, m_movement_speed); });
 
-    LOG_INFO("Setting up shaders");
-    auto vsc_octree_lines = RES.open("shaders/octree_lines.vert");
-    Shader vs_octree_lines(GL_VERTEX_SHADER);
-    vs_octree_lines.compile(std::string_view(vsc_octree_lines.begin(), vsc_octree_lines.end()));
+    m_window->register_mouse_button_event(GLFW_PRESS, GLFW_MOUSE_BUTTON_MIDDLE, [this]()
+                                          {
+                                              if (!m_nav_mode)
+                                              {
+                                                  return;
+                                              }
 
-    auto fsc_octree_lines = RES.open("shaders/octree_lines.frag");
-    Shader fs_octree_lines(GL_FRAGMENT_SHADER);
-    fs_octree_lines.compile(std::string_view(fsc_octree_lines.begin(), fsc_octree_lines.end()));
+                                              std::optional<octree::Id> picked_node = m_octree_render_manager->ray_cast_rendered_nodes(m_camera);
 
-    ShaderProgram sp_octree_lines;
-
-    sp_octree_lines.attach(vs_octree_lines);
-    sp_octree_lines.attach(fs_octree_lines);
-    sp_octree_lines.link();
-    sp_octree_lines.use();
-
-    Uniform<glm::mat4> U_projection = sp_octree_lines.get_uniform<glm::mat4>("projection");
-    Uniform<glm::mat4> U_view = sp_octree_lines.get_uniform<glm::mat4>("view");
+                                              if (picked_node.has_value())
+                                              {
+                                                  m_tmp_nsel_octree_id = picked_node;
+                                                  m_tmp_nsel_octree_id_dirty = true;
+                                                  m_octree_render_manager->set_selected_node(m_tmp_nsel_octree_id.value());
+                                              } });
 
     LOG_INFO("Setting up camera");
     CameraConfig camera_config = {
         .fov_deg = 90.0f,
         .aspect_ratio = m_window->getAspectRatio(),
-        .near_plane = 1000.0f,
-        .far_plane = 200000000.0f,
+        .near_plane = 1.0f,
+        .far_plane = 200000.0f,
 
-        .position = glm::vec3(10000000.0f),
+        .position = glm::vec3(4081584.0f, 1203621.5f, 4735362.5f),
         .target = glm::vec3(0.0f),
         .up = glm::vec3(0.0f, 1.0f, 0.0f),
     };
-    m_camera = std::make_unique<Camera>(camera_config);
+    m_camera = std::make_shared<Camera>(camera_config);
 
-    U_projection.set(m_camera->projection_matrix());
-    U_view.set(m_camera->view_matrix());
-
-    m_window->register_framebuffer_resize_event([this, &U_projection](glm::ivec2 new_size)
+    m_window->register_framebuffer_resize_event([this /*, &U_projection*/](glm::ivec2 new_size)
                                                 {
-        m_camera->set_aspect_ratio((float)new_size.x / (float)new_size.y);
+                                                    if (new_size.y != 0) {
+                                                        m_camera->set_aspect_ratio((float)new_size.x / (float)new_size.y);
+                                                    }
+                                                    
+                                                    glViewport(0, 0, new_size.x, new_size.y);
+                                                    
+                                                    m_octree_render_manager->U_projection->set(m_camera->projection_matrix()); });
 
-        glViewport(0, 0, new_size.x, new_size.y);
+    LOG_INFO("Setting up Octree repository");
+    m_octree_repo = std::make_shared<OctreeNodeRepository>();
 
-        U_projection.set(m_camera->projection_matrix()); });
+    // auto id2 = octree::Id::try_make(octree::Id::Level(13), octree::Id::Coords(6480, 4798, 6854)).value();
 
-    LOG_INFO("Setting up lines");
+    // m_octree_repo->register_index_folder("D:/Uni/AlpineMapsOrg/Alpenite/data/octree-tiles/innenstadt2");
+    // m_octree_repo->register_file("D:/Uni/AlpineMapsOrg/Alpenite/data/octree-tiles/innenstadt2/13/6480/4798/6854.terrain", id2);
 
-    std::vector<glm::vec3> vertices = UnitCube::vertices();
-    std::vector<unsigned int> indices = UnitCube::line_indices();
+    for (auto &index : octree_indices)
+    {
+        m_octree_repo->register_index_folder(index);
+    }
 
-    octree::OctreeRenderManager octree_render_manager(octree::Space::earth());
+    LOG_INFO("Setting up OctreeRenderManager");
 
-    unsigned int VAO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
+    m_octree_render_manager = std::make_shared<octree::OctreeRenderManager>(m_octree_repo, m_space);
 
-    Buffer cube_ibo(GL_ELEMENT_ARRAY_BUFFER, GL_STATIC_DRAW);
-    Buffer cube_vbo;
-    Buffer cube_instance_active_buffer;
-    Buffer cube_instance_model_buffer;
-
-    cube_vbo.set_data(vertices);
-    cube_ibo.set_data(indices);
-
-    // VERTICES
-    cube_vbo.bind();
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), NULL);
-
-    // INSTANCE ACTIVE
-    cube_instance_active_buffer.bind();
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(float), NULL);
-    glVertexAttribDivisor(1, 1);
-
-    // INSTANCE MODEL MATRICES
-    cube_instance_model_buffer.bind();
-
-    size_t vec4_size = sizeof(glm::vec4);
-
-    // LOC 2: COLUMN 0
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4 * vec4_size, (void *)0);
-    glVertexAttribDivisor(2, 1);
-
-    // LOC 3: COLUMN 1
-    glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 4 * vec4_size, (void *)(1 * vec4_size));
-    glVertexAttribDivisor(3, 1);
-
-    // LOC 4: COLUMN 2
-    glEnableVertexAttribArray(4);
-    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 4 * vec4_size, (void *)(2 * vec4_size));
-    glVertexAttribDivisor(4, 1);
-
-    // LOC 5: COLUMN 3
-    glEnableVertexAttribArray(5);
-    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 4 * vec4_size, (void *)(3 * vec4_size));
-    glVertexAttribDivisor(5, 1);
-
-    // INDICES
-    cube_ibo.bind();
-
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
+    glViewport(0, 0, m_window->get_window_size().x, m_window->get_window_size().y);
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glClearColor(0.f, 0.f, 0.f, 1.f);
 
+    glfwSwapInterval(1);
+
     m_last_draw_amount = 0;
+
+    LOG_DEBUG("START LOOP");
 
     while (!m_window->should_close())
     {
@@ -216,43 +190,40 @@ void Application::run()
         const double frame_delta_time = current_frame_time - last_frame_time;
         last_frame_time = current_frame_time;
 
+        update_camera(frame_delta_time);
+
+        m_octree_render_manager->update(m_camera);
+
+        // octree::OctreeRenderIntent visible_rendering_intent = octree_render_manager.generate_visible_octree_nodes(m_camera->get_position());
+        // octree::OctreeRenderIntent rendering_intent = octree_render_manager.generate_octree_render_intent(octree::Id::root(), m_camera->get_position(), false, m_refining_factor);
+
+        // m_last_draw_amount = visible_rendering_intent.instance_count;
+
+        // cube_instance_active_buffer.set_data(visible_rendering_intent.instances_active);
+        // cube_instance_model_buffer.set_data(visible_rendering_intent.instances_model_mats);
+
+        // if (rendering_intent.min_scene_distance.has_value() && m_camera->get_near() != (float)rendering_intent.min_scene_distance.value() * 0.5f)
+        // {
+        //     m_camera->set_near(rendering_intent.min_scene_distance.value() * 0.5f);
+        // }
+        // if (rendering_intent.max_scene_distance.has_value() && m_camera->get_far() != (float)rendering_intent.max_scene_distance.value() * 1.5f)
+        // {
+        //     m_camera->set_far(rendering_intent.max_scene_distance.value() * 1.5f);
+        // }
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        m_octree_render_manager->render();
+
+        // sp_octree_mesh.use();
+        // octree_render_manager.render_gpu_nodes(U_model_mesh, m_camera->get_position());
+
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         draw_settings_window();
-
-        update_camera(frame_delta_time, U_view);
-
-        octree::OctreeRenderIntent rendering_intent = octree_render_manager.generate_octree_render_intent(octree::Id::root(), m_camera->get_position(), false, m_refining_factor);
-
-        m_last_draw_amount = rendering_intent.instance_count;
-
-        cube_instance_active_buffer.set_data(rendering_intent.instances_active);
-        cube_instance_model_buffer.set_data(rendering_intent.instances_model_mats);
-
-        if (rendering_intent.min_scene_distance.has_value() && m_camera->get_near() != (float)rendering_intent.min_scene_distance.value() * 0.5f)
-        {
-            m_camera->set_near(rendering_intent.min_scene_distance.value() * 0.5f);
-        }
-        if (rendering_intent.max_scene_distance.has_value() && m_camera->get_far() != (float)rendering_intent.max_scene_distance.value() * 1.5f)
-        {
-            m_camera->set_far(rendering_intent.max_scene_distance.value() * 1.5f);
-        }
-
-        if (m_camera->is_view_matrix_outdated())
-        {
-            U_view.set(m_camera->view_matrix());
-        }
-        if (m_camera->is_projection_matrix_outdated())
-        {
-            U_projection.set(m_camera->projection_matrix());
-        }
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        // glLineWidth(2.0f);
-        glDrawElementsInstanced(GL_LINES, indices.size(), GL_UNSIGNED_INT, 0, rendering_intent.instance_count);
 
         // RENDER IMGUI AFTER OUR RENDERS
         ImGui::Render();
@@ -262,7 +233,7 @@ void Application::run()
     }
 }
 
-void Application::update_camera(float frame_delta_time, Uniform<glm::mat4> U_view)
+void Application::update_camera(float frame_delta_time)
 {
     if (!m_camera)
     {
@@ -416,12 +387,16 @@ void Application::draw_settings_window()
     float window_width = glm::clamp(main_viewport->Size.x * 0.2f, 250.0f, 350.0f);
     float window_height = main_viewport->Size.y;
 
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(window_width, window_height),         // min size
+        ImVec2(main_viewport->Size.x, window_height) // max size
+    );
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(window_width, window_height), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(window_width, window_height), ImGuiCond_Appearing);
 
     ImGuiWindowFlags flags = 0;
     flags |= ImGuiWindowFlags_NoMove;
-    flags |= ImGuiWindowFlags_NoResize;
+    // flags |= ImGuiWindowFlags_NoResize;
 
     if (!ImGui::Begin("Settings", NULL, flags))
     {
@@ -429,6 +404,7 @@ void Application::draw_settings_window()
         return;
     }
 
+    draw_rendering_settings_section();
     draw_octree_settings_section();
     draw_camera_settings_section();
 
@@ -539,7 +515,7 @@ void Application::draw_camera_settings_section()
         ImGui::TreePop();
     }
 
-    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    // ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
     if (ImGui::TreeNode("Projection"))
     {
         float fov = m_camera->get_fov();
@@ -583,55 +559,346 @@ void Application::draw_octree_settings_section()
     ImGui::PushItemWidth(-80);
 
     ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Node Selector"))
+    {
+        if (m_tmp_nsel_octree_id_dirty && m_tmp_nsel_octree_id.has_value())
+        {
+            m_tmp_nsel_octree_zoom = m_tmp_nsel_octree_id.value().level();
+            m_tmp_nsel_octree_coords = m_tmp_nsel_octree_id.value().coords();
+            m_tmp_nsel_octree_index = m_tmp_nsel_octree_id.value().index_on_level();
+
+            m_tmp_nsel_node_path = m_octree_repo->get_node_file_path(m_tmp_nsel_octree_id.value());
+            m_tmp_nsel_node_status = m_octree_repo->get_node_status(m_tmp_nsel_octree_id.value());
+            m_tmp_nsel_node_exists = m_octree_repo->has_node(m_tmp_nsel_octree_id.value());
+
+            m_tmp_nsel_octree_id_dirty = false;
+        }
+
+        if (ImGui::ALP::InputOctreeId(m_tmp_nsel_octree_id, m_tmp_nsel_octree_zoom, m_tmp_nsel_octree_coords, m_tmp_nsel_octree_index))
+        {
+            m_tmp_nsel_octree_id_dirty = true;
+
+            if (m_tmp_nsel_octree_id.has_value())
+            {
+                m_octree_render_manager->set_selected_node(m_tmp_nsel_octree_id.value());
+            }
+        }
+
+        ImGui::SeparatorText("Node Information");
+
+        static ImGuiTableFlags flags;
+        flags |= ImGuiTableFlags_SizingFixedFit;
+        flags |= ImGuiTableFlags_Resizable;
+        flags |= ImGuiTableFlags_BordersOuter;
+        flags |= ImGuiTableFlags_BordersV;
+        flags |= ImGuiTableFlags_ContextMenuInBody;
+        flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
+
+        ImVec2 table_viewport_size(0.0f, 100.0f);
+        if (ImGui::BeginTable("node_info", 2, flags, table_viewport_size, 1000.0f))
+        {
+            ImGui::TableSetupScrollFreeze(1, 1);
+            ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Exists");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%s", m_tmp_nsel_node_exists ? "Yes" : "No");
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("NodeStatus");
+
+            ImGui::TableSetColumnIndex(1);
+            std::string status = "Unknown";
+
+            if (m_tmp_nsel_node_status.has_value())
+            {
+                switch (m_tmp_nsel_node_status.value())
+                {
+                case octree::NodeStatus::Inner:
+                    status = "Inner";
+                    break;
+                case octree::NodeStatus::Virtual:
+                    status = "Virtual";
+                    break;
+                case octree::NodeStatus::Leaf:
+                    status = "Leaf";
+                    break;
+                }
+            }
+            else if (m_tmp_nsel_node_path.has_value())
+            {
+                // Node exists, has a path, but the status is unknown, so its probably coming from a directly added file
+                status = "Unknown due to non-indexed file";
+            }
+
+            ImGui::Text("%s", status.c_str());
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("FilePath");
+
+            ImGui::TableSetColumnIndex(1);
+            std::string path = "Unknown";
+
+            if (m_tmp_nsel_node_path.has_value())
+            {
+                path = m_tmp_nsel_node_path.value().string();
+            }
+
+            ImGui::Text("%s", path.c_str());
+
+            ImGui::EndTable();
+        }
+
+        ImGui::SeparatorText("Actions");
+
+        ImGui::BeginDisabled(!m_tmp_nsel_octree_id.has_value());
+
+        if (ImGui::Button("Jump To") && m_tmp_nsel_octree_id.has_value())
+        {
+            octree::Bounds node_bounds = m_space.get_node_bounds(m_tmp_nsel_octree_id.value());
+            glm::dvec3 node_centre = node_bounds.centre();
+
+            glm::dvec3 node_to_cam_dir = m_camera->get_local_forward_dir() * -glm::length(node_bounds.size());
+
+            m_camera->set_position(node_centre + node_to_cam_dir);
+        }
+
+        ImGui::EndDisabled();
+
+        ImGui::TreePop();
+    }
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Input"))
+    {
+        float path_input_border_size = m_tmp_path_is_valid || m_tmp_new_path.size() <= 0 ? 0.0f : 1.0f;
+
+        ImGui::PushStyleColor(ImGuiCol_Border, (ImVec4)ImColor::HSV(0, 1, 1));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, path_input_border_size);
+        if (ImGui::InputText("Path", &m_tmp_new_path))
+        {
+            if (std::filesystem::exists(m_tmp_new_path))
+            {
+                if (std::filesystem::is_directory(m_tmp_new_path))
+                {
+                    m_tmp_path_is_file = false;
+                    m_tmp_path_is_valid = true;
+                }
+                else if (std::filesystem::is_regular_file(m_tmp_new_path))
+                {
+                    m_tmp_path_is_file = true;
+                    m_tmp_path_is_valid = true;
+                }
+            }
+            else
+            {
+                m_tmp_path_is_file = false;
+                m_tmp_path_is_valid = false;
+            }
+        }
+
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+
+        ImGui::Separator();
+
+        // Disable Octree ID Input when the path given is a directory
+        ImGui::BeginDisabled(!m_tmp_path_is_file || !m_tmp_path_is_valid);
+        ImGui::ALP::InputOctreeId(m_tmp_octree_id, m_tmp_octree_zoom, m_tmp_octree_coords, m_tmp_octree_index);
+        ImGui::EndDisabled();
+
+        ImGui::Separator();
+
+        // Disable "Add" Button if the path empty or if the octree id is invalid if the input is a file
+        ImGui::BeginDisabled(!m_tmp_path_is_valid || (m_tmp_path_is_file && !m_tmp_octree_id.has_value()));
+
+        if (ImGui::Button("Add"))
+        {
+            if (m_tmp_path_is_file && m_octree_repo->register_file(m_tmp_new_path, m_tmp_octree_id.value()))
+            {
+                m_tmp_new_path.clear();
+                m_tmp_octree_id = octree::Id::root();
+
+                m_tmp_octree_coords = m_tmp_octree_id.value().coords();
+                m_tmp_octree_index = m_tmp_octree_id.value().index_on_level();
+                m_tmp_octree_zoom = m_tmp_octree_id.value().level();
+            }
+            else if (!m_tmp_path_is_file && m_octree_repo->register_index_folder(m_tmp_new_path))
+            {
+                m_tmp_new_path.clear();
+            }
+        }
+
+        ImGui::EndDisabled();
+
+        ImGui::SeparatorText("Registered Locations");
+
+        static ImGuiTableFlags flags;
+        flags |= ImGuiTableFlags_SizingFixedFit;
+        flags |= ImGuiTableFlags_Resizable;
+        flags |= ImGuiTableFlags_BordersOuter;
+        flags |= ImGuiTableFlags_BordersV;
+        flags |= ImGuiTableFlags_ContextMenuInBody;
+        flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
+
+        ImVec2 table_viewport_size(0.0f, 100.0f);
+        if (ImGui::BeginTable("octree_node_repo", 2, flags, table_viewport_size, 1000.0f))
+        {
+            ImGui::TableSetupScrollFreeze(1, 1);
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("Path", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+
+            int i = 0;
+            for (auto path : m_octree_repo->get_registered_paths())
+            {
+                ImGui::PushID(i);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                if (ImGui::Button("Del"))
+                {
+                    m_octree_repo->unregister(path);
+                }
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%s", path.string().c_str());
+
+                ImGui::PopID();
+                i++;
+            }
+            ImGui::EndTable();
+        }
+
+        // ImGui::Text("Nodes found on disk: %d", -1);
+
+        ImGui::TreePop();
+    }
+
+    // ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
     if (ImGui::TreeNode("Stats"))
     {
 
-        ImGui::Text("Nodes Rendered: %d", m_last_draw_amount);
+        ImGui::Text("Nodes rendered: %d", m_octree_render_manager->get_last_node_draw_amount());
 
         ImGui::TreePop();
     }
 
-    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
-    if (ImGui::TreeNode("Filtering"))
-    {
+    // ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    // if (ImGui::TreeNode("Filtering"))
+    // {
 
-        ImGui::TreePop();
-    }
+    //     ImGui::TreePop();
+    // }
 
-    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
-    if (ImGui::TreeNode("Refining"))
-    {
-        std::array<std::string, 3> metrics = {"Distance", "Level", "DGNSDNFOL"};
-        size_t selected_idx = 0;
+    // ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    // if (ImGui::TreeNode("Refining"))
+    // {
+    //     std::array<std::string, 3> metrics = {"Distance", "Level", "DGNSDNFOL"};
+    //     size_t selected_idx = 0;
 
-        if (ImGui::BeginCombo("Metric", metrics[selected_idx].c_str()))
-        {
-            for (int i = 0; i < metrics.size(); i++)
-            {
-                bool selected = selected_idx == i;
+    //     if (ImGui::BeginCombo("Metric", metrics[selected_idx].c_str()))
+    //     {
+    //         for (int i = 0; i < metrics.size(); i++)
+    //         {
+    //             bool selected = selected_idx == i;
 
-                if (ImGui::Selectable(metrics[i].c_str(), selected))
-                {
-                    selected_idx = i;
-                    selected = true;
-                }
+    //             if (ImGui::Selectable(metrics[i].c_str(), selected))
+    //             {
+    //                 selected_idx = i;
+    //                 selected = true;
+    //             }
 
-                if (selected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndCombo();
-        }
+    //             if (selected)
+    //             {
+    //                 ImGui::SetItemDefaultFocus();
+    //             }
+    //         }
+    //         ImGui::EndCombo();
+    //     }
 
-        if (ImGui::SliderFloat("Factor", &m_refining_factor, 0.0f, 2.0f))
-        {
-        }
+    //     if (ImGui::SliderFloat("Factor", &m_refining_factor, 0.0f, 2.0f))
+    //     {
+    //     }
 
-        ImGui::TreePop();
-    }
+    //     ImGui::TreePop();
+    // }
 
     ImGui::PopItemWidth();
+}
+
+void Application::draw_rendering_settings_section()
+{
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (!ImGui::CollapsingHeader("Render Settings"))
+    {
+        return;
+    }
+
+    std::array<std::string, 4> modes = {"Wireframe", "Textured", "Clay", "FlatNormals"};
+    size_t selected_idx = 0;
+
+    switch (m_octree_render_manager->get_render_mode())
+    {
+    case octree::RenderMode::Wireframe:
+        selected_idx = 0;
+        break;
+    case octree::RenderMode::Textured:
+        selected_idx = 1;
+        break;
+    case octree::RenderMode::Clay:
+        selected_idx = 2;
+        break;
+    case octree::RenderMode::FlatNormals:
+        selected_idx = 3;
+        break;
+    }
+
+    if (ImGui::BeginCombo("Render Mode", modes[selected_idx].c_str()))
+    {
+        for (int i = 0; i < modes.size(); i++)
+        {
+            bool selected = selected_idx == i;
+
+            if (ImGui::Selectable(modes[i].c_str(), selected))
+            {
+                selected_idx = i;
+                selected = true;
+            }
+
+            if (selected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+
+        switch (selected_idx)
+        {
+        case 0:
+            m_octree_render_manager->set_render_mode(octree::RenderMode::Wireframe);
+            break;
+        case 1:
+            m_octree_render_manager->set_render_mode(octree::RenderMode::Textured);
+            break;
+        case 2:
+            m_octree_render_manager->set_render_mode(octree::RenderMode::Clay);
+            break;
+        case 3:
+            m_octree_render_manager->set_render_mode(octree::RenderMode::FlatNormals);
+            break;
+        }
+    }
 }
 
 void Application::gl_debug_callback(GLenum source, GLenum type,

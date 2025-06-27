@@ -1,0 +1,56 @@
+#version 460 core
+
+uniform float render_mode;
+uniform sampler2D uTexture;
+
+in VS_OUT {
+    vec4 world_pos;
+    vec4 view_space_pos;
+    vec4 view_space_light_dir;
+    vec2 uvs;
+} fs_in;
+
+out vec4 FragColor;
+
+vec4 phong(vec3 L, vec3 H, vec3 N, vec4 diff_color, vec4 spec_color, float ambient, float shininess) {
+
+    float diff = max(dot(N, L), 0.0f);
+    float spec = pow(max(dot(H, N), 0.0f), shininess);
+
+    return diff * diff_color + spec * spec_color + ambient;
+}
+
+void main() {
+    vec4 c = vec4(0);
+
+    vec3 dpdx = dFdx(fs_in.view_space_pos.xyz);
+    vec3 dpdy = dFdy(fs_in.view_space_pos.xyz);
+    vec3 N = normalize(cross(dpdx, dpdy));
+
+    if (render_mode == 0) { 
+        // WIREFRAME
+        c = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    } else if (render_mode == 1) {
+        // TEXTURED
+        float shininess = 2.0f;
+
+        vec3 L = normalize(fs_in.view_space_light_dir.xyz);
+        vec3 H = normalize(L + normalize(-fs_in.view_space_pos.xyz));
+
+        c = phong(L, H, N, texture(uTexture, fs_in.uvs), vec4(0.4f), 0.1f, 2.0f);
+    } else if (render_mode == 2) {
+        // CLAY
+
+        float shininess = 2.0f;
+
+        vec3 L = normalize(fs_in.view_space_light_dir.xyz);
+        vec3 H = normalize(L + normalize(-fs_in.view_space_pos.xyz));
+
+        c = phong(L, H, N, vec4(0.4f), vec4(0.4f), 0.1f, 2.0f);
+    } else if (render_mode == 3) {
+        // FLAT NORMALS
+        c = vec4(N, 1.0f);
+    }
+
+    FragColor = c;
+}

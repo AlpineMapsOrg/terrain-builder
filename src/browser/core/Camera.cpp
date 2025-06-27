@@ -11,9 +11,6 @@ Camera::Camera(CameraConfig config) : m_fov_deg(config.fov_deg),
 
 	glm::dvec3 forward = glm::normalize(config.target - m_position);
 	m_rotation = glm::quatLookAt(forward, m_up);
-
-	update_projection_matrix();
-	update_view_matrix();
 }
 
 void Camera::rotate(double delta_yaw, double delta_pitch, double delta_roll)
@@ -42,7 +39,6 @@ void Camera::move_local(glm::dvec3 local_movement_delta)
 
 void Camera::set_near(float near)
 {
-	LOG_TRACE("SETTING NEAR: {}", near);
 	m_projection_matrix_cache.reset();
 
 	m_near_plane = near;
@@ -50,7 +46,6 @@ void Camera::set_near(float near)
 
 void Camera::set_far(float far)
 {
-	LOG_TRACE("SETTING FAR: {}", far);
 	m_projection_matrix_cache.reset();
 
 	m_far_plane = far;

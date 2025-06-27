@@ -49,6 +49,7 @@ public:
 	bool is_mouse_button_pressed(int key);
 
 	void register_key_event(int action, int key, std::function<void()> callback);
+	void register_mouse_button_event(int action, int button, std::function<void()> callback);
 	void register_scroll_event(std::function<void(glm::dvec2)> callback);
 	void register_framebuffer_resize_event(std::function<void(glm::ivec2)> callback);
 
@@ -71,6 +72,7 @@ private:
 	glm::dvec2 m_current_unfetched_cursor_pos;
 
 	std::map<std::tuple<int, int>, std::vector<std::function<void()>>> m_key_callbacks;
+	std::map<std::tuple<int, int>, std::vector<std::function<void()>>> m_mouse_button_callbacks;
 	std::vector<std::function<void(glm::dvec2)>> m_scroll_callbacks;
 	std::vector<std::function<void(glm::ivec2)>> m_framebuffer_resize_callbacks;
 
