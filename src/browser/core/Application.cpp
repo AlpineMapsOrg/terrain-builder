@@ -144,13 +144,18 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 
     m_window->register_framebuffer_resize_event([this /*, &U_projection*/](glm::ivec2 new_size)
                                                 {
-                                                    if (new_size.y != 0) {
+                                                    if (new_size.y != 0)
+                                                    {
                                                         m_camera->set_aspect_ratio((float)new_size.x / (float)new_size.y);
                                                     }
-                                                    
+
                                                     glViewport(0, 0, new_size.x, new_size.y);
-                                                    
-                                                    m_octree_render_manager->U_projection->set(m_camera->projection_matrix()); });
+
+                                                    m_octree_render_manager->update(m_camera);
+
+                                                    // m_octree_render_manager->U_projection->set(m_camera->projection_matrix());
+                                                    // m_octree_render_manager->U_mesh_projection->set(m_camera->projection_matrix());
+                                                });
 
     LOG_INFO("Setting up Octree repository");
     m_octree_repo = std::make_shared<OctreeNodeRepository>();

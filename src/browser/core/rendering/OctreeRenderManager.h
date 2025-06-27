@@ -73,8 +73,6 @@ namespace octree
 
         int get_last_node_draw_amount();
 
-        std::unique_ptr<Uniform<glm::mat4>> U_projection;
-
     private:
         RenderMode m_render_mode;
 
@@ -103,6 +101,7 @@ namespace octree
         Shader vs_octree_lines;
         Shader fs_octree_lines;
         std::unique_ptr<Uniform<glm::mat4>> U_view;
+        std::unique_ptr<Uniform<glm::mat4>> U_projection;
 
         ShaderProgram sp_octree_mesh;
         Shader vs_octree_mesh;
