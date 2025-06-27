@@ -97,7 +97,6 @@ void GPUOctreeNode::render(std::unique_ptr<Uniform<int>> &U_mesh_texture)
     glDrawElements(GL_TRIANGLES, m_index_size, GL_UNSIGNED_INT, 0);
 }
 
-// GPUOctreeNode::GPUOctreeNode() : m_indices(GL_ELEMENT_ARRAY_BUFFER, GL_STATIC_DRAW) {}
 
 void GPUOctreeNode::update_model_matrix()
 {

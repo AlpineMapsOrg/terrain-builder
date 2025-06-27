@@ -155,11 +155,6 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
     LOG_INFO("Setting up Octree repository");
     m_octree_repo = std::make_shared<OctreeNodeRepository>();
 
-    // auto id2 = octree::Id::try_make(octree::Id::Level(13), octree::Id::Coords(6480, 4798, 6854)).value();
-
-    // m_octree_repo->register_index_folder("D:/Uni/AlpineMapsOrg/Alpenite/data/octree-tiles/innenstadt2");
-    // m_octree_repo->register_file("D:/Uni/AlpineMapsOrg/Alpenite/data/octree-tiles/innenstadt2/13/6480/4798/6854.terrain", id2);
-
     for (auto &index : octree_indices)
     {
         m_octree_repo->register_index_folder(index);
@@ -194,29 +189,9 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 
         m_octree_render_manager->update(m_camera);
 
-        // octree::OctreeRenderIntent visible_rendering_intent = octree_render_manager.generate_visible_octree_nodes(m_camera->get_position());
-        // octree::OctreeRenderIntent rendering_intent = octree_render_manager.generate_octree_render_intent(octree::Id::root(), m_camera->get_position(), false, m_refining_factor);
-
-        // m_last_draw_amount = visible_rendering_intent.instance_count;
-
-        // cube_instance_active_buffer.set_data(visible_rendering_intent.instances_active);
-        // cube_instance_model_buffer.set_data(visible_rendering_intent.instances_model_mats);
-
-        // if (rendering_intent.min_scene_distance.has_value() && m_camera->get_near() != (float)rendering_intent.min_scene_distance.value() * 0.5f)
-        // {
-        //     m_camera->set_near(rendering_intent.min_scene_distance.value() * 0.5f);
-        // }
-        // if (rendering_intent.max_scene_distance.has_value() && m_camera->get_far() != (float)rendering_intent.max_scene_distance.value() * 1.5f)
-        // {
-        //     m_camera->set_far(rendering_intent.max_scene_distance.value() * 1.5f);
-        // }
-
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         m_octree_render_manager->render();
-
-        // sp_octree_mesh.use();
-        // octree_render_manager.render_gpu_nodes(U_model_mesh, m_camera->get_position());
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();

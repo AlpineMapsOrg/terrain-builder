@@ -72,11 +72,6 @@ namespace octree
 
         int get_last_node_draw_amount();
 
-        // void populate_gpu_nodes(glm::dvec3 cam_pos);
-        // OctreeRenderIntent generate_visible_octree_nodes(glm::dvec3 cam_pos);
-        // void render_gpu_nodes(Uniform<glm::mat4> U_model_mesh, glm::dvec3 cam_pos);
-        // OctreeRenderIntent generate_octree_render_intent(const Id root, glm::dvec3 cam_pos, bool draw_neighbours_only, float refining_ratio);
-
         std::unique_ptr<Uniform<glm::mat4>> U_projection;
 
     private:
@@ -85,7 +80,6 @@ namespace octree
         cmrc::embedded_filesystem RES;
 
         Space m_space;
-        // std::shared_ptr<Storage> m_storage;
         std::shared_ptr<OctreeNodeRepository> m_repository;
 
         const size_t m_max_rendered_nodes = 15;

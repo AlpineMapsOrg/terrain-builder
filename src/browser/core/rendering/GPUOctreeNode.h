@@ -9,7 +9,6 @@
 class GPUOctreeNode
 {
 public:
-    // static std::optional<GPUOctreeNode> load(const octree::Id &id, std::shared_ptr<octree::Storage> storage, const octree::Space &space = octree::Space::earth());
     GPUOctreeNode(const SimpleMesh &mesh, const octree::Id &id, const octree::Space &space);
 
     void recenter(glm::dvec3 new_center);
