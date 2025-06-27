@@ -243,7 +243,7 @@ namespace octree
         for (std::shared_ptr<GPUOctreeNode> &n : m_octree_mesh_node_drawlist)
         {
             U_mesh_model->set(n->model_matrix());
-            n->render(U_mesh_texture);
+            n->render(U_mesh_texture, U_mesh_has_texture);
         }
 
         sp_octree_lines.use();
@@ -348,5 +348,6 @@ namespace octree
         U_mesh_model = std::make_unique<Uniform<glm::mat4>>(sp_octree_mesh.get_uniform<glm::mat4>("model"));
         U_mesh_render_mode = std::make_unique<Uniform<float>>(sp_octree_mesh.get_uniform<float>("render_mode"));
         U_mesh_texture = std::make_unique<Uniform<int>>(sp_octree_mesh.get_uniform<int>("uTexture"));
+        U_mesh_has_texture = std::make_unique<Uniform<bool>>(sp_octree_mesh.get_uniform<bool>("has_texture"));
     }
 }

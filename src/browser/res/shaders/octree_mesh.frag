@@ -2,6 +2,7 @@
 
 uniform float render_mode;
 uniform sampler2D uTexture;
+uniform bool has_texture;
 
 in VS_OUT {
     vec4 world_pos;
@@ -27,6 +28,10 @@ void main() {
     vec3 dpdy = dFdy(fs_in.view_space_pos.xyz);
     vec3 N = normalize(cross(dpdx, dpdy));
 
+    vec3 dpdx_world = dFdx(fs_in.world_pos.xyz);
+    vec3 dpdy_world = dFdy(fs_in.world_pos.xyz);
+    vec3 N_world = normalize(cross(dpdx_world, dpdy_world));
+
     if (render_mode == 0) { 
         // WIREFRAME
         c = vec4(1.0f, 0.0f, 0.0f, 1.0f);
@@ -37,7 +42,9 @@ void main() {
         vec3 L = normalize(fs_in.view_space_light_dir.xyz);
         vec3 H = normalize(L + normalize(-fs_in.view_space_pos.xyz));
 
-        c = phong(L, H, N, texture(uTexture, fs_in.uvs), vec4(0.4f), 0.1f, 2.0f);
+        vec4 diff_color = mix(vec4(0.4f), texture(uTexture, fs_in.uvs), has_texture);
+
+        c = phong(L, H, N, diff_color, vec4(0.4f), 0.1f, 2.0f);
     } else if (render_mode == 2) {
         // CLAY
 
@@ -49,7 +56,7 @@ void main() {
         c = phong(L, H, N, vec4(0.4f), vec4(0.4f), 0.1f, 2.0f);
     } else if (render_mode == 3) {
         // FLAT NORMALS
-        c = vec4(N, 1.0f);
+        c = vec4(N_world, 1.0f);
     }
 
     FragColor = c;

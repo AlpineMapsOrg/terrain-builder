@@ -54,8 +54,11 @@ GPUOctreeNode::GPUOctreeNode(const SimpleMesh &mesh, const octree::Id &id, const
         cv::flip(texture, texture, 0);
 
         // Texture
-        glGenTextures(1, &m_tex_handle);
-        glBindTexture(GL_TEXTURE_2D, m_tex_handle);
+        unsigned int tmp_tex_handle;
+        glGenTextures(1, &tmp_tex_handle);
+        glBindTexture(GL_TEXTURE_2D, tmp_tex_handle);
+
+        m_tex_handle = tmp_tex_handle;
 
         // Ensure proper alignment (OpenCV width*channels might not match GL's default 4-byte pack)
         glPixelStorei(GL_UNPACK_ALIGNMENT, (texture.step & 3) ? 1 : 4);
@@ -87,16 +90,25 @@ glm::mat4 GPUOctreeNode::model_matrix()
     return m_model_matrix_cache.value();
 }
 
-void GPUOctreeNode::render(std::unique_ptr<Uniform<int>> &U_mesh_texture)
+void GPUOctreeNode::render(std::unique_ptr<Uniform<int>> &U_mesh_texture, std::unique_ptr<Uniform<bool>> &U_mesh_has_texture)
 {
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_tex_handle);
-    U_mesh_texture->set(0);
+    if (m_tex_handle.has_value())
+    {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_tex_handle.value());
+        U_mesh_texture->set(0);
+        U_mesh_has_texture->set(true);
+    }
+    else
+    {
+        U_mesh_has_texture->set(false);
+    }
 
     glBindVertexArray(m_vao_handle);
     glDrawElements(GL_TRIANGLES, m_index_size, GL_UNSIGNED_INT, 0);
-}
 
+    glActiveTexture(GL_TEXTURE);
+}
 
 void GPUOctreeNode::update_model_matrix()
 {

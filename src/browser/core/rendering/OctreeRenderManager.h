@@ -111,6 +111,7 @@ namespace octree
         std::unique_ptr<Uniform<glm::mat4>> U_mesh_model;
         std::unique_ptr<Uniform<float>> U_mesh_render_mode;
         std::unique_ptr<Uniform<int>> U_mesh_texture;
+        std::unique_ptr<Uniform<bool>> U_mesh_has_texture;
 
         void init_node_cube_rendering();
         void init_node_mesh_rendering();

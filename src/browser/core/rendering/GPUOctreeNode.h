@@ -13,7 +13,7 @@ public:
 
     void recenter(glm::dvec3 new_center);
     glm::mat4 model_matrix();
-    void render(std::unique_ptr<Uniform<int>> &U_mesh_texture);
+    void render(std::unique_ptr<Uniform<int>> &U_mesh_texture, std::unique_ptr<Uniform<bool>> &U_mesh_has_texture);
 
 private:
     unsigned int m_vao_handle;
@@ -28,7 +28,7 @@ private:
     std::unique_ptr<Buffer> m_vertices;
     std::unique_ptr<Buffer> m_uvs;
 
-    unsigned int m_tex_handle;
+    std::optional<unsigned int> m_tex_handle;
 
     GPUOctreeNode();
 
