@@ -221,16 +221,17 @@ namespace octree
 
         m_octree_mesh_node_drawlist = m_repository->load_nodes(m_octree_node_drawlist, m_space);
 
+        if (!m_octree_mesh_node_drawlist.empty())
+        {
+            for (std::shared_ptr<GPUOctreeNode> &n : m_octree_mesh_node_drawlist)
+            {
+                n->recenter(cam_pos);
+            }
+        }
+
         // Update Camera Matrices & Recenter GPUNodes
         if (camera->is_view_matrix_outdated())
         {
-            if (!m_octree_mesh_node_drawlist.empty())
-            {
-                for (std::shared_ptr<GPUOctreeNode> &n : m_octree_mesh_node_drawlist)
-                {
-                    n->recenter(cam_pos);
-                }
-            }
             sp_octree_lines.use();
             U_view->set(camera->view_matrix());
             sp_octree_mesh.use();
