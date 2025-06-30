@@ -42,7 +42,16 @@ void main() {
         vec3 L = normalize(fs_in.view_space_light_dir.xyz);
         vec3 H = normalize(L + normalize(-fs_in.view_space_pos.xyz));
 
-        vec4 diff_color = mix(vec4(0.4f), texture(uTexture, fs_in.uvs), has_texture);
+        uvec2 checkerboard = uvec2(lessThan(mod(fs_in.uvs * 10.0f, 2.0f), vec2(1.0f)));
+        bool checkerboard_reduced = (checkerboard.x ^ checkerboard.y) == 1u;
+
+        vec4 error_texture = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+        if (checkerboard_reduced) {
+            error_texture = vec4(1.0f, 0.0f, 1.0f, 1.0f);
+        }
+
+        vec4 diff_color = mix(error_texture, texture(uTexture, fs_in.uvs), has_texture);
 
         c = phong(L, H, N, diff_color, vec4(0.4f), 0.1f, 2.0f);
     } else if (render_mode == 2) {
