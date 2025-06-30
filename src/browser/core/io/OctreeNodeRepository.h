@@ -16,6 +16,9 @@ public:
     std::vector<std::filesystem::path> get_registered_paths();
     std::vector<octree::Id> get_registered_file_ids();
 
+    uint get_max_cache_entries();
+    void set_max_cache_entries(uint new_max_cache_entries);
+
     bool has_node(const octree::Id &id);
     std::optional<std::filesystem::path> get_node_file_path(const octree::Id &id);
     std::optional<octree::NodeStatus> get_node_status(const octree::Id &id);
@@ -27,7 +30,7 @@ private:
     std::unordered_map<octree::Id, std::filesystem::path> m_registered_files;
 
     std::unordered_map<octree::Id, std::pair<std::shared_ptr<GPUOctreeNode>, std::chrono::time_point<std::chrono::system_clock>>> m_node_cache;
-    static const int m_max_cache_entries = 50;
+    uint m_max_cache_entries = 50;
 
     std::optional<std::shared_ptr<GPUOctreeNode>> load_from_cache(const octree::Id &id);
     void store_in_cache(const octree::Id &id, std::shared_ptr<GPUOctreeNode> node);

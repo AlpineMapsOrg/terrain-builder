@@ -116,6 +116,16 @@ namespace octree
         return closest_id;
     }
 
+    size_t OctreeRenderManager::get_max_rendered_nodes()
+    {
+        return m_max_rendered_nodes;
+    }
+
+    void OctreeRenderManager::set_max_rendered_nodes(size_t new_max_rendered_nodes)
+    {
+        m_max_rendered_nodes = new_max_rendered_nodes;
+    }
+
     void OctreeRenderManager::update(const std::shared_ptr<Camera> &camera)
     {
         auto cam_pos = camera->get_position();

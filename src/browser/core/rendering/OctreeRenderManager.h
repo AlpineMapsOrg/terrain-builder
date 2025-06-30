@@ -68,6 +68,9 @@ namespace octree
         void set_selected_node(octree::Id id);
         std::optional<octree::Id> ray_cast_rendered_nodes(const std::shared_ptr<Camera> &camera);
 
+        size_t get_max_rendered_nodes();
+        void set_max_rendered_nodes(size_t new_max_rendered_nodes);
+
         void update(const std::shared_ptr<Camera> &camera);
         void render();
 
@@ -81,7 +84,7 @@ namespace octree
         Space m_space;
         std::shared_ptr<OctreeNodeRepository> m_repository;
 
-        const size_t m_max_rendered_nodes = 15;
+        size_t m_max_rendered_nodes = 20;
         const size_t m_max_node_candidates = 200;
 
         std::optional<octree::Id> m_selected_node;

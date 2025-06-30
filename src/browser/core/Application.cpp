@@ -819,6 +819,8 @@ void Application::draw_octree_settings_section()
 
 void Application::draw_rendering_settings_section()
 {
+    ImGui::PushItemWidth(-140);
+
     ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
     if (!ImGui::CollapsingHeader("Render Settings"))
     {
@@ -884,6 +886,31 @@ void Application::draw_rendering_settings_section()
             m_octree_render_manager->set_render_mode(octree::RenderMode::UVs);
             break;
         }
+    }
+
+    uint max_cached_nodes = m_octree_repo->get_max_cache_entries();
+    uint max_rendered_nodes = m_octree_render_manager->get_max_rendered_nodes();
+
+    if (ImGui::InputScalar("Max Cached Nodes", ImGuiDataType_U32, &max_cached_nodes))
+    {
+        if (max_cached_nodes < max_rendered_nodes)
+        {
+            // The cache has to always be larger than or equal to the number of rendered nodes
+            max_rendered_nodes = max_cached_nodes;
+            m_octree_render_manager->set_max_rendered_nodes(max_rendered_nodes);
+        }
+        m_octree_repo->set_max_cache_entries(max_cached_nodes);
+    }
+
+    if (ImGui::InputScalar("Max Rendered Nodes", ImGuiDataType_U32, &max_rendered_nodes))
+    {
+        if (max_cached_nodes < max_rendered_nodes)
+        {
+            // The cache has to always be larger than or equal to the number of rendered nodes
+            max_cached_nodes = max_rendered_nodes;
+            m_octree_repo->set_max_cache_entries(max_cached_nodes);
+        }
+        m_octree_render_manager->set_max_rendered_nodes(max_rendered_nodes);
     }
 }
 

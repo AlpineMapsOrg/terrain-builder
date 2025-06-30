@@ -104,6 +104,18 @@ std::vector<octree::Id> OctreeNodeRepository::get_registered_file_ids()
     return registered_file_ids;
 }
 
+uint OctreeNodeRepository::get_max_cache_entries()
+{
+    return m_max_cache_entries;
+}
+
+void OctreeNodeRepository::set_max_cache_entries(uint new_max_cache_entries)
+{
+    m_max_cache_entries = new_max_cache_entries;
+
+    m_node_cache.clear();
+}
+
 bool OctreeNodeRepository::has_node(const octree::Id &id)
 {
     if (m_registered_files.contains(id))
