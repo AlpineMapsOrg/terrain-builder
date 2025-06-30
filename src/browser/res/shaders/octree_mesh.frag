@@ -15,8 +15,8 @@ out vec4 FragColor;
 
 vec4 phong(vec3 L, vec3 H, vec3 N, vec4 diff_color, vec4 spec_color, float ambient, float shininess) {
 
-    float diff = max(dot(N, L), 0.0f);
-    float spec = pow(max(dot(H, N), 0.0f), shininess);
+    float diff = clamp(dot(N, L), 0.0f, 1.0f);
+    float spec = pow(clamp(dot(H, N), 0.0f, 1.0f), shininess);
 
     return diff * diff_color + spec * spec_color + ambient;
 }

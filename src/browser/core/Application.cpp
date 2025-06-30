@@ -142,7 +142,7 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
     };
     m_camera = std::make_shared<Camera>(camera_config);
 
-    m_window->register_framebuffer_resize_event([this /*, &U_projection*/](glm::ivec2 new_size)
+    m_window->register_framebuffer_resize_event([this](glm::ivec2 new_size)
                                                 {
                                                     if (new_size.y != 0)
                                                     {
@@ -151,11 +151,7 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 
                                                     glViewport(0, 0, new_size.x, new_size.y);
 
-                                                    m_octree_render_manager->update(m_camera);
-
-                                                    // m_octree_render_manager->U_projection->set(m_camera->projection_matrix());
-                                                    // m_octree_render_manager->U_mesh_projection->set(m_camera->projection_matrix());
-                                                });
+                                                    m_octree_render_manager->update(m_camera); });
 
     LOG_INFO("Setting up Octree repository");
     m_octree_repo = std::make_shared<OctreeNodeRepository>();
@@ -351,11 +347,11 @@ void Application::init_glad()
 
 void Application::init_gl()
 {
-#ifdef _DEBUG
+    // #ifdef _DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     // set debug callback
     glDebugMessageCallback(gl_debug_callback, nullptr);
-#endif // _DEBUG
+    // #endif // _DEBUG
 
     glViewport(0, 0, m_width, m_height);
 }
@@ -924,6 +920,11 @@ void Application::gl_debug_callback(GLenum source, GLenum type,
     std::string sourceString;
     std::string typeString;
     std::string severityString;
+
+    if (severity == GL_DEBUG_SEVERITY_NOTIFICATION)
+    {
+        return;
+    }
 
     switch (source)
     {

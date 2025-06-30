@@ -107,7 +107,11 @@ void GPUOctreeNode::render(std::unique_ptr<Uniform<int>> &U_mesh_texture, std::u
     glBindVertexArray(m_vao_handle);
     glDrawElements(GL_TRIANGLES, m_index_size, GL_UNSIGNED_INT, 0);
 
-    glActiveTexture(GL_TEXTURE);
+    if (m_tex_handle.has_value())
+    {
+        // Unbind texture
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 }
 
 void GPUOctreeNode::update_model_matrix()
