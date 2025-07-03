@@ -51,7 +51,6 @@ GPUOctreeNode::GPUOctreeNode(const SimpleMesh &mesh, const octree::Id &id, const
     if (mesh.has_texture())
     {
         auto texture = mesh.texture.value();
-        cv::flip(texture, texture, 0);
 
         // Texture
         unsigned int tmp_tex_handle;

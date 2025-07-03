@@ -49,7 +49,7 @@ namespace octree
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             U_mesh_render_mode->set(1);
         }
-        else if (m_render_mode == RenderMode::Clay)
+        else if (m_render_mode == RenderMode::Textured_Unshaded)
         {
             glDisable(GL_CULL_FACE);
             // glCullFace(GL_BACK);
@@ -57,7 +57,7 @@ namespace octree
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             U_mesh_render_mode->set(2);
         }
-        else if (m_render_mode == RenderMode::FlatNormals)
+        else if (m_render_mode == RenderMode::Clay)
         {
             glDisable(GL_CULL_FACE);
             // glCullFace(GL_BACK);
@@ -65,13 +65,21 @@ namespace octree
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             U_mesh_render_mode->set(3);
         }
-        else if (m_render_mode == RenderMode::UVs)
+        else if (m_render_mode == RenderMode::FlatNormals)
         {
             glDisable(GL_CULL_FACE);
             // glCullFace(GL_BACK);
 
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             U_mesh_render_mode->set(4);
+        }
+        else if (m_render_mode == RenderMode::UVs)
+        {
+            glDisable(GL_CULL_FACE);
+            // glCullFace(GL_BACK);
+
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            U_mesh_render_mode->set(5);
         }
     }
 

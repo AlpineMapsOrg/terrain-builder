@@ -53,6 +53,7 @@ namespace octree
     {
         Wireframe,
         Textured,
+        Textured_Unshaded,
         Clay,
         FlatNormals,
         UVs

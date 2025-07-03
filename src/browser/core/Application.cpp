@@ -823,7 +823,7 @@ void Application::draw_rendering_settings_section()
         return;
     }
 
-    std::array<std::string, 5> modes = {"Wireframe", "Textured", "Clay", "FlatNormals", "UVs"};
+    std::array<std::string, 6> modes = {"Wireframe", "Textured", "Textured Unshaded", "Clay", "FlatNormals", "UVs"};
     size_t selected_idx = 0;
 
     switch (m_octree_render_manager->get_render_mode())
@@ -834,14 +834,17 @@ void Application::draw_rendering_settings_section()
     case octree::RenderMode::Textured:
         selected_idx = 1;
         break;
-    case octree::RenderMode::Clay:
+    case octree::RenderMode::Textured_Unshaded:
         selected_idx = 2;
         break;
-    case octree::RenderMode::FlatNormals:
+    case octree::RenderMode::Clay:
         selected_idx = 3;
         break;
-    case octree::RenderMode::UVs:
+    case octree::RenderMode::FlatNormals:
         selected_idx = 4;
+        break;
+    case octree::RenderMode::UVs:
+        selected_idx = 5;
         break;
     }
 
@@ -873,12 +876,15 @@ void Application::draw_rendering_settings_section()
             m_octree_render_manager->set_render_mode(octree::RenderMode::Textured);
             break;
         case 2:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::Clay);
+            m_octree_render_manager->set_render_mode(octree::RenderMode::Textured_Unshaded);
             break;
         case 3:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::FlatNormals);
+            m_octree_render_manager->set_render_mode(octree::RenderMode::Clay);
             break;
         case 4:
+            m_octree_render_manager->set_render_mode(octree::RenderMode::FlatNormals);
+            break;
+        case 5:
             m_octree_render_manager->set_render_mode(octree::RenderMode::UVs);
             break;
         }

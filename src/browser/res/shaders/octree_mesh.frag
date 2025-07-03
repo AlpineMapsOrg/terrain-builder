@@ -35,7 +35,7 @@ void main() {
     if (render_mode == 0) { 
         // WIREFRAME
         c = vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    } else if (render_mode == 1) {
+    } else if (render_mode == 1 || render_mode == 2) {
         // TEXTURED
         float shininess = 2.0f;
 
@@ -53,8 +53,14 @@ void main() {
 
         vec4 diff_color = mix(error_texture, texture(uTexture, fs_in.uvs), has_texture);
 
-        c = phong(L, H, N, diff_color, vec4(0.4f), 0.1f, 2.0f);
-    } else if (render_mode == 2) {
+        if (render_mode == 1) {
+            // Shaded
+            c = phong(L, H, N, diff_color, vec4(0.1f), 0.05f, 2.0f);
+        } else {
+            // Unshaded
+            c = diff_color;
+        }
+    } else if (render_mode == 3) {
         // CLAY
 
         float shininess = 2.0f;
@@ -63,10 +69,10 @@ void main() {
         vec3 H = normalize(L + normalize(-fs_in.view_space_pos.xyz));
 
         c = phong(L, H, N, vec4(0.4f), vec4(0.4f), 0.1f, 2.0f);
-    } else if (render_mode == 3) {
+    } else if (render_mode == 4) {
         // FLAT NORMALS
         c = vec4(N_world, 1.0f);
-    } else if (render_mode == 4) {
+    } else if (render_mode == 5) {
         // FLAT NORMALS
         c = vec4(fs_in.uvs, 0.0f, 1.0f);
     }
