@@ -176,7 +176,7 @@ namespace octree
                             auto a_dist = glm::distance(m_space.get_node_bounds(a).centre(), cam_pos);
                             auto b_dist = glm::distance(m_space.get_node_bounds(b).centre(), cam_pos);
 
-                            return a_dist < b_dist; });
+                            return a_dist > b_dist; });
             }
             else if (status.has_value() && status.value() == NodeStatus::Inner)
             {
