@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cxxabi.h>
 #include <string_view>
+#include <typeinfo>
 
 // modified from https://stackoverflow.com/questions/1055452/c-get-name-of-type-in-template/59522794#59522794
 namespace {
@@ -44,4 +46,13 @@ template <typename T>
 template <typename T>
 [[nodiscard]] constexpr const char *type_name_c() {
     return type_name_storage<T>.data();
+}
+
+template <class T>
+std::string type_name(const T &obj) {
+    int status;
+    std::unique_ptr<char, void (*)(void *)> res{
+        abi::__cxa_demangle(typeid(obj).name(), nullptr, nullptr, &status),
+        std::free};
+    return (status == 0) ? res.get() : typeid(obj).name();
 }

@@ -7,11 +7,35 @@
 
 namespace cli {
 
-struct Args {
+struct BaseArgs {
     spdlog::level::level_enum log_level;
-    std::vector<std::filesystem::path> input_paths;
-    std::filesystem::path output_path;
 };
+
+/*
+enum class MergeAlgorithm {
+    Combine,
+    Masked,
+    Project
+};
+*/
+
+struct MergeArgs : public BaseArgs {
+    std::filesystem::path base_path;
+    std::filesystem::path new_path;
+    std::filesystem::path output_path;
+    std::optional<std::filesystem::path> mask_path;
+    // MergeAlgorithm algorihm;
+    bool overwrite_output;
+};
+
+struct CutArgs : public BaseArgs {
+    std::filesystem::path input_path;
+    std::filesystem::path output_path;
+    std::filesystem::path mask_path;
+    bool keep_inside;
+};
+
+using Args = std::variant<MergeArgs, CutArgs>;
 
 Args parse(int argc, const char *const *argv);
 

@@ -2,20 +2,32 @@
 
 #include <optional>
 #include <span>
+#include <unordered_set>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 #include <radix/geometry.h>
 
-// TODO: put in mesh namespace
+#include "mesh/SimpleMesh.h"
 
-radix::geometry::Aabb3d calculate_bounds(const SimpleMesh &mesh);
-radix::geometry::Aabb3d calculate_bounds(std::span<const SimpleMesh> meshes);
+// TODO: put in mesh namespace
+// TODO: make all methods work with SimpleMesh_<n_dims, T>
+
+template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> calculate_bounds(const SimpleMesh_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const SimpleMesh_<n_dims, T>> meshes);
+template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const std::reference_wrapper<const SimpleMesh_<n_dims, T>>> meshes);
 
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size = 1000);
 std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh);
+std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh);
+std::optional<double> calculate_max_edge_length_squared(const SimpleMesh &mesh);
+std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh);
 
-std::vector<size_t> find_isolated_vertices(const SimpleMesh &mesh);
+template <glm::length_t n_dims, typename T>
+std::vector<size_t> find_isolated_vertices(const SimpleMesh_<n_dims, T> &mesh);
 size_t remove_isolated_vertices(SimpleMesh & mesh);
 size_t remove_triangles_of_negligible_size(SimpleMesh & mesh, const double threshold_percentage_of_average = 0.001);
 
@@ -43,10 +55,24 @@ std::vector<glm::uvec2> find_non_manifold_edges(const SimpleMesh &mesh);
 std::vector<size_t> find_single_non_manifold_triangle_indices(const SimpleMesh &mesh);
 void remove_single_non_manifold_triangles(SimpleMesh& mesh);
 
-void sort_and_normalize_triangles(SimpleMesh& mesh);
+template <glm::length_t n_dims, typename T>
+void sort_and_normalize_triangles(SimpleMesh_<n_dims, T> &mesh);
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
 
-void validate_mesh(const SimpleMesh &mesh);
-
+void reindex_mesh(SimpleMesh &mesh);
 SimpleMesh reindex_mesh(const SimpleMesh &mesh);
-SimpleMesh clip_mesh_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds);
+
+void flip_triangle_orientation(glm::uvec3 &triangle);
+void flip_triangle_orientations(std::vector<glm::uvec3> &triangles);
+template <glm::length_t n_dims, typename T>
+void flip_orientation(SimpleMesh_<n_dims, T> &mesh);
+
+template <glm::length_t n_dims, typename T, typename Func>
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> get_edges(const SimpleMesh_<n_dims, T> &mesh);
+
+template <glm::length_t n_dims, typename T>
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary);
+
+#include "utils.inl"

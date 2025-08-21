@@ -4,6 +4,10 @@ project(terrain_builder_src LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+# TODO: This is needed to avoid NDEBUG being undefined on Release
+if (CMAKE_BUILD_TYPE MATCHES Release)
+    # set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
+endif()
 
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
@@ -16,7 +20,6 @@ alp_add_git_repository(tbb URL https://github.com/uxlfoundation/oneTBB COMMITISH
 
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
-
 
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
 alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
@@ -62,6 +65,11 @@ alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COM
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 
+alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
+
+alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
+
+alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
 
 # Don't build glfw docs, tests and examples
@@ -118,37 +126,65 @@ add_library(terrainlib
     terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
     terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
 
+    terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
     terrainlib/mesh/cgal.h
+    terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
     terrainlib/mesh/convert.h
     terrainlib/mesh/convert.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
+    terrainlib/mesh/merge.h terrainlib/mesh/merge.cpp
+    terrainlib/mesh/merging/VertexDeduplicate.h
+    terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
+    terrainlib/mesh/merging/VertexMapping.h
+    terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
     terrainlib/mesh/SimpleMesh.h
+    terrainlib/mesh/TriangleSoup.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
+    terrainlib/mesh/validate.h
 
+    terrainlib/octree/disk/layout/strategy/Default.h
     terrainlib/octree/disk/layout/strategy/Flat.h
     terrainlib/octree/disk/layout/strategy/LevelAndCoordinateDirectories.h
     terrainlib/octree/disk/layout/Strategy.h
     terrainlib/octree/disk/layout/StrategyRegister.h
     terrainlib/octree/disk/IndexFile.h
     terrainlib/octree/disk/Layout.h
+    terrainlib/octree/storage/cache/Dummy.h
+    terrainlib/octree/storage/cache/ICache.h
+    terrainlib/octree/storage/cache/LruCache.h
+    terrainlib/octree/storage/helpers.h terrainlib/octree/storage/helpers.cpp
+    terrainlib/octree/storage/IndexedStorage.h
+    terrainlib/octree/storage/open.h terrainlib/octree/storage/open.cpp
+    terrainlib/octree/storage/RawStorage.h terrainlib/octree/storage/RawStorage.cpp
+    terrainlib/octree/storage/Storage.h
     terrainlib/octree/Id.h
-    terrainlib/octree/Storage.h terrainlib/octree/Storage.cpp
+    terrainlib/octree/Storage.h
     terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
     terrainlib/octree/NodeStatus.h
     terrainlib/octree/Space.h terrainlib/octree/Space.cpp
     terrainlib/octree/traverse.h
     terrainlib/octree/utils.h
 
+    terrainlib/spatial_lookup/CellBased.h
+    terrainlib/spatial_lookup/CellBasedStorage.h
+    terrainlib/spatial_lookup/Grid.h
+    terrainlib/spatial_lookup/GridStorage.h
+    terrainlib/spatial_lookup/Hashmap.h
+    terrainlib/spatial_lookup/HashmapStorage.h
+    terrainlib/spatial_lookup/NDLoopHelper.h
+    terrainlib/spatial_lookup/SpatialLookup.h
+
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/hash_utils.h
     terrainlib/init.h terrainlib/init.cpp
     terrainlib/log.h terrainlib/log.cpp
     terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
+    terrainlib/SphereProjector.h
     terrainlib/srs.h
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -180,6 +216,7 @@ target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
 
 add_library(terrainmergerlib
     terrainmerger/merge.h
+    terrainmerger/mask.h
 )
 target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
 target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
@@ -213,13 +250,10 @@ target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 add_library(terrainsimplifylib
     terrainsimplify/cli.h
     terrainsimplify/cli.cpp
-    terrainsimplify/merge.h
-    terrainsimplify/merge.cpp
     terrainsimplify/simplify.h
     terrainsimplify/simplify.cpp
     terrainsimplify/uv_map.h
     terrainsimplify/uv_map.cpp
-    terrainsimplify/validate.h
 )
 target_include_directories(terrainsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainsimplify)
 target_precompile_headers(terrainsimplifylib PRIVATE terrainsimplify/pch.h)
@@ -235,11 +269,22 @@ add_executable(tile-downloader
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 
 add_executable(terrainconvert
-    terrainconvert/cli.h
-    terrainconvert/cli.cpp
+    terrainconvert/cli.h terrainconvert/cli.cpp
     terrainconvert/main.cpp
 )
 target_link_libraries(terrainconvert PUBLIC terrainlib CLI11::CLI11)
+
+add_executable(index_browser
+    index_browser/cli.h index_browser/cli.cpp
+    index_browser/main.cpp
+)
+target_link_libraries(index_browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
+
+add_executable(mesh_merger
+    mesh_merger/cli.h mesh_merger/cli.cpp
+    mesh_merger/main.cpp
+)
+target_link_libraries(mesh_merger PUBLIC terrainlib CLI11::CLI11)
 
 add_executable(browser
     # browser/main2.cpp

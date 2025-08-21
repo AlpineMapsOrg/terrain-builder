@@ -14,13 +14,17 @@ enum class TraversalOrder {
     BreadthFirst
 };
 
+constexpr bool always_refine(const Id &) {
+    return true;
+}
+
 template <
     typename VisitFn,
     typename RefineFn = std::function<bool(const Id &)>>
 void traverse(
-    const IndexMap& index,
-    VisitFn&& visit_fn,
-    RefineFn&& refine_fn = [](const Id &) { return true; },
+    const IndexMap &index,
+    VisitFn &&visit_fn,
+    RefineFn &&refine_fn = always_refine,
     const Id &root = Id::root(),
     TraversalOrder order = TraversalOrder::DepthFirst) {
     if (!index.is_present(root)) {
@@ -35,10 +39,10 @@ void traverse(
                 return;
             }
             const auto current_status = current_status_opt.value();
-            
-            visit_fn(current, current_status);
 
-            if (current.has_children() && refine_fn(current)) {
+            std::forward<VisitFn>(visit_fn)(current, current_status);
+
+            if (current.has_children() && std::forward<RefineFn>(refine_fn)(current)) {
                 const auto children = current.children().value();
                 for (const auto& child : children) {
                     dfs(child);
@@ -56,13 +60,13 @@ void traverse(
 
             auto current_status_opt = index.get(current);
             if (!current_status_opt) {
-                return;
+                continue;
             }
             const auto current_status = current_status_opt.value();
 
-            visit_fn(current, current_status);
+            std::forward<VisitFn>(visit_fn)(current, current_status);
 
-            if (current.has_children() && refine_fn(current)) {
+            if (current.has_children() && std::forward<RefineFn>(refine_fn)(current)) {
                 const auto children = current.children().value();
                 for (const auto& child : children) {
                     queue.push(child);
@@ -73,6 +77,5 @@ void traverse(
         UNREACHABLE();
     }
 }
-
 
 } // namespace octree

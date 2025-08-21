@@ -19,38 +19,31 @@
 
 #pragma once
 
-#include <optional>
-
+#include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
+#include <catch2/catch_tostring.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <radix/geometry.h>
+#include <fmt/format.h>
 
-#include "octree/NodeStatus.h"
+#include "type_utils.h"
 
 namespace Catch {
-template <glm::length_t s, typename T>
-struct StringMaker<glm::vec<s, T>> {
-    static std::string convert(const glm::vec<s, T>& value) {
+template <glm::length_t N, typename T>
+struct StringMaker<glm::vec<N, T>> {
+    static std::string convert(const glm::vec<N, T> &value) {
         return glm::to_string(value);
     }
 };
 
-template<>
-struct StringMaker<octree::NodeStatus> {
-    static std::string convert(const octree::NodeStatus& status) {
-        return status.to_string();
+template <glm::length_t N, typename T>
+struct StringMaker<radix::geometry::Aabb<N, T>> {
+    static std::string convert(const radix::geometry::Aabb<N, T> &value) {
+        return fmt::format("Aabb{}{}(({}, {}, {}) - ({}, {}, {}))", 
+            N,
+            type_name<T>()[0], 
+            value.min.x, value.min.y, value.min.z,
+            value.max.x, value.max.y, value.max.z);
     }
 };
-
-template <typename T>
-struct StringMaker<std::optional<T>> {
-    static std::string convert(const std::optional<T>& opt) {
-        if (opt.has_value()) {
-            return StringMaker<std::remove_cv_t<std::remove_reference_t<T>>>::convert(opt.value());
-        } else {
-            return "nullopt";
-        }
-    }
-};
-
 }

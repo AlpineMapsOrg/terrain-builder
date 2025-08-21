@@ -6,8 +6,9 @@ option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" OFF
 option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
 set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian dataset (terrain model, i.e., OeRect_01m_gt_31287.img)")
 
+add_compile_definitions(CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
 if (NOT TARGET Catch2)
-    alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.5.1)
+    alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.8.1)
 endif()
 
 
@@ -30,17 +31,23 @@ endif()
 
 add_executable(unittests_terrainlib
     catch2_helpers.h
+    opencv_helpers.h
+    
     terrainlib/convert.cpp
     terrainlib/dataset.cpp
     terrainlib/grid.cpp
-    terrainlib/progress_indicator_test.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
+    terrainlib/mesh_clip.cpp
+    terrainlib/mesh_io.cpp
+    terrainlib/mesh_utils.cpp
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
-    terrainlib/mesh_io.cpp
+    terrainlib/progress_indicator_test.cpp
+    terrainlib/spatial_lookup.cpp
+    terrainlib/mesh_merge_mapping.cpp
+    terrainlib/mesh_merge.cpp
 )
-    
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 
 
@@ -54,16 +61,13 @@ add_executable(unittests_tilebuilder
     tilebuilder/parallel_tiler.cpp
     tilebuilder/tile_heights_generator.cpp
     tilebuilder/top_down_tiler.cpp
-)
-    
+)  
 target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
 
 
 add_executable(unittests_terrainsimplify
     catch2_helpers.h
-    terrainsimplify/merge.cpp
 )
-
 target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
 
 
@@ -72,6 +76,12 @@ add_executable(unittests_terrainbuilder
     terrainbuilder/mesh.cpp
     terrainbuilder/texture.cpp
 )
-
 target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainsimplifylib terrainlib Catch2WithMain)
 target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
+
+
+add_executable(unittests_terrainmerger
+    catch2_helpers.h
+    terrainmerger/sphere_projector.cpp
+)
+target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib terrainlib Catch2WithMain)
