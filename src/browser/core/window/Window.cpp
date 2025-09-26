@@ -31,6 +31,14 @@ Window::Window(WindowConfig config) : m_width(config.width), m_height(config.hei
         update_window_count(-1);
         LOG_ERROR_AND_EXIT("Failed to create GLFW window");
     }
+
+    // Create offscreen contexts
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    for (unsigned int i = 0; i < config.num_offscreen_contexts; i++)
+    {
+        m_offscreen_handles.push_back(glfwCreateWindow(1, 1, "", NULL, NULL));
+    }
+
     glfwMakeContextCurrent(m_handle);
 
     // Set the required callback functions
@@ -53,7 +61,12 @@ Window::Window(WindowConfig config) : m_width(config.width), m_height(config.hei
 
 Window::~Window()
 {
-    LOG_INFO("Destroying Window \"{}\"", m_title);
+    LOG_INFO("Destroying Window \"{}\" and {} offscreen context(s)", m_title, m_offscreen_handles.size());
+    for (int i = 0; i < m_offscreen_handles.size(); i++)
+    {
+        glfwDestroyWindow(m_offscreen_handles[i]);
+    }
+
     glfwDestroyWindow(m_handle);
 
     update_window_count(-1);
@@ -144,6 +157,16 @@ glm::dvec2 Window::get_window_size()
 GLFWwindow *Window::handle()
 {
     return m_handle;
+}
+
+std::optional<GLFWwindow *> Window::get_offscreen_handle(const unsigned int index)
+{
+    if (index >= m_offscreen_handles.size() || index < 0)
+    {
+        return std::nullopt;
+    }
+
+    return m_offscreen_handles[index];
 }
 
 bool Window::is_key_pressed(int key)

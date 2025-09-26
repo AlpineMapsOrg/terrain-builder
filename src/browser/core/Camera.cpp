@@ -87,6 +87,7 @@ float Camera::get_far()
 
 glm::dvec3 Camera::get_position()
 {
+	std::lock_guard<std::mutex> lock(m_mutex);
 	return m_position;
 }
 

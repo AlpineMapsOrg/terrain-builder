@@ -5,7 +5,9 @@
 
 #include "Camera.h"
 #include "io/OctreeNodeRepository.h"
-#include "rendering/OctreeRenderManager.h"
+#include "process/OctreeNodeCandidateSelector.h"
+#include "rendering/OctreeMeshedRenderManager.h"
+#include "rendering/OctreeWireframeRenderManager.h"
 #include "shader/Uniform.h"
 #include "window/Window.h"
 #include <memory>
@@ -31,7 +33,10 @@ private:
 
     octree::Space m_space;
     std::shared_ptr<OctreeNodeRepository> m_octree_repo;
-    std::shared_ptr<octree::OctreeRenderManager> m_octree_render_manager;
+
+    std::shared_ptr<OctreeWireframeRenderManager> m_octree_wireframe_render_manager;
+    std::shared_ptr<OctreeMeshedRenderManager> m_octree_meshed_render_manager;
+    std::unique_ptr<OctreeNodeCandidateSelector> m_octree_node_candidate_selector;
 
     float m_movement_speed, m_roll_speed, m_mouse_sensitivity;
 

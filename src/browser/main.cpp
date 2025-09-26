@@ -22,6 +22,8 @@ int main(int argc, char **argv)
 
     CLI11_PARSE(cli_app, argc, argv);
 
+    spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%-7l%$] %v");
+
     Application app("Alpenite Browser", 1280, 720);
 
     app.run(octree_indices);

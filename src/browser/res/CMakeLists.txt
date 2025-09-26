@@ -12,8 +12,10 @@ cmrc_add_resource_library(
     NAMESPACE res
 
 # ADD NEW RESOURCES AFTER HERE
-    shaders/octree_lines.vert
-    shaders/octree_lines.frag
+    shaders/selection.vert
+
+    shaders/wireframe.vert
+    shaders/wireframe.frag
 
     shaders/octree_mesh.vert
     shaders/octree_mesh.frag

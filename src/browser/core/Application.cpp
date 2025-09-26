@@ -1,5 +1,6 @@
 #include "Application.h"
 #include <sstream>
+#include <thread>
 
 #include <log.h>
 
@@ -34,7 +35,8 @@ Application::Application(std::string title, int width, int height)
         .resizeable = true,
         .msaa_samples = 4,
         .opengl_version = {4, 6},
-        .opengl_core_profile = true};
+        .opengl_core_profile = true,
+        .num_offscreen_contexts = 0};
 
     m_window = std::make_unique<Window>(c);
 
@@ -76,6 +78,30 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 {
     double last_frame_time = glfwGetTime();
 
+    LOG_INFO("Setting up Octree repository");
+    m_octree_repo = std::make_shared<OctreeNodeRepository>();
+
+    for (auto &index : octree_indices)
+    {
+        m_octree_repo->register_index_folder(index);
+    }
+    LOG_INFO("Setting up OctreeMeshedRenderManager");
+    m_octree_meshed_render_manager = std::make_shared<OctreeMeshedRenderManager>(m_space);
+
+    LOG_INFO("Setting up OctreeWireframeRenderManager");
+    m_octree_wireframe_render_manager = std::make_shared<OctreeWireframeRenderManager>(m_space);
+
+    LOG_INFO("Setting up OctreeNodeCandidateSelector");
+    m_octree_node_candidate_selector = std::make_unique<OctreeNodeCandidateSelector>(m_octree_wireframe_render_manager->p_wireframe_ids,
+                                                                                     m_octree_meshed_render_manager->p_mesh_queue,
+                                                                                     m_octree_meshed_render_manager->p_removal_queue,
+                                                                                     m_octree_repo,
+                                                                                     m_space);
+    m_octree_node_candidate_selector->start();
+    m_octree_node_candidate_selector->p_max_nodes->write(5'000);
+    m_octree_node_candidate_selector->p_max_meshed_nodes->write(50);
+    m_octree_node_candidate_selector->p_storage_changed->write(true);
+
     LOG_INFO("Setting up key event callbacks");
     m_window->register_key_event(GLFW_PRESS, GLFW_KEY_TAB, [this]()
                                  { toggle_nav_mode(); });
@@ -85,10 +111,6 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
                                      if (m_nav_mode)
                                      {
                                          toggle_nav_mode();
-                                     }
-                                     else
-                                     {
-                                         m_window->set_should_close(true);
                                      } });
 
     m_window->register_scroll_event([this](glm::dvec2 scroll)
@@ -120,13 +142,13 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
                                                   return;
                                               }
 
-                                              std::optional<octree::Id> picked_node = m_octree_render_manager->ray_cast_rendered_nodes(m_camera);
+                                              std::optional<octree::Id> picked_node = m_octree_wireframe_render_manager->ray_cast_rendered_nodes(m_camera);
 
                                               if (picked_node.has_value())
                                               {
                                                   m_tmp_nsel_octree_id = picked_node;
                                                   m_tmp_nsel_octree_id_dirty = true;
-                                                  m_octree_render_manager->set_selected_node(m_tmp_nsel_octree_id.value());
+                                                  m_octree_wireframe_render_manager->set_selected_node(m_tmp_nsel_octree_id.value());
                                               } });
 
     LOG_INFO("Setting up camera");
@@ -141,6 +163,7 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
         .up = glm::vec3(0.0f, 1.0f, 0.0f),
     };
     m_camera = std::make_shared<Camera>(camera_config);
+    m_octree_node_candidate_selector->p_cam_pos->write(m_camera->get_position());
 
     m_window->register_framebuffer_resize_event([this](glm::ivec2 new_size)
                                                 {
@@ -151,21 +174,14 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 
                                                     glViewport(0, 0, new_size.x, new_size.y);
 
-                                                    m_octree_render_manager->update(m_camera); });
-
-    LOG_INFO("Setting up Octree repository");
-    m_octree_repo = std::make_shared<OctreeNodeRepository>();
-
-    for (auto &index : octree_indices)
-    {
-        m_octree_repo->register_index_folder(index);
-    }
-
-    LOG_INFO("Setting up OctreeRenderManager");
-
-    m_octree_render_manager = std::make_shared<octree::OctreeRenderManager>(m_octree_repo, m_space);
+                                                    // m_octree_render_manager->update(m_camera);
+                                                    // m_octree_manager->camera_pos_changed(m_camera->get_position());
+                                                });
 
     glViewport(0, 0, m_window->get_window_size().x, m_window->get_window_size().y);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -179,7 +195,6 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 
     while (!m_window->should_close())
     {
-
         m_window->poll_events();
 
         const double current_frame_time = glfwGetTime();
@@ -188,11 +203,15 @@ void Application::run(const std::vector<std::filesystem::path> &octree_indices)
 
         update_camera(frame_delta_time);
 
-        m_octree_render_manager->update(m_camera);
+        m_octree_node_candidate_selector->wake();
+
+        m_octree_wireframe_render_manager->update(m_camera);
+        m_octree_meshed_render_manager->update(m_camera);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        m_octree_render_manager->render();
+        m_octree_meshed_render_manager->render(m_camera);
+        m_octree_wireframe_render_manager->render(m_camera);
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -288,6 +307,8 @@ void Application::update_camera(float frame_delta_time)
     if (movement_magnitude != 0.0f)
     {
         m_camera->move_local(local_movement_delta * (float)frame_delta_time * movement_speed);
+        // m_octree_manager->camera_pos_changed(m_camera->get_position());
+        m_octree_node_candidate_selector->p_cam_pos->write(m_camera->get_position());
     }
 }
 
@@ -403,29 +424,18 @@ void Application::draw_camera_settings_section()
 
         ImGui::PushItemWidth(-80);
 
-        ImGui::InputDouble("X", &cam_pos.x);
-
-        if (ImGui::IsItemEdited())
-        {
-            cam_pos_edited = true;
-        }
+        cam_pos_edited |= ImGui::InputDouble("X", &cam_pos.x);
 
         // ImGui::SetNextItemWidth(double_input_width);
-        ImGui::InputDouble("Y", &cam_pos.y);
-
-        if (ImGui::IsItemEdited())
-        {
-            cam_pos_edited = true;
-        }
+        cam_pos_edited |= ImGui::InputDouble("Y", &cam_pos.y);
 
         // ImGui::SetNextItemWidth(double_input_width);
-        ImGui::InputDouble("Z", &cam_pos.z);
+        cam_pos_edited |= ImGui::InputDouble("Z", &cam_pos.z);
 
-        if (ImGui::IsItemEdited() || cam_pos_edited)
+        if (cam_pos_edited)
         {
-            cam_pos_edited = true;
-
             m_camera->set_position(cam_pos);
+            m_octree_node_candidate_selector->p_cam_pos->write(cam_pos);
         }
 
         ImGui::TreePop();
@@ -438,23 +448,12 @@ void Application::draw_camera_settings_section()
         bool euler_edited = false;
         glm::vec3 euler = glm::degrees(m_camera->get_rotation_euler());
 
-        ImGui::SliderFloat("Pitch (X)", &euler.x, -180.0f, 180.0f);
-        if (ImGui::IsItemEdited())
-        {
-            euler_edited = true;
-        }
+        euler_edited |= ImGui::SliderFloat("Pitch (X)", &euler.x, -180.0f, 180.0f);
+        euler_edited |= ImGui::SliderFloat("Yaw (Y)", &euler.y, -90.0f, 90.0f);
+        euler_edited |= ImGui::SliderFloat("Roll (Z)", &euler.z, -180.0f, 180.0f);
 
-        ImGui::SliderFloat("Yaw (Y)", &euler.y, -90.0f, 90.0f);
-        if (ImGui::IsItemEdited())
+        if (euler_edited)
         {
-            euler_edited = true;
-        }
-
-        ImGui::SliderFloat("Roll (Z)", &euler.z, -180.0f, 180.0f);
-        if (ImGui::IsItemEdited() || euler_edited)
-        {
-            euler_edited = true;
-
             m_camera->set_rotation_euler(glm::radians(euler));
         }
 
@@ -462,29 +461,13 @@ void Application::draw_camera_settings_section()
         bool quat_edited = false;
         glm::quat quat = m_camera->get_rotation_quat();
 
-        ImGui::SliderFloat("X", &quat.x, -1.0, 1.0);
-        if (ImGui::IsItemEdited())
-        {
-            quat_edited = true;
-        }
+        quat_edited |= ImGui::SliderFloat("X", &quat.x, -1.0, 1.0);
+        quat_edited |= ImGui::SliderFloat("Y", &quat.y, -1.0, 1.0);
+        quat_edited |= ImGui::SliderFloat("Z", &quat.z, -1.0, 1.0);
+        quat_edited |= ImGui::SliderFloat("W", &quat.w, -1.0, 1.0);
 
-        ImGui::SliderFloat("Y", &quat.y, -1.0, 1.0);
-        if (ImGui::IsItemEdited())
+        if (quat_edited)
         {
-            quat_edited = true;
-        }
-
-        ImGui::SliderFloat("Z", &quat.z, -1.0, 1.0);
-        if (ImGui::IsItemEdited())
-        {
-            quat_edited = true;
-        }
-
-        ImGui::SliderFloat("W", &quat.w, -1.0, 1.0);
-        if (ImGui::IsItemEdited() || quat_edited)
-        {
-            quat_edited = true;
-
             m_camera->set_rotation_quat(glm::normalize(quat));
         }
 
@@ -495,9 +478,7 @@ void Application::draw_camera_settings_section()
     if (ImGui::TreeNode("Projection"))
     {
         float fov = m_camera->get_fov();
-
-        ImGui::SliderFloat("FOV", &fov, 0.1f, 120.0f);
-        if (ImGui::IsItemEdited())
+        if (ImGui::SliderFloat("FOV", &fov, 0.1f, 120.0f))
         {
             m_camera->set_fov(fov);
         }
@@ -505,15 +486,13 @@ void Application::draw_camera_settings_section()
         ImGui::Separator();
 
         float near = m_camera->get_near();
-        ImGui::InputFloat("Near Plane", &near);
-        if (ImGui::IsItemEdited())
+        if (ImGui::InputFloat("Near Plane", &near))
         {
             m_camera->set_near(near);
         }
 
         float far = m_camera->get_far();
-        ImGui::InputFloat("Far Plane", &far);
-        if (ImGui::IsItemEdited())
+        if (ImGui::InputFloat("Far Plane", &far))
         {
             m_camera->set_far(far);
         }
@@ -556,7 +535,7 @@ void Application::draw_octree_settings_section()
 
             if (m_tmp_nsel_octree_id.has_value())
             {
-                m_octree_render_manager->set_selected_node(m_tmp_nsel_octree_id.value());
+                m_octree_wireframe_render_manager->set_selected_node(m_tmp_nsel_octree_id.value());
             }
         }
 
@@ -647,6 +626,7 @@ void Application::draw_octree_settings_section()
             glm::dvec3 node_to_cam_dir = m_camera->get_local_forward_dir() * -glm::length(node_bounds.size());
 
             m_camera->set_position(node_centre + node_to_cam_dir);
+            m_octree_node_candidate_selector->p_cam_pos->write(node_centre + node_to_cam_dir);
         }
 
         ImGui::EndDisabled();
@@ -708,10 +688,14 @@ void Application::draw_octree_settings_section()
                 m_tmp_octree_coords = m_tmp_octree_id.value().coords();
                 m_tmp_octree_index = m_tmp_octree_id.value().index_on_level();
                 m_tmp_octree_zoom = m_tmp_octree_id.value().level();
+
+                m_octree_node_candidate_selector->p_storage_changed->write(true);
             }
             else if (!m_tmp_path_is_file && m_octree_repo->register_index_folder(m_tmp_new_path))
             {
                 m_tmp_new_path.clear();
+
+                m_octree_node_candidate_selector->p_storage_changed->write(true);
             }
         }
 
@@ -745,6 +729,8 @@ void Application::draw_octree_settings_section()
                 if (ImGui::Button("Del"))
                 {
                     m_octree_repo->unregister(path);
+
+                    m_octree_node_candidate_selector->p_storage_changed->write(true);
                 }
 
                 ImGui::TableSetColumnIndex(1);
@@ -762,13 +748,6 @@ void Application::draw_octree_settings_section()
     }
 
     // ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
-    if (ImGui::TreeNode("Stats"))
-    {
-
-        ImGui::Text("Nodes rendered: %d", m_octree_render_manager->get_last_node_draw_amount());
-
-        ImGui::TreePop();
-    }
 
     // ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
     // if (ImGui::TreeNode("Filtering"))
@@ -826,24 +805,24 @@ void Application::draw_rendering_settings_section()
     std::array<std::string, 6> modes = {"Wireframe", "Textured", "Textured Unshaded", "Clay", "FlatNormals", "UVs"};
     size_t selected_idx = 0;
 
-    switch (m_octree_render_manager->get_render_mode())
+    switch (m_octree_meshed_render_manager->get_render_mode())
     {
-    case octree::RenderMode::Wireframe:
+    case OctreeMeshedRenderManager::RenderMode::Wireframe:
         selected_idx = 0;
         break;
-    case octree::RenderMode::Textured:
+    case OctreeMeshedRenderManager::RenderMode::Textured:
         selected_idx = 1;
         break;
-    case octree::RenderMode::Textured_Unshaded:
+    case OctreeMeshedRenderManager::RenderMode::Textured_Unshaded:
         selected_idx = 2;
         break;
-    case octree::RenderMode::Clay:
+    case OctreeMeshedRenderManager::RenderMode::Clay:
         selected_idx = 3;
         break;
-    case octree::RenderMode::FlatNormals:
+    case OctreeMeshedRenderManager::RenderMode::FlatNormals:
         selected_idx = 4;
         break;
-    case octree::RenderMode::UVs:
+    case OctreeMeshedRenderManager::RenderMode::UVs:
         selected_idx = 5;
         break;
     }
@@ -870,50 +849,87 @@ void Application::draw_rendering_settings_section()
         switch (selected_idx)
         {
         case 0:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::Wireframe);
+            m_octree_meshed_render_manager->set_render_mode(OctreeMeshedRenderManager::RenderMode::Wireframe);
             break;
         case 1:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::Textured);
+            m_octree_meshed_render_manager->set_render_mode(OctreeMeshedRenderManager::RenderMode::Textured);
             break;
         case 2:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::Textured_Unshaded);
+            m_octree_meshed_render_manager->set_render_mode(OctreeMeshedRenderManager::RenderMode::Textured_Unshaded);
             break;
         case 3:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::Clay);
+            m_octree_meshed_render_manager->set_render_mode(OctreeMeshedRenderManager::RenderMode::Clay);
             break;
         case 4:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::FlatNormals);
+            m_octree_meshed_render_manager->set_render_mode(OctreeMeshedRenderManager::RenderMode::FlatNormals);
             break;
         case 5:
-            m_octree_render_manager->set_render_mode(octree::RenderMode::UVs);
+            m_octree_meshed_render_manager->set_render_mode(OctreeMeshedRenderManager::RenderMode::UVs);
             break;
         }
     }
 
-    uint max_cached_nodes = m_octree_repo->get_max_cache_entries();
-    uint max_rendered_nodes = m_octree_render_manager->get_max_rendered_nodes();
+    int max_nodes = 5'000;     // default
+    int max_meshed_nodes = 50; // default
 
-    if (ImGui::InputScalar("Max Cached Nodes", ImGuiDataType_U32, &max_cached_nodes))
+    if (m_octree_node_candidate_selector->p_max_nodes->has_value())
     {
-        if (max_cached_nodes < max_rendered_nodes)
-        {
-            // The cache has to always be larger than or equal to the number of rendered nodes
-            max_rendered_nodes = max_cached_nodes;
-            m_octree_render_manager->set_max_rendered_nodes(max_rendered_nodes);
-        }
-        m_octree_repo->set_max_cache_entries(max_cached_nodes);
+        max_nodes = m_octree_node_candidate_selector->p_max_nodes->value();
+    }
+    else
+    {
+        m_octree_node_candidate_selector->p_max_nodes->write(max_nodes);
     }
 
-    if (ImGui::InputScalar("Max Rendered Nodes", ImGuiDataType_U32, &max_rendered_nodes))
+    if (m_octree_node_candidate_selector->p_max_meshed_nodes->has_value())
     {
-        if (max_cached_nodes < max_rendered_nodes)
-        {
-            // The cache has to always be larger than or equal to the number of rendered nodes
-            max_cached_nodes = max_rendered_nodes;
-            m_octree_repo->set_max_cache_entries(max_cached_nodes);
-        }
-        m_octree_render_manager->set_max_rendered_nodes(max_rendered_nodes);
+        max_meshed_nodes = m_octree_node_candidate_selector->p_max_meshed_nodes->value();
     }
+    else
+    {
+        m_octree_node_candidate_selector->p_max_meshed_nodes->write(max_meshed_nodes);
+    }
+
+    if (ImGui::SliderInt("Max Candidate Nodes", &max_nodes, max_meshed_nodes, 5'000))
+    {
+        m_octree_node_candidate_selector->p_max_nodes->write(max_nodes);
+
+        max_meshed_nodes = glm::min(max_meshed_nodes, max_nodes);
+        m_octree_node_candidate_selector->p_max_meshed_nodes->write(max_meshed_nodes);
+    }
+
+    if (ImGui::SliderInt("Max Meshed Nodes", &max_meshed_nodes, 0, glm::min(max_nodes, 100)))
+    {
+        m_octree_node_candidate_selector->p_max_meshed_nodes->write(max_meshed_nodes);
+    }
+
+    float selection_opacity = m_octree_wireframe_render_manager->get_selection_opacity();
+
+    if (ImGui::SliderFloat("Selection Opacity", &selection_opacity, 0, 1))
+    {
+        m_octree_wireframe_render_manager->set_selection_opacity(selection_opacity);
+    }
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    if (ImGui::TreeNode("Stats"))
+    {
+
+        ImGui::Text("Candidate node count: %d", m_octree_wireframe_render_manager->get_wireframe_node_count());
+        ImGui::Text("Meshed node count: %d", m_octree_meshed_render_manager->get_meshed_node_count());
+
+        ImGui::TreePop();
+    }
+
+    // if (ImGui::InputScalar("Max Rendered Nodes", ImGuiDataType_U32, &max_rendered_nodes))
+    // {
+    //     if (max_cached_nodes < max_rendered_nodes)
+    //     {
+    //         // The cache has to always be larger than or equal to the number of rendered nodes
+    //         max_cached_nodes = max_rendered_nodes;
+    //         m_octree_repo->set_max_cache_entries(max_cached_nodes);
+    //     }
+    //     m_octree_render_manager->set_max_rendered_nodes(max_rendered_nodes);
+    // }
 }
 
 void Application::gl_debug_callback(GLenum source, GLenum type,

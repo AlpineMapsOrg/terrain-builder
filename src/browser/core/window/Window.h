@@ -4,6 +4,8 @@
 #include <functional>
 #include <glm/glm.hpp>
 #include <map>
+#include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -17,6 +19,8 @@ struct WindowConfig
 
 	std::tuple<int, int> opengl_version = {4, 6};
 	bool opengl_core_profile = true;
+
+	unsigned int num_offscreen_contexts = 0;
 };
 
 class Window
@@ -45,6 +49,8 @@ public:
 
 	GLFWwindow *handle();
 
+	std::optional<GLFWwindow *> get_offscreen_handle(const unsigned int index);
+
 	bool is_key_pressed(int key);
 	bool is_mouse_button_pressed(int key);
 
@@ -64,6 +70,7 @@ private:
 	int m_msaa_samples;
 
 	GLFWwindow *m_handle;
+	std::vector<GLFWwindow *> m_offscreen_handles;
 
 	std::map<int, bool> m_mouse_button_states;
 	std::map<int, bool> m_key_states;

@@ -7,6 +7,8 @@ OctreeNodeRepository::OctreeNodeRepository()
 
 bool OctreeNodeRepository::register_index_folder(std::filesystem::path path_to_index_folder)
 {
+    std::lock_guard lock(m_mutex);
+
     path_to_index_folder = path_to_index_folder.lexically_normal();
 
     if (m_registered_storages.contains(path_to_index_folder))
@@ -22,13 +24,13 @@ bool OctreeNodeRepository::register_index_folder(std::filesystem::path path_to_i
 
     m_registered_storages[path_to_index_folder] = std::make_unique<octree::Storage>(octree::open_folder(path_to_index_folder));
 
-    // Clear the node cache when adding input locations
-    m_node_cache.clear();
     return true;
 }
 
 bool OctreeNodeRepository::register_file(std::filesystem::path path, octree::Id id)
 {
+    std::lock_guard lock(m_mutex);
+
     path = path.lexically_normal();
 
     if (m_registered_files.contains(id))
@@ -50,13 +52,13 @@ bool OctreeNodeRepository::register_file(std::filesystem::path path, octree::Id 
 
     m_registered_files[id] = path;
 
-    // Clear the node cache when adding input locations
-    m_node_cache.clear();
     return true;
 }
 
 void OctreeNodeRepository::unregister(const std::filesystem::path &path)
 {
+    std::lock_guard lock(m_mutex);
+
     auto clean_path = path.lexically_normal();
 
     for (auto &entry : m_registered_files)
@@ -69,13 +71,12 @@ void OctreeNodeRepository::unregister(const std::filesystem::path &path)
     }
 
     m_registered_storages.erase(clean_path);
-
-    // Clear the node cache when removing input locations
-    m_node_cache.clear();
 }
 
 std::vector<std::filesystem::path> OctreeNodeRepository::get_registered_paths()
 {
+    std::shared_lock lock(m_mutex);
+
     std::vector<std::filesystem::path> registered_paths;
     registered_paths.reserve(m_registered_storages.size() + m_registered_files.size());
 
@@ -94,6 +95,8 @@ std::vector<std::filesystem::path> OctreeNodeRepository::get_registered_paths()
 
 std::vector<octree::Id> OctreeNodeRepository::get_registered_file_ids()
 {
+    std::shared_lock lock(m_mutex);
+
     std::vector<octree::Id> registered_file_ids;
     registered_file_ids.reserve(m_registered_files.size());
 
@@ -104,20 +107,10 @@ std::vector<octree::Id> OctreeNodeRepository::get_registered_file_ids()
     return registered_file_ids;
 }
 
-uint OctreeNodeRepository::get_max_cache_entries()
-{
-    return m_max_cache_entries;
-}
-
-void OctreeNodeRepository::set_max_cache_entries(uint new_max_cache_entries)
-{
-    m_max_cache_entries = new_max_cache_entries;
-
-    m_node_cache.clear();
-}
-
 bool OctreeNodeRepository::has_node(const octree::Id &id)
 {
+    std::shared_lock lock(m_mutex);
+
     if (m_registered_files.contains(id))
     {
         return true;
@@ -136,6 +129,8 @@ bool OctreeNodeRepository::has_node(const octree::Id &id)
 
 std::optional<octree::NodeStatus> OctreeNodeRepository::get_node_status(const octree::Id &id)
 {
+    std::shared_lock lock(m_mutex);
+
     if (m_registered_files.contains(id))
     {
         // LOAD FROM FILE
@@ -146,9 +141,9 @@ std::optional<octree::NodeStatus> OctreeNodeRepository::get_node_status(const oc
 
     for (auto &entry : m_registered_storages)
     {
-        if (entry.second->has_node(id))
+        if (entry.second->has_node(id) && entry.second->index().has_value())
         {
-            return entry.second->index()->get(id);
+            return entry.second->index().value().get().get(id);
         }
     }
 
@@ -159,6 +154,8 @@ std::optional<octree::NodeStatus> OctreeNodeRepository::get_node_status(const oc
 
 std::optional<std::filesystem::path> OctreeNodeRepository::get_node_file_path(const octree::Id &id)
 {
+    std::shared_lock lock(m_mutex);
+
     if (m_registered_files.contains(id))
     {
         return m_registered_files[id].lexically_normal();
@@ -177,12 +174,19 @@ std::optional<std::filesystem::path> OctreeNodeRepository::get_node_file_path(co
 
 std::optional<std::shared_ptr<GPUOctreeNode>> OctreeNodeRepository::load_node(const octree::Id &id, const octree::Space &space)
 {
-    std::optional<std::shared_ptr<GPUOctreeNode>> node = load_from_cache(id);
+    auto mesh = load_mesh(id);
 
-    if (node.has_value())
+    if (mesh.has_value())
     {
-        return node.value();
+        return std::make_shared<GPUOctreeNode>(mesh.value(), id, space);
     }
+
+    return std::nullopt;
+}
+
+std::optional<std::shared_ptr<SimpleMesh>> OctreeNodeRepository::load_mesh(const octree::Id &id)
+{
+    std::shared_lock lock(m_mutex);
 
     if (m_registered_files.contains(id))
     {
@@ -197,11 +201,7 @@ std::optional<std::shared_ptr<GPUOctreeNode>> OctreeNodeRepository::load_node(co
             return std::nullopt;
         }
 
-        std::shared_ptr<GPUOctreeNode> gpu_node = std::make_shared<GPUOctreeNode>(node.value(), id, space);
-
-        store_in_cache(id, gpu_node);
-
-        return gpu_node;
+        return std::make_shared<SimpleMesh>(node.value());
     }
 
     for (auto &entry : m_registered_storages)
@@ -221,11 +221,7 @@ std::optional<std::shared_ptr<GPUOctreeNode>> OctreeNodeRepository::load_node(co
                 return std::nullopt;
             }
 
-            std::shared_ptr<GPUOctreeNode> gpu_node = std::make_shared<GPUOctreeNode>(node.value(), id, space);
-
-            store_in_cache(id, gpu_node);
-
-            return gpu_node;
+            return std::make_shared<SimpleMesh>(node.value());
         }
     }
 
@@ -250,47 +246,9 @@ std::vector<std::shared_ptr<GPUOctreeNode>> OctreeNodeRepository::load_nodes(con
     return nodes;
 }
 
-std::optional<std::shared_ptr<GPUOctreeNode>> OctreeNodeRepository::load_from_cache(const octree::Id &id)
-{
-    if (m_node_cache.contains(id))
-    {
-        m_node_cache[id].second = std::chrono::system_clock::now();
-
-        return m_node_cache[id].first;
-    }
-    return std::nullopt;
-}
-
-void OctreeNodeRepository::store_in_cache(const octree::Id &id, std::shared_ptr<GPUOctreeNode> node)
-{
-    if (m_node_cache.contains(id))
-    {
-        return;
-    }
-
-    // If the cache is full, free up some space
-    if (m_node_cache.size() > m_max_cache_entries)
-    {
-        std::vector<std::pair<octree::Id, std::chrono::time_point<std::chrono::system_clock>>> cache_entries;
-
-        for (auto &entry : m_node_cache)
-        {
-            cache_entries.push_back(std::make_pair(entry.first, entry.second.second));
-        }
-
-        std::sort(cache_entries.begin(), cache_entries.end(), [](std::pair<octree::Id, std::chrono::time_point<std::chrono::system_clock>> &a, std::pair<octree::Id, std::chrono::time_point<std::chrono::system_clock>> &b)
-                  { return a.second < b.second; });
-
-        while (m_node_cache.size() >= m_max_cache_entries)
-        {
-            m_node_cache.erase(cache_entries.front().first);
-        }
-    }
-    m_node_cache[id] = std::make_pair(node, std::chrono::system_clock::now());
-}
-
 bool OctreeNodeRepository::has_path_thorough_check(const std::filesystem::path &path_to_check)
 {
+
     for (auto &registered_file : m_registered_files)
     {
         if (std::filesystem::equivalent(registered_file.second, path_to_check))

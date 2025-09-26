@@ -1,6 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <mutex>
 #include <optional>
 
 struct CameraConfig
@@ -54,6 +55,8 @@ public:
 	glm::mat4 view_matrix();
 
 private:
+	std::mutex m_mutex;
+
 	float m_fov_deg;
 	float m_aspect_ratio;
 	float m_near_plane;

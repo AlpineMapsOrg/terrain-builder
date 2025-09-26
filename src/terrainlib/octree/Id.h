@@ -23,29 +23,9 @@ namespace octree
         using Coords = glm::tvec3<Coord>;
         using Index = uint64_t;
 
-    [[nodiscard]] static constexpr Level max_level() {
-        return (sizeof(Index) * 8) / 3;
-    }
-    [[nodiscard]] static constexpr Coord max_coord_on_level(const Level level) {
-        return (1ull << level) - 1;
-    }
-    [[nodiscard]] static constexpr Index max_index_on_level(const Level level) {
-        return (1ull << (3 * level)) - 1;
-    }
-
-    constexpr Id() = default; // zpp::bits requires a default constructor
-    constexpr Id(const Level level, const Coords coords)
-        : Id(level, interleave3(coords)) {
-    }
-    constexpr Id(const Level level, const Index index)
-        : _level(level), _index(index) {
-        DEBUG_ASSERT(level <= Id::max_level());
-        DEBUG_ASSERT(index <= Id::max_index_on_level(this->_level));
-    }
-
-    [[nodiscard]] static std::optional<Id> try_make(const Level level, const Coords coords) {
-        if (level > Id::max_level()) {
-            return std::nullopt;
+        [[nodiscard]] static constexpr Level max_level()
+        {
+            return (sizeof(Index) * 8) / 3;
         }
         [[nodiscard]] static constexpr Coord max_coord_on_level(const Level level)
         {
@@ -64,8 +44,8 @@ namespace octree
         constexpr Id(const Level level, const Index index)
             : _level(level), _index(index)
         {
-            assert(level <= Id::max_level());
-            assert(index <= Id::max_index_on_level(this->_level));
+            DEBUG_ASSERT(level <= Id::max_level());
+            DEBUG_ASSERT(index <= Id::max_index_on_level(this->_level));
         }
 
         [[nodiscard]] static std::optional<Id> try_make(const Level level, const Coords coords)
@@ -192,57 +172,9 @@ namespace octree
                 this->_child(4), this->_child(5), this->_child(6), this->_child(7)};
         }
 
-    [[nodiscard]] constexpr bool has_children() const {
-        return this->level() < Id::max_level();
-    }
-
-    [[nodiscard]] constexpr bool is_root() const {
-        return this->level() == 0;
-    }
-
-    [[nodiscard]] static constexpr Id root() {
-        return Id(0, 0);
-    }
-
-    constexpr bool operator==(const Id &other) const {
-        return this->_level == other._level && this->_index == other._index;
-    }
-    constexpr bool operator!=(const Id &other) const {
-        return !(*this == other);
-    }
-    constexpr std::strong_ordering operator<=>(const Id &other) const {
-        if (this->_level < other._level) {
-            return std::strong_ordering::less;
-        }
-        if (this->_level > other._level) {
-            return std::strong_ordering::greater;
-        }
-        return this->_index <=> other._index;
-    }
-
-    std::string to_string() const;
-
-private:
-    Level _level;
-    Index _index;
-
-    [[nodiscard]] constexpr Id _child(const uint32_t child_index) const {
-        DEBUG_ASSERT(child_index <= 7);
-        return Id(this->level() + 1, (this->index_on_level() << 3) | child_index);
-    }
-
-    [[nodiscard]] static constexpr Index interleave3(const Coords &coords) {
-        DEBUG_ASSERT(glm::all(glm::lessThanEqual(coords, Coords(Id::max_coord_on_level(Id::max_level())))));
-
-        const Index x = coords.x;
-        const Index y = coords.y;
-        const Index z = coords.z;
-
-        Index result = 0;
-        for (Level i = 0; i < Id::max_level(); i++) {
-            result |= ((x >> i) & 1) << (3 * i);
-            result |= ((y >> i) & 1) << (3 * i + 1);
-            result |= ((z >> i) & 1) << (3 * i + 2);
+        [[nodiscard]] constexpr bool has_children() const
+        {
+            return this->level() < Id::max_level();
         }
 
         [[nodiscard]] constexpr bool is_root() const
@@ -255,22 +187,28 @@ private:
             return Id(0, 0);
         }
 
-        bool operator==(const Id &other) const
+        constexpr bool operator==(const Id &other) const
         {
             return this->_level == other._level && this->_index == other._index;
         }
-        bool operator!=(const Id &other) const
+        constexpr bool operator!=(const Id &other) const
         {
             return !(*this == other);
         }
-        bool operator<(const Id &other) const
+        constexpr std::strong_ordering operator<=>(const Id &other) const
         {
-            if (this->_level == other._level)
+            if (this->_level < other._level)
             {
-                return this->_index < other._index;
+                return std::strong_ordering::less;
             }
-            return this->_level < other._level;
+            if (this->_level > other._level)
+            {
+                return std::strong_ordering::greater;
+            }
+            return this->_index <=> other._index;
         }
+
+        std::string to_string() const;
 
     private:
         Level _level;
@@ -278,13 +216,13 @@ private:
 
         [[nodiscard]] constexpr Id _child(const uint32_t child_index) const
         {
-            assert(child_index <= 7);
+            DEBUG_ASSERT(child_index <= 7);
             return Id(this->level() + 1, (this->index_on_level() << 3) | child_index);
         }
 
         [[nodiscard]] static constexpr Index interleave3(const Coords &coords)
         {
-            assert(glm::all(glm::lessThanEqual(coords, Coords(Id::max_coord_on_level(Id::max_level())))));
+            DEBUG_ASSERT(glm::all(glm::lessThanEqual(coords, Coords(Id::max_coord_on_level(Id::max_level())))));
 
             const Index x = coords.x;
             const Index y = coords.y;
@@ -341,23 +279,29 @@ struct fmt::formatter<octree::Id>
 
 #include <fmt/ostream.h>
 #include <iostream>
-namespace octree {
-inline std::string octree::Id::to_string() const {
-    return fmt::format("{}", *this);
-}
-inline std::ostream &operator<<(std::ostream &os, const octree::Id &id) {
-    fmt::print(os, "{}", id);
-    return os;
-}
+namespace octree
+{
+    inline std::string octree::Id::to_string() const
+    {
+        return fmt::format("{}", *this);
+    }
+    inline std::ostream &operator<<(std::ostream &os, const octree::Id &id)
+    {
+        fmt::print(os, "{}", id);
+        return os;
+    }
 }
 
-namespace std {
-template <>
-struct hash<octree::Id> {
-    std::size_t operator()(const octree::Id &id) const noexcept {
-        return ::hash::combine(id.level(), id.index_on_level());
-    }
-};
+namespace std
+{
+    template <>
+    struct hash<octree::Id>
+    {
+        std::size_t operator()(const octree::Id &id) const noexcept
+        {
+            return ::hash::combine(id.level(), id.index_on_level());
+        }
+    };
 } // namespace std
 
 #include <zpp_bits.h>

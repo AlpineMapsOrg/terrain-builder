@@ -12,12 +12,7 @@ endif()
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-set(TBB_TEST OFF)
-# set(TBB_ENABLE_IPO OFF)
-set(TBB_STRICT OFF)
-set(TBB_FIND_PACKAGE OFF)
-alp_add_git_repository(tbb URL https://github.com/uxlfoundation/oneTBB COMMITISH v2021.11.0)
-
+find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
@@ -28,11 +23,11 @@ alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH
 add_library(Eigen3 INTERFACE)
 target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
 
-alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format'")
+alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format\;logic'")
 find_package(Boost CONFIG REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
-alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
+alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.2)
 
 alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DCGAL_HEADER_ONLY=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF)
 find_package(CGAL REQUIRED)
@@ -303,11 +298,20 @@ add_executable(browser
     browser/core/geometry/UnitCube.h
     browser/core/geometry/RadixExtensions.h
 
-    browser/core/rendering/OctreeRenderManager.cpp
+    browser/core/rendering/OctreeWireframeRenderManager.cpp
+    browser/core/rendering/OctreeMeshedRenderManager.cpp
     browser/core/rendering/GPUOctreeNode.cpp
     browser/core/rendering/ImGuiExtensions.cpp
 
     browser/core/io/OctreeNodeRepository.cpp
+
+    browser/core/threading/SafeQueue.h
+
+    browser/core/process/OctreeNodeCandidateSelector.cpp
+
+    browser/core/process/param/IParam.h
+    browser/core/process/param/ITrackable.h
+    browser/core/process/param/SyncTrackedParam.h
 )
 
 #target_compile_features(browser PRIVATE cxx_std_20)
