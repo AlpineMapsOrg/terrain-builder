@@ -61,7 +61,7 @@ void OctreeMeshedRenderManager::update(const std::shared_ptr<Camera> &camera)
         LOG_DEBUG("Adding {} elements took {}ms", add, std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
     }
 
-    glm::vec3 cam_pos = camera->get_position();
+    glm::dvec3 cam_pos = camera->get_position();
 
     for (auto &[id, node] : m_meshed_node_drawlist)
     {
