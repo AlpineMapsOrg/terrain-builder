@@ -201,7 +201,7 @@ std::optional<std::shared_ptr<SimpleMesh>> OctreeNodeRepository::load_mesh(const
             return std::nullopt;
         }
 
-        return std::make_shared<SimpleMesh>(node.value());
+        return std::make_shared<SimpleMesh>(std::move(node.value()));
     }
 
     for (auto &entry : m_registered_storages)
@@ -221,7 +221,7 @@ std::optional<std::shared_ptr<SimpleMesh>> OctreeNodeRepository::load_mesh(const
                 return std::nullopt;
             }
 
-            return std::make_shared<SimpleMesh>(node.value());
+            return std::make_shared<SimpleMesh>(std::move(node.value()));
         }
     }
 

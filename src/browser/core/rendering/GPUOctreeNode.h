@@ -11,6 +11,7 @@ class GPUOctreeNode
 public:
     // GPUOctreeNode(const SimpleMesh &mesh, const octree::Id &id, const octree::Space &space);
     GPUOctreeNode(const std::shared_ptr<SimpleMesh> &mesh, const octree::Id &id, const octree::Space &space);
+    ~GPUOctreeNode();
 
     void recenter(glm::dvec3 new_center);
     glm::mat4 model_matrix();

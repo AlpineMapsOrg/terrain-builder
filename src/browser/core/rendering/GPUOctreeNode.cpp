@@ -204,6 +204,16 @@ GPUOctreeNode::GPUOctreeNode(const std::shared_ptr<SimpleMesh> &mesh, const octr
     }
 }
 
+GPUOctreeNode::~GPUOctreeNode()
+{
+    glDeleteVertexArrays(1, &m_vao_handle);
+
+    if (m_tex_handle.has_value())
+    {
+        glDeleteTextures(1, &m_tex_handle.value());
+    }
+}
+
 void GPUOctreeNode::recenter(glm::dvec3 new_center)
 {
     m_model_matrix_cache.reset();
@@ -246,6 +256,8 @@ void GPUOctreeNode::render(std::unique_ptr<Uniform<int>> &U_mesh_texture, std::u
         // Unbind texture
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+
+    glBindVertexArray(0);
 }
 
 void GPUOctreeNode::update_model_matrix()

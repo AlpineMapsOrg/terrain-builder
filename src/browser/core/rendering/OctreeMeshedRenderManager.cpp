@@ -51,8 +51,8 @@ void OctreeMeshedRenderManager::update(const std::shared_ptr<Camera> &camera)
     {
         auto [id, mesh] = p_mesh_queue->pop();
 
-        m_meshed_node_drawlist.erase(id);
-        m_meshed_node_drawlist[id] = std::make_unique<GPUOctreeNode>(mesh, id, m_space);
+        // m_meshed_node_drawlist.erase(id);
+        m_meshed_node_drawlist.emplace(id, std::make_unique<GPUOctreeNode>(mesh, id, m_space));
         add++;
     }
     if (add > 0)
