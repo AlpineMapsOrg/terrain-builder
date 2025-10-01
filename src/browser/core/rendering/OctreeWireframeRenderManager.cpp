@@ -68,7 +68,7 @@ std::optional<octree::Id> OctreeWireframeRenderManager::ray_cast_rendered_nodes(
         glm::dvec2 itx = radix::geometry::ray_intersect(bounds, ray_start, ray_dir);
 
         // Check if valid intersection
-        if (itx.x <= itx.y && itx.x < closest_t)
+        if (itx.x >= 0 && itx.x <= itx.y && itx.x < closest_t)
         {
             closest_id = id;
             closest_t = itx.x;

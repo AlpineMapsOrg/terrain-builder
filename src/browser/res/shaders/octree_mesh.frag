@@ -60,6 +60,8 @@ void main() {
             // Unshaded
             c = diff_color;
         }
+        //TODO: Handle alpha better, now its just set manually to 1.0f
+        c = vec4(c.rgb, 1.0f);
     } else if (render_mode == 3) {
         // CLAY
 
@@ -69,6 +71,8 @@ void main() {
         vec3 H = normalize(L + normalize(-fs_in.view_space_pos.xyz));
 
         c = phong(L, H, N, vec4(0.4f), vec4(0.4f), 0.1f, 2.0f);
+        
+        //TODO: Handle alpha better, now its just set manually to 1.0f
         c = vec4(c.rgb, 1.0f);
     } else if (render_mode == 4) {
         // FLAT NORMALS
