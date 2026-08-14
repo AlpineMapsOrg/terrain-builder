@@ -16,8 +16,6 @@ baseline, not a finalized binary-format specification.
 
 - [Store refactoring plan](refactor-plan.md)
 - [Raster store TODO](todo.md)
-- [DRAFT RF builder plan archive](rf_builder.md)
-- [DRAFT RF merger plan archive](rf_merger.md)
 
 ## Scope
 
