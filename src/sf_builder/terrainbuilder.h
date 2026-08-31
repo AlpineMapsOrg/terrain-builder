@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <expected>
 
 #include <radix/geometry.h>
 
@@ -8,6 +9,8 @@
 #include "octree/Id.h"
 #include "mesh/SimpleMesh.h"
 #include "tile_provider.h"
+#include "mesh/storage.h"
+#include "Error.h"
 
 namespace terrainbuilder {
 
@@ -28,7 +31,7 @@ std::optional<SimpleMesh> build_patch(
     const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs);
 
-void build_all_patches(
+Expected<void> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,

@@ -2,13 +2,15 @@
 
 #include <cstdint>
 #include <optional>
+#include <expected>
 
 #include "ContinuationMode.h"
 #include "Range.h"
 #include "build_config.h"
 #include "texturing.h"
-#include "octree/storage/MeshStorage.h"
+#include "mesh/storage.h"
 #include "storage.h"
+#include "Error.h"
 
 namespace dag {
 
@@ -30,14 +32,14 @@ struct BuildOptions {
     ContinuationMode continuation_mode = ContinuationMode::Error;
 };
 
-void build_full(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
+Expected<void> build_full(
+    const mesh::storage::IndexedStorage &input_storage,
+    dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options);
 
-void build_levels(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
+Expected<void> build_levels(
+    const mesh::storage::IndexedStorage &input_storage,
+    dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,
     const AnyRange<uint32_t> &level_range);
 

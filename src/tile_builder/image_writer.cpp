@@ -20,27 +20,32 @@
 
 #include "image_writer.h"
 
+#include "io/conversion.h"
+
 #include <opencv2/opencv.hpp>
-#include <stdexcept>
 
-void image::saveImageAsPng(const radix::Raster<glm::u8vec3>& input_image, const std::string& path)
+Expected<void> image::save_image_as_png(const radix::Raster<glm::u8vec3>& input_image, const std::string& path)
 {
-    const int width = static_cast<int>(input_image.width());
-    const int height = static_cast<int>(input_image.height());
+    auto converted = io::conversion::to_mat(input_image);
+    if (!converted) {
+        return Error::propagate(std::move(converted), "convert raster for PNG output");
+    }
 
-    cv::Mat image(height, width, CV_8UC3);
-
-    for (int row = 0; row < height; ++row) {
-        for (int column = 0; column < width; ++column) {
-            const auto& pixel = input_image.pixel({ static_cast<unsigned>(column), static_cast<unsigned>(height - row - 1) });
-            image.at<cv::Vec3b>(row, column) = cv::Vec3b(pixel.z, pixel.y, pixel.x);
-        }
+    cv::Mat flipped;
+    cv::Mat image;
+    try {
+        cv::flip(*converted, flipped, 0);
+        cv::cvtColor(flipped, image, cv::COLOR_RGB2BGR);
+    } catch (const cv::Exception& error) {
+        return Error::fail(Error::Code::Internal, "prepare PNG image: " + error.msg);
     }
 
     try {
-        if (!cv::imwrite(path, image))
-            throw std::runtime_error("Failed to write PNG image to " + path);
+        if (!cv::imwrite(path, image)) {
+            return Error::fail(Error::Code::Io, "write PNG image to \"" + path + "\"");
+        }
     } catch (const cv::Exception& error) {
-        throw std::runtime_error("Failed to write PNG image to " + path + ": " + error.what());
+        return Error::fail(Error::Code::Io, "write PNG image to \"" + path + "\": " + error.msg);
     }
+    return {};
 }

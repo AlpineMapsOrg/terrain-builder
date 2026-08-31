@@ -1,49 +1,90 @@
 #pragma once
 
-#include <libassert/assert.hpp>
+#include <expected>
+#include <optional>
 
+#include <libassert/assert.hpp>
+#include <opencv2/imgcodecs.hpp>
+
+#include "Error.h"
 #include "NodeLoader.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"
-#include "octree/NodeStatus.h"
-#include "octree/storage/Storage.h"
-#include "octree/traverse.h"
+#include "mesh/storage.h"
+#include "store/traverse.h"
 
 // TODO: make thread safe
 class NodeWriter {
 public:
-    NodeWriter(octree::Storage &storage) : _storage(storage) {}
+    NodeWriter(mesh::storage::Storage &storage) : _storage(storage) {}
 
-    bool has_node(const octree::Id &id) {
+    Expected<bool> has_node(
+        const octree::Id &id) {
         return this->_storage.has(id);
     }
 
-    void write_node(const octree::Id &id, const SimpleMesh &mesh) {
+    Expected<void> write_node(
+        const octree::Id &id,
+        const SimpleMesh &mesh) {
         mesh::validate(mesh);
-        DEBUG_ASSERT_VAL(this->_storage.save(id, mesh));
-        auto p = this->_storage.path_for(id);
+        auto save_result = this->_storage.save(id, mesh);
+        if (!save_result) {
+            return save_result;
+        }
+        auto path_result = this->_storage.path_for(id);
+        if (!path_result) {
+            return Error::propagate(
+                std::move(path_result), "resolve texture output path for node " + id.to_string());
+        }
+        auto p = path_result.value();
         // change extension to .png
         p.replace_extension(".png");
-        cv::imwrite(p, mesh.texture.value_or(cv::Mat()));
+        if (mesh.texture.has_value()) {
+            try {
+                if (!cv::imwrite(p, mesh.texture.value())) {
+                    return Error::fail(Error::Code::Io, "write node texture to", p);
+                }
+            } catch (const cv::Exception& error) {
+                return Error::fail(
+                    Error::Code::Io, "write node texture to \"" + p.string() + "\": " + error.what());
+            }
+        }
+        return {};
     }
 
-    void copy_subtree_to_output(
+    Expected<void> copy_subtree_to_output(
         const octree::Id &id,
         const NodeLoader &loader) {
-        octree::traverse(
+        std::optional<Error> error = std::nullopt;
+        auto traversal = store::traverse(
             loader.storage().index(),
-            [&](const octree::Id &child_id, const octree::NodeStatus &status) {
-                if (status == octree::NodeStatus::Virtual) {
+            [&](const octree::Id &child_id, const store::NodeStatus &status) {
+                if (error.has_value()) {
                     return;
                 }
-                DEBUG_ASSERT(status == octree::NodeStatus::Leaf);
+                if (status == store::NodeStatus::Virtual) {
+                    return;
+                }
+                DEBUG_ASSERT(status == store::NodeStatus::Leaf);
 
-                DEBUG_ASSERT_VAL(this->_storage.copy_from(child_id, loader.storage()));
+                auto result = this->_storage.copy_from(child_id, loader.storage());
+                if (!result) {
+                    error = std::move(result).error();
+                }
             },
-            octree::always_refine,
+            [&](const octree::Id &) { return !error.has_value(); },
             id);
+        if (!traversal) {
+            return Error::propagate(
+                std::move(traversal), "traverse source subtree rooted at " + id.to_string() + " while copying");
+        }
+        if (error.has_value()) {
+            return Error::propagate(
+                std::move(error.value()), "copy subtree rooted at " + id.to_string() + " to output");
+        }
+        return {};
     }
 
 private:
-    octree::Storage &_storage;
+    mesh::storage::Storage &_storage;
 };
