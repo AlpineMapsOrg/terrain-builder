@@ -2,8 +2,8 @@
 
 This directory describes authoritative raster tile storage and the planned
 generation of delivery tile pyramids from it. Storage format version 1 is
-documented alongside the implementation status; builders and generators
-remain future work.
+documented alongside the implementation status. RF import is implemented;
+TB generation and the tile server remain future work.
 
 ## Documents
 
@@ -15,11 +15,12 @@ remain future work.
 
 ## Plans
 
+
 - [Tile-storage implementation plan](implementation-plan.md)
 - [Raster store TODO](todo.md)
 
 ## Scope
 
-The documents mostly hold format information. The `rf_builder` and
-`rf_merger` documents are explicitly non-authoritative idea parking lots, not
-tool specifications or implementation plans.
+The documents mostly hold format information. The `rf_merger` document is
+explicitly a non-authoritative idea parking lot, not a tool specification or
+implementation plan.
