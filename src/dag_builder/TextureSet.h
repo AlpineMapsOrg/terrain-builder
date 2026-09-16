@@ -6,6 +6,8 @@
 #include <optional>
 #include <vector>
 
+#include <libassert/assert.hpp>
+
 #include "ImageKey.h"
 
 class TextureSet {

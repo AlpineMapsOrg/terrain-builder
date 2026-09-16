@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include <libassert/assert.hpp>
+
 #include "atlas/reprojection.h"
 #include "cluster.h"
 #include "enumerate.h"

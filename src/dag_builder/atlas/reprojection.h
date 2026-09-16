@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
 #include "geometry/PlaneFrame.h"

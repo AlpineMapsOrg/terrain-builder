@@ -4,6 +4,7 @@
 
 #include <libassert/assert.hpp>
 
+#include "log.h"
 #include "octree/Id.h"
 #include "octree/IndexMap.h"
 #include "octree/disk/Layout.h"

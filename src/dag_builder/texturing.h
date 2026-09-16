@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "atlas/BakeSource.h"
 #include "atlas/bake_cluster_texture.h"

@@ -9,6 +9,7 @@
 
 #include <tl/expected.hpp>
 
+#include "log.h"
 #include "mesh/io.h"
 #include "octree/Id.h"
 #include "octree/IndexMap.h"

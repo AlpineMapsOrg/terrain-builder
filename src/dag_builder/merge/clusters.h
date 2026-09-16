@@ -6,6 +6,7 @@
 #include <ranges>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "build_config.h"
 #include "cluster.h"

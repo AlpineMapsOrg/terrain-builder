@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
 #include "cluster.h"

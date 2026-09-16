@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <glm/gtx/component_wise.hpp>
+#include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
 #include "atlas/rect/atlas.h"
