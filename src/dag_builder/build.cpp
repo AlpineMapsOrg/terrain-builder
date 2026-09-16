@@ -165,9 +165,6 @@ dag::NodeMetadata build_node_metadata(
     const std::unordered_map<octree::Id, dag::NodeMetadata> &cluster_metadata) {
     dag::NodeMetadata metadata;
     metadata.group_assignment = std::move(group_assignment);
-    metadata.triangle_counts = transform_vector(simplified.clusters, [](const Cluster &cluster) {
-        return cluster.triangle_count();
-    });
     metadata.groups.resize(group_children.segment_count());
 
     // map child indices to dag ids

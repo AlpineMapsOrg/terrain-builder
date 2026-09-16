@@ -26,7 +26,6 @@ struct Group {
 
 struct NodeMetadata {
     std::vector<uint32_t> group_assignment; // cluster index -> group id
-    std::vector<uint32_t> triangle_counts; // cluster index -> triangle count
     std::vector<Group> groups;
 
     uint32_t group_count() const {
@@ -37,12 +36,10 @@ struct NodeMetadata {
 inline NodeMetadata build_leaf_metadata(const Clustering &clustering) {
     NodeMetadata metadata;
     metadata.group_assignment.reserve(clustering.cluster_count());
-    metadata.triangle_counts.reserve(clustering.cluster_count());
     metadata.groups.reserve(clustering.cluster_count());
     for (uint32_t i = 0; i < clustering.cluster_count(); i++) {
         DEBUG_ASSERT(clustering.clusters[i].absolute_error == 0.0);
         metadata.group_assignment.push_back(i);
-        metadata.triangle_counts.push_back(clustering.clusters[i].triangle_count());
         Group &group = metadata.groups.emplace_back();
         group.error = 0.0;
         group.bounds = compute_cluster_bounds(clustering.clusters[i], clustering.positions);
@@ -57,16 +54,12 @@ inline dag::NodeMetadata concat_metadata(std::vector<dag::NodeMetadata> parts) {
 
     dag::NodeMetadata result;
     result.group_assignment.reserve(total_clusters);
-    result.triangle_counts.reserve(total_clusters);
     result.groups.reserve(total_groups);
 
     for (dag::NodeMetadata &part : parts) {
         const uint32_t group_offset = result.group_count();
         for (const uint32_t group_index : part.group_assignment) {
             result.group_assignment.push_back(group_offset + group_index);
-        }
-        for (const uint32_t triangle_count : part.triangle_counts) {
-            result.triangle_counts.push_back(triangle_count);
         }
         for (dag::Group &group : part.groups) {
             result.groups.push_back(std::move(group));
@@ -103,11 +96,11 @@ auto serialize(Archive &archive, dag::Group &group) {
 
 template <typename Archive>
 auto serialize(Archive &archive, const dag::NodeMetadata &metadata) {
-    return archive(metadata.group_assignment, metadata.triangle_counts, metadata.groups);
+    return archive(metadata.group_assignment, metadata.groups);
 }
 template <typename Archive>
 auto serialize(Archive &archive, dag::NodeMetadata &metadata) {
-    return archive(metadata.group_assignment, metadata.triangle_counts, metadata.groups);
+    return archive(metadata.group_assignment, metadata.groups);
 }
 
 } // namespace zpp::bits
