@@ -20,6 +20,8 @@ struct Group {
     std::vector<Id> children; // higher-detail clusters sharing this group's boundary
     double error; // absolute error compared to the original mesh
     radix::geometry::Aabb3d bounds; // union of the children's bounds
+
+    bool operator==(const Group &) const = default;
 };
 
 struct NodeMetadata {
