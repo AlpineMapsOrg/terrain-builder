@@ -15,6 +15,7 @@ TB generation and the tile server remain future work.
 
 ## Plans
 
+- [Tiles with halo: design in progress](tiles-with-halo.md)
 
 - [Tile-storage implementation plan](implementation-plan.md)
 - [Raster store TODO](todo.md)
