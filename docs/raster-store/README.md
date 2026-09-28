@@ -25,5 +25,5 @@ TB generation and the tile server remain future work.
 
 ## Scope
 
-The documents describe the storage format, implemented import tools, and
-proposed merger and delivery-generation behavior.
+The documents describe the storage format, implemented import and merge
+tools, and proposed delivery-generation behavior.
