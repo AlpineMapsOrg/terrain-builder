@@ -25,6 +25,5 @@ TB generation and the tile server remain future work.
 
 ## Scope
 
-The documents mostly hold format information. The `rf_merger` document is
-explicitly a non-authoritative idea parking lot, not a tool specification or
-implementation plan.
+The documents describe the storage format, implemented import and merge
+tools, and proposed delivery-generation behavior.
