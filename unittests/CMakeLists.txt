@@ -31,6 +31,7 @@ add_executable(unittests_terrainlib
     terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
     terrainlib/io_conversion.cpp
+    terrainlib/io_hash.cpp
     terrainlib/io_image.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
