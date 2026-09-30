@@ -19,6 +19,7 @@ TB generation and the tile server remain future work.
 - [Tiles with halo: design](tiles-with-halo.md)
 - [Halo extraction implementation plan](halo-implementation-plan.md)
 - [GDAL import NoData filling: policy and verification](gdal-nodata-filling.md)
+- [Envelope content hashes](content-hash-plan.md)
 
 - [Tile-storage implementation plan](implementation-plan.md)
 - [Raster store TODO](todo.md)
