@@ -180,9 +180,6 @@ endif()
 
 add_subdirectory(terrainlib)
 
-if(ALP_BUILD_TILE_BUILDER)
-    add_subdirectory(tile_builder)
-endif()
 if(ALP_BUILD_SF_MERGER)
     add_subdirectory(sf_merger)
 endif()
