@@ -12,7 +12,6 @@ implemented; TB generation and the tile server remain future work.
 - [Storage format](storage-format.md)
 - [Sampling and pyramid generation](sampling-and-generation.md): sampling
   theory, TB generation requirements, and the implemented scaling rules
-- [Tiles with halo](tiles-with-halo.md)
 - [TODO](todo.md)
 
 Decisions and their rationale are recorded in the [ADRs](../adr/).
