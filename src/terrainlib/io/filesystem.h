@@ -9,6 +9,7 @@
 
 #include "error/Context.h"
 #include "error/Result.h"
+#include "error/try.h"
 #include "error/utils.h"
 #include "fmt_impls.h"
 #include "io/FileError.h"
@@ -57,6 +58,37 @@ inline alp::Result<bool, FileError> is_symlink(const std::filesystem::path &path
         return alp::make_unexpected(FileError(code, path), alp::make_context("reading a file status at {}", path));
     }
     return std::filesystem::is_symlink(status);
+}
+
+// Whether `path` names an empty file or an empty directory.
+[[nodiscard]]
+inline alp::Result<bool, FileError> is_empty(const std::filesystem::path &path) {
+    std::error_code code;
+    const bool empty = std::filesystem::is_empty(path, code);
+    if (code) {
+        return alp::make_unexpected(FileError(code, path), alp::make_context("checking whether {} is empty", path));
+    }
+    return empty;
+}
+
+// Whether `path` is an empty directory; false if nothing exists at `path`.
+[[nodiscard]]
+inline alp::Result<bool, FileError> is_empty_directory(const std::filesystem::path &path) {
+    ALP_TRY(const bool directory, filesystem::is_directory(path));
+    if (!directory) {
+        return false;
+    }
+    return filesystem::is_empty(path);
+}
+
+// Whether nothing exists at `path`, or `path` names an empty directory.
+[[nodiscard]]
+inline alp::Result<bool, FileError> is_missing_or_empty_directory(const std::filesystem::path &path) {
+    ALP_TRY(const bool exists, filesystem::exists(path));
+    if (!exists) {
+        return true;
+    }
+    return filesystem::is_empty_directory(path);
 }
 
 // Calls `visit` with each regular file and symlink below `path`, stopping early once `visit` returns false.

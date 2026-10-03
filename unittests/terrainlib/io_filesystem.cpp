@@ -75,6 +75,40 @@ TEST_CASE("A missing path is reported as nothing", "[io][filesystem]") {
     CHECK(!REQUIRE_VALUE(io::filesystem::is_symlink(missing)));
 }
 
+TEST_CASE("A directory is reported as empty until it holds a file", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_empty");
+
+    CHECK(REQUIRE_VALUE(io::filesystem::is_empty(directory.path())));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_empty_directory(directory.path())));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_missing_or_empty_directory(directory.path())));
+
+    write_file(directory.path() / "file");
+
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_empty(directory.path())));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_empty_directory(directory.path())));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_missing_or_empty_directory(directory.path())));
+}
+
+TEST_CASE("A regular file is not reported as an empty directory", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_empty_file");
+    const std::filesystem::path file = directory.path() / "file";
+    write_file(file);
+
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_empty_directory(file)));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_missing_or_empty_directory(file)));
+}
+
+TEST_CASE("A missing path is reported as missing, not as an empty directory", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_empty_missing");
+    const std::filesystem::path missing = directory.path() / "missing";
+
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_empty_directory(missing)));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_missing_or_empty_directory(missing)));
+
+    const alp::Error<io::FileError> error = REQUIRE_ERROR(io::filesystem::is_empty(missing));
+    CHECK(error.holds(io::make_file_not_found(missing)));
+}
+
 TEST_CASE("Visiting files recursively visits every file in nested directories and no directory", "[io][filesystem]") {
     const TempDirectory directory("io_filesystem_visit_all");
     const std::set<std::filesystem::path> files = {
