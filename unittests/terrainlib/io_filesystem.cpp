@@ -8,6 +8,7 @@
 #include "../result_helpers.h"
 #include "../temp_directory.h"
 #include "error/prelude.h"
+#include "io/DirectoryNotEmpty.h"
 #include "io/FileError.h"
 #include "io/bytes.h"
 #include "io/filesystem.h"
@@ -107,6 +108,38 @@ TEST_CASE("A missing path is reported as missing, not as an empty directory", "[
 
     const alp::Error<io::FileError> error = REQUIRE_ERROR(io::filesystem::is_empty(missing));
     CHECK(error.holds(io::make_file_not_found(missing)));
+}
+
+TEST_CASE("Creating an empty directory creates its missing parents and accepts one that is already empty", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_create_empty");
+    const std::filesystem::path nested = directory.path() / "parent" / "nested";
+
+    REQUIRE_VALUE(io::filesystem::create_empty_directory(nested));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_empty_directory(nested)));
+
+    REQUIRE_VALUE(io::filesystem::create_empty_directory(nested));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_empty_directory(nested)));
+}
+
+TEST_CASE("Creating an empty directory fails where one holds something, naming it and leaving it alone", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_create_empty_used");
+    const std::filesystem::path used = directory.path() / "used";
+    write_file(used / "file");
+
+    const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(io::filesystem::create_empty_directory(used));
+
+    CHECK(error.holds(io::DirectoryNotEmpty{used}));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_regular_file(used / "file")));
+}
+
+TEST_CASE("Creating an empty directory fails where a regular file is in the way, naming it", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_create_empty_file");
+    const std::filesystem::path file = directory.path() / "file";
+    write_file(file);
+
+    const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(io::filesystem::create_empty_directory(file));
+
+    CHECK(error.holds_and<io::FileError>([&](const io::FileError &e) { return e.path() == file; }));
 }
 
 TEST_CASE("Visiting files recursively visits every file in nested directories and no directory", "[io][filesystem]") {
