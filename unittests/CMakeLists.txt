@@ -45,7 +45,6 @@ add_executable(unittests_terrainlib
     terrainlib/fixed_vector.cpp
     terrainlib/geometry_frames.cpp
     terrainlib/glm_serialization.cpp
-    terrainlib/grid.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
