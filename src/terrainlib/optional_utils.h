@@ -32,6 +32,20 @@ auto map(const std::optional<T> &option, Func &&f) -> std::optional<std::invoke_
     }
 }
 
+template <typename T, typename DefaultFunc, typename Func>
+auto map_or_else(const std::optional<T> &option, DefaultFunc &&default_f, Func &&f) -> std::invoke_result_t<Func, const T &> {
+    if (option.has_value()) {
+        return std::forward<Func>(f)(option.value());
+    } else {
+        return std::forward<DefaultFunc>(default_f)();
+    }
+}
+
+template <typename T, typename Func>
+auto map_or(const std::optional<T> &option, std::type_identity_t<std::invoke_result_t<Func, const T &>> default_value, Func &&f) -> std::invoke_result_t<Func, const T &> {
+    return map_or_else(option, [&] { return std::move(default_value); }, std::forward<Func>(f));
+}
+
 template <typename T, typename Func>
 T& get_or_insert_with(std::optional<T> &option, Func &&f) {
     if (!option.has_value()) {
