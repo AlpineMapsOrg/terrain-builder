@@ -29,11 +29,9 @@
 #include <radix/tile.h>
 #include <glm/gtc/type_precision.hpp>
 #include "Error.h"
-#include "RasterTransform.h"
 #include "srs.h"
 
 class Dataset;
-class GDALDataset;
 
 // Reads selected dataset bands into a target projection, using Lanczos at base
 // resolution and GDAL's approximate transformer. Validity comes from the
@@ -97,26 +95,5 @@ private:
 
 extern template class DatasetReader<float>;
 extern template class DatasetReader<glm::u8vec3>;
-
-// The previous RF import reader, kept until the RF builder migrates to DatasetReader.
-// Lanczos at base resolution, exact coordinates, declared source validity.
-// RGB requires a valid filtered result in every selected channel.
-namespace deprecated {
-Expected<DatasetReader<float>::Samples> read_scalar(
-    GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, glm::uvec2 size, unsigned band);
-Expected<DatasetReader<glm::u8vec3>::Samples> read_colour(
-    GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, glm::uvec2 size, const std::array<unsigned, 3>& bands);
-
-inline Expected<DatasetReader<float>::Samples> read_scalar(
-    GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, unsigned side, unsigned band)
-{
-    return read_scalar(dataset, transform, bounds, glm::uvec2(side), band);
-}
-inline Expected<DatasetReader<glm::u8vec3>::Samples> read_colour(
-    GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, unsigned side, const std::array<unsigned, 3>& bands)
-{
-    return read_colour(dataset, transform, bounds, glm::uvec2(side), bands);
-}
-} // namespace deprecated
 
 #endif // DATASETREADER_H

@@ -20,7 +20,6 @@
 add_library(terrainlib
     Error.h Error.cpp
     DatasetReader.h DatasetReader.cpp
-    RasterTransform.h RasterTransform.cpp
     vector_mask.h
     Dataset.h Dataset.cpp
     ImageKey.h
