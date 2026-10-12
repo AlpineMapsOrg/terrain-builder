@@ -23,6 +23,7 @@
 
 #include <sys/stat.h>
 
+#include "cli_support/log.h"
 #include "io/utils.h"
 #include "store/inputs.h"
 
@@ -94,15 +95,17 @@ Expected<void> publish(const std::filesystem::path& partial_path)
     if (auto absent = require_absent(destination); !absent) {
         return absent;
     }
-    const auto inputs_path = partial / inputs::file_name;
-    std::error_code error;
-    std::filesystem::remove(inputs_path, error);
-    if (error) {
-        return Error::fail(Error::Code::Io, "remove input record before publication", inputs_path, error);
-    }
+    // The record stays until the rename succeeded, so a .part that failed to publish remains a cache.
     auto renamed = ::io::utils::rename_without_replacement(partial, destination);
     if (!renamed) {
         return Error::propagate(std::move(renamed), "publish snapshot");
+    }
+    // A leftover record is harmless, as a published snapshot is never accepted as a cache.
+    const auto inputs_path = destination / inputs::file_name;
+    std::error_code error;
+    std::filesystem::remove(inputs_path, error);
+    if (error) {
+        LOG_WARN("Failed to remove the input record {} from the published snapshot: {}", inputs_path, error.message());
     }
     return {};
 }

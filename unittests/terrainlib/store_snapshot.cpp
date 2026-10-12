@@ -100,10 +100,12 @@ TEST_CASE("snapshots are created as .part and published by renaming", "[store][s
         SECTION("empty directory") { REQUIRE(std::filesystem::create_directory(final_path)); }
         SECTION("nonempty directory") { REQUIRE(io::byte::write(io::byte::span {}, final_path / "keep")); }
         SECTION("dangling symlink") { std::filesystem::create_symlink(directory.path() / "missing", final_path); }
+        REQUIRE(store::inputs::write<Schema>(partial_path, Record { "input", 1 }).has_value());
         const auto published = store::snapshot::publish(partial_path);
         REQUIRE_FALSE(published.has_value());
         CHECK(published.error().code() == Error::Code::AlreadyExists);
-        CHECK(std::filesystem::is_directory(partial_path));
+        // The retained .part stays usable as a cache.
+        CHECK(store::inputs::validate_cache<Schema>(partial_path, Record { "input", 1 }).has_value());
     }
 }
 

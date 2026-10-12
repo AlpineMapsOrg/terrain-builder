@@ -36,7 +36,7 @@ bool is_partial(const std::filesystem::path& path);
 Expected<void> require_absent(const std::filesystem::path& path);
 // Requires that neither <final> nor <final>.part exists, then creates <final>.part.
 Expected<std::filesystem::path> create_partial(const std::filesystem::path& final_path);
-// Removes the inputs record and renames <final>.part to <final>. The storage in it
+// Renames <final>.part to <final> and removes the input record. The storage in it
 // must have saved its index and must not be used afterwards.
 Expected<void> publish(const std::filesystem::path& partial_path);
 // Hard links require the source and the output to be on the same filesystem.
