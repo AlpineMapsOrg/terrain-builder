@@ -34,18 +34,12 @@
 namespace cli_support {
 
 class Log {
-private:
-	static std::shared_ptr<spdlog::logger> logger;
 public:
 	static void init(spdlog::level::level_enum level);
     // Also writes the log to path, appending, and flushes it from level info on.
     static void add_file(const std::filesystem::path& path);
-	inline static std::shared_ptr<spdlog::logger>& get_logger() {
-        if (Log::logger == nullptr) {
-            Log::init(spdlog::level::level_enum::info);
-        }
-		return Log::logger;
-	}
+    // Creates the logger on first use, at level info; safe to call from any thread.
+    static const std::shared_ptr<spdlog::logger>& get_logger();
 };
 
 // Names accepted by the --verbosity option of the tools.

@@ -28,13 +28,18 @@
 
 namespace cli_support {
 
-std::shared_ptr<spdlog::logger> Log::logger;
-
-void Log::init(spdlog::level::level_enum log_level) {
-	spdlog::set_pattern("[%Y-%m-%d %T.%e] [%=3n] [%^%l%$] %v");
-	Log::logger = spdlog::stderr_color_mt("LOG");
-	Log::logger->set_level(log_level);
+const std::shared_ptr<spdlog::logger>& Log::get_logger()
+{
+    static const std::shared_ptr<spdlog::logger> logger = [] {
+        spdlog::set_pattern("[%Y-%m-%d %T.%e] [%=3n] [%^%l%$] %v");
+        auto created = spdlog::stderr_color_mt("LOG");
+        created->set_level(spdlog::level::info);
+        return created;
+    }();
+    return logger;
 }
+
+void Log::init(spdlog::level::level_enum log_level) { get_logger()->set_level(log_level); }
 
 void Log::add_file(const std::filesystem::path& path)
 {
