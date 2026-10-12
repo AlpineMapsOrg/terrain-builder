@@ -26,7 +26,7 @@
 namespace io::hash {
 namespace {
 
-    std::vector<std::byte> xxh3_64(const std::span<const std::byte> bytes)
+    byte::vector xxh3_64(const byte::span bytes)
     {
         XXH64_canonical_t canonical;
         XXH64_canonicalFromHash(&canonical, XXH3_64bits(bytes.data(), bytes.size()));
@@ -36,7 +36,7 @@ namespace {
 
 } // namespace
 
-std::vector<std::byte> data(const std::span<const std::byte> bytes, const Algorithm algorithm)
+byte::vector data(const byte::span bytes, const Algorithm algorithm)
 {
     switch (algorithm) {
     case Algorithm::None:

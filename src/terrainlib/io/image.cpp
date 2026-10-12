@@ -26,7 +26,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "bytes.h"
+#include "byte.h"
 #include "conversion.h"
 #include "raster/algorithm/transform.h"
 
@@ -55,7 +55,7 @@ namespace {
     }
 
     template <typename Pixel>
-    Expected<std::vector<std::byte>> encode_raster(const radix::Raster<Pixel>& image, Format format, EncodeOptions options)
+    Expected<byte::vector> encode_raster(const radix::Raster<Pixel>& image, Format format, EncodeOptions options)
     try {
         if (auto valid = validate_encoding(format, Pixel::length(), options); !valid) {
             return Error::propagate(std::move(valid));
@@ -76,7 +76,7 @@ namespace {
         }
         // OpenCV only encodes into a std::vector<uchar>.
         const auto bytes = std::as_bytes(std::span(encoded));
-        return std::vector<std::byte>(bytes.begin(), bytes.end());
+        return byte::vector(bytes.begin(), bytes.end());
     } catch (const cv::Exception& error) {
         return Error::fail(error.code == cv::Error::StsNoMem ? Error::Code::ResourceExhausted : Error::Code::Io, "encode image: " + error.msg);
     } catch (const std::bad_alloc&) {
@@ -84,7 +84,7 @@ namespace {
     }
 
     template <typename Pixel>
-    Expected<radix::Raster<Pixel>> decode_raster(std::span<const std::byte> bytes)
+    Expected<radix::Raster<Pixel>> decode_raster(byte::span bytes)
     try {
         if (bytes.empty() || bytes.size() > static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
             return Error::fail(Error::Code::CorruptData, "empty or oversized encoded image");
@@ -133,7 +133,7 @@ namespace {
     template <typename Pixel>
     Expected<radix::Raster<Pixel>> read_raster(const std::filesystem::path& path)
     try {
-        auto bytes = read_bytes_from_path(path);
+        auto bytes = byte::read(path);
         if (!bytes) {
             return Error::propagate(std::move(bytes));
         }
@@ -179,15 +179,15 @@ namespace {
         if (!bytes) {
             return Error::propagate(std::move(bytes), "encode image for " + path.string());
         }
-        return write_bytes_to_path(*bytes, path, options.overwrite ? WriteMode::Overwrite : WriteMode::CreateNew, options.make_dirs);
+        return byte::write(*bytes, path, options.overwrite ? byte::WriteMode::Overwrite : byte::WriteMode::CreateNew, options.make_dirs);
     }
 
 } // namespace
 
-Expected<std::vector<std::byte>> encode(const RGB8& image, Format format, EncodeOptions options) { return encode_raster(image, format, options); }
-Expected<std::vector<std::byte>> encode(const RGBA8& image, Format format, EncodeOptions options) { return encode_raster(image, format, options); }
-Expected<RGB8> decode_rgb8(std::span<const std::byte> bytes) { return decode_raster<glm::u8vec3>(bytes); }
-Expected<RGBA8> decode_rgba8(std::span<const std::byte> bytes) { return decode_raster<glm::u8vec4>(bytes); }
+Expected<byte::vector> encode(const RGB8& image, Format format, EncodeOptions options) { return encode_raster(image, format, options); }
+Expected<byte::vector> encode(const RGBA8& image, Format format, EncodeOptions options) { return encode_raster(image, format, options); }
+Expected<RGB8> decode_rgb8(byte::span bytes) { return decode_raster<glm::u8vec3>(bytes); }
+Expected<RGBA8> decode_rgba8(byte::span bytes) { return decode_raster<glm::u8vec4>(bytes); }
 Expected<RGB8> read_rgb8(const std::filesystem::path& path) { return read_raster<glm::u8vec3>(path); }
 Expected<RGBA8> read_rgba8(const std::filesystem::path& path) { return read_raster<glm::u8vec4>(path); }
 Expected<void> write(const RGB8& image, const std::filesystem::path& path, WriteOptions options) { return write_image(image, path, options); }

@@ -22,6 +22,7 @@
 #include <memory>
 #include <string>
 
+#include "io/byte.h"
 #include "io/envelope.h"
 #include "raster_store/Tile.h"
 #include "raster_store/pixel.h"
@@ -36,8 +37,8 @@ namespace tile_codec {
         struct RasterTile {
             std::uint32_t width;
             std::uint32_t height;
-            std::vector<std::byte> data;
-            std::vector<std::byte> source_attribution;
+            ::io::byte::vector data;
+            ::io::byte::vector source_attribution;
         };
 
     } // namespace detail::v1

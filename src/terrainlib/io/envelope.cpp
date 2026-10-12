@@ -24,7 +24,7 @@ namespace io::envelope {
 
 Expected<Header> read_header(const std::filesystem::path& path)
 {
-    auto file_bytes = ::io::read_bytes_from_path(path, max_header_size);
+    auto file_bytes = ::io::byte::read(path, max_header_size);
     if (!file_bytes) {
         return Error::propagate(std::move(file_bytes), "reading envelope file \"" + path.string() + "\"");
     }

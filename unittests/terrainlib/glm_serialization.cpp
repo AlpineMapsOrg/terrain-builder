@@ -17,6 +17,7 @@
  *****************************************************************************/
 
 #include "io/glm_serialization.h"
+#include "io/byte.h"
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -32,7 +33,7 @@ namespace {
 template <typename Value>
 auto encode(const Value& value)
 {
-    std::vector<std::byte> bytes;
+    io::byte::vector bytes;
     zpp::bits::out output(bytes);
     REQUIRE(!zpp::bits::failure(output(value)));
     return bytes;
@@ -52,7 +53,7 @@ void check_encoding(const Value& value, const std::array<Scalar, Size>& componen
     CHECK(input.position() == bytes.size());
 
     // Non-const values must also work with output archives.
-    std::vector<std::byte> mutable_bytes;
+    io::byte::vector mutable_bytes;
     zpp::bits::out output(mutable_bytes);
     REQUIRE(!zpp::bits::failure(output(decoded)));
     CHECK(mutable_bytes == bytes);
@@ -140,10 +141,10 @@ TEMPLATE_TEST_CASE("GLM serialization propagates truncated buffer errors", "[glm
     for (std::size_t size = 0; size < bytes.size(); ++size) {
         CAPTURE(size);
         TestType decoded {};
-        zpp::bits::in input(std::span<const std::byte>(bytes.data(), size));
+        zpp::bits::in input(io::byte::span(bytes.data(), size));
         CHECK(zpp::bits::failure(input(decoded)));
 
-        std::vector<std::byte> buffer(size);
+        io::byte::vector buffer(size);
         zpp::bits::out output { std::span<std::byte>(buffer) };
         CHECK(zpp::bits::failure(output(value)));
     }

@@ -71,7 +71,7 @@ add_library(terrainlib
     gis/vector_mask.h
     gis/webmercator.h gis/webmercator.cpp
 
-    io/bytes.h io/bytes.cpp
+    io/byte.h io/byte.cpp
     io/compression.h io/compression.cpp
     io/conversion.h
     io/image.h io/image.cpp

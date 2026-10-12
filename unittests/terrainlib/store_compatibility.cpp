@@ -26,7 +26,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "../temporary_directory.h"
-#include "io/bytes.h"
+#include "io/byte.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/codec/SfMeshFormat.h"
 #include "mesh/codec/from_extension.h"
@@ -250,7 +250,7 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
     CHECK(unknown_codec.error().code() == Error::Code::Unsupported);
 
     const std::array malformed_bytes { std::byte { 0xff }, std::byte { 0x00 }, std::byte { 0x01 } };
-    REQUIRE(io::write_bytes_to_path(malformed_bytes, index_path).has_value());
+    REQUIRE(io::byte::write(malformed_bytes, index_path).has_value());
     const auto malformed = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(malformed.has_value());
     CHECK(malformed.error().code() == Error::Code::CorruptData);

@@ -24,7 +24,7 @@
 #include <opencv2/imgcodecs.hpp>
 
 #include "../temporary_directory.h"
-#include "io/bytes.h"
+#include "io/byte.h"
 #include "io/image.h"
 
 namespace {
@@ -40,7 +40,7 @@ image::RGBA8 colours()
     return result;
 }
 
-cv::Mat encoded_mat(const std::vector<std::byte>& bytes) { return { 1, int(bytes.size()), CV_8UC1, const_cast<std::byte*>(bytes.data()) }; }
+cv::Mat encoded_mat(const io::byte::vector& bytes) { return { 1, int(bytes.size()), CV_8UC1, const_cast<std::byte*>(bytes.data()) }; }
 } // namespace
 
 TEST_CASE("PNG preserves RGBA including hidden colour and row order", "[io-image]")
@@ -134,10 +134,10 @@ TEST_CASE("disk image I/O preserves RGBA and honours overwrite and directory pol
     auto source = colours();
     CHECK_FALSE(image::write(source, path, { .make_dirs = false }));
     REQUIRE(image::write(source, path));
-    const auto original = io::read_bytes_from_path(path);
+    const auto original = io::byte::read(path);
     REQUIRE(original);
     CHECK(image::write(source, path).error().code() == Error::Code::AlreadyExists);
-    CHECK(*io::read_bytes_from_path(path) == *original);
+    CHECK(*io::byte::read(path) == *original);
     source.pixel({ 0, 0 }) = { 8, 9, 10, 11 };
     REQUIRE(image::write(source, path, { .overwrite = true }));
     const auto decoded = image::read_rgba8(path);
@@ -162,9 +162,9 @@ TEST_CASE("byte writer retains legacy overwrite and supports exclusive creation"
     const auto path = directory.path() / "bytes";
     const std::array first { std::byte { 1 }, std::byte { 2 }, std::byte { 3 } };
     const std::array second { std::byte { 4 }, std::byte { 5 } };
-    REQUIRE(io::write_bytes_to_path(first, path, io::WriteMode::CreateNew));
-    CHECK(io::write_bytes_to_path(second, path, io::WriteMode::CreateNew).error().code() == Error::Code::AlreadyExists);
-    CHECK(*io::read_bytes_from_path(path) == std::vector(first.begin(), first.end()));
-    REQUIRE(io::write_bytes_to_path(second, path));
-    CHECK(*io::read_bytes_from_path(path) == std::vector(second.begin(), second.end()));
+    REQUIRE(io::byte::write(first, path, io::byte::WriteMode::CreateNew));
+    CHECK(io::byte::write(second, path, io::byte::WriteMode::CreateNew).error().code() == Error::Code::AlreadyExists);
+    CHECK(*io::byte::read(path) == std::vector(first.begin(), first.end()));
+    REQUIRE(io::byte::write(second, path));
+    CHECK(*io::byte::read(path) == std::vector(second.begin(), second.end()));
 }

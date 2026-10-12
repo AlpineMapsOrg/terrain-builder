@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include "io/byte.h"
 #include "io/hash.h"
 
 #include <catch2/benchmark/catch_benchmark.hpp>
@@ -28,9 +29,9 @@
 namespace {
 
 // XSUM_fillTestBuffer from xxHash's cli/xsum_sanity_check.c, which generates the input of its test vectors.
-std::vector<std::byte> sanity_buffer(const std::size_t size)
+io::byte::vector sanity_buffer(const std::size_t size)
 {
-    std::vector<std::byte> buffer(size);
+    io::byte::vector buffer(size);
     std::uint64_t generator = 2654435761U;
     for (auto& byte : buffer) {
         byte = std::byte(generator >> 56);
@@ -39,9 +40,9 @@ std::vector<std::byte> sanity_buffer(const std::size_t size)
     return buffer;
 }
 
-std::vector<std::byte> big_endian(const std::uint64_t value)
+io::byte::vector big_endian(const std::uint64_t value)
 {
-    std::vector<std::byte> bytes(8);
+    io::byte::vector bytes(8);
     for (std::size_t index = 0; index < bytes.size(); ++index) {
         bytes[index] = std::byte(value >> (56 - 8 * index));
     }

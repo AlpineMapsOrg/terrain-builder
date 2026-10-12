@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "io/bytes.h"
+#include "io/byte.h"
 #include "io/compression.h"
 #include "io/glm_serialization.h"
 #include "io/hash.h"
@@ -52,7 +52,7 @@ struct Header {
     std::uint32_t class_version;
     hash::Algorithm hash_algorithm;
     // hash::data of the uncompressed payload.
-    std::vector<std::byte> hash;
+    byte::vector hash;
     CompressionAlgorithm compression_algorithm;
     std::uint64_t uncompressed_size;
 };
@@ -60,7 +60,7 @@ struct Header {
 // The payload is the last field, so a file prefix of max_header_size bytes contains the header.
 struct Envelope {
     Header header;
-    std::vector<std::byte> compressed_data;
+    byte::vector compressed_data;
 };
 
 // zpp_bits prefixes strings and vectors with their 32-bit size.
@@ -155,17 +155,17 @@ struct PayloadSchema {
 };
 
 template <typename Schema, std::uint32_t VersionNumber>
-Expected<std::vector<std::byte>> serialize(const typename Schema::template payload_type<VersionNumber>& payload,
+Expected<byte::vector> serialize(const typename Schema::template payload_type<VersionNumber>& payload,
     CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdDefaultCompression,
     hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64);
 
 template <typename Schema>
-Expected<std::vector<std::byte>> serialize(const typename Schema::latest_type& payload,
+Expected<byte::vector> serialize(const typename Schema::latest_type& payload,
     CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdDefaultCompression,
     hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64);
 
 template <typename Schema>
-Expected<typename Schema::latest_type> deserialize(std::span<const std::byte> bytes, std::size_t max_decompressed_size = default_max_decompressed_size);
+Expected<typename Schema::latest_type> deserialize(byte::span bytes, std::size_t max_decompressed_size = default_max_decompressed_size);
 
 // Reads and decodes only the header of an envelope file. It checks the magic and the algorithm
 // enumerators, but neither the class nor the payload, which it does not read.
@@ -177,9 +177,9 @@ namespace detail {
 Expected<void> validate_header(const Header& header);
 
 template <typename Value>
-Expected<std::vector<std::byte>> serialize_to_bytes(const Value& value)
+Expected<byte::vector> serialize_to_bytes(const Value& value)
 {
-    std::vector<std::byte> bytes;
+    byte::vector bytes;
     zpp::bits::out output(bytes, zpp::bits::alloc_limit<default_max_decompressed_size>());
     const zpp::bits::errc result = output(value);
     if (zpp::bits::failure(result)) {
@@ -191,7 +191,7 @@ Expected<std::vector<std::byte>> serialize_to_bytes(const Value& value)
 }
 
 template <typename Value>
-Expected<Value> deserialize_from_bytes(const std::span<const std::byte> bytes)
+Expected<Value> deserialize_from_bytes(const byte::span bytes)
 {
     Value value{};
     zpp::bits::in input(bytes, zpp::bits::alloc_limit<default_max_decompressed_size>());
@@ -217,7 +217,7 @@ typename Schema::latest_type convert_to_latest(Current current)
 template <typename Schema, std::size_t Index = 0>
 Expected<typename Schema::latest_type> deserialize_version(
     const std::uint32_t class_version,
-    const std::span<const std::byte> payload_bytes)
+    const byte::span payload_bytes)
 {
     using CurrentVersion = typename Schema::template version_at<Index>;
     if (class_version == CurrentVersion::number) {
@@ -239,7 +239,7 @@ Expected<typename Schema::latest_type> deserialize_version(
 } // namespace detail
 
 template <typename Schema, std::uint32_t VersionNumber>
-Expected<std::vector<std::byte>> serialize(
+Expected<byte::vector> serialize(
     const typename Schema::template payload_type<VersionNumber> &payload,
     const CompressionAlgorithm compression_algorithm,
     const hash::Algorithm hash_algorithm)
@@ -274,7 +274,7 @@ Expected<std::vector<std::byte>> serialize(
 }
 
 template <typename Schema>
-Expected<std::vector<std::byte>> serialize(
+Expected<byte::vector> serialize(
     const typename Schema::latest_type &payload,
     const CompressionAlgorithm compression_algorithm,
     const hash::Algorithm hash_algorithm)
@@ -287,7 +287,7 @@ Expected<std::vector<std::byte>> serialize(
 
 template <typename Schema>
 Expected<typename Schema::latest_type> deserialize(
-    const std::span<const std::byte> bytes,
+    const byte::span bytes,
     const std::size_t max_decompressed_size)
 {
     auto envelope = detail::deserialize_from_bytes<Envelope>(bytes);
@@ -336,7 +336,7 @@ template <typename Schema>
 Expected<typename Schema::latest_type> read_from_path(
     const std::filesystem::path& path, const std::size_t max_decompressed_size = default_max_decompressed_size)
 {
-    auto file_bytes = ::io::read_bytes_from_path(path);
+    auto file_bytes = ::io::byte::read(path);
     if (!file_bytes) {
         return Error::propagate(std::move(file_bytes), "reading envelope file \"" + path.string() + "\"");
     }
@@ -358,7 +358,7 @@ Expected<void> write_to_path(const typename Schema::latest_type& payload,
     if (!serialized) {
         return Error::propagate(std::move(serialized), "encoding envelope file \"" + path.string() + "\"");
     }
-    auto result = ::io::write_bytes_to_path(*serialized, path, make_dirs);
+    auto result = ::io::byte::write(*serialized, path, make_dirs);
     if (!result) {
         return Error::propagate(std::move(result), "writing envelope file \"" + path.string() + "\"");
     }

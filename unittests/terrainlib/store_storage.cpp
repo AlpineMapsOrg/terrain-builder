@@ -27,7 +27,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "../temporary_directory.h"
-#include "io/bytes.h"
+#include "io/byte.h"
 #include "io/utils.h"
 #include "octree/StoreTraits.h"
 #include "octree/store_layout/Mappings.h"
@@ -79,7 +79,7 @@ store::path_layout::Mapping<radix::tile::Id> test_mapping<raster_store::StoreTra
 
 Expected<int> read_int(const std::filesystem::path& path)
 {
-    auto bytes = io::read_bytes_from_path(path);
+    auto bytes = io::byte::read(path);
     if (!bytes) {
         return Error::propagate(std::move(bytes), "read test integer");
     }
@@ -94,7 +94,7 @@ Expected<int> read_int(const std::filesystem::path& path)
 Expected<void> write_int(const int value, const std::filesystem::path& path)
 {
     const auto bytes = std::as_bytes(std::span(&value, 1));
-    auto written = io::write_bytes_to_path(bytes, path);
+    auto written = io::byte::write(bytes, path);
     if (!written) {
         return Error::propagate(std::move(written), "write test integer");
     }
@@ -245,7 +245,7 @@ TEST_CASE("byte writes report directory creation errors", "[io][bytes]")
     const std::filesystem::path blocker = directory.path() / "blocker";
     REQUIRE(write_int(1, blocker).has_value());
 
-    const auto result = io::write_bytes_to_path(std::span<const std::byte> {}, blocker / "payload");
+    const auto result = io::byte::write(io::byte::span {}, blocker / "payload");
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code() == Error::Code::Io);
 }

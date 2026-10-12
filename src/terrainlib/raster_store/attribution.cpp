@@ -24,7 +24,7 @@
 
 #include <cpl_json.h>
 
-#include "io/bytes.h"
+#include "io/byte.h"
 
 namespace raster_store::attribution {
 
@@ -110,7 +110,7 @@ Expected<Table> read_table(const std::filesystem::path& index_path)
     if (!path) {
         return Error::propagate(std::move(path));
     }
-    auto bytes = ::io::read_bytes_from_path(*path);
+    auto bytes = ::io::byte::read(*path);
     if (!bytes) {
         return Error::propagate(std::move(bytes), "read source attribution table");
     }

@@ -21,18 +21,18 @@
 #include <fstream>
 #include <system_error>
 
-#include "io/bytes.h"
+#include "io/byte.h"
 #include "io/utils.h"
 #include "log.h"
 
-namespace io {
+namespace io::byte {
 
-Expected<void> write_bytes_to_path(const std::span<const std::byte> bytes, const std::filesystem::path& path, bool make_dirs)
+Expected<void> write(const span bytes, const std::filesystem::path& path, bool make_dirs)
 {
-    return write_bytes_to_path(bytes, path, WriteMode::Overwrite, make_dirs);
+    return write(bytes, path, WriteMode::Overwrite, make_dirs);
 }
 
-Expected<void> write_bytes_to_path(const std::span<const std::byte> bytes, const std::filesystem::path& path, WriteMode mode, bool make_dirs)
+Expected<void> write(const span bytes, const std::filesystem::path& path, WriteMode mode, bool make_dirs)
 {
     LOG_TRACE("Writing bytes to path {}", path);
 
@@ -69,7 +69,7 @@ Expected<void> write_bytes_to_path(const std::span<const std::byte> bytes, const
     return {};
 }
 
-Expected<std::vector<std::byte>> read_bytes_from_path(const std::filesystem::path& path, const std::size_t max_size)
+Expected<vector> read(const std::filesystem::path& path, const std::size_t max_size)
 {
     LOG_TRACE("Reading bytes from path {}", path);
 
@@ -91,7 +91,7 @@ Expected<std::vector<std::byte>> read_bytes_from_path(const std::filesystem::pat
     }
 
     const auto read_size = static_cast<std::streamsize>(std::min(static_cast<std::size_t>(size), max_size));
-    std::vector<std::byte> buffer(static_cast<size_t>(read_size));
+    vector buffer(static_cast<size_t>(read_size));
     file.seekg(0);
     file.read(reinterpret_cast<char *>(buffer.data()), read_size);
 

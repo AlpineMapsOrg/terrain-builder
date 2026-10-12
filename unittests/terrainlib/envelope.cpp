@@ -19,6 +19,7 @@
 #include "../catch2_helpers.h"
 #include "../temporary_directory.h"
 
+#include "io/byte.h"
 #include "io/envelope.h"
 
 #include <zpp_bits.h>
@@ -115,17 +116,17 @@ static_assert(std::same_as<Schema::latest_type, v3::Payload>);
 static_assert(std::same_as<Schema::payload_type<1>, v1::Payload>);
 
 template <typename Value>
-std::vector<std::byte> encode_value(const Value& value)
+io::byte::vector encode_value(const Value& value)
 {
-    std::vector<std::byte> bytes;
+    io::byte::vector bytes;
     zpp::bits::out output(bytes);
     output(value).or_throw();
     return bytes;
 }
 
-std::vector<std::byte> encode_envelope(const io::envelope::Envelope& envelope) { return encode_value(envelope); }
+io::byte::vector encode_envelope(const io::envelope::Envelope& envelope) { return encode_value(envelope); }
 
-io::envelope::Envelope decode_envelope(const std::vector<std::byte>& bytes)
+io::envelope::Envelope decode_envelope(const io::byte::vector& bytes)
 {
     io::envelope::Envelope envelope {};
     zpp::bits::in input(bytes);
@@ -134,7 +135,7 @@ io::envelope::Envelope decode_envelope(const std::vector<std::byte>& bytes)
 }
 
 // Writes a frame with a checksum, which the reader accepts but does not require.
-std::vector<std::byte> compress_without_content_size(const std::vector<std::byte>& uncompressed_data)
+io::byte::vector compress_without_content_size(const io::byte::vector& uncompressed_data)
 {
     const std::unique_ptr<ZSTD_CCtx, decltype(&ZSTD_freeCCtx)> context { ZSTD_createCCtx(), &ZSTD_freeCCtx };
     if (!context || ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_contentSizeFlag, 0))
@@ -142,7 +143,7 @@ std::vector<std::byte> compress_without_content_size(const std::vector<std::byte
         throw std::runtime_error { "could not configure zstd test context" };
     }
 
-    std::vector<std::byte> compressed_data(ZSTD_compressBound(uncompressed_data.size()));
+    io::byte::vector compressed_data(ZSTD_compressBound(uncompressed_data.size()));
     const std::size_t compressed_size
         = ZSTD_compress2(context.get(), compressed_data.data(), compressed_data.size(), uncompressed_data.data(), uncompressed_data.size());
     if (ZSTD_isError(compressed_size)) {
@@ -159,7 +160,7 @@ void check_error(const Result& result, const Error::Code expected)
     CHECK(result.error().code() == expected);
 }
 
-void write_file(const std::filesystem::path& path, const std::span<const std::byte> bytes) { REQUIRE(io::write_bytes_to_path(bytes, path)); }
+void write_file(const std::filesystem::path& path, const io::byte::span bytes) { REQUIRE(io::byte::write(bytes, path)); }
 
 } // namespace
 
@@ -334,7 +335,7 @@ TEST_CASE("XXH3-64 detects corrupted envelope payloads")
 
 TEST_CASE("Compression round trips and enforces its size limit")
 {
-    const std::vector<std::byte> original(4096, std::byte { 0x2a });
+    const io::byte::vector original(4096, std::byte { 0x2a });
     for (const auto compression_algorithm : zstd_compression_algorithms) {
         CAPTURE(compression_algorithm);
         const auto compressed = io::envelope::compress(original, compression_algorithm);
@@ -362,7 +363,7 @@ TEST_CASE("Compression round trips and enforces its size limit")
 
 TEST_CASE("Decompression uses its maximum when the format omits the content size")
 {
-    const std::vector<std::byte> original(4096, std::byte { 0x37 });
+    const io::byte::vector original(4096, std::byte { 0x37 });
     const auto compressed_data = compress_without_content_size(original);
 
     for (const auto compression_algorithm : zstd_compression_algorithms) {
@@ -521,7 +522,7 @@ TEST_CASE("Envelope reports malformed serialized data")
 {
     SECTION("envelope")
     {
-        const std::vector<std::byte> malformed { std::byte { 0x01 }, std::byte { 0x02 } };
+        const io::byte::vector malformed { std::byte { 0x01 }, std::byte { 0x02 } };
         check_error(io::envelope::deserialize<Schema>(malformed), Error::Code::CorruptData);
     }
 
@@ -589,8 +590,8 @@ TEST_CASE("Envelope headers are read without the payload")
     {
         io::envelope::Envelope envelope = decode_envelope(io::envelope::serialize<Schema, 3>({}).value());
         envelope.header.class_name = std::string(io::envelope::max_class_name_size, 'n');
-        envelope.header.hash = std::vector<std::byte>(io::envelope::max_hash_size, std::byte { 0x5a });
-        envelope.compressed_data = std::vector<std::byte>(1024, std::byte { 0x11 });
+        envelope.header.hash = io::byte::vector(io::envelope::max_hash_size, std::byte { 0x5a });
+        envelope.compressed_data = io::byte::vector(1024, std::byte { 0x11 });
         const auto bytes = encode_envelope(envelope);
         CHECK(encode_value(envelope.header).size() == io::envelope::max_header_size);
         write_file(path, bytes);

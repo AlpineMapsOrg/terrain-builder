@@ -25,7 +25,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "../temporary_directory.h"
-#include "io/bytes.h"
+#include "io/byte.h"
 #include "mesh/codec/Gltf.h"
 #include "mesh/codec/SfMesh.h"
 #include "store/Codec.h"

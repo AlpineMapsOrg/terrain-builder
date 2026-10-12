@@ -29,7 +29,7 @@
 #include <glm/gtc/type_precision.hpp>
 
 #include "../temporary_directory.h"
-#include "io/bytes.h"
+#include "io/byte.h"
 #include "raster_store/storage.h"
 
 namespace {
@@ -47,7 +47,7 @@ constexpr std::string_view entity_json =
 
 void write_text(const std::filesystem::path& path, const std::string_view text)
 {
-    REQUIRE(io::write_bytes_to_path(std::as_bytes(std::span(text)), path));
+    REQUIRE(io::byte::write(std::as_bytes(std::span(text)), path));
 }
 
 void write_table(const std::filesystem::path& directory)
@@ -191,7 +191,7 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     TileCodec<float> rectangular({ 3, 2 });
     CHECK(rectangular.write(path, tile).error().code() == Error::Code::InvalidInput);
 
-    tile_codec::detail::v1::RasterTile encoded { 3, 3, std::vector<std::byte>(36), std::vector<std::byte>(18) };
+    tile_codec::detail::v1::RasterTile encoded { 3, 3, io::byte::vector(36), io::byte::vector(18) };
     SECTION("wrong dimensions") { encoded.width = 4; }
     SECTION("short data") { encoded.data.pop_back(); }
     SECTION("long attribution") { encoded.source_attribution.push_back(std::byte { 0 }); }
@@ -250,14 +250,14 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     CHECK_FALSE(storage::open<float>(partial));
     CHECK_FALSE(storage::open<float>(partial / ""));
     CHECK(storage::open<float>(partial, { .allow_incomplete = true }));
-    const auto metadata_before = io::read_bytes_from_path(partial / manifest::metadata_file_name).value();
+    const auto metadata_before = io::byte::read(partial / manifest::metadata_file_name).value();
     raster_store::Tile<float> tile(4);
     tile.data.fill(12.5f);
     // Reference checks belong to RF builder, not storage reads or writes.
     tile.attribution.fill(65534);
     REQUIRE(created->save({ 0, { 0, 0 } }, tile));
     REQUIRE(created->save_index());
-    CHECK(io::read_bytes_from_path(partial / manifest::metadata_file_name).value() == metadata_before);
+    CHECK(io::byte::read(partial / manifest::metadata_file_name).value() == metadata_before);
     auto checkpoint_result = storage::open<float>(partial, { .allow_incomplete = true });
     REQUIRE(checkpoint_result);
     auto [checkpoint, checkpoint_metadata] = std::move(*checkpoint_result);
@@ -394,8 +394,8 @@ TEST_CASE("cross-root hard links and independent attribution survive RF removal"
             CHECK(std::filesystem::equivalent(source->path_for(key).value(), target->path_for(key).value()));
         }
         CHECK_FALSE(std::filesystem::equivalent(rf_root / attribution::file_name, target->base_path() / attribution::file_name));
-        CHECK(io::read_bytes_from_path(rf_root / attribution::file_name).value()
-            == io::read_bytes_from_path(target->base_path() / attribution::file_name).value());
+        CHECK(io::byte::read(rf_root / attribution::file_name).value()
+            == io::byte::read(target->base_path() / attribution::file_name).value());
         REQUIRE(storage::publish(std::move(target)));
     }
     std::filesystem::remove_all(rf_root);
@@ -411,7 +411,7 @@ TEST_CASE("byte writes report buffered device failures", "[io][bytes][raster-sto
 {
 #ifdef __linux__
     const std::array bytes { std::byte { 42 } };
-    auto written = io::write_bytes_to_path(bytes, "/dev/full", false);
+    auto written = io::byte::write(bytes, "/dev/full", false);
     REQUIRE_FALSE(written);
     CHECK(written.error().code() == Error::Code::Io);
 #endif
@@ -515,7 +515,7 @@ TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster-stor
     const auto payload_path = directory.path() / "tile.amort";
     TileCodec<float> amort({ 3, 3 });
     REQUIRE(amort.write(path, raster_store::Tile<float>(3)));
-    const auto bytes = io::read_bytes_from_path(payload_path).value();
+    const auto bytes = io::byte::read(payload_path).value();
     auto envelope = io::envelope::detail::deserialize_from_bytes<io::envelope::Envelope>(bytes).value();
     auto expected_error = Error::Code::CorruptData;
     SECTION("hash") { envelope.compressed_data.back() ^= std::byte { 1 }; }
@@ -525,7 +525,7 @@ TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster-stor
         expected_error = Error::Code::Unsupported;
     }
     const auto modified = io::envelope::detail::serialize_to_bytes(envelope).value();
-    REQUIRE(io::write_bytes_to_path(modified, payload_path));
+    REQUIRE(io::byte::write(modified, payload_path));
     CHECK(amort.read(path).error().code() == expected_error);
 }
 

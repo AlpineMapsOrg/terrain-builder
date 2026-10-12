@@ -37,7 +37,7 @@ namespace {
 
 } // namespace
 
-Expected<std::vector<std::byte>> compress(const std::span<const std::byte> uncompressed_data, const CompressionAlgorithm compression_algorithm)
+Expected<byte::vector> compress(const byte::span uncompressed_data, const CompressionAlgorithm compression_algorithm)
 {
     if (uncompressed_data.size() > default_max_decompressed_size) {
         return Error::fail(Error::Code::ResourceExhausted, "uncompressed data exceeds the compression size limit");
@@ -46,7 +46,7 @@ Expected<std::vector<std::byte>> compress(const std::span<const std::byte> uncom
     int compression_level = 0;
     switch (compression_algorithm) {
     case CompressionAlgorithm::None:
-        return std::vector<std::byte>(uncompressed_data.begin(), uncompressed_data.end());
+        return byte::vector(uncompressed_data.begin(), uncompressed_data.end());
     case CompressionAlgorithm::ZstdBestCompression:
         compression_level = ZSTD_maxCLevel();
         break;
@@ -66,7 +66,7 @@ Expected<std::vector<std::byte>> compress(const std::span<const std::byte> uncom
     }
 
     const std::size_t capacity = ZSTD_compressBound(uncompressed_data.size());
-    std::vector<std::byte> compressed_data(capacity);
+    byte::vector compressed_data(capacity);
     const std::size_t compressed_size
         = ZSTD_compress2(context.get(), compressed_data.data(), compressed_data.size(), uncompressed_data.data(), uncompressed_data.size());
     if (ZSTD_isError(compressed_size)) {
@@ -77,14 +77,14 @@ Expected<std::vector<std::byte>> compress(const std::span<const std::byte> uncom
     return compressed_data;
 }
 
-Expected<std::vector<std::byte>> decompress(
-    const std::span<const std::byte> compressed_data, const CompressionAlgorithm compression_algorithm, const std::size_t max_decompressed_size)
+Expected<byte::vector> decompress(
+    const byte::span compressed_data, const CompressionAlgorithm compression_algorithm, const std::size_t max_decompressed_size)
 {
     ASSERT(magic_enum::enum_contains(compression_algorithm), "unsupported compression algorithm", static_cast<unsigned>(compression_algorithm));
 
     const std::size_t effective_max_decompressed_size = std::min(max_decompressed_size, default_max_decompressed_size);
 
-    std::vector<std::byte> uncompressed_data;
+    byte::vector uncompressed_data;
     if (compression_algorithm == CompressionAlgorithm::None) {
         if (compressed_data.size() > effective_max_decompressed_size) {
             return Error::fail(Error::Code::ResourceExhausted, "decompressed data exceeds the configured size limit");
