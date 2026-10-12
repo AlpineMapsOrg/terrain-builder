@@ -19,17 +19,20 @@
 
 #pragma once
 
-#include <filesystem>
 #include <expected>
+#include <filesystem>
+#include <functional>
+#include <optional>
 
 #include <radix/geometry.h>
 
-#include "gis/Dataset.h"
-#include "octree/Id.h"
-#include "mesh/SimpleMesh.h"
-#include "tile_provider.h"
-#include "mesh/storage.h"
 #include "Error.h"
+#include "gis/Dataset.h"
+#include "inputs.h"
+#include "mesh/SimpleMesh.h"
+#include "mesh/storage.h"
+#include "octree/Id.h"
+#include "tile_provider.h"
 
 namespace terrainbuilder {
 
@@ -53,13 +56,16 @@ std::optional<SimpleMesh> build_patch(
     const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs);
 
-Expected<void> build_all_patches(
-    gis::Dataset &dataset,
-    const octree::Id::Level target_level,
-    const OGRSpatialReference &texture_srs,
-    const TileProvider *tile_provider,
-    const OGRSpatialReference &mesh_srs,
-    const std::filesystem::path &output_base_path,
-    const std::string &output_format,
-    const bool overwrite_existing);
+// Builds all nodes at record.target_level into <output_path>.part and publishes it to
+// output_path. Nodes in the cache, an incomplete earlier build with the same record, are
+// linked instead of built. When stop_requested returns true, the active nodes are finished
+// and the incomplete snapshot is retained, and the result is an error with code Cancelled.
+Expected<void> build_all_patches(gis::Dataset& dataset,
+    const OGRSpatialReference& texture_srs,
+    const TileProvider* tile_provider,
+    const OGRSpatialReference& mesh_srs,
+    const std::filesystem::path& output_path,
+    const inputs::Record& record,
+    const std::optional<std::filesystem::path>& cache_path = std::nullopt,
+    const std::function<bool()>& stop_requested = {});
 }

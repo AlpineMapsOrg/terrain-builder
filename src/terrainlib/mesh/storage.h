@@ -25,6 +25,7 @@
 #include "mesh/codec/from_extension.h"
 #include "octree/StoreTraits.h"
 #include "octree/storage/IndexFile.h"
+#include "octree/storage/create.h"
 #include "octree/storage/open_runtime.h"
 #include "store/IndexedStorage.h"
 
@@ -50,5 +51,17 @@ inline Expected<IndexedStorage> open_folder_indexed(const std::filesystem::path&
 {
     return octree::storage::open_folder_indexed<mesh::Simple>(path, std::string(payload_class), ".sfmesh", mesh::codec::from_extension, std::move(options));
 }
+
+// Creates an empty storage in <path>.part; see store::snapshot.
+inline Expected<IndexedStorage> create(const std::filesystem::path& path, OpenOptions options = {})
+{
+    return octree::storage::create<mesh::Simple>(path,
+        std::string(payload_class),
+        options.preferred_extension.value_or(".sfmesh"),
+        mesh::codec::from_extension,
+        options.default_mapping.value_or(octree::storage::default_mapping()));
+}
+
+inline Expected<void> publish(IndexedStorage storage) { return octree::storage::publish(std::move(storage)); }
 
 } // namespace mesh::storage

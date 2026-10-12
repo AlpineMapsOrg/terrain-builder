@@ -31,12 +31,13 @@
 #include <radix/geometry.h>
 #include <tbb/global_control.h>
 
-#include "gis/Dataset.h"
 #include "cli_support/log.h"
+#include "cli_support/stop_signal.h"
+#include "gis/Dataset.h"
 #include "gis/srs.h"
 #include "gis/webmercator.h"
-#include "terrainbuilder.h"
 #include "octree/Space.h"
+#include "terrainbuilder.h"
 #include "tile_provider.h"
 
 OGRSpatialReference parse_srs(const std::string &user_input) {
@@ -282,7 +283,7 @@ int run(std::span<char *> args) {
         ->required()
         ->check(CLI::Range(unsigned(terrainbuilder::min_target_level), unsigned(octree::Id::max_level())));
     std::filesystem::path output_base_path;
-    batch->add_option("--output", output_base_path, "Output path were the meshes are written to.")
+    batch->add_option("--output", output_base_path, "New output path; the meshes are written to <output>.part, which is renamed to <output> when complete")
         ->required();
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")
@@ -291,8 +292,8 @@ int run(std::span<char *> args) {
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);
-    bool overwrite_existing = false;
-    batch->add_flag("--overwrite", overwrite_existing, "Overwrite existing mesh files");
+    std::optional<std::filesystem::path> cache_path;
+    batch->add_option("--cache", cache_path, "Incomplete .part output of an earlier batch build with the same inputs to reuse")->check(CLI::ExistingDirectory);
 
     CLI11_PARSE(app, argc, argv);
 
@@ -344,19 +345,27 @@ int run(std::span<char *> args) {
         const auto maybe_s = actual_num_threads == 1 ? "" : "s";
         LOG_INFO("Using {} thread{} for batch processing.", actual_num_threads, maybe_s);
 
+        const auto identifier = [](const std::filesystem::path& path) { return std::filesystem::absolute(path).lexically_normal().string(); };
+        terrainbuilder::inputs::Record record;
+        record.dataset = identifier(dataset_path);
+        if (texture_base_path.has_value()) {
+            record.textures = identifier(*texture_base_path);
+        }
+        record.min_texture_level = min_texture_level;
+        record.max_texture_level = max_texture_level;
+        record.mesh_srs = mesh_srs_input;
+        record.target_level = target_level;
+        record.format = output_format;
+
+        cli_support::stop_signal::install();
         const auto build_result = terrainbuilder::build_all_patches(
-            dataset,
-            target_level,
-            texture_srs,
-            tile_provider.get(),
-            mesh_srs,
-            output_base_path,
-            output_format,
-            overwrite_existing);
+            dataset, texture_srs, tile_provider.get(), mesh_srs, output_base_path, record, cache_path, cli_support::stop_signal::requested);
         if (!build_result) {
-            LOG_ERROR(
-                "Failed to finalize Structura Fundamentalis output: {}",
-                build_result.error().to_string());
+            if (build_result.error().code() == Error::Code::Cancelled) {
+                LOG_INFO("{}", build_result.error().to_string());
+                return cli_support::stop_signal::exit_code();
+            }
+            LOG_ERROR("Failed to build Structura Fundamentalis output: {}", build_result.error().to_string());
             return 1;
         }
     }

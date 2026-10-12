@@ -18,6 +18,7 @@
 
 add_library(sfbuilderlib
     border.h
+    inputs.h
     mesh_builder.h mesh_builder.cpp
     raw_dataset_reader.h
     terrainbuilder.h terrainbuilder.cpp
