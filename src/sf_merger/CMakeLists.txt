@@ -21,6 +21,7 @@ add_library(sfmergerlib INTERFACE
     NodeWriter.h
     cut.h
     earth.h
+    inputs.h
     mask.h
     merge.h
     utils.h

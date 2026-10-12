@@ -24,13 +24,15 @@
 #include <vector>
 
 #include "cli.h"
-#include "cut.h"
 #include "cli_support/log.h"
-#include "mask.h"
-#include "mesh/storage.h"
-#include "merge.h"
-#include "optional_utils.h"
+#include "cli_support/stop_signal.h"
+#include "cut.h"
 #include "earth.h"
+#include "inputs.h"
+#include "mask.h"
+#include "merge.h"
+#include "mesh/storage.h"
+#include "optional_utils.h"
 
 std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
     if (std::filesystem::exists(path)) {
@@ -52,7 +54,8 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
     return std::nullopt;
 }
 
-void run(const cli::MergeArgs& args) {
+int run(const cli::MergeArgs& args)
+{
     LOG_TRACE("Loading base dataset from {}", args.base_path);
     auto base_result = mesh::storage::open_folder_indexed(args.base_path);
     if (!base_result) {
@@ -73,33 +76,28 @@ void run(const cli::MergeArgs& args) {
     }
     mesh::storage::IndexedStorage new_dataset = std::move(new_result.value());
 
-    LOG_TRACE("Creating output dataset at {}", args.output_path);
-    std::filesystem::create_directories(args.output_path);
-    mesh::storage::OpenOptions options;
-    options.default_mapping = base_dataset.layout().mapping();
-    options.preferred_extension = std::string(base_dataset.codec_selector().value_or(".sfmesh"));
-    auto output_result = mesh::storage::open_folder(args.output_path, std::move(options));
-    if (!output_result) {
-        LOG_ERROR_AND_EXIT(
-            "Failed to open output dataset {}: {}",
-            args.output_path,
-            output_result.error().to_string());
+    const auto record = sf_merger::inputs::make_record(args.base_path, args.new_path, args.mask_path);
+    if (!record) {
+        LOG_ERROR_AND_EXIT("Failed to record the merge inputs: {}", record.error().to_string());
     }
-    mesh::storage::Storage output_dataset = std::move(output_result.value());
 
     std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
 
-    const auto merge_result = merge_datasets(
-        base_dataset,
-        new_dataset,
-        output_dataset,
-        mask);
+    cli_support::stop_signal::install();
+    const auto merge_result = merge_datasets(base_dataset, new_dataset, args.output_path, mask, *record, args.cache_path, cli_support::stop_signal::requested);
     if (!merge_result) {
-        LOG_ERROR_AND_EXIT("Failed to merge datasets: {}", merge_result.error().to_string());
+        if (merge_result.error().code() == Error::Code::Cancelled) {
+            LOG_INFO("{}", merge_result.error().to_string());
+            return cli_support::stop_signal::exit_code();
+        }
+        LOG_ERROR("Failed to merge datasets: {}", merge_result.error().to_string());
+        return 1;
     }
+    return 0;
 }
 
-void run(const cli::CutArgs& args) {
+int run(const cli::CutArgs& args)
+{
     LOG_TRACE("Loading input dataset from {}", args.input_path);
     auto input_result = mesh::storage::open_folder_indexed(args.input_path);
     if (!input_result) {
@@ -116,12 +114,15 @@ void run(const cli::CutArgs& args) {
         args.output_path,
         args.keep_inside);
     if (!cut_result) {
-        LOG_ERROR_AND_EXIT("Failed to cut dataset: {}", cut_result.error().to_string());
+        LOG_ERROR("Failed to cut dataset: {}", cut_result.error().to_string());
+        return 1;
     }
+    return 0;
 }
 
-void run(const cli::Args &args) {
-    std::visit([](const auto& args) { run(args); }, args);
+int run(const cli::Args& args)
+{
+    return std::visit([](const auto& args) { return run(args); }, args);
 }
 
 int main(int argc, char **argv) {
@@ -135,7 +136,7 @@ int main(int argc, char **argv) {
                                                 });
     LOG_DEBUG("Running with: {}", arg_str);
 
-    run(args);
+    return run(args);
     // TODO: remove
     // std::filesystem::path source = "../../../meshes/out-merge";
     // std::filesystem::path destination = "/mnt/c/Users/Admin/Downloads/out-merge";

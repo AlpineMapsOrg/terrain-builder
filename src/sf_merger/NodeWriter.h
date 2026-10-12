@@ -23,7 +23,6 @@
 #include <optional>
 
 #include <libassert/assert.hpp>
-#include <opencv2/imgcodecs.hpp>
 
 #include "Error.h"
 #include "NodeLoader.h"
@@ -37,39 +36,16 @@ class NodeWriter {
 public:
     NodeWriter(mesh::storage::Storage &storage) : _storage(storage) {}
 
-    Expected<bool> has_node(
-        const octree::Id &id) {
-        return this->_storage.has(id);
-    }
-
     Expected<void> write_node(
         const octree::Id &id,
         const SimpleMesh &mesh) {
         mesh::validate(mesh);
-        auto save_result = this->_storage.save(id, mesh);
-        if (!save_result) {
-            return save_result;
-        }
-        auto path_result = this->_storage.path_for(id);
-        if (!path_result) {
-            return Error::propagate(
-                std::move(path_result), "resolve texture output path for node " + id.to_string());
-        }
-        auto p = path_result.value();
-        // change extension to .png
-        p.replace_extension(".png");
-        if (mesh.texture.has_value()) {
-            try {
-                if (!cv::imwrite(p, mesh.texture.value())) {
-                    return Error::fail(Error::Code::Io, "write node texture to", p);
-                }
-            } catch (const cv::Exception& error) {
-                return Error::fail(
-                    Error::Code::Io, "write node texture to \"" + p.string() + "\": " + error.what());
-            }
-        }
-        return {};
+        return this->_storage.save(id, mesh);
     }
+
+    Expected<void> link_node(const octree::Id& id, const mesh::storage::IndexedStorage& source) { return this->_storage.link_from(id, source); }
+
+    Expected<void> save_index() { return this->_storage.save_index(); }
 
     Expected<void> link_subtree_to_output(
         const octree::Id &id,

@@ -174,20 +174,22 @@ inline Expected<void> cut_dataset(
     const std::filesystem::path &output_path,
     const bool keep_inside) {
     LOG_TRACE("Creating output dataset at {}", output_path);
-    std::filesystem::create_directories(output_path);
-
     mesh::storage::OpenOptions options;
     options.default_mapping = input_dataset.layout().mapping();
     options.preferred_extension = std::string(input_dataset.codec_selector().value_or(".sfmesh"));
-    auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
+    auto output_result = mesh::storage::create(output_path, std::move(options));
     if (!output_result) {
-        return Error::propagate(
-            std::move(output_result), "open cut output dataset \"" + output_path.string() + "\"");
+        return Error::propagate(std::move(output_result), "create cut output dataset \"" + output_path.string() + "\"");
     }
     mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
-    if (!output_dataset.index().empty()) {
-        return Error::fail(Error::Code::AlreadyExists, "output dataset already contains nodes: " + output_path.string());
-    }
 
-    return cut_dataset(input_dataset, mask, output_dataset, keep_inside);
+    auto cut = cut_dataset(input_dataset, mask, output_dataset, keep_inside);
+    if (!cut) {
+        return cut;
+    }
+    auto published = mesh::storage::publish(std::move(output_dataset));
+    if (!published) {
+        return Error::propagate(std::move(published), "publish cut output dataset \"" + output_path.string() + "\"");
+    }
+    return {};
 }

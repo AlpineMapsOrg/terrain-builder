@@ -43,7 +43,7 @@ struct MergeArgs : public BaseArgs {
     std::filesystem::path output_path;
     std::optional<std::filesystem::path> mask_path;
     // MergeAlgorithm algorihm;
-    bool overwrite_output;
+    std::optional<std::filesystem::path> cache_path;
 };
 
 struct CutArgs : public BaseArgs {

@@ -44,10 +44,13 @@ Args cli::parse(int argc, const char *const *argv) {
     merge.add_option("--mask", merge_args.mask_path, "Path to a mask denoting the valid area of the new dataset")
         ->check(CLI::ExistingFile);
 
-    merge.add_option("--output", merge_args.output_path, "Path to output write the merged dataset to")
+    merge
+        .add_option(
+            "--output", merge_args.output_path, "New path for the merged dataset; it is written to <output>.part, which is renamed to <output> when complete")
         ->required();
 
-    merge.add_option("--overwrite", merge_args.overwrite_output, "Overwrite any data already in output");
+    merge.add_option("--cache", merge_args.cache_path, "Incomplete .part output of an earlier merge with the same inputs to reuse")
+        ->check(CLI::ExistingDirectory);
 
     /*
     const std::map<std::string, MergeAlgorithm> method_names{
@@ -67,7 +70,8 @@ Args cli::parse(int argc, const char *const *argv) {
     cut.add_option("--mask", cut_args.mask_path, "Path to a mask denoting the regions to retain")
         ->check(CLI::ExistingFile);
 
-    cut.add_option("--output", cut_args.output_path, "Path to output the cut dataset to");
+    cut.add_option("--output", cut_args.output_path, "New path for the cut dataset; it is written to <output>.part, which is renamed to <output> when complete")
+        ->required();
 
     cut.add_flag("--keep-inside,!--keep-outside", cut_args.keep_inside, "Keep the part of the dataset thats inside/outside the mask.");
 
