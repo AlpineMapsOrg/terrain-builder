@@ -32,7 +32,7 @@
 #include <tbb/global_control.h>
 
 #include "gis/Dataset.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "gis/srs.h"
 #include "gis/webmercator.h"
 #include "terrainbuilder.h"
@@ -296,7 +296,7 @@ int run(std::span<char *> args) {
 
     CLI11_PARSE(app, argc, argv);
 
-    Log::init(log_level);
+    cli_support::Log::init(log_level);
 
     gis::Dataset dataset(dataset_path.string());
     log_dataset_overview(dataset);

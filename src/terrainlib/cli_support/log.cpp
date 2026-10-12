@@ -1,7 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2022 Adam Celarek-Litofcenko
- * Copyright (C) 2022 Martin Braunsperger
+ * Copyright (C) 2024 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,26 +16,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#pragma once
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
-#include <atomic>
-#include <cassert>
-#include <condition_variable>
-#include <mutex>
-#include <string>
-#include <thread>
+#include "cli_support/log.h"
 
-class ProgressIndicator {
-    const size_t m_n_steps;
-    std::atomic<size_t> m_step = 0;
-    mutable std::condition_variable_any m_monitor_condition;
-    mutable std::mutex m_monitor_mutex;
+namespace cli_support {
 
-public:
-    ProgressIndicator(size_t n_steps);
+std::shared_ptr<spdlog::logger> Log::logger;
 
-    void task_finished();
-    [[nodiscard]] std::jthread start_monitoring() const; // join on the returned thread after the work is done!!
-    [[nodiscard]] std::string progress_bar(const uint32_t bar_width=50) const;
-    [[nodiscard]] std::string x_of_y_done_message() const;
-};
+void Log::init(spdlog::level::level_enum log_level) {
+	spdlog::set_pattern("[%Y-%m-%d %T.%e] [%=3n] [%^%l%$] %v");
+	Log::logger = spdlog::stderr_color_mt("LOG");
+	Log::logger->set_level(log_level);
+}
+
+} // namespace cli_support

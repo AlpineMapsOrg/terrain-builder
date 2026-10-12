@@ -29,7 +29,7 @@
 #include "build_config.h"
 #include "cluster.h"
 #include "enumerate.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/connectivity/adjacency.h"
 #include "range_utils.h"
 #include "validate.h"

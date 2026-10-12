@@ -31,7 +31,7 @@
 #include <glm/gtx/vector_angle.hpp>
 
 #include "containers/FixedVector.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/connectivity/connected_components.h"
 #include "mesh/holes.h"
 #include "mesh/connectivity/boundary.h"

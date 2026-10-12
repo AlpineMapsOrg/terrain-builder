@@ -31,7 +31,7 @@
 #include <CGAL/mark_domain_in_triangulation.h>
 
 #include "build_config.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "polygon/triangulate.h"

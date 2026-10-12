@@ -23,7 +23,7 @@
 
 #include "cli.h"
 #include "build.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/storage.h"
 #include "storage.h"
 #include "ContinuationMode.h"
@@ -31,7 +31,7 @@
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
 
-    Log::init(args.log_level);
+    cli_support::Log::init(args.log_level);
 
     try {
         auto input_result = mesh::storage::open_folder_indexed(args.input_path);

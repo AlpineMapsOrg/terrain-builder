@@ -56,7 +56,7 @@
 #include <expected>
 
 // Internal headers
-#include "log.h"
+#include "cli_support/log.h"
 #include "hash_utils.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"

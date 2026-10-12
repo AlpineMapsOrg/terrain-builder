@@ -24,7 +24,7 @@
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mask.h"
 #include "octree/Id.h"
 #include "mesh/storage.h"

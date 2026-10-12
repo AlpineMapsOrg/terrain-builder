@@ -1,6 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2024 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,15 +16,31 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include "cli_support/stop_signal.h"
 
-#include "log.h"
+#include <atomic>
+#include <csignal>
 
-std::shared_ptr<spdlog::logger> Log::logger;
+namespace cli_support::stop_signal {
 
-void Log::init(spdlog::level::level_enum log_level) {
-	spdlog::set_pattern("[%Y-%m-%d %T.%e] [%=3n] [%^%l%$] %v");
-	Log::logger = spdlog::stderr_color_mt("LOG");
-	Log::logger->set_level(log_level);
+namespace {
+    static_assert(std::atomic<int>::is_always_lock_free);
+    std::atomic<int> received = 0;
+    void record(int signal) { received.store(signal, std::memory_order_relaxed); }
+} // namespace
+
+void install()
+{
+    std::signal(SIGINT, record);
+    std::signal(SIGTERM, record);
 }
+
+bool requested() { return received.load(std::memory_order_relaxed) != 0; }
+
+int exit_code()
+{
+    const auto signal = received.load(std::memory_order_relaxed);
+    return signal ? 128 + signal : 1;
+}
+
+} // namespace cli_support::stop_signal

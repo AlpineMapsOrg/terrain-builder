@@ -28,7 +28,7 @@
 #include <libassert/assert.hpp>
 
 #include "build_config.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/cleanup.h"
 #include "mesh/connectivity/connected_components.h"
 #include "mesh/convert.h"

@@ -19,7 +19,7 @@
 
 #include "ShaderProgram.h"
 #include <glad/gl.h>
-#include <log.h>
+#include <cli_support/log.h>
 #include <utility>
 
 ShaderProgram::ShaderProgram() {

@@ -18,7 +18,7 @@
  *****************************************************************************/
 
 #include "Shader.h"
-#include <log.h>
+#include <cli_support/log.h>
 
 Shader::Shader(GLenum type) : m_type(type) {
 	m_handle = glCreateShader(m_type);

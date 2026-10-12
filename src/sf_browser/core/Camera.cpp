@@ -18,7 +18,7 @@
  *****************************************************************************/
 
 #include "Camera.h"
-#include <log.h>
+#include <cli_support/log.h>
 
 Camera::Camera(CameraConfig config) : 
 	m_fov_deg(config.fov_deg), 

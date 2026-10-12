@@ -25,7 +25,7 @@
 #include <meshoptimizer.h>
 #include <expected>
 
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/EncodedMesh.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io/texture.h"

@@ -44,7 +44,7 @@
 #include "gis/webmercator.h"
 
 #include "tile_provider.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 namespace terrainbuilder {
 

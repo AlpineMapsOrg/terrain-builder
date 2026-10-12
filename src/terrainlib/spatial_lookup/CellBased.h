@@ -23,7 +23,7 @@
 #include <glm/gtx/norm.hpp>
 #include <libassert/assert.hpp>
 
-#include "log.h"
+#include "cli_support/log.h"
 #include "spatial_lookup/CellBasedStorage.h"
 #include "spatial_lookup/NDLoopHelper.h"
 #include "spatial_lookup/SpatialLookup.h"

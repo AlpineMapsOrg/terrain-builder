@@ -32,7 +32,7 @@
 #include "cluster.h"
 #include "compact.h"
 #include "enumerate.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/connectivity/adjacency.h"
 #include "spatial_lookup/Hashmap.h"
 #include "validate.h"

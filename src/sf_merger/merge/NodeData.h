@@ -22,7 +22,7 @@
 #include <optional>
 
 #include "NodeLoader.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"
 #include "optional_utils.h"

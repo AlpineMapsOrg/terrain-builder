@@ -25,7 +25,7 @@
 #include <utility>
 
 #include "Error.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "store/NodeStatus.h"
 #include "store/Traits.h"
 #include <libassert/assert.hpp>

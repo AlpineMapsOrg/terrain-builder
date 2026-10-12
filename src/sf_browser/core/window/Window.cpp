@@ -18,7 +18,7 @@
  *****************************************************************************/
 
 #include "Window.h"
-#include <log.h>
+#include <cli_support/log.h>
 #include <limits>
 
 std::atomic<bool> Window::glfw_initialized(false);

@@ -23,7 +23,7 @@
 
 #include "io/byte.h"
 #include "io/utils.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 namespace io::byte {
 

@@ -21,7 +21,7 @@
 #include "Application.h"
 #include <sstream>
 
-#include <log.h>
+#include <cli_support/log.h>
 
 #include <glm/glm.hpp>
 

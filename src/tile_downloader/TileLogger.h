@@ -34,8 +34,8 @@
 #include <fmt/core.h>
 #include <radix/tile.h>
 
-#include "ProgressIndicator.h"
-#include "log.h"
+#include "cli_support/ProgressIndicator.h"
+#include "cli_support/log.h"
 
 struct TileResult {
     struct Downloaded {};
@@ -88,7 +88,7 @@ private:
     static constexpr size_t PROGRESS_RESOLUTION = 10'000;
 
     unsigned _root_zoom_level;
-    ProgressIndicator _progress;
+    cli_support::ProgressIndicator _progress;
     std::jthread _progress_thread;
     size_t _steps_done = 0;
     std::map<unsigned, uint32_t> _level_counts;

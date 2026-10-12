@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "ProgressIndicator.h"
+#include "cli_support/ProgressIndicator.h"
 
 #include <chrono>
 #include <iostream>
@@ -29,6 +29,8 @@
 #include <libassert/assert.hpp>
 
 using namespace std::literals;
+
+namespace cli_support {
 
 ProgressIndicator::ProgressIndicator(size_t n_steps)
     : m_n_steps(n_steps) {
@@ -106,3 +108,5 @@ std::string ProgressIndicator::progress_bar(const uint32_t bar_width) const {
 std::string ProgressIndicator::x_of_y_done_message() const {
     return fmt::format("{}/{}", m_step.load(), m_n_steps);
 }
+
+} // namespace cli_support

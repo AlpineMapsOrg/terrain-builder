@@ -41,7 +41,7 @@
 #include <vrtdataset.h>
 
 #include <radix/raster.h>
-#include "log.h"
+#include "cli_support/log.h"
 
 namespace gis {
 

@@ -32,7 +32,7 @@
 
 #include "gis/gdal.h"
 #include "gis/srs.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 namespace gis {
 

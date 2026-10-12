@@ -28,7 +28,7 @@
 #include "containers/Size.h"
 #include "containers/Buffer.h"
 #include "clusterize.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "meshopt.h"
 #include "numeric/number_types.h"
 #include "utils.h"

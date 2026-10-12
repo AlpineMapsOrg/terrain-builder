@@ -35,7 +35,7 @@
 #undef CGLTF_WRITE_IMPLEMENTATION
 
 #include "io/utils.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/io/gltf.h"
 #include "mesh/io/texture.h"
 

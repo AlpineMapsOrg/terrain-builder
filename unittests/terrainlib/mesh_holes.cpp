@@ -31,7 +31,7 @@
 #include "mesh/connectivity/boundary.h"
 #include "mesh/connectivity/topology.h"
 #include "mesh/connectivity/manifold.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 std::string vec2d_to_string(const std::vector<std::vector<uint32_t>> &v) {
     std::ostringstream oss;

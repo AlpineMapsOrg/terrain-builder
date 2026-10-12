@@ -26,7 +26,7 @@
 
 #include <expected>
 
-#include "log.h"
+#include "cli_support/log.h"
 #include "store/IndexFormat.h"
 #include "store/RawStorage.h"
 

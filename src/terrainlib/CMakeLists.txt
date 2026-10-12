@@ -20,7 +20,6 @@
 add_library(terrainlib
     Error.h Error.cpp
     ImageKey.h
-    ProgressIndicator.h ProgressIndicator.cpp
     Range.h
     SphereProjector.h
     VecHash.h
@@ -31,7 +30,6 @@ add_library(terrainlib
     fmt_impls.h
     glm_utils.h
     hash_utils.h
-    log.h log.cpp
     macros.h
     opencv_utils.h
     optional_utils.h
@@ -42,6 +40,10 @@ add_library(terrainlib
     type_utils.h
     variant_utils.h
     vector_utils.h
+
+    cli_support/log.h cli_support/log.cpp
+    cli_support/ProgressIndicator.h cli_support/ProgressIndicator.cpp
+    cli_support/stop_signal.h cli_support/stop_signal.cpp
 
     containers/Buffer.h
     containers/Cow.h

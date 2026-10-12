@@ -32,7 +32,7 @@
 #include <libassert/assert.hpp>
 
 #include "gis/Dataset.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
 #include "mesh_builder.h"

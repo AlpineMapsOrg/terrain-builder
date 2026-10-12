@@ -26,7 +26,7 @@
 #include <radix/geometry.h>
 #include <libassert/assert.hpp>
 
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/texture_trim.h"
 #include "range_utils.h"
 

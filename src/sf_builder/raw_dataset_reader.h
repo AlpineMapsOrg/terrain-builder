@@ -32,7 +32,7 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
-#include "log.h"
+#include "cli_support/log.h"
 #include <radix/raster.h>
 
 namespace terrainbuilder {

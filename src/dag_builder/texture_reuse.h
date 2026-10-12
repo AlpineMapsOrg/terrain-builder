@@ -29,7 +29,7 @@
 #include "Partitioning.h"
 #include "cluster.h"
 #include "enumerate.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "range_utils.h"
 
 namespace detail {

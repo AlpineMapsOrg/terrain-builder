@@ -23,7 +23,7 @@
 #include <random>
 
 #include "SphereProjector.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 static constexpr double epsilon = 1e-6;
 inline void check_equal(const glm::dvec2& a, const glm::dvec2& b) {

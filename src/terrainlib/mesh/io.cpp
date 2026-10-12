@@ -18,7 +18,7 @@
  *****************************************************************************/
 
 #include "mesh/io.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/io/gltf.h"
 #include "mesh/codec/SfMesh.h"
 #include "mesh/validate.h"

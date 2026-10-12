@@ -29,7 +29,7 @@
 #include <fmt/ostream.h>
 #include <magic_enum/magic_enum.hpp>
 
-#include "log.h"
+#include "cli_support/log.h"
 #include "store/NodeStatus.h"
 
 namespace store {

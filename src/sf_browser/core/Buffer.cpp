@@ -18,7 +18,7 @@
  *****************************************************************************/
 
 #include "Buffer.h"
-#include <log.h>
+#include <cli_support/log.h>
 
 Buffer::Buffer(GLenum target, GLenum usage) : m_target(target), m_usage(usage) {
 	glCreateBuffers(1, &m_handle);

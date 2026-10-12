@@ -47,8 +47,8 @@
 #include "gis/Dataset.h"
 #include "gis/srs.h"
 
-#include "ProgressIndicator.h"
-#include "log.h"
+#include "cli_support/ProgressIndicator.h"
+#include "cli_support/log.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
 #include "mesh_builder.h"
@@ -336,7 +336,7 @@ Expected<void> build_all_patches(
     std::vector<octree::Id> target_nodes;
     target_nodes.assign(concurrent_targets.begin(), concurrent_targets.end());
 
-    ProgressIndicator progress(target_nodes.size());
+    cli_support::ProgressIndicator progress(target_nodes.size());
     std::jthread progress_thread = progress.start_monitoring();
 
     // Clone dataset and SRSs for each thread
@@ -354,7 +354,7 @@ Expected<void> build_all_patches(
     });
 
     // Decrease log level to error to avoid excessive logging during mesh building
-    auto logger = Log::get_logger();
+    auto logger = cli_support::Log::get_logger();
     const auto original_level = logger->level();
     const auto new_level = spdlog::level::err;
     // Only set to if it's more restrictive than current level

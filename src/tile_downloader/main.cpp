@@ -21,11 +21,11 @@
 #include "TileDownloader.h"
 #include "TileUrlBuilder.h"
 #include "cli.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 int main(int argc, char *argv[]) {
     const auto args = cli::parse(argc, argv);
-    Log::init(args.log_level);
+    cli_support::Log::init(args.log_level);
 
     if (args.srs != 3857) {
         LOG_ERROR_AND_EXIT("unsupported srs EPSG \"{}\"", args.srs);

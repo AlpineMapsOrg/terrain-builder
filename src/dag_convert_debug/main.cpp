@@ -23,11 +23,11 @@
 #include "cli.h"
 #include "codec.h"
 #include "dag_node.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
 #include "mesh/storage.h"
-#include "ProgressIndicator.h"
+#include "cli_support/ProgressIndicator.h"
 #include "storage.h"
 #include "utils.h"
 
@@ -83,7 +83,7 @@ void export_storage(const cli::Args &args) {
 
     size_t exported_count = 0;
 
-    ProgressIndicator progress(input_storage.index().size());
+    cli_support::ProgressIndicator progress(input_storage.index().size());
     auto progress_thread = progress.start_monitoring();
 
     for (const auto &[id, status] : input_storage.index()) {
@@ -135,7 +135,7 @@ void export_storage(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    Log::init(args.log_level);
+    cli_support::Log::init(args.log_level);
 
     if (std::filesystem::is_directory(args.input_path)) {
         export_storage(args);

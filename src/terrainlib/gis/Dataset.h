@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "Error.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include <radix/tile.h>
 
 class GDALDataset;

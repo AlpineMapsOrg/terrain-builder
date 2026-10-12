@@ -25,7 +25,7 @@
 
 #include "cli.h"
 #include "cut.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mask.h"
 #include "mesh/storage.h"
 #include "merge.h"
@@ -127,7 +127,7 @@ void run(const cli::Args &args) {
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
     const auto log_level = std::visit([](const auto& args) { return args.log_level; }, args);
-    Log::init(log_level);
+    cli_support::Log::init(log_level);
 
     const std::string arg_str = std::accumulate(argv, argv + argc, std::string(),
                                                 [](const std::string &acc, const char *arg) {

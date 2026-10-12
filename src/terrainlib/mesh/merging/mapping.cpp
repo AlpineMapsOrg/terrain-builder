@@ -36,7 +36,7 @@
 
 #include "build_config.h"
 #include "containers/UnionFind.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/convert.h"
 #include "mesh/connectivity/boundary.h"
 #include "mesh/merging/EpsilonVertexDeduplicate.h"

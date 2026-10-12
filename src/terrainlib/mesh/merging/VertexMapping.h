@@ -32,7 +32,7 @@
 #include "containers/SegmentedBuffer.h"
 #include "containers/HybridIndexPairMap.h"
 #include "mesh/merging/VertexId.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 namespace mesh::merging {
 

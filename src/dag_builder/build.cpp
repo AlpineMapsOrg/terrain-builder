@@ -36,7 +36,7 @@
 #include "compact.h"
 #include "geometry/geometry.h"
 #include "numeric/int_math.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "merge/clusterings.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
@@ -46,7 +46,7 @@
 #include "octree/Space.h"
 #include "mesh/storage.h"
 #include "store/traverse.h"
-#include "ProgressIndicator.h"
+#include "cli_support/ProgressIndicator.h"
 #include "partition.h"
 #include "simplify.h"
 #include "slice.h"
@@ -552,7 +552,7 @@ std::unordered_set<octree::Id> build_level(
 
     tbb::concurrent_vector<octree::Id> saved_ids;
 
-    ProgressIndicator progress(targets.size());
+    cli_support::ProgressIndicator progress(targets.size());
     auto progress_thread = progress.start_monitoring();
 
     parallel_foreach(targets, [&](const octree::Id &target) {
