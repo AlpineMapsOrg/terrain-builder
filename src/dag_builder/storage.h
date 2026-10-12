@@ -25,7 +25,7 @@
 #include "codec.h"
 #include "octree/StoreTraits.h"
 #include "octree/storage/IndexFile.h"
-#include "octree/storage/create.h"
+#include "octree/storage/snapshot.h"
 #include "octree/storage/open_runtime.h"
 #include "store/IndexedStorage.h"
 

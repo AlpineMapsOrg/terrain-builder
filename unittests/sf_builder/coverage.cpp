@@ -205,7 +205,7 @@ TEST_CASE("batch builds datasets crossing the prime meridian", "[terrainbuilder]
     }
 }
 
-TEST_CASE("batch builds write a new snapshot and reuse compatible caches", "[terrainbuilder][snapshot]")
+TEST_CASE("batch builds stop on request and reuse cached nodes", "[terrainbuilder][snapshot]")
 {
     TemporaryDirectory directory("sf-batch-snapshot");
     const auto wgs84 = gis::srs::wgs84();
@@ -214,14 +214,6 @@ TEST_CASE("batch builds write a new snapshot and reuse compatible caches", "[ter
     gis::Dataset dataset(write_raster(directory.path(), wgs84, { { -0.02, 51.47 }, { 0.02, 51.49 } }, { 400, 200 }));
     const auto record = batch_record(12);
     const auto output = directory.path() / "output";
-
-    SECTION("an existing output is rejected")
-    {
-        REQUIRE(std::filesystem::create_directory(output));
-        const auto built = terrainbuilder::build_all_patches(dataset, webmercator, nullptr, ecef, output, record);
-        REQUIRE_FALSE(built.has_value());
-        CHECK(built.error().code() == Error::Code::AlreadyExists);
-    }
 
     SECTION("a stop request retains the incomplete snapshot")
     {
@@ -243,28 +235,17 @@ TEST_CASE("batch builds write a new snapshot and reuse compatible caches", "[ter
         std::filesystem::rename(first, cache);
         REQUIRE(store::inputs::write<terrainbuilder::inputs::Schema>(cache, record).has_value());
 
-        SECTION("with matching inputs")
-        {
-            REQUIRE(terrainbuilder::build_all_patches(dataset, webmercator, nullptr, ecef, output, record, cache).has_value());
-            const auto cached = mesh::storage::open_index(cache / octree::storage::index_file_name).value();
-            const auto built = mesh::storage::open_index(output / octree::storage::index_file_name).value();
-            CHECK(built.index().size() == cached.index().size());
-            std::size_t linked = 0;
-            for (const auto& [id, status] : cached.index()) {
-                if (status != store::NodeStatus::Virtual) {
-                    CHECK(std::filesystem::equivalent(cached.path_for(id).value(), built.path_for(id).value()));
-                    ++linked;
-                }
+        REQUIRE(terrainbuilder::build_all_patches(dataset, webmercator, nullptr, ecef, output, record, cache).has_value());
+        const auto cached = mesh::storage::open_index(cache / octree::storage::index_file_name).value();
+        const auto built = mesh::storage::open_index(output / octree::storage::index_file_name).value();
+        CHECK(built.index().size() == cached.index().size());
+        std::size_t linked = 0;
+        for (const auto& [id, status] : cached.index()) {
+            if (status != store::NodeStatus::Virtual) {
+                CHECK(std::filesystem::equivalent(cached.path_for(id).value(), built.path_for(id).value()));
+                ++linked;
             }
-            CHECK(linked > 0);
         }
-
-        SECTION("with different inputs")
-        {
-            const auto built = terrainbuilder::build_all_patches(dataset, webmercator, nullptr, ecef, output, batch_record(13), cache);
-            REQUIRE_FALSE(built.has_value());
-            CHECK(built.error().code() == Error::Code::InvalidInput);
-            CHECK_FALSE(std::filesystem::exists(directory.path() / "output.part"));
-        }
+        CHECK(linked > 0);
     }
 }

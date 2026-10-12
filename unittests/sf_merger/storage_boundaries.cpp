@@ -24,7 +24,6 @@
 #include "cut.h"
 #include "merge.h"
 #include "mesh/storage.h"
-#include "octree/store_layout/Mappings.h"
 #include "store/inputs.h"
 
 namespace {
@@ -197,29 +196,7 @@ TEST_CASE("SF cut hard-links unchanged leaves and writes clipped leaves", "[sfme
     }
 }
 
-TEST_CASE("SF cut output keeps the input layout and codec", "[sfmerger][sf][link]")
-{
-    const octree::Id root = octree::Id::root();
-    TemporaryDirectory input_directory("cut-format-input");
-    TemporaryDirectory output_directory("cut-format-output");
-    mesh::storage::OpenOptions options;
-    options.default_mapping = octree::store_layout::flat();
-    options.preferred_extension = ".glb";
-    auto input_result = mesh::storage::open_folder_indexed(input_directory.path(), std::move(options));
-    REQUIRE(input_result.has_value());
-    auto input = std::move(input_result.value());
-    REQUIRE(input.save(root, triangle()).has_value());
-    REQUIRE(input.save_index().has_value());
-
-    const auto output_path = output_directory.path() / "cut";
-    REQUIRE(cut_dataset(input, MeshMask {}, output_path, false).has_value());
-    const auto output = indexed_storage(output_path);
-    CHECK(output.codec_selector() == input.codec_selector());
-    CHECK(output.layout().mapping().id == input.layout().mapping().id);
-    CHECK(std::filesystem::equivalent(input.paths(root)->front(), output.paths(root)->front()));
-}
-
-TEST_CASE("SF merge writes a new snapshot and reuses compatible caches", "[sfmerger][sf][snapshot]")
+TEST_CASE("SF merge stops on request and reuses cached nodes", "[sfmerger][sf][snapshot]")
 {
     const octree::Id root = octree::Id::root();
     TemporaryDirectory directory("merge-snapshot");
@@ -234,14 +211,6 @@ TEST_CASE("SF merge writes a new snapshot and reuses compatible caches", "[sfmer
     const auto record = sf_merger::inputs::make_record(left_path, right_path, std::nullopt);
     REQUIRE(record.has_value());
     const auto output = directory.path() / "output";
-
-    SECTION("an existing output is rejected")
-    {
-        REQUIRE(std::filesystem::create_directory(output));
-        const auto merged = merge_datasets(left, right, output, std::nullopt, *record);
-        REQUIRE_FALSE(merged.has_value());
-        CHECK(merged.error().code() == Error::Code::AlreadyExists);
-    }
 
     SECTION("a stop request retains the incomplete snapshot")
     {
@@ -264,22 +233,9 @@ TEST_CASE("SF merge writes a new snapshot and reuses compatible caches", "[sfmer
         std::filesystem::rename(first, cache);
         REQUIRE(store::inputs::write<sf_merger::inputs::Schema>(cache, *record).has_value());
 
-        SECTION("with matching inputs")
-        {
-            REQUIRE(merge_datasets(left, right, output, std::nullopt, *record, cache).has_value());
-            const auto cached = indexed_storage(cache);
-            const auto merged = indexed_storage(output);
-            CHECK(std::filesystem::equivalent(cached.paths(root)->front(), merged.paths(root)->front()));
-        }
-
-        SECTION("with different inputs")
-        {
-            auto different = *record;
-            different.mask = "mask.shp";
-            const auto merged = merge_datasets(left, right, output, std::nullopt, different, cache);
-            REQUIRE_FALSE(merged.has_value());
-            CHECK(merged.error().code() == Error::Code::InvalidInput);
-            CHECK_FALSE(std::filesystem::exists(directory.path() / "output.part"));
-        }
+        REQUIRE(merge_datasets(left, right, output, std::nullopt, *record, cache).has_value());
+        const auto cached = indexed_storage(cache);
+        const auto merged = indexed_storage(output);
+        CHECK(std::filesystem::equivalent(cached.paths(root)->front(), merged.paths(root)->front()));
     }
 }

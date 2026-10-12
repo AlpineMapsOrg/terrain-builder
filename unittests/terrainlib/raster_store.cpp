@@ -311,24 +311,6 @@ TEST_CASE("failed checkpoints retain the previous index and ignore unindexed fil
     CHECK(reopened->index().size() == 1);
 }
 
-TEST_CASE("raster creation and publication reject destination collisions", "[raster-store][storage]")
-{
-    TemporaryDirectory directory;
-    write_table(directory.path());
-    const auto final = directory.path() / "snapshot";
-    auto created_result = storage::create<float>(final, small_options());
-    REQUIRE(created_result);
-    auto [created, created_metadata] = std::move(*created_result);
-    CHECK(storage::create<float>(final, small_options()).error().code() == Error::Code::AlreadyExists);
-    SECTION("empty destination") { std::filesystem::create_directory(final); }
-    SECTION("nonempty destination") { write_text(final / "keep", "keep"); }
-    SECTION("dangling symlink") { std::filesystem::create_symlink(directory.path() / "missing", final); }
-    CHECK(storage::publish(std::move(created)).error().code() == Error::Code::AlreadyExists);
-    CHECK_FALSE(created);
-    CHECK(std::filesystem::exists(directory.path() / "snapshot.part"));
-    CHECK(storage::create<float>(final, small_options()).error().code() == Error::Code::AlreadyExists);
-}
-
 TEST_CASE("raster publication does not scan payloads or reopen output", "[raster-store][storage]")
 {
     TemporaryDirectory directory;

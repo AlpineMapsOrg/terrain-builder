@@ -156,8 +156,8 @@ add_library(terrainlib
     octree/Space.h octree/Space.cpp
     octree/StoreTraits.h
     octree/storage/IndexFile.h
-    octree/storage/create.h
     octree/storage/open_runtime.h
+    octree/storage/snapshot.h
     octree/store_layout/Flat.h
     octree/store_layout/LevelAndCoordinateDirectories.h
     octree/store_layout/Mappings.h

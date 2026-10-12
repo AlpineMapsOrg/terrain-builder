@@ -25,7 +25,7 @@
 #include "io/byte.h"
 #include "io/envelope.h"
 #include "mesh/storage.h"
-#include "octree/storage/create.h"
+#include "octree/storage/snapshot.h"
 #include "octree/store_layout/Mappings.h"
 #include "store/inputs.h"
 #include "store/snapshot.h"
@@ -97,7 +97,9 @@ TEST_CASE("snapshots are created as .part and published by renaming", "[store][s
 
     SECTION("publication does not replace an existing destination")
     {
-        REQUIRE(std::filesystem::create_directory(final_path));
+        SECTION("empty directory") { REQUIRE(std::filesystem::create_directory(final_path)); }
+        SECTION("nonempty directory") { REQUIRE(io::byte::write(io::byte::span {}, final_path / "keep")); }
+        SECTION("dangling symlink") { std::filesystem::create_symlink(directory.path() / "missing", final_path); }
         const auto published = store::snapshot::publish(partial_path);
         REQUIRE_FALSE(published.has_value());
         CHECK(published.error().code() == Error::Code::AlreadyExists);
@@ -174,4 +176,23 @@ TEST_CASE("octree snapshots are created empty, published, and fingerprinted", "[
     CHECK(fingerprint->path == std::filesystem::canonical(final_path).string());
     CHECK(fingerprint->index_hash == io::envelope::read_header(final_path / octree::storage::index_file_name)->hash);
     CHECK(fingerprint->metadata_hash == io::envelope::read_header(final_path / octree::storage::metadata_file_name)->hash);
+
+    const auto metadata_path = final_path / octree::storage::metadata_file_name;
+    const auto metadata = io::envelope::read_from_path<octree::storage::StoreMetadataSchema>(metadata_path);
+    REQUIRE(metadata.has_value());
+    SECTION("recompression keeps the fingerprint")
+    {
+        REQUIRE(io::envelope::write_to_path<octree::storage::StoreMetadataSchema>(*metadata, metadata_path, true, io::envelope::CompressionAlgorithm::None));
+        const auto recompressed = store::inputs::fingerprint(final_path, octree::storage::metadata_file_name, octree::storage::index_file_name);
+        REQUIRE(recompressed.has_value());
+        CHECK(*recompressed == *fingerprint);
+    }
+    SECTION("files without a hash are rejected")
+    {
+        REQUIRE(io::envelope::write_to_path<octree::storage::StoreMetadataSchema>(
+            *metadata, metadata_path, true, io::envelope::CompressionAlgorithm::ZstdDefaultCompression, io::hash::Algorithm::None));
+        const auto unhashed = store::inputs::fingerprint(final_path, octree::storage::metadata_file_name, octree::storage::index_file_name);
+        REQUIRE_FALSE(unhashed.has_value());
+        CHECK(unhashed.error().code() == Error::Code::Unsupported);
+    }
 }

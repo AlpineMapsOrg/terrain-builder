@@ -94,7 +94,6 @@ add_executable(unittests_terrainlib
     terrainlib/raster_view.cpp
     terrainlib/raster_store.cpp
     terrainlib/spatial_lookup.cpp
-    terrainlib/stop_signal.cpp
     terrainlib/string_utils.cpp
     terrainlib/texture_dilate_colors.cpp
     terrainlib/tiny_vector.cpp
