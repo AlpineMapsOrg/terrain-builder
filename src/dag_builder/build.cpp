@@ -515,10 +515,7 @@ std::optional<uint32_t> find_max_input_level(const std::vector<std::vector<octre
 
 std::filesystem::path debug_mesh_path(const std::filesystem::path& output_path)
 {
-    auto path = output_path.lexically_normal();
-    if (!path.has_filename()) {
-        path = path.parent_path();
-    }
+    auto path = store::snapshot::normalized(output_path);
     if (store::snapshot::is_partial(path)) {
         path.replace_extension();
     }

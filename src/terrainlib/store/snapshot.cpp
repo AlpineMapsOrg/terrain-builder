@@ -29,21 +29,23 @@
 
 namespace store::snapshot {
 
+std::filesystem::path normalized(const std::filesystem::path& path)
+{
+    auto result = path.lexically_normal();
+    if (!result.has_filename() && result.has_relative_path()) {
+        result = result.parent_path();
+    }
+    return result;
+}
+
 std::filesystem::path partial_path(const std::filesystem::path& final_path)
 {
-    auto path = final_path.lexically_normal();
+    auto path = normalized(final_path);
     path += ".part";
     return path;
 }
 
-bool is_partial(const std::filesystem::path& path)
-{
-    auto normalized = path.lexically_normal();
-    if (!normalized.has_filename()) {
-        normalized = normalized.parent_path();
-    }
-    return normalized.extension() == ".part";
-}
+bool is_partial(const std::filesystem::path& path) { return normalized(path).extension() == ".part"; }
 
 Expected<void> require_absent(const std::filesystem::path& path)
 {
@@ -60,7 +62,7 @@ Expected<void> require_absent(const std::filesystem::path& path)
 
 Expected<std::filesystem::path> create_partial(const std::filesystem::path& final_path)
 {
-    const auto destination = final_path.lexically_normal();
+    const auto destination = normalized(final_path);
     if (destination.filename().empty() || destination.filename() == "." || destination.filename() == ".." || is_partial(destination)) {
         return Error::fail(Error::Code::InvalidInput, "creation requires a final snapshot path without a .part suffix", final_path);
     }
@@ -86,7 +88,7 @@ Expected<std::filesystem::path> create_partial(const std::filesystem::path& fina
 
 Expected<void> publish(const std::filesystem::path& partial_path)
 {
-    const auto partial = partial_path.lexically_normal();
+    const auto partial = normalized(partial_path);
     if (!is_partial(partial)) {
         return Error::fail(Error::Code::InvalidInput, "publication requires an incomplete .part snapshot", partial_path);
     }

@@ -68,10 +68,7 @@ template <typename PixelType>
 Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique_ptr<const io::manifest::Metadata>>> open(
     const std::filesystem::path& base_path, const OpenOptions options = {})
 {
-    auto normalized_path = base_path.lexically_normal();
-    if (!normalized_path.has_filename()) {
-        normalized_path = normalized_path.parent_path();
-    }
+    const auto normalized_path = store::snapshot::normalized(base_path);
     if (!options.allow_incomplete && normalized_path.extension() == ".part") {
         return Error::fail(Error::Code::InvalidInput, "opening an incomplete raster snapshot requires allow_incomplete", base_path);
     }
@@ -106,7 +103,7 @@ template <typename PixelType>
 Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<const io::manifest::Metadata>>> create(
     const std::filesystem::path& final_path, const CreateOptions options = {})
 {
-    const auto destination = final_path.lexically_normal();
+    const auto destination = store::snapshot::normalized(final_path);
     if (destination.filename().empty() || destination.filename() == "." || destination.filename() == ".." || destination.extension() == ".part") {
         return Error::fail(Error::Code::InvalidInput, "creation requires a final snapshot path without a .part suffix", final_path);
     }
@@ -172,7 +169,7 @@ Expected<void> publish(std::unique_ptr<IndexedStorage<PixelType>> storage)
     if (!storage) {
         return Error::fail(Error::Code::InvalidInput, "publication requires an output handle");
     }
-    const auto partial_path = storage->base_path().lexically_normal();
+    const auto partial_path = store::snapshot::normalized(storage->base_path());
     if (!store::snapshot::is_partial(partial_path)) {
         return Error::fail(Error::Code::InvalidInput, "publication requires an incomplete .part snapshot", partial_path);
     }

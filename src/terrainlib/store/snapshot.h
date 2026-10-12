@@ -31,6 +31,8 @@ namespace store::snapshot {
 
 inline constexpr auto checkpoint_interval = std::chrono::minutes(2);
 
+// Lexically normal and without a trailing separator, so that "out/" names the snapshot "out".
+std::filesystem::path normalized(const std::filesystem::path& path);
 std::filesystem::path partial_path(const std::filesystem::path& final_path);
 bool is_partial(const std::filesystem::path& path);
 Expected<void> require_absent(const std::filesystem::path& path);
