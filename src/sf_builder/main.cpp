@@ -217,15 +217,6 @@ int run(std::span<char *> args) {
     std::filesystem::path output_path;
     spdlog::level::level_enum log_level = spdlog::level::level_enum::trace;
 
-    const std::map<std::string, spdlog::level::level_enum> log_level_names{
-        {"off", spdlog::level::level_enum::off},
-        {"critical", spdlog::level::level_enum::critical},
-        {"error", spdlog::level::level_enum::err},
-        {"warn", spdlog::level::level_enum::warn},
-        {"info", spdlog::level::level_enum::info},
-        {"debug", spdlog::level::level_enum::debug},
-        {"trace", spdlog::level::level_enum::trace}};
-
     app.add_option("--dataset", dataset_path, "Path to a heightmap dataset file")
         ->required()
         ->check(CLI::ExistingFile);
@@ -238,7 +229,7 @@ int run(std::span<char *> args) {
     app.add_option("--max-texture-level", max_texture_level, "Maximum texture zoom level to use for assembling textures.")
         ->needs("--textures");
     app.add_option("--verbosity", log_level, "Verbosity level of logging")
-        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case));
+        ->transform(CLI::CheckedTransformer(cli_support::log_level_names(), CLI::ignore_case));
 
     // === SINGLE COMMAND ===
     auto *single = app.add_subcommand("single", "Build a single reference mesh")

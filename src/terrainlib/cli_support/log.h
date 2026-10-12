@@ -24,6 +24,10 @@
 #endif
 #include "fmt_impls.h"
 #include "numeric/int_math.h"
+#include <filesystem>
+#include <map>
+#include <string>
+
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
@@ -34,6 +38,8 @@ private:
 	static std::shared_ptr<spdlog::logger> logger;
 public:
 	static void init(spdlog::level::level_enum level);
+    // Also writes the log to path, appending, and flushes it from level info on.
+    static void add_file(const std::filesystem::path& path);
 	inline static std::shared_ptr<spdlog::logger>& get_logger() {
         if (Log::logger == nullptr) {
             Log::init(spdlog::level::level_enum::info);
@@ -41,6 +47,13 @@ public:
 		return Log::logger;
 	}
 };
+
+// Names accepted by the --verbosity option of the tools.
+const std::map<std::string, spdlog::level::level_enum>& log_level_names();
+
+// Assertion failures are bugs; logs them with their stack trace, so that they also
+// reach a log file, before aborting.
+void log_assertion_failures();
 
 } // namespace cli_support
 

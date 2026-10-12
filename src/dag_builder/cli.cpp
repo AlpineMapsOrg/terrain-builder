@@ -23,6 +23,8 @@
 #include <libassert/assert.hpp>
 #include <spdlog/spdlog.h>
 
+#include "cli_support/log.h"
+
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -35,16 +37,6 @@
 using namespace cli;
 
 namespace {
-
-const std::unordered_map<std::string, spdlog::level::level_enum> log_level_names{
-    {"off", spdlog::level::level_enum::off},
-    {"critical", spdlog::level::level_enum::critical},
-    {"error", spdlog::level::level_enum::err},
-    {"warn", spdlog::level::level_enum::warn},
-    {"info", spdlog::level::level_enum::info},
-    {"debug", spdlog::level::level_enum::debug},
-    {"trace", spdlog::level::level_enum::trace},
-};
 
 const std::unordered_map<std::string, dag::IncludeMode> include_mode_names{
     {"current", dag::IncludeMode::CurrentOnly},
@@ -196,7 +188,7 @@ Args cli::parse(int argc, const char *const *argv) {
         ->default_val(args.include_mode);
 
     app.add_option("--verbosity", args.log_level, "Verbosity level of logging")
-        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
+        ->transform(CLI::CheckedTransformer(cli_support::log_level_names(), CLI::ignore_case))
         ->default_val(args.log_level);
 
     try {

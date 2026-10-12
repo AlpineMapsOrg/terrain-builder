@@ -22,6 +22,8 @@
 #include <libassert/assert.hpp>
 #include <spdlog/spdlog.h>
 
+#include "cli_support/log.h"
+
 using namespace cli;
 
 Args cli::parse(int argc, const char *const *argv) {
@@ -78,16 +80,8 @@ Args cli::parse(int argc, const char *const *argv) {
     cut.fallthrough();
 
     spdlog::level::level_enum log_level;
-    const std::map<std::string, spdlog::level::level_enum> log_level_names{
-        {"off", spdlog::level::level_enum::off},
-        {"critical", spdlog::level::level_enum::critical},
-        {"error", spdlog::level::level_enum::err},
-        {"warn", spdlog::level::level_enum::warn},
-        {"info", spdlog::level::level_enum::info},
-        {"debug", spdlog::level::level_enum::debug},
-        {"trace", spdlog::level::level_enum::trace}};
     app.add_option("--verbosity", log_level, "Verbosity level of logging")
-        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
+        ->transform(CLI::CheckedTransformer(cli_support::log_level_names(), CLI::ignore_case))
         ->default_val(spdlog::level::level_enum::info);
 
     app.require_subcommand(1);

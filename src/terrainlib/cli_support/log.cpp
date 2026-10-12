@@ -17,7 +17,12 @@
  *****************************************************************************/
 
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+
+#include <cstdlib>
+
+#include <libassert/assert.hpp>
 
 #include "cli_support/log.h"
 
@@ -29,6 +34,37 @@ void Log::init(spdlog::level::level_enum log_level) {
 	spdlog::set_pattern("[%Y-%m-%d %T.%e] [%=3n] [%^%l%$] %v");
 	Log::logger = spdlog::stderr_color_mt("LOG");
 	Log::logger->set_level(log_level);
+}
+
+void Log::add_file(const std::filesystem::path& path)
+{
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path.string(), false);
+    file_sink->set_pattern("[%Y-%m-%d %T.%e] [%n] [%l] %v");
+    get_logger()->sinks().push_back(std::move(file_sink));
+    get_logger()->flush_on(spdlog::level::info);
+}
+
+const std::map<std::string, spdlog::level::level_enum>& log_level_names()
+{
+    static const std::map<std::string, spdlog::level::level_enum> names {
+        { "off", spdlog::level::off },
+        { "critical", spdlog::level::critical },
+        { "error", spdlog::level::err },
+        { "warn", spdlog::level::warn },
+        { "info", spdlog::level::info },
+        { "debug", spdlog::level::debug },
+        { "trace", spdlog::level::trace },
+    };
+    return names;
+}
+
+void log_assertion_failures()
+{
+    libassert::set_failure_handler([](const libassert::assertion_info& info) {
+        LOG_ERROR("{}", info.to_string(0, libassert::color_scheme::blank));
+        Log::get_logger()->flush();
+        std::abort();
+    });
 }
 
 } // namespace cli_support

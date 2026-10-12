@@ -24,6 +24,8 @@
 
 #include <CLI/CLI.hpp>
 
+#include "cli_support/log.h"
+
 namespace cli {
 
 Args parse(int argc, const char *const *argv) {
@@ -60,17 +62,9 @@ Args parse(int argc, const char *const *argv) {
     args.output = "tiles";
     app.add_option("--output", args.output, "Output directory; files use Google/Mapbox zoom/x/y.jpeg layout")->default_val(args.output.string());
 
-    const std::map<std::string, spdlog::level::level_enum> log_level_names{
-        {"off", spdlog::level::off},
-        {"critical", spdlog::level::critical},
-        {"error", spdlog::level::err},
-        {"warn", spdlog::level::warn},
-        {"info", spdlog::level::info},
-        {"debug", spdlog::level::debug},
-        {"trace", spdlog::level::trace}};
     args.log_level = spdlog::level::info;
     app.add_option("--verbosity", args.log_level, "Verbosity level of logging")
-        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
+        ->transform(CLI::CheckedTransformer(cli_support::log_level_names(), CLI::ignore_case))
         ->default_val(spdlog::level::info);
 
     app.add_option("--max-zoom-level", args.max_zoom_level, "Maximum zoom level to descend to");
