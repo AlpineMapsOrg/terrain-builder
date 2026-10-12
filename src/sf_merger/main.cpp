@@ -34,24 +34,16 @@
 #include "mesh/storage.h"
 #include "optional_utils.h"
 
-std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
-    if (std::filesystem::exists(path)) {
-        LOG_INFO("Loading mask file from {}", path);
-        const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2);
-        auto result = mask::load_from_path(path, radius_range);
-        if (result) {
-            const auto mask = result.value();
-            LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)",
-                mask.vertex_count(), mask.face_count());
-            return mask;
-        } else {
-            LOG_ERROR("Failed to load mask: {}", result.error().description());
-        }
-    } else {
-        LOG_DEBUG("No mask file found at {}, proceeding without mask", path);
+MeshMask load_mask_from_path(const std::filesystem::path& path)
+{
+    LOG_INFO("Loading mask file from {}", path);
+    const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2);
+    auto result = mask::load_from_path(path, radius_range);
+    if (!result) {
+        LOG_ERROR_AND_EXIT("Failed to load mask {}: {}", path, result.error().to_string());
     }
-
-    return std::nullopt;
+    LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)", result->vertex_count(), result->face_count());
+    return std::move(*result);
 }
 
 int run(const cli::MergeArgs& args)
@@ -81,7 +73,7 @@ int run(const cli::MergeArgs& args)
         LOG_ERROR_AND_EXIT("Failed to record the merge inputs: {}", record.error().to_string());
     }
 
-    std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
+    std::optional<MeshMask> mask = map(args.mask_path, load_mask_from_path);
 
     cli_support::stop_signal::install();
     const auto merge_result = merge_datasets(base_dataset, new_dataset, args.output_path, mask, *record, args.cache_path, cli_support::stop_signal::requested);
@@ -107,7 +99,7 @@ int run(const cli::CutArgs& args)
             input_result.error().to_string());
     }
     const mesh::storage::IndexedStorage input_dataset = std::move(input_result.value());
-    const MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
+    const MeshMask mask = load_mask_from_path(args.mask_path);
     const auto cut_result = cut_dataset(
         input_dataset,
         mask,

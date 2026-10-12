@@ -70,6 +70,7 @@ Args cli::parse(int argc, const char *const *argv) {
         ->check(CLI::ExistingDirectory);
 
     cut.add_option("--mask", cut_args.mask_path, "Path to a mask denoting the regions to retain")
+        ->required()
         ->check(CLI::ExistingFile);
 
     cut.add_option("--output", cut_args.output_path, "New path for the cut dataset; it is written to <output>.part, which is renamed to <output> when complete")

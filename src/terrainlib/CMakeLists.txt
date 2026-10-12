@@ -71,7 +71,6 @@ add_library(terrainlib
     gis/srs.h gis/srs.cpp
     gis/srs/detail.h gis/srs/detail.cpp
     gis/vector_mask.h gis/vector_mask.cpp
-    gis/vector_mask_deprecated.h
     gis/webmercator.h gis/webmercator.cpp
 
     io/byte.h io/byte.cpp

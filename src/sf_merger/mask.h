@@ -30,7 +30,7 @@
 #include <glm/gtx/norm.hpp>
 
 #include "gis/Dataset.h"
-#include "gis/vector_mask_deprecated.h"
+#include "gis/vector_mask.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
@@ -106,16 +106,7 @@ namespace {
     }
 }
 
-using gis::vector_mask::deprecated::LoadErrorKind;
-using gis::vector_mask::deprecated::LoadError;
-using gis::vector_mask::deprecated::simplification_tolerance_metres;
-using gis::vector_mask::deprecated::simplification_tolerance;
-using gis::vector_mask::deprecated::point_count;
-using gis::vector_mask::deprecated::simplify_geometry;
-using gis::vector_mask::deprecated::convert_ring;
-using gis::vector_mask::deprecated::convert_polygon;
-using gis::vector_mask::deprecated::process_geometry;
-using gis::vector_mask::deprecated::load_referenced_from_dataset;
+inline constexpr double simplification_tolerance_m = 0.1;
 
 namespace {
     template <typename Function>
@@ -344,25 +335,18 @@ inline MeshMask extrude(
     return extrude(mask, padded_radius_range);
 }
 
-inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path(const std::filesystem::path &path) {
-    if (!std::filesystem::exists(path)) {
-        LOG_ERROR("Mask file does not exist: {}", path);
-        return std::unexpected(LoadErrorKind::FileNotFound);
-    }
-
+inline Expected<ReferencedPolygonMask> load_referenced_from_path(const std::filesystem::path &path) {
     auto opened = gis::Dataset::open_vector(path);
     if (!opened) {
-        LOG_ERROR("Failed to load mask dataset: {}", opened.error().to_string());
-        return std::unexpected(LoadErrorKind::FileNotFound);
+        return Error::propagate(std::move(opened));
     }
-    gis::Dataset dataset = std::move(*opened);
-    return load_referenced_from_dataset(dataset);
+    return gis::vector_mask::simplify(gis::vector_mask::load(*opened), simplification_tolerance_m);
 }
 
-inline std::expected<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
+inline Expected<MeshMask> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
     auto ref_mask_res = load_referenced_from_path(path);
     if (!ref_mask_res) {
-        return std::unexpected(ref_mask_res.error());
+        return Error::propagate(std::move(ref_mask_res));
     }
     ReferencedPolygonMask ref_polygon_mask = std::move(ref_mask_res.value());
     SpherePolygonMask sphere_polygon_mask = project_onto_sphere(std::move(ref_polygon_mask), radius_range.x);
