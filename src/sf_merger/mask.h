@@ -30,7 +30,7 @@
 #include <glm/gtx/norm.hpp>
 
 #include "gis/Dataset.h"
-#include "gis/vector_mask.h"
+#include "gis/vector_mask_deprecated.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
@@ -106,16 +106,16 @@ namespace {
     }
 }
 
-using gis::vector_mask::LoadErrorKind;
-using gis::vector_mask::LoadError;
-using gis::vector_mask::simplification_tolerance_metres;
-using gis::vector_mask::simplification_tolerance;
-using gis::vector_mask::point_count;
-using gis::vector_mask::simplify_geometry;
-using gis::vector_mask::convert_ring;
-using gis::vector_mask::convert_polygon;
-using gis::vector_mask::process_geometry;
-using gis::vector_mask::load_referenced_from_dataset;
+using gis::vector_mask::deprecated::LoadErrorKind;
+using gis::vector_mask::deprecated::LoadError;
+using gis::vector_mask::deprecated::simplification_tolerance_metres;
+using gis::vector_mask::deprecated::simplification_tolerance;
+using gis::vector_mask::deprecated::point_count;
+using gis::vector_mask::deprecated::simplify_geometry;
+using gis::vector_mask::deprecated::convert_ring;
+using gis::vector_mask::deprecated::convert_polygon;
+using gis::vector_mask::deprecated::process_geometry;
+using gis::vector_mask::deprecated::load_referenced_from_dataset;
 
 namespace {
     template <typename Function>

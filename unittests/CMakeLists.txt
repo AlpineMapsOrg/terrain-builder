@@ -46,6 +46,7 @@ add_executable(unittests_terrainlib
     terrainlib/gis_dataset_reading.cpp
     terrainlib/gis_srs_bounds.cpp
     terrainlib/gis_srs_coverage.cpp
+    terrainlib/gis_vector_mask.cpp
     terrainlib/glm_serialization.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
