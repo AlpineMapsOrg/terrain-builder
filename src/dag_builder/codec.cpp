@@ -443,11 +443,11 @@ Expected<void> ClusterBatch::write(const std::filesystem::path& node_path, const
     if (auto valid = format::validate(metadata); !valid) {
         return Error::propagate(std::move(valid), "validate DAG metadata for \"" + node_paths[1].string() + "\"");
     }
-    auto data_written = io::envelope::write<format::ClusteringSchema>(*clustering, node_paths[0]);
+    auto data_written = io::envelope::write<format::ClusteringSchema>(*clustering, node_paths[0], io::byte::WriteMode::Overwrite);
     if (!data_written) {
         return Error::propagate(std::move(data_written), "write DAG clustering");
     }
-    auto metadata_written = io::envelope::write<format::MetadataSchema>(metadata, node_paths[1]);
+    auto metadata_written = io::envelope::write<format::MetadataSchema>(metadata, node_paths[1], io::byte::WriteMode::Overwrite);
     if (!metadata_written) {
         return Error::propagate(std::move(metadata_written), "write DAG metadata");
     }

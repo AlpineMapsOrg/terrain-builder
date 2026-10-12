@@ -165,6 +165,6 @@ TEST_CASE("byte writer retains legacy overwrite and supports exclusive creation"
     REQUIRE(io::byte::write(first, path, io::byte::WriteMode::CreateNew));
     CHECK(io::byte::write(second, path, io::byte::WriteMode::CreateNew).error().code() == Error::Code::AlreadyExists);
     CHECK(*io::byte::read(path) == std::vector(first.begin(), first.end()));
-    REQUIRE(io::byte::write(second, path));
+    REQUIRE(io::byte::write(second, path, io::byte::WriteMode::Overwrite));
     CHECK(*io::byte::read(path) == std::vector(second.begin(), second.end()));
 }

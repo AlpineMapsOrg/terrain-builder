@@ -36,7 +36,6 @@ using span = std::span<const std::byte>;
 
 enum class WriteMode { Overwrite, CreateNew };
 
-Expected<void> write(const span bytes, const std::filesystem::path& path, bool make_dirs = true);
 Expected<void> write(span bytes, const std::filesystem::path& path, WriteMode mode, bool make_dirs = true);
 // Reads the whole file, or its first max_size bytes if it is longer.
 Expected<vector> read(const std::filesystem::path& path, std::size_t max_size = std::numeric_limits<std::size_t>::max());

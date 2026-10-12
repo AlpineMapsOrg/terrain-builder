@@ -163,12 +163,12 @@ inline Expected<void> write_index_file(const std::filesystem::path& path, const 
         return Error::propagate(std::move(valid), "validate store metadata for writing");
     }
     const std::filesystem::path metadata_path = path.parent_path() / metadata_file_name;
-    if (auto written = io::envelope::write<StoreMetadataSchema>(store_metadata, metadata_path); !written) {
+    if (auto written = io::envelope::write<StoreMetadataSchema>(store_metadata, metadata_path, io::byte::WriteMode::Overwrite); !written) {
         return Error::propagate(std::move(written), "write octree store metadata " + metadata_path.string());
     }
 
     const StoreIndex encoded_index = encode_index(metadata.index);
-    if (auto written = io::envelope::write<StoreIndexSchema>(encoded_index, path); !written) {
+    if (auto written = io::envelope::write<StoreIndexSchema>(encoded_index, path, io::byte::WriteMode::Overwrite); !written) {
         return Error::propagate(std::move(written), "write octree store index " + path.string());
     }
     return {};

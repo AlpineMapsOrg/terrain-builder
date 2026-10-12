@@ -48,7 +48,7 @@ constexpr std::string_view entity_json =
 
 void write_text(const std::filesystem::path& path, const std::string_view text)
 {
-    REQUIRE(io::byte::write(std::as_bytes(std::span(text)), path));
+    REQUIRE(io::byte::write(std::as_bytes(std::span(text)), path, io::byte::WriteMode::Overwrite));
 }
 
 void write_table(const std::filesystem::path& directory)
@@ -196,7 +196,7 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     SECTION("wrong dimensions") { encoded.width = 4; }
     SECTION("short data") { encoded.data.pop_back(); }
     SECTION("long attribution") { encoded.source_attribution.push_back(std::byte { 0 }); }
-    REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, path.string() + ".amort"));
+    REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, path.string() + ".amort", io::byte::WriteMode::Overwrite));
     CHECK(amort.read(path).error().code() == Error::Code::CorruptData);
 }
 
@@ -340,10 +340,10 @@ TEST_CASE("raster reader selection follows metadata instead of file endings", "[
     REQUIRE(storage::publish(std::move(created)));
     auto metadata = manifest::read_metadata(final).value();
     metadata.codec_selector = ".amort";
-    REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+    REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name, io::byte::WriteMode::Overwrite));
     CHECK(storage::open<float>(final).error().code() == Error::Code::Unsupported);
     metadata.codec_selector = "amort";
-    REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+    REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name, io::byte::WriteMode::Overwrite));
     REQUIRE(storage::open<float>(final));
 }
 
@@ -394,7 +394,7 @@ TEST_CASE("byte writes report buffered device failures", "[io][bytes][raster-sto
 {
 #ifdef __linux__
     const std::array bytes { std::byte { 42 } };
-    auto written = io::byte::write(bytes, "/dev/full", false);
+    auto written = io::byte::write(bytes, "/dev/full", io::byte::WriteMode::Overwrite, false);
     REQUIRE_FALSE(written);
     CHECK(written.error().code() == Error::Code::Io);
 #endif
@@ -473,14 +473,14 @@ TEST_CASE("raster opening retains metadata and index errors without creating a d
     {
         auto metadata = manifest::read_metadata(final).value();
         metadata.layout_id = "unknown";
-        REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+        REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name, io::byte::WriteMode::Overwrite));
         CHECK(storage::open<float>(final).error().code() == Error::Code::Unsupported);
     }
     SECTION("rectangular metadata")
     {
         auto metadata = manifest::read_metadata(final).value();
         metadata.stored_tile_size = 2;
-        REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+        REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name, io::byte::WriteMode::Overwrite));
         CHECK(storage::open<float>(final).error().code() == Error::Code::CorruptData);
     }
     SECTION("wrong envelope class")
@@ -508,7 +508,7 @@ TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster-stor
         expected_error = Error::Code::Unsupported;
     }
     const auto modified = io::envelope::detail::serialize_to_bytes(envelope).value();
-    REQUIRE(io::byte::write(modified, payload_path));
+    REQUIRE(io::byte::write(modified, payload_path, io::byte::WriteMode::Overwrite));
     CHECK(amort.read(path).error().code() == expected_error);
 }
 

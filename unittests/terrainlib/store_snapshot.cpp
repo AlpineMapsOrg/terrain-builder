@@ -98,7 +98,7 @@ TEST_CASE("snapshots are created as .part and published by renaming", "[store][s
     SECTION("publication does not replace an existing destination")
     {
         SECTION("empty directory") { REQUIRE(std::filesystem::create_directory(final_path)); }
-        SECTION("nonempty directory") { REQUIRE(io::byte::write(io::byte::span {}, final_path / "keep")); }
+        SECTION("nonempty directory") { REQUIRE(io::byte::write(io::byte::span {}, final_path / "keep", io::byte::WriteMode::Overwrite)); }
         SECTION("dangling symlink") { std::filesystem::create_symlink(directory.path() / "missing", final_path); }
         REQUIRE(store::inputs::write<Schema>(partial_path, Record { "input", 1 }).has_value());
         const auto published = store::snapshot::publish(partial_path);
@@ -184,15 +184,20 @@ TEST_CASE("octree snapshots are created empty, published, and fingerprinted", "[
     REQUIRE(metadata.has_value());
     SECTION("recompression keeps the fingerprint")
     {
-        REQUIRE(io::envelope::write<octree::storage::StoreMetadataSchema>(*metadata, metadata_path, true, io::envelope::CompressionAlgorithm::None));
+        REQUIRE(io::envelope::write<octree::storage::StoreMetadataSchema>(
+            *metadata, metadata_path, io::byte::WriteMode::Overwrite, true, io::envelope::CompressionAlgorithm::None));
         const auto recompressed = store::inputs::fingerprint(final_path, octree::storage::metadata_file_name, octree::storage::index_file_name);
         REQUIRE(recompressed.has_value());
         CHECK(*recompressed == *fingerprint);
     }
     SECTION("files without a hash are rejected")
     {
-        REQUIRE(io::envelope::write<octree::storage::StoreMetadataSchema>(
-            *metadata, metadata_path, true, io::envelope::CompressionAlgorithm::ZstdDefaultCompression, io::hash::Algorithm::None));
+        REQUIRE(io::envelope::write<octree::storage::StoreMetadataSchema>(*metadata,
+            metadata_path,
+            io::byte::WriteMode::Overwrite,
+            true,
+            io::envelope::CompressionAlgorithm::ZstdDefaultCompression,
+            io::hash::Algorithm::None));
         const auto unhashed = store::inputs::fingerprint(final_path, octree::storage::metadata_file_name, octree::storage::index_file_name);
         REQUIRE_FALSE(unhashed.has_value());
         CHECK(unhashed.error().code() == Error::Code::Unsupported);

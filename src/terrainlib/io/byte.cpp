@@ -27,11 +27,6 @@
 
 namespace io::byte {
 
-Expected<void> write(const span bytes, const std::filesystem::path& path, bool make_dirs)
-{
-    return write(bytes, path, WriteMode::Overwrite, make_dirs);
-}
-
 Expected<void> write(const span bytes, const std::filesystem::path& path, WriteMode mode, bool make_dirs)
 {
     LOG_TRACE("Writing bytes to path {}", path);

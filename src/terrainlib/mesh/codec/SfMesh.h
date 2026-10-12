@@ -61,7 +61,7 @@ public:
         if (auto valid = mesh::sf::validate(*payload); !valid) {
             return Error::propagate(std::move(valid), "validate SF mesh for \"" + path.string() + "\"");
         }
-        auto result = ::io::envelope::write<mesh::sf::Schema>(*payload, path);
+        auto result = ::io::envelope::write<mesh::sf::Schema>(*payload, path, ::io::byte::WriteMode::Overwrite);
         if (!result) {
             return Error::propagate(std::move(result), "write SF mesh");
         }

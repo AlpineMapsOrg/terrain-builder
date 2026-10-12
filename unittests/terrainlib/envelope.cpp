@@ -160,7 +160,7 @@ void check_error(const Result& result, const Error::Code expected)
     CHECK(result.error().code() == expected);
 }
 
-void write_file(const std::filesystem::path& path, const io::byte::span bytes) { REQUIRE(io::byte::write(bytes, path)); }
+void write_file(const std::filesystem::path& path, const io::byte::span bytes) { REQUIRE(io::byte::write(bytes, path, io::byte::WriteMode::Overwrite)); }
 
 } // namespace
 
@@ -561,7 +561,7 @@ TEST_CASE("Envelope headers are read without the payload")
     SECTION("the header matches a full read")
     {
         const v3::Payload payload { .id = 21, .label = std::string(4096, 'h'), .enabled = true, .samples = { 1, 2, 3 } };
-        REQUIRE(io::envelope::write<Schema>(payload, path));
+        REQUIRE(io::envelope::write<Schema>(payload, path, io::byte::WriteMode::Overwrite));
         const auto header = io::envelope::read_header(path);
         REQUIRE(header.has_value());
         CHECK(header->magic == io::envelope::magic);

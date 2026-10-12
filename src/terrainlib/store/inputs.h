@@ -49,7 +49,7 @@ Expected<Fingerprint> fingerprint(const std::filesystem::path& snapshot, std::st
 template <typename Schema>
 Expected<void> write(const std::filesystem::path& snapshot, const typename Schema::latest_type& record)
 {
-    auto written = ::io::envelope::write<Schema>(record, snapshot / file_name);
+    auto written = ::io::envelope::write<Schema>(record, snapshot / file_name, ::io::byte::WriteMode::Overwrite);
     if (!written) {
         return Error::propagate(std::move(written), "write input record");
     }

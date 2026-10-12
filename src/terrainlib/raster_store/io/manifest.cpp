@@ -58,7 +58,7 @@ Expected<Metadata> read_metadata(const std::filesystem::path& base_path)
 
 Expected<void> write_metadata(const Metadata& metadata, const std::filesystem::path& base_path)
 {
-    return ::io::envelope::write<MetadataSchema>(metadata, base_path / metadata_file_name);
+    return ::io::envelope::write<MetadataSchema>(metadata, base_path / metadata_file_name, ::io::byte::WriteMode::Overwrite);
 }
 
 detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index)
@@ -123,7 +123,7 @@ Expected<void> write_index_file(const std::filesystem::path& index_path, const s
 {
     auto temporary_path = index_path;
     temporary_path += ".tmp";
-    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index), temporary_path);
+    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index), temporary_path, ::io::byte::WriteMode::Overwrite);
     if (!written) {
         return Error::propagate(std::move(written), "checkpoint raster index");
     }

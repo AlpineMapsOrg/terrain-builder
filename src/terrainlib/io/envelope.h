@@ -350,6 +350,7 @@ Expected<typename Schema::latest_type> read(
 template <typename Schema>
 Expected<void> write(const typename Schema::latest_type& payload,
     const std::filesystem::path& path,
+    const byte::WriteMode mode,
     const bool make_dirs = true,
     const CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdDefaultCompression,
     const hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64)
@@ -358,7 +359,7 @@ Expected<void> write(const typename Schema::latest_type& payload,
     if (!serialized) {
         return Error::propagate(std::move(serialized), "encoding envelope file \"" + path.string() + "\"");
     }
-    auto result = ::io::byte::write(*serialized, path, make_dirs);
+    auto result = ::io::byte::write(*serialized, path, mode, make_dirs);
     if (!result) {
         return Error::propagate(std::move(result), "writing envelope file \"" + path.string() + "\"");
     }
