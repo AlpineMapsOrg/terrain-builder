@@ -24,6 +24,7 @@
 #endif
 #include "fmt_impls.h"
 #include "numeric/int_math.h"
+#include <atomic>
 #include <filesystem>
 #include <map>
 #include <string>
@@ -62,14 +63,13 @@ void log_assertion_failures();
         exit(1);                \
     } while (false)
 
-// Logs at most once per call site for the lifetime of the process.
-#define LOG_WARN_ONCE(...)                  \
-    do {                                     \
-        static bool _log_warn_once_fired = false; \
-        if (!_log_warn_once_fired) {         \
-            LOG_WARN(__VA_ARGS__);           \
-            _log_warn_once_fired = true;     \
-        }                                    \
+// Logs at most once per call site for the lifetime of the process, even across threads.
+#define LOG_WARN_ONCE(...)                                       \
+    do {                                                         \
+        static std::atomic<bool> _log_warn_once_fired { false }; \
+        if (!_log_warn_once_fired.exchange(true)) {              \
+            LOG_WARN(__VA_ARGS__);                               \
+        }                                                        \
     } while (false)
 
 namespace cli_support {
