@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
                 LOG_INFO("{}", build_result.error().to_string());
                 return cli_support::stop_signal::exit_code();
             }
-            LOG_ERROR("Invalid Structura Fundamentalis input: {}", build_result.error().to_string());
+            LOG_ERROR("DAG build failed: {}", build_result.error().to_string());
             return EXIT_FAILURE;
         }
         const auto published = dag::storage::publish(std::move(output_storage));

@@ -523,8 +523,8 @@ std::filesystem::path debug_mesh_path(const std::filesystem::path& output_path)
     return path;
 }
 
-// Build a single level of the DAG, returning the set of nodes that were built.
-std::unordered_set<octree::Id> build_level(
+// Build a single level of the DAG, returning the set of nodes that were built or the first failure.
+Expected<std::unordered_set<octree::Id>> build_level(
     const uint32_t level,
     const std::vector<std::vector<octree::Id>> &input_by_level,
     const std::unordered_set<octree::Id> &prev_level_built,
@@ -545,9 +545,7 @@ std::unordered_set<octree::Id> build_level(
         options.preferred_extension = ".glb";
         auto debug_result = mesh::storage::open_folder(debug_mesh_path(ctx.output_storage.base_path()), std::move(options));
         if (!debug_result) {
-            LOG_ERROR_AND_EXIT(
-                "Failed to open debug mesh storage: {}",
-                debug_result.error().to_string());
+            return Error::propagate(std::move(debug_result), "open debug mesh storage");
         }
         debug_storage.emplace(std::move(debug_result.value()));
     }
@@ -570,6 +568,13 @@ std::unordered_set<octree::Id> build_level(
             LOG_WARN("Could not checkpoint the index: {}", saved.error().to_string());
         }
     };
+    // A failure stops the level like a stop request: active tasks finish their nodes, queued ones are skipped.
+    tbb::concurrent_vector<Error> failures;
+    const auto fail = [&](std::unexpected<Error> error) {
+        failures.push_back(std::move(error).error());
+        ctx.stopped = true;
+        progress.task_finished();
+    };
 
     parallel_foreach(targets, [&](const octree::Id &target) {
         if (ctx.stopped || (ctx.stop_requested && ctx.stop_requested())) {
@@ -578,9 +583,10 @@ std::unordered_set<octree::Id> build_level(
             return;
         }
         if (ctx.cache != nullptr && DEBUG_ASSERT_VAL(ctx.cache->has(target)).value()) {
-            const auto linked = ctx.output_storage.link_from(target, *ctx.cache);
+            auto linked = ctx.output_storage.link_from(target, *ctx.cache);
             if (!linked) {
-                LOG_ERROR_AND_EXIT("Failed to link cached node {}: {}", target, linked.error().to_string());
+                fail(Error::propagate(std::move(linked), fmt::format("link cached node {}", target)));
+                return;
             }
             linked_ids.push_back(target);
             progress.task_finished();
@@ -592,31 +598,30 @@ std::unordered_set<octree::Id> build_level(
 
         auto result = build_node(target, target_input_ids, dag_ids, ctx);
         if (result) {
-            const auto save_result = ctx.output_storage.save(target, *result);
-            if (save_result) {
-                if (debug_storage) {
-                    const auto debug_mesh = clustering_to_mesh(result->clustering);
-                    const auto debug_save_result = debug_storage->save(target, debug_mesh);
-                    if (!debug_save_result) {
-                        LOG_ERROR_AND_EXIT(
-                            "Failed to save debug mesh for node {}: {}",
-                            target,
-                            debug_save_result.error().to_string());
-                    }
-                }
-                saved_ids.push_back(target);
-            } else {
-                LOG_ERROR_AND_EXIT(
-                    "Failed to save node {}: {}",
-                    target,
-                    save_result.error().to_string());
+            auto save_result = ctx.output_storage.save(target, *result);
+            if (!save_result) {
+                fail(Error::propagate(std::move(save_result), fmt::format("save node {}", target)));
+                return;
             }
+            if (debug_storage) {
+                const auto debug_mesh = clustering_to_mesh(result->clustering);
+                auto debug_save_result = debug_storage->save(target, debug_mesh);
+                if (!debug_save_result) {
+                    fail(Error::propagate(std::move(debug_save_result), fmt::format("save debug mesh for node {}", target)));
+                    return;
+                }
+            }
+            saved_ids.push_back(target);
         }
         checkpoint();
         progress.task_finished();
     }, ctx.options.parallelize);
 
     progress_thread.join();
+
+    if (!failures.empty()) {
+        return std::unexpected(std::move(failures.front()));
+    }
 
     std::unordered_set<octree::Id> built(linked_ids.begin(), linked_ids.end());
     for (const octree::Id &id : saved_ids) {
@@ -669,23 +674,25 @@ Expected<void> build_levels(
     BuildContext ctx{input_storage, store::ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds, cache, stop_requested};
 
     for (uint32_t level = range.end; level-- > range.start;) {
-        prev_level_built = build_level(
-            level,
-            input_by_level,
-            prev_level_built,
-            ctx);
+        auto built = build_level(level, input_by_level, prev_level_built, ctx);
 
-        // Persist per level so a finished level can be read back before the whole run completes
+        // Persist per level so a finished level can be read back before the whole run completes,
+        // and after a failure so the nodes committed before it are kept
         if (const auto result = ctx.output_storage.save_or_create_index(); !result) {
             LOG_WARN(
                 "Could not save index after level {}: {}",
                 level,
                 result.error().to_string());
         }
+        if (!built) {
+            output_storage = std::move(ctx.output_storage).release();
+            return Error::propagate(std::move(built), fmt::format("build DAG level {}", level));
+        }
         if (ctx.stopped) {
             output_storage = std::move(ctx.output_storage).release();
             return Error::fail(Error::Code::Cancelled, "DAG build cancelled; incomplete snapshot retained");
         }
+        prev_level_built = std::move(built.value());
     }
 
     output_storage = std::move(ctx.output_storage).release();
