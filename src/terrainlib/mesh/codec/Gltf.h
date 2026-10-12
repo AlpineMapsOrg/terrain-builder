@@ -62,7 +62,7 @@ public:
     {
         const std::filesystem::path path = paths(node_path).front();
         try {
-            auto result = mesh::io::gltf::save_to_path(mesh, path);
+            auto result = mesh::io::gltf::save_to_path(mesh, path, mesh::io::SaveOptions { .write_mode = ::io::byte::WriteMode::CreateNew });
             if (!result) {
                 return Error::propagate(std::move(result), "write glTF mesh \"" + path.string() + "\"");
             }

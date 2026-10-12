@@ -22,6 +22,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "io/byte.h"
 
 namespace mesh::io {
     
@@ -32,6 +33,7 @@ struct SaveOptions {
     std::string texture_format = ".jpeg";
     std::string name = "Octree";
     std::unordered_map<std::string, std::string> metadata = {};
+    ::io::byte::WriteMode write_mode = ::io::byte::WriteMode::Overwrite;
 };
 
 } // namespace mesh::io

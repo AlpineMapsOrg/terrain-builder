@@ -49,9 +49,13 @@ public:
         return std::move(*decoded);
     }
 
-    Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override { return write(node_path, mesh, {}); }
+    Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
+    {
+        return write(node_path, mesh, {}, ::io::byte::WriteMode::CreateNew);
+    }
 
-    Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options) const
+    Expected<void> write(
+        const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options, const ::io::byte::WriteMode mode) const
     {
         const std::filesystem::path path = paths(node_path).front();
         auto payload = mesh::sf::encode_payload(mesh, options);
@@ -61,7 +65,7 @@ public:
         if (auto valid = mesh::sf::validate(*payload); !valid) {
             return Error::propagate(std::move(valid), "validate SF mesh for \"" + path.string() + "\"");
         }
-        auto result = ::io::envelope::write<mesh::sf::Schema>(*payload, path, ::io::byte::WriteMode::Overwrite);
+        auto result = ::io::envelope::write<mesh::sf::Schema>(*payload, path, mode);
         if (!result) {
             return Error::propagate(std::move(result), "write SF mesh");
         }

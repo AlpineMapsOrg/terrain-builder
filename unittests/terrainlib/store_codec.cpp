@@ -83,6 +83,20 @@ void check_mesh_codec_reentrancy(const Codec& codec, const std::filesystem::path
     }
 }
 
+template <typename Codec>
+void check_mesh_codec_creates_exclusively(const Codec& codec, const std::filesystem::path& node_path)
+{
+    REQUIRE(codec.write(node_path, triangle_mesh(0.0)).has_value());
+    const auto path = codec.paths(node_path).front();
+    const auto original = io::byte::read(path);
+    REQUIRE(original.has_value());
+
+    const auto rejected = codec.write(node_path, triangle_mesh(5.0));
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
+    CHECK(io::byte::read(path).value() == original.value());
+}
+
 } // namespace
 
 TEST_CASE("runtime codec defaults report unsupported operations", "[store][codec]")
@@ -123,14 +137,23 @@ TEST_CASE("runtime mesh codecs are reentrant", "[store][codec]")
     SECTION("JSON glTF") { check_mesh_codec_reentrancy(mesh::codec::Gltf(mesh::codec::GltfContainer::Json), directory.path() / "gltf"); }
 }
 
+TEST_CASE("runtime mesh codecs never replace existing files", "[store][codec]")
+{
+    TemporaryDirectory directory("mesh-exclusive");
+
+    SECTION("SF mesh") { check_mesh_codec_creates_exclusively(mesh::codec::SfMesh {}, directory.path() / "node"); }
+    SECTION("binary glTF") { check_mesh_codec_creates_exclusively(mesh::codec::Gltf(mesh::codec::GltfContainer::Binary), directory.path() / "node"); }
+    SECTION("JSON glTF") { check_mesh_codec_creates_exclusively(mesh::codec::Gltf(mesh::codec::GltfContainer::Json), directory.path() / "node"); }
+}
+
 TEST_CASE("runtime glTF codec reports writer IO errors", "[store][codec]")
 {
     TemporaryDirectory directory("gltf-error");
     mesh::codec::Gltf codec(mesh::codec::GltfContainer::Binary);
-    const std::filesystem::path node_path(directory.path() / "blocked");
-    REQUIRE(std::filesystem::create_directory(codec.paths(node_path).front()));
+    const std::filesystem::path blocker(directory.path() / "blocker");
+    REQUIRE(io::byte::write(io::byte::span {}, blocker, io::byte::WriteMode::Overwrite).has_value());
 
-    const auto result = codec.write(node_path, triangle_mesh(0.0));
+    const auto result = codec.write(blocker / "node", triangle_mesh(0.0));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code() == Error::Code::Io);
 }

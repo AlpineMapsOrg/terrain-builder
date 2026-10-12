@@ -25,6 +25,7 @@
 #include "build.h"
 #include "codec.h"
 #include "dag_node.h"
+#include "io/byte.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/storage.h"
 #include "storage.h"
@@ -131,6 +132,27 @@ TEST_CASE("DAG codec rejects invalid batches and inconsistent files")
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code() == Error::Code::CorruptData);
     }
+}
+
+TEST_CASE("DAG codec never replaces existing files")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto node_paths = codec.paths(node_path);
+    REQUIRE(codec.write(node_path, sample_batch()).has_value());
+    const auto original_data = io::byte::read(node_paths[0]);
+    const auto original_metadata = io::byte::read(node_paths[1]);
+    REQUIRE(original_data.has_value());
+    REQUIRE(original_metadata.has_value());
+
+    auto batch = sample_batch();
+    batch.metadata.groups.front().error = 99.0;
+    const auto rejected = codec.write(node_path, batch);
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
+    CHECK(io::byte::read(node_paths[0]).value() == original_data.value());
+    CHECK(io::byte::read(node_paths[1]).value() == original_metadata.value());
 }
 
 TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]")

@@ -28,6 +28,12 @@
 
 namespace store {
 
+// Codec methods must support concurrent calls on the same instance.
+// write creates the node's files exclusively and fails with AlreadyExists if
+// one of them exists. It never truncates or replaces a file, which may be a
+// hard link shared with another snapshot. Reading a node requires its write to
+// have completed; exclusive creation alone does not make an unfinished file
+// readable.
 template <typename NodeData>
 class Codec {
 public:

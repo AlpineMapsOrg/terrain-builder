@@ -103,7 +103,7 @@ public:
         const tile_codec::detail::v1::RasterTile encoded { m_dimensions.x, m_dimensions.y,
             { data.begin(), data.end() }, { source_attribution.begin(), source_attribution.end() } };
         return ::io::envelope::write<tile_codec::TileSchema>(
-            encoded, paths(node_path).front(), ::io::byte::WriteMode::Overwrite, true, m_compression_algorithm, m_hash_algorithm);
+            encoded, paths(node_path).front(), ::io::byte::WriteMode::CreateNew, true, m_compression_algorithm, m_hash_algorithm);
     }
 
 private:

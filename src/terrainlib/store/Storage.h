@@ -47,11 +47,6 @@ public:
         std::string codec_selector;
     };
 
-    explicit Storage(RawStorage<Traits, NodeData> raw)
-        : m_raw(std::move(raw))
-    {
-    }
-
     Storage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Persistence persistence, const bool dirty = false)
         : m_raw(std::move(raw))
         , m_index(std::move(index))
@@ -95,14 +90,12 @@ public:
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
-        if (m_index.has_value()) {
-            auto status = m_index->get(key);
-            if (!status) {
-                return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
-            }
-            if (!status->has_value() || status->value() == NodeStatus::Virtual) {
-                return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
-            }
+        auto status = m_index->get(key);
+        if (!status) {
+            return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
+        }
+        if (!status->has_value() || status->value() == NodeStatus::Virtual) {
+            return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
         }
         return m_raw.load(key);
     }
@@ -121,17 +114,37 @@ public:
             return Error::fail(Error::Code::AlreadyExists, "save node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
         }
 
-        auto result = m_raw.save(key, data);
+        auto result = write_payload(key, data);
         if (!result) {
             return result;
         }
-        if (m_index.has_value()) {
-            auto added = m_index->add(key);
-            if (!added) {
-                return Error::propagate(std::move(added), "add saved node " + Traits::key_to_string(key) + " to storage index");
-            }
-            m_dirty = m_dirty || added.value();
+        return commit(key);
+    }
+
+    // Writes the node's payload files without recording the node in the index;
+    // commit records it. save is the existence check, write_payload and commit.
+    // Thread safety: may run concurrently with itself and with any other method
+    // except construction, move, assignment and destruction. It reads only the
+    // layout and the codec, which never change after construction, and never the
+    // index. Codecs create files exclusively, so a second write of a key, concurrent
+    // or later, fails with AlreadyExists and leaves the first write's files intact.
+    // Payload files must not be removed or replaced externally while writes are
+    // outstanding. Linking from this storage requires completed, immutable payloads.
+    Expected<void> write_payload(const Key& key, const NodeData& data) const { return m_raw.save(key, data); }
+
+    // Records a node in the index after write_payload has succeeded for that key.
+    // Not thread safe. Fails with AlreadyExists if the node is already physically
+    // present in the index.
+    Expected<void> commit(const Key& key)
+    {
+        auto added = m_index->add(key);
+        if (!added) {
+            return Error::propagate(std::move(added), "add node " + Traits::key_to_string(key) + " to storage index");
         }
+        if (!added.value()) {
+            return Error::fail(Error::Code::AlreadyExists, "node " + Traits::key_to_string(key) + " is already physically present in the storage index");
+        }
+        m_dirty = true;
         return {};
     }
 
@@ -153,39 +166,13 @@ public:
         if (!result) {
             return result;
         }
-        if (m_index.has_value()) {
-            auto added = m_index->add(key);
-            if (!added) {
-                return Error::propagate(std::move(added), "add linked node " + Traits::key_to_string(key) + " to storage index");
-            }
-            m_dirty = m_dirty || added.value();
-        }
-        return {};
-    }
-
-    Expected<bool> remove(const Key& key)
-    {
-        auto removed = m_raw.remove(key);
-        if (!removed) {
-            return removed;
-        }
-        if (m_index.has_value()) {
-            auto index_removed = m_index->remove(key);
-            if (!index_removed) {
-                return Error::propagate(std::move(index_removed), "remove node " + Traits::key_to_string(key) + " from storage index");
-            }
-            m_dirty = m_dirty || index_removed.value();
-        }
-        return removed.value();
+        return commit(key);
     }
 
     Expected<bool> has(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
-        }
-        if (!m_index.has_value()) {
-            return m_raw.has(key);
         }
         auto status = m_index->get(key);
         if (!status) {
@@ -216,13 +203,6 @@ public:
     }
 
     bool is_indexed() const { return m_index.has_value(); }
-    void ensure_indexed()
-    {
-        if (!m_index.has_value()) {
-            m_index.emplace();
-            m_dirty = true;
-        }
-    }
 
     std::optional<std::reference_wrapper<const Index<Traits>>> index() const
     {
@@ -253,14 +233,7 @@ public:
         return result;
     }
 
-    Expected<void> save_or_create_index()
-    {
-        if (!m_index.has_value()) {
-            m_index.emplace();
-            m_dirty = true;
-        }
-        return save_index();
-    }
+    Expected<void> save_or_create_index() { return save_index(); }
 
 protected:
     Index<Traits>& index_mut() { return m_index.value(); }

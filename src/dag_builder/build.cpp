@@ -606,7 +606,7 @@ std::unordered_set<octree::Id> build_level(
                 }
                 saved_ids.push_back(target);
             } else {
-                LOG_ERROR(
+                LOG_ERROR_AND_EXIT(
                     "Failed to save node {}: {}",
                     target,
                     save_result.error().to_string());

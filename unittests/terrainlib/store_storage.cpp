@@ -19,9 +19,12 @@
 #include <atomic>
 #include <cstring>
 #include <filesystem>
+#include <future>
+#include <latch>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -33,6 +36,7 @@
 #include "octree/store_layout/Mappings.h"
 #include "raster_store/StoreTraits.h"
 #include "store/IndexedStorage.h"
+#include "store/ThreadSafeStorage.h"
 #include "string_utils.h"
 
 namespace {
@@ -94,7 +98,7 @@ Expected<int> read_int(const std::filesystem::path& path)
 Expected<void> write_int(const int value, const std::filesystem::path& path)
 {
     const auto bytes = std::as_bytes(std::span(&value, 1));
-    auto written = io::byte::write(bytes, path, io::byte::WriteMode::Overwrite);
+    auto written = io::byte::write(bytes, path, io::byte::WriteMode::CreateNew);
     if (!written) {
         return Error::propagate(std::move(written), "write test integer");
     }
@@ -109,13 +113,6 @@ public:
 
     Expected<void> write(const std::filesystem::path& node_path, const int& value) const override { return write_int(value, paths(node_path).front()); }
 };
-
-template <typename Traits>
-store::Storage<Traits, int> make_storage(const std::filesystem::path& path)
-{
-    return store::Storage<Traits, int>(
-        store::RawStorage<Traits, int>(store::path_layout::Resolver<typename Traits::Key>(path, test_mapping<Traits>()), std::make_unique<IntCodec>()));
-}
 
 class MultiFileCodec final : public store::Codec<int> {
 public:
@@ -145,49 +142,59 @@ public:
 
 std::atomic_uint32_t index_writes = 0;
 
-Expected<store::IndexMetadata<octree::StoreTraits>> unused_index_read(const std::filesystem::path& path)
+template <typename Traits>
+Expected<store::IndexMetadata<Traits>> unused_index_read(const std::filesystem::path& path)
 {
     return Error::fail(Error::Code::NotFound, "read unused test index from", path);
 }
 
-Expected<void> count_index_write(const std::filesystem::path&, const store::IndexMetadata<octree::StoreTraits>&)
+template <typename Traits>
+Expected<void> count_index_write(const std::filesystem::path&, const store::IndexMetadata<Traits>&)
 {
     ++index_writes;
     return {};
 }
 
-std::optional<store::path_layout::Mapping<octree::Id>> fake_mapping_from_id(const std::string_view id)
+template <typename Traits>
+std::optional<store::path_layout::Mapping<typename Traits::Key>> test_mapping_from_id(const std::string_view id)
 {
-    return id == "flat" ? std::optional<store::path_layout::Mapping<octree::Id>>(octree::store_layout::flat()) : std::nullopt;
+    const auto mapping = test_mapping<Traits>();
+    return id == mapping.id ? std::optional(mapping) : std::nullopt;
 }
 
-store::path_layout::Mapping<octree::Id> fake_default_mapping() { return octree::store_layout::flat(); }
-
-store::IndexFormat<octree::StoreTraits> counting_index_format()
+template <typename Traits>
+store::IndexFormat<Traits> counting_index_format()
 {
     return {
-        "octree.storeindex",
-        unused_index_read,
-        count_index_write,
-        fake_mapping_from_id,
-        fake_default_mapping,
+        "test.storeindex",
+        unused_index_read<Traits>,
+        count_index_write<Traits>,
+        test_mapping_from_id<Traits>,
+        test_mapping<Traits>,
     };
 }
 
-store::IndexedStorage<octree::StoreTraits, int> make_indexed_storage(
+template <typename Traits = octree::StoreTraits>
+store::IndexedStorage<Traits, int> make_indexed_storage(
     const std::filesystem::path& path, std::unique_ptr<store::Codec<int>> codec = std::make_unique<IntCodec>())
 {
-    using Storage = store::Storage<octree::StoreTraits, int>;
-    return store::IndexedStorage<octree::StoreTraits, int>(
-        store::RawStorage<octree::StoreTraits, int>(store::path_layout::Resolver<octree::Id>(path, octree::store_layout::flat()), std::move(codec)),
-        store::Index<octree::StoreTraits> {},
-        Storage::Persistence {
-            counting_index_format(),
-            path / "octree.storeindex",
-            "flat",
+    const auto mapping = test_mapping<Traits>();
+    return store::IndexedStorage<Traits, int>(
+        store::RawStorage<Traits, int>(store::path_layout::Resolver<typename Traits::Key>(path, mapping), std::move(codec)),
+        store::Index<Traits> {},
+        typename store::Storage<Traits, int>::Persistence {
+            counting_index_format<Traits>(),
+            path / "test.storeindex",
+            std::string(mapping.id),
             "test.Int",
             ".data",
         });
+}
+
+std::vector<octree::Id> root_children()
+{
+    const auto children = octree::Id::root().children().value();
+    return { children.begin(), children.end() };
 }
 
 } // namespace
@@ -213,11 +220,11 @@ TEST_CASE("byte writes report directory creation errors", "[io][bytes]")
     CHECK(result.error().code() == Error::Code::Io);
 }
 
-TEMPLATE_TEST_CASE("shared raw storage has no hidden octree dependency", "[store][storage]", octree::StoreTraits, raster_store::StoreTraits)
+TEMPLATE_TEST_CASE("shared storage has no hidden octree dependency", "[store][storage]", octree::StoreTraits, raster_store::StoreTraits)
 {
     using Traits = TestType;
     TemporaryDirectory directory("traits");
-    auto storage = make_storage<Traits>(directory.path());
+    auto storage = make_indexed_storage<Traits>(directory.path());
     const auto root = Traits::root();
 
     CHECK_FALSE(storage.has(root).value());
@@ -225,26 +232,23 @@ TEMPLATE_TEST_CASE("shared raw storage has no hidden octree dependency", "[store
     CHECK(storage.has(root).value());
     REQUIRE(storage.load(root).has_value());
     CHECK(storage.load(root).value() == 42);
-    REQUIRE(storage.remove(root).has_value());
-    CHECK_FALSE(storage.has(root).value());
 }
 
 TEST_CASE("shared storage rejects invalid 2D keys", "[store][storage]")
 {
     TemporaryDirectory directory("invalid-key");
-    auto storage = make_storage<raster_store::StoreTraits>(directory.path());
+    auto storage = make_indexed_storage<raster_store::StoreTraits>(directory.path());
     const radix::tile::Id invalid { 3, { 8, 0 } };
 
     CHECK(storage.load(invalid).error().code() == Error::Code::InvalidInput);
     CHECK(storage.save(invalid, 1).error().code() == Error::Code::InvalidInput);
     CHECK(storage.has(invalid).error().code() == Error::Code::InvalidInput);
-    CHECK(storage.remove(invalid).error().code() == Error::Code::InvalidInput);
 }
 
 TEST_CASE("shared storage rejects saving existing nodes", "[store][storage]")
 {
     TemporaryDirectory directory("overwrite");
-    auto storage = make_storage<octree::StoreTraits>(directory.path());
+    auto storage = make_indexed_storage(directory.path());
     const octree::Id root = octree::Id::root();
 
     REQUIRE(storage.save(root, 1).has_value());
@@ -254,7 +258,7 @@ TEST_CASE("shared storage rejects saving existing nodes", "[store][storage]")
     CHECK(storage.load(root).value() == 1);
 }
 
-TEST_CASE("raw storage requires and removes every codec path", "[store][storage]")
+TEST_CASE("raw storage requires every codec path", "[store][storage]")
 {
     TemporaryDirectory directory("multi-file");
     store::RawStorage<octree::StoreTraits, int> storage(
@@ -267,9 +271,90 @@ TEST_CASE("raw storage requires and removes every codec path", "[store][storage]
     CHECK_FALSE(storage.has(root).value());
     REQUIRE(write_int(2, paths[1]).has_value());
     CHECK(storage.has(root).value());
-    REQUIRE(storage.remove(root).value());
-    CHECK_FALSE(std::filesystem::exists(paths[0]));
-    CHECK_FALSE(std::filesystem::exists(paths[1]));
+}
+
+TEST_CASE("written payloads become available after exactly one commit", "[store][storage][write]")
+{
+    TemporaryDirectory directory("uncommitted");
+    auto storage = make_indexed_storage(directory.path());
+    const octree::Id root = octree::Id::root();
+
+    REQUIRE(storage.write_payload(root, 7).has_value());
+    CHECK_FALSE(storage.has(root).value());
+    const auto uncommitted = storage.load(root);
+    REQUIRE_FALSE(uncommitted.has_value());
+    CHECK(uncommitted.error().code() == Error::Code::NotFound);
+
+    REQUIRE(storage.commit(root).has_value());
+    CHECK(storage.has(root).value());
+    CHECK(storage.load(root).value() == 7);
+
+    const auto recommitted = storage.commit(root);
+    REQUIRE_FALSE(recommitted.has_value());
+    CHECK(recommitted.error().code() == Error::Code::AlreadyExists);
+}
+
+TEST_CASE("payload writes reject linked nodes and keep the source file", "[store][storage][write][link]")
+{
+    TemporaryDirectory source_directory("write-linked-source");
+    TemporaryDirectory target_directory("write-linked-target");
+    auto source = make_indexed_storage(source_directory.path());
+    auto target = make_indexed_storage(target_directory.path());
+    const octree::Id root = octree::Id::root();
+    REQUIRE(source.save(root, 41).has_value());
+    REQUIRE(target.link_from(root, source).has_value());
+
+    const auto rejected = target.write_payload(root, 2);
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
+    CHECK(source.load(root).value() == 41);
+    CHECK(target.load(root).value() == 41);
+}
+
+TEST_CASE("thread-safe storage saves different keys concurrently and one key once", "[store][storage][write]")
+{
+    TemporaryDirectory directory("thread-safe");
+    store::ThreadSafeStorage storage(make_indexed_storage(directory.path()));
+
+    SECTION("different keys")
+    {
+        const auto keys = root_children();
+        std::vector<std::future<Expected<void>>> saves;
+        for (std::size_t index = 0; index < keys.size(); ++index) {
+            saves.push_back(std::async(std::launch::async, [&storage, &keys, index] { return storage.save(keys[index], int(index)); }));
+        }
+        for (auto& save : saves) {
+            REQUIRE(save.get().has_value());
+        }
+        for (std::size_t index = 0; index < keys.size(); ++index) {
+            CHECK(storage.load(keys[index]).value() == int(index));
+        }
+    }
+
+    SECTION("same key")
+    {
+        const octree::Id root = octree::Id::root();
+        constexpr int writers = 8;
+        std::latch start(writers);
+        std::vector<std::future<Expected<void>>> saves;
+        for (int value = 0; value < writers; ++value) {
+            saves.push_back(std::async(std::launch::async, [&storage, &start, root, value] {
+                start.arrive_and_wait();
+                return storage.save(root, value);
+            }));
+        }
+        std::vector<int> saved;
+        for (int value = 0; value < writers; ++value) {
+            const auto result = saves[std::size_t(value)].get();
+            if (result) {
+                saved.push_back(value);
+            } else {
+                CHECK(result.error().code() == Error::Code::AlreadyExists);
+            }
+        }
+        REQUIRE(saved.size() == 1);
+        CHECK(storage.load(root).value() == saved.front());
+    }
 }
 
 TEST_CASE("storage moves transfer and finalize dirty index state", "[store][storage]")
@@ -277,6 +362,7 @@ TEST_CASE("storage moves transfer and finalize dirty index state", "[store][stor
     index_writes = 0;
     TemporaryDirectory first_directory("move-first");
     TemporaryDirectory second_directory("move-second");
+    TemporaryDirectory third_directory("move-third");
 
     {
         auto original = make_indexed_storage(first_directory.path());
@@ -289,9 +375,9 @@ TEST_CASE("storage moves transfer and finalize dirty index state", "[store][stor
     CHECK(index_writes == 1);
 
     {
-        auto destination = make_indexed_storage(first_directory.path());
+        auto destination = make_indexed_storage(second_directory.path());
         REQUIRE(destination.save(octree::Id::root(), 2).has_value());
-        auto source = make_indexed_storage(second_directory.path());
+        auto source = make_indexed_storage(third_directory.path());
         REQUIRE(source.save(octree::Id::root(), 3).has_value());
         destination = std::move(source);
         CHECK(index_writes == 2);

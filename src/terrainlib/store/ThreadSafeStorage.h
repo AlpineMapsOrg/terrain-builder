@@ -26,6 +26,8 @@
 
 #include <expected>
 
+#include "Error.h"
+
 namespace store {
 
 template <typename Storage>
@@ -62,10 +64,26 @@ public:
 
     std::filesystem::path base_path() const noexcept { return m_storage.base_path(); }
 
-    auto save(const key_type& key, const value_type& value) const
+    // Saves of different keys encode and write their payloads in parallel. The
+    // existence check holds the shared lock and only the index update holds the
+    // exclusive lock.
+    Expected<void> save(const key_type& key, const value_type& value) const
     {
+        {
+            std::shared_lock lock(m_mutex);
+            auto exists = m_storage.has(key);
+            if (!exists) {
+                return Error::propagate(std::move(exists), "check whether node exists before saving");
+            }
+            if (exists.value()) {
+                return Error::fail(Error::Code::AlreadyExists, "save node to", Error::asserting_unwrap(m_storage.path_for(key)));
+            }
+        }
+        if (auto written = m_storage.write_payload(key, value); !written) {
+            return written;
+        }
         std::unique_lock lock(m_mutex);
-        return m_storage.save(key, value);
+        return m_storage.commit(key);
     }
 
     template <typename Source>

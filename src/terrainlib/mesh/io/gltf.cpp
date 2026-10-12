@@ -26,6 +26,7 @@
 #include <limits>
 #include <new>
 #include <stdexcept>
+#include <system_error>
 
 #define CGLTF_IMPLEMENTATION
 #define CGLTF_WRITE_IMPLEMENTATION
@@ -294,7 +295,8 @@ Expected<void> write_serialized(
     const std::filesystem::path& path,
     const std::span<const std::uint8_t> json,
     const cgltf_data& data,
-    const bool binary_output)
+    const bool binary_output,
+    const ::io::byte::WriteMode mode)
 try {
     constexpr std::uint32_t glb_magic = 0x46546C67;
     constexpr std::uint32_t glb_version = 2;
@@ -337,8 +339,12 @@ try {
         return Error::propagate(std::move(directories), "write glTF file");
     }
 
-    std::ofstream file(path, std::ios::binary);
+    std::ofstream file(path, std::ios::binary | (mode == ::io::byte::WriteMode::CreateNew ? std::ios::noreplace : std::ios::trunc));
     if (!file.is_open()) {
+        std::error_code error;
+        if (mode == ::io::byte::WriteMode::CreateNew && std::filesystem::exists(std::filesystem::symlink_status(path, error))) {
+            return Error::fail(Error::Code::AlreadyExists, "create glTF file", path);
+        }
         return Error::fail(Error::Code::Io, "open glTF file for writing", path);
     }
 
@@ -894,7 +900,7 @@ Expected<void> save_to_path(
     if (!serialized) {
         return Error::propagate(std::move(serialized), "serialize glTF output");
     }
-    auto written = write_serialized(path, *serialized, data, binary_output);
+    auto written = write_serialized(path, *serialized, data, binary_output, options.write_mode);
     if (!written) {
         return Error::propagate(std::move(written), "write glTF output");
     }

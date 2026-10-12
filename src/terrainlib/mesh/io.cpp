@@ -56,7 +56,7 @@ Expected<void> save_to_path(
         std::filesystem::path node_path = path;
         node_path.replace_extension();
         const mesh::codec::SfMesh codec;
-        return codec.write(node_path, mesh, mesh::EncodeOptions{.texture_format = options.texture_format});
+        return codec.write(node_path, mesh, mesh::EncodeOptions{.texture_format = options.texture_format}, options.write_mode);
     } else {
         return Error::fail(Error::Code::Unsupported, "unsupported mesh output format: " + extension.string());
     }

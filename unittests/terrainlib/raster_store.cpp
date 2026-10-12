@@ -159,10 +159,29 @@ TEMPLATE_TEST_CASE("AMORT preserves native scalar and packed vector bytes", "[ra
     check_bytes(read->attribution, tile.attribution);
 
     TileCodec<TestType> uncompressed({ 3, 3 }, io::envelope::CompressionAlgorithm::None, io::hash::Algorithm::Xxh3_64);
-    REQUIRE(uncompressed.write(path, tile));
-    read = writer.read(path);
+    const auto uncompressed_path = directory.path() / "uncompressed";
+    REQUIRE(uncompressed.write(uncompressed_path, tile));
+    read = writer.read(uncompressed_path);
     REQUIRE(read);
     check_bytes(read->data, tile.data);
+}
+
+TEST_CASE("AMORT never replaces an existing tile file", "[raster-store][codec]")
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "tile";
+    TileCodec<float> amort({ 3, 3 });
+    raster_store::Tile<float> tile(3);
+    tile.data.pixel({ 0, 0 }) = 1.0f;
+    REQUIRE(amort.write(path, tile));
+    const auto original = io::byte::read(path.string() + ".amort");
+    REQUIRE(original);
+
+    tile.data.pixel({ 0, 0 }) = 2.0f;
+    const auto rejected = amort.write(path, tile);
+    REQUIRE_FALSE(rejected);
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
+    CHECK(io::byte::read(path.string() + ".amort").value() == original.value());
 }
 
 TEST_CASE("AMORT preserves NaN bits and data beneath NoData pixels", "[raster-store][codec]")

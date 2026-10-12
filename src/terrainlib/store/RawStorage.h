@@ -96,23 +96,6 @@ public:
         return true;
     }
 
-    Expected<bool> remove(const Key& key) const
-    {
-        auto node_paths = paths(key);
-        if (!node_paths) {
-            return Error::propagate(std::move(node_paths));
-        }
-        bool removed = false;
-        for (const auto& path : node_paths.value()) {
-            std::error_code error;
-            removed = std::filesystem::remove(path, error) || removed;
-            if (error) {
-                return Error::fail(Error::Code::Io, "remove", path, error);
-            }
-        }
-        return removed;
-    }
-
     // Hard-links the node's files from source. Both storages must use the same codec,
     // and the target files must not exist.
     Expected<void> link_from(const Key& key, const RawStorage& source) const

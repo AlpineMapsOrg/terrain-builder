@@ -33,7 +33,6 @@ public:
     explicit IndexedStorage(Storage<Traits, NodeData> storage)
         : Base(std::move(storage))
     {
-        this->ensure_indexed();
     }
 
     IndexedStorage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Persistence persistence)
