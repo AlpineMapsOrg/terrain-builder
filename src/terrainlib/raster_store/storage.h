@@ -26,12 +26,12 @@
 #include <system_error>
 #include <utility>
 
-#include "io/utils.h"
 #include "raster_store/attribution.h"
 #include "raster_store/io/TileCodec.h"
 #include "raster_store/io/manifest.h"
 #include "raster_store/path_layout.h"
 #include "store/open.h"
+#include "store/snapshot.h"
 
 namespace raster_store::storage {
 
@@ -54,19 +54,6 @@ struct CreateOptions {
 };
 
 namespace detail {
-
-    inline Expected<void> require_absent(const std::filesystem::path& path)
-    {
-        std::error_code error;
-        const auto status = std::filesystem::symlink_status(path, error);
-        if (error && error != std::errc::no_such_file_or_directory) {
-            return Error::fail(Error::Code::Io, "inspect snapshot destination", path, error);
-        }
-        if (std::filesystem::exists(status)) {
-            return Error::fail(Error::Code::AlreadyExists, "create snapshot at", path);
-        }
-        return {};
-    }
 
     // The owned handle is destroyed on return, before publication renames its directory.
     template <typename PixelType>
@@ -141,28 +128,16 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (!codec) {
         return Error::propagate(std::move(codec));
     }
-    if (auto absent = detail::require_absent(destination); !absent) {
-        return Error::propagate(std::move(absent));
-    }
-    auto partial_path = destination;
-    partial_path += ".part";
-    if (auto absent = detail::require_absent(partial_path); !absent) {
-        return Error::propagate(std::move(absent));
-    }
-    auto table = attribution::read_table(options.copy_attribution_from_index.value_or(partial_path / io::manifest::index_file_name));
+    auto table
+        = attribution::read_table(options.copy_attribution_from_index.value_or(store::snapshot::partial_path(destination) / io::manifest::index_file_name));
     if (!table) {
         return Error::propagate(std::move(table), "resolve attribution for new raster snapshot");
     }
-    std::error_code error;
-    if (!destination.parent_path().empty()) {
-        std::filesystem::create_directories(destination.parent_path(), error);
-        if (error) {
-            return Error::fail(Error::Code::Io, "create snapshot parent directory", destination.parent_path(), error);
-        }
+    auto created = store::snapshot::create_partial(destination);
+    if (!created) {
+        return Error::propagate(std::move(created));
     }
-    if (!std::filesystem::create_directory(partial_path, error)) {
-        return Error::fail(error ? Error::Code::Io : Error::Code::AlreadyExists, "create incomplete snapshot", partial_path, error);
-    }
+    const auto& partial_path = *created;
     if (options.copy_attribution_from_index) {
         auto copied = attribution::copy_table(*options.copy_attribution_from_index, partial_path);
         if (!copied) {
@@ -198,22 +173,13 @@ Expected<void> publish(std::unique_ptr<IndexedStorage<PixelType>> storage)
         return Error::fail(Error::Code::InvalidInput, "publication requires an output handle");
     }
     const auto partial_path = storage->base_path().lexically_normal();
-    if (partial_path.extension() != ".part") {
+    if (!store::snapshot::is_partial(partial_path)) {
         return Error::fail(Error::Code::InvalidInput, "publication requires an incomplete .part snapshot", partial_path);
-    }
-    auto destination = partial_path;
-    destination.replace_extension();
-    if (auto absent = detail::require_absent(destination); !absent) {
-        return absent;
     }
     if (auto finished = detail::finish_output(std::move(storage)); !finished) {
         return Error::propagate(std::move(finished), "finish raster snapshot before publication");
     }
-    auto renamed = ::io::utils::rename_without_replacement(partial_path, destination);
-    if (!renamed) {
-        return Error::propagate(std::move(renamed), "publish raster snapshot");
-    }
-    return {};
+    return store::snapshot::publish(partial_path);
 }
 
 } // namespace raster_store::storage

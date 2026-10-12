@@ -30,6 +30,7 @@
 
 #include "../temporary_directory.h"
 #include "io/byte.h"
+#include "io/utils.h"
 #include "raster_store/storage.h"
 
 namespace {

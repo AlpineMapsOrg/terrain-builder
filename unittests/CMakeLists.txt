@@ -61,6 +61,7 @@ add_executable(unittests_terrainlib
     terrainlib/store_codec.cpp
     terrainlib/store_index.cpp
     terrainlib/store_layout.cpp
+    terrainlib/store_snapshot.cpp
     terrainlib/store_storage.cpp
     terrainlib/store_traverse.cpp
     terrainlib/mesh_boundary.cpp

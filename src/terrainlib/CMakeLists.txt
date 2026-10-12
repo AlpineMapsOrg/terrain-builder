@@ -156,6 +156,7 @@ add_library(terrainlib
     octree/Space.h octree/Space.cpp
     octree/StoreTraits.h
     octree/storage/IndexFile.h
+    octree/storage/create.h
     octree/storage/open_runtime.h
     octree/store_layout/Flat.h
     octree/store_layout/LevelAndCoordinateDirectories.h
@@ -220,6 +221,7 @@ add_library(terrainlib
     store/Index.h
     store/IndexFormat.h
     store/IndexedStorage.h
+    store/inputs.h store/inputs.cpp
     store/NodeStatus.h
     store/NodeStatusOrMissing.h
     store/path_layout.h
@@ -231,6 +233,7 @@ add_library(terrainlib
     store/cache/Interface.h
     store/cache/Lru.h
     store/open.h
+    store/snapshot.h store/snapshot.cpp
     store/traverse.h
 
     texture/Mask.h
