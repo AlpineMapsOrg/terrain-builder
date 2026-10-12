@@ -46,7 +46,7 @@ Expected<void> validate(const Metadata& metadata)
 
 Expected<Metadata> read_metadata(const std::filesystem::path& base_path)
 {
-    auto metadata = ::io::envelope::read_from_path<MetadataSchema>(base_path / metadata_file_name);
+    auto metadata = ::io::envelope::read<MetadataSchema>(base_path / metadata_file_name);
     if (!metadata) {
         return metadata;
     }
@@ -58,7 +58,7 @@ Expected<Metadata> read_metadata(const std::filesystem::path& base_path)
 
 Expected<void> write_metadata(const Metadata& metadata, const std::filesystem::path& base_path)
 {
-    return ::io::envelope::write_to_path<MetadataSchema>(metadata, base_path / metadata_file_name);
+    return ::io::envelope::write<MetadataSchema>(metadata, base_path / metadata_file_name);
 }
 
 detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index)
@@ -99,7 +99,7 @@ Expected<store::Index<StoreTraits>> decode_index(const detail::v1::Hierarchy& en
 
 Expected<store::Index<StoreTraits>> read_hierarchy(const std::filesystem::path& index_path)
 {
-    auto encoded = ::io::envelope::read_from_path<IndexSchema>(index_path);
+    auto encoded = ::io::envelope::read<IndexSchema>(index_path);
     if (!encoded) {
         return Error::propagate(std::move(encoded), "read raster hierarchy");
     }
@@ -123,7 +123,7 @@ Expected<void> write_index_file(const std::filesystem::path& index_path, const s
 {
     auto temporary_path = index_path;
     temporary_path += ".tmp";
-    auto written = ::io::envelope::write_to_path<IndexSchema>(encode_index(metadata.index), temporary_path);
+    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index), temporary_path);
     if (!written) {
         return Error::propagate(std::move(written), "checkpoint raster index");
     }

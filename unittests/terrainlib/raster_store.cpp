@@ -196,7 +196,7 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     SECTION("wrong dimensions") { encoded.width = 4; }
     SECTION("short data") { encoded.data.pop_back(); }
     SECTION("long attribution") { encoded.source_attribution.push_back(std::byte { 0 }); }
-    REQUIRE(io::envelope::write_to_path<tile_codec::TileSchema>(encoded, path.string() + ".amort"));
+    REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, path.string() + ".amort"));
     CHECK(amort.read(path).error().code() == Error::Code::CorruptData);
 }
 
@@ -340,10 +340,10 @@ TEST_CASE("raster reader selection follows metadata instead of file endings", "[
     REQUIRE(storage::publish(std::move(created)));
     auto metadata = manifest::read_metadata(final).value();
     metadata.codec_selector = ".amort";
-    REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+    REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
     CHECK(storage::open<float>(final).error().code() == Error::Code::Unsupported);
     metadata.codec_selector = "amort";
-    REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+    REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
     REQUIRE(storage::open<float>(final));
 }
 
@@ -473,14 +473,14 @@ TEST_CASE("raster opening retains metadata and index errors without creating a d
     {
         auto metadata = manifest::read_metadata(final).value();
         metadata.layout_id = "unknown";
-        REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+        REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
         CHECK(storage::open<float>(final).error().code() == Error::Code::Unsupported);
     }
     SECTION("rectangular metadata")
     {
         auto metadata = manifest::read_metadata(final).value();
         metadata.stored_tile_size = 2;
-        REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
+        REQUIRE(io::envelope::write<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
         CHECK(storage::open<float>(final).error().code() == Error::Code::CorruptData);
     }
     SECTION("wrong envelope class")

@@ -35,7 +35,7 @@ public:
     Expected<mesh::Simple> read(const std::filesystem::path& node_path) const override
     {
         const std::filesystem::path path = paths(node_path).front();
-        auto payload = ::io::envelope::read_from_path<mesh::sf::Schema>(path);
+        auto payload = ::io::envelope::read<mesh::sf::Schema>(path);
         if (!payload) {
             return Error::propagate(std::move(payload), "read SF mesh");
         }
@@ -61,7 +61,7 @@ public:
         if (auto valid = mesh::sf::validate(*payload); !valid) {
             return Error::propagate(std::move(valid), "validate SF mesh for \"" + path.string() + "\"");
         }
-        auto result = ::io::envelope::write_to_path<mesh::sf::Schema>(*payload, path);
+        auto result = ::io::envelope::write<mesh::sf::Schema>(*payload, path);
         if (!result) {
             return Error::propagate(std::move(result), "write SF mesh");
         }

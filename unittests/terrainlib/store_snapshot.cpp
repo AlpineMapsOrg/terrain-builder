@@ -180,18 +180,18 @@ TEST_CASE("octree snapshots are created empty, published, and fingerprinted", "[
     CHECK(fingerprint->metadata_hash == io::envelope::read_header(final_path / octree::storage::metadata_file_name)->hash);
 
     const auto metadata_path = final_path / octree::storage::metadata_file_name;
-    const auto metadata = io::envelope::read_from_path<octree::storage::StoreMetadataSchema>(metadata_path);
+    const auto metadata = io::envelope::read<octree::storage::StoreMetadataSchema>(metadata_path);
     REQUIRE(metadata.has_value());
     SECTION("recompression keeps the fingerprint")
     {
-        REQUIRE(io::envelope::write_to_path<octree::storage::StoreMetadataSchema>(*metadata, metadata_path, true, io::envelope::CompressionAlgorithm::None));
+        REQUIRE(io::envelope::write<octree::storage::StoreMetadataSchema>(*metadata, metadata_path, true, io::envelope::CompressionAlgorithm::None));
         const auto recompressed = store::inputs::fingerprint(final_path, octree::storage::metadata_file_name, octree::storage::index_file_name);
         REQUIRE(recompressed.has_value());
         CHECK(*recompressed == *fingerprint);
     }
     SECTION("files without a hash are rejected")
     {
-        REQUIRE(io::envelope::write_to_path<octree::storage::StoreMetadataSchema>(
+        REQUIRE(io::envelope::write<octree::storage::StoreMetadataSchema>(
             *metadata, metadata_path, true, io::envelope::CompressionAlgorithm::ZstdDefaultCompression, io::hash::Algorithm::None));
         const auto unhashed = store::inputs::fingerprint(final_path, octree::storage::metadata_file_name, octree::storage::index_file_name);
         REQUIRE_FALSE(unhashed.has_value());

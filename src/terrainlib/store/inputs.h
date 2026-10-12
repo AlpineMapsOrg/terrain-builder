@@ -49,7 +49,7 @@ Expected<Fingerprint> fingerprint(const std::filesystem::path& snapshot, std::st
 template <typename Schema>
 Expected<void> write(const std::filesystem::path& snapshot, const typename Schema::latest_type& record)
 {
-    auto written = ::io::envelope::write_to_path<Schema>(record, snapshot / file_name);
+    auto written = ::io::envelope::write<Schema>(record, snapshot / file_name);
     if (!written) {
         return Error::propagate(std::move(written), "write input record");
     }
@@ -62,7 +62,7 @@ Expected<void> validate_cache(const std::filesystem::path& cache, const typename
     if (!snapshot::is_partial(cache)) {
         return Error::fail(Error::Code::InvalidInput, "a cache must be an incomplete .part snapshot", cache);
     }
-    auto saved = ::io::envelope::read_from_path<Schema>(cache / file_name);
+    auto saved = ::io::envelope::read<Schema>(cache / file_name);
     if (!saved) {
         return Error::propagate(std::move(saved), "requested cache has a missing or corrupt " + std::string(file_name));
     }

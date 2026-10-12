@@ -71,7 +71,7 @@ public:
         if (auto valid = validate_dimensions(m_dimensions); !valid) {
             return Error::propagate(std::move(valid));
         }
-        auto encoded = ::io::envelope::read_from_path<tile_codec::TileSchema>(paths(node_path).front());
+        auto encoded = ::io::envelope::read<tile_codec::TileSchema>(paths(node_path).front());
         if (!encoded) {
             return Error::propagate(std::move(encoded), "read AMORT tile");
         }
@@ -102,7 +102,7 @@ public:
         const auto source_attribution = tile.attribution.bytes();
         const tile_codec::detail::v1::RasterTile encoded { m_dimensions.x, m_dimensions.y,
             { data.begin(), data.end() }, { source_attribution.begin(), source_attribution.end() } };
-        return ::io::envelope::write_to_path<tile_codec::TileSchema>(encoded, paths(node_path).front(), true, m_compression_algorithm, m_hash_algorithm);
+        return ::io::envelope::write<tile_codec::TileSchema>(encoded, paths(node_path).front(), true, m_compression_algorithm, m_hash_algorithm);
     }
 
 private:

@@ -561,7 +561,7 @@ TEST_CASE("Envelope headers are read without the payload")
     SECTION("the header matches a full read")
     {
         const v3::Payload payload { .id = 21, .label = std::string(4096, 'h'), .enabled = true, .samples = { 1, 2, 3 } };
-        REQUIRE(io::envelope::write_to_path<Schema>(payload, path));
+        REQUIRE(io::envelope::write<Schema>(payload, path));
         const auto header = io::envelope::read_header(path);
         REQUIRE(header.has_value());
         CHECK(header->magic == io::envelope::magic);
@@ -570,7 +570,7 @@ TEST_CASE("Envelope headers are read without the payload")
         CHECK(header->hash_algorithm == io::hash::Algorithm::Xxh3_64);
         CHECK(header->compression_algorithm == io::envelope::CompressionAlgorithm::ZstdDefaultCompression);
 
-        const auto full = io::envelope::read_from_path<Schema>(path);
+        const auto full = io::envelope::read<Schema>(path);
         REQUIRE(full.has_value());
         CHECK(header->uncompressed_size == encode_value(*full).size());
         CHECK(header->hash == io::hash::data(encode_value(*full), io::hash::Algorithm::Xxh3_64));

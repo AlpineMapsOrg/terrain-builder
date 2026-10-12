@@ -333,7 +333,7 @@ Expected<typename Schema::latest_type> deserialize(
 }
 
 template <typename Schema>
-Expected<typename Schema::latest_type> read_from_path(
+Expected<typename Schema::latest_type> read(
     const std::filesystem::path& path, const std::size_t max_decompressed_size = default_max_decompressed_size)
 {
     auto file_bytes = ::io::byte::read(path);
@@ -348,7 +348,7 @@ Expected<typename Schema::latest_type> read_from_path(
 }
 
 template <typename Schema>
-Expected<void> write_to_path(const typename Schema::latest_type& payload,
+Expected<void> write(const typename Schema::latest_type& payload,
     const std::filesystem::path& path,
     const bool make_dirs = true,
     const CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdDefaultCompression,

@@ -119,7 +119,7 @@ inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encode
 inline Expected<StoreMetadata> read_store_metadata(const std::filesystem::path& base_path)
 {
     const std::filesystem::path path = base_path / metadata_file_name;
-    auto metadata = io::envelope::read_from_path<StoreMetadataSchema>(path);
+    auto metadata = io::envelope::read<StoreMetadataSchema>(path);
     if (!metadata) {
         return metadata;
     }
@@ -136,7 +136,7 @@ inline Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::fi
         return Error::propagate(std::move(metadata), "read octree store metadata");
     }
 
-    auto encoded_index = io::envelope::read_from_path<StoreIndexSchema>(path);
+    auto encoded_index = io::envelope::read<StoreIndexSchema>(path);
     if (!encoded_index) {
         return Error::propagate(std::move(encoded_index), "read octree store index \"" + path.string() + "\"");
     }
@@ -163,12 +163,12 @@ inline Expected<void> write_index_file(const std::filesystem::path& path, const 
         return Error::propagate(std::move(valid), "validate store metadata for writing");
     }
     const std::filesystem::path metadata_path = path.parent_path() / metadata_file_name;
-    if (auto written = io::envelope::write_to_path<StoreMetadataSchema>(store_metadata, metadata_path); !written) {
+    if (auto written = io::envelope::write<StoreMetadataSchema>(store_metadata, metadata_path); !written) {
         return Error::propagate(std::move(written), "write octree store metadata " + metadata_path.string());
     }
 
     const StoreIndex encoded_index = encode_index(metadata.index);
-    if (auto written = io::envelope::write_to_path<StoreIndexSchema>(encoded_index, path); !written) {
+    if (auto written = io::envelope::write<StoreIndexSchema>(encoded_index, path); !written) {
         return Error::propagate(std::move(written), "write octree store index " + path.string());
     }
     return {};

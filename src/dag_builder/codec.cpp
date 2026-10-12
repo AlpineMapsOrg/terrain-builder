@@ -380,7 +380,7 @@ namespace {
 
     Expected<dag::NodeMetadata> read_metadata(const std::filesystem::path& path)
     {
-        auto payload = io::envelope::read_from_path<format::MetadataSchema>(path);
+        auto payload = io::envelope::read<format::MetadataSchema>(path);
         if (!payload) {
             return Error::propagate(std::move(payload), "read DAG metadata");
         }
@@ -404,7 +404,7 @@ std::vector<std::filesystem::path> ClusterBatch::paths(const std::filesystem::pa
 Expected<dag::ClusterBatch> ClusterBatch::read(const std::filesystem::path& node_path) const
 {
     const auto node_paths = paths(node_path);
-    auto clustering_payload = io::envelope::read_from_path<format::ClusteringSchema>(node_paths[0]);
+    auto clustering_payload = io::envelope::read<format::ClusteringSchema>(node_paths[0]);
     if (!clustering_payload) {
         return Error::propagate(std::move(clustering_payload), "read DAG clustering");
     }
@@ -443,11 +443,11 @@ Expected<void> ClusterBatch::write(const std::filesystem::path& node_path, const
     if (auto valid = format::validate(metadata); !valid) {
         return Error::propagate(std::move(valid), "validate DAG metadata for \"" + node_paths[1].string() + "\"");
     }
-    auto data_written = io::envelope::write_to_path<format::ClusteringSchema>(*clustering, node_paths[0]);
+    auto data_written = io::envelope::write<format::ClusteringSchema>(*clustering, node_paths[0]);
     if (!data_written) {
         return Error::propagate(std::move(data_written), "write DAG clustering");
     }
-    auto metadata_written = io::envelope::write_to_path<format::MetadataSchema>(metadata, node_paths[1]);
+    auto metadata_written = io::envelope::write<format::MetadataSchema>(metadata, node_paths[1]);
     if (!metadata_written) {
         return Error::propagate(std::move(metadata_written), "write DAG metadata");
     }
