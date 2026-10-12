@@ -147,7 +147,8 @@ public:
                 } else {
                     auto link_result = this->_output.link_subtree_to_output(
                         id,
-                        result.source == merge::Source::Left ? this->_left : this->_right);
+                        result.source == merge::Source::Left ? this->_left : this->_right,
+                        [this] { return this->poll(); });
                     if (!link_result) {
                         return link_result;
                     }

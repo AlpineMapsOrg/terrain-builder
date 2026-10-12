@@ -20,6 +20,7 @@
 #pragma once
 
 #include <expected>
+#include <functional>
 #include <optional>
 
 #include <libassert/assert.hpp>
@@ -47,9 +48,11 @@ public:
 
     Expected<void> save_index() { return this->_storage.save_index(); }
 
+    // Calls poll before linking each leaf and stops at its first error, e.g. a cancellation.
     Expected<void> link_subtree_to_output(
         const octree::Id &id,
-        const NodeLoader &loader) {
+        const NodeLoader &loader,
+        const std::function<Expected<void>()> &poll) {
         std::optional<Error> error = std::nullopt;
         auto traversal = store::traverse(
             loader.storage().index(),
@@ -62,6 +65,10 @@ public:
                 }
                 DEBUG_ASSERT(status == store::NodeStatus::Leaf);
 
+                if (auto polled = poll(); !polled) {
+                    error = std::move(polled).error();
+                    return;
+                }
                 auto result = this->_storage.link_from(child_id, loader.storage());
                 if (!result) {
                     error = std::move(result).error();
