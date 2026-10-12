@@ -241,7 +241,7 @@ TEST_CASE("shared storage rejects invalid 2D keys", "[store][storage]")
     CHECK(storage.remove(invalid).error().code() == Error::Code::InvalidInput);
 }
 
-TEST_CASE("shared storage preserves overwrite settings", "[store][storage]")
+TEST_CASE("shared storage rejects saving existing nodes", "[store][storage]")
 {
     TemporaryDirectory directory("overwrite");
     auto storage = make_storage<octree::StoreTraits>(directory.path());
@@ -252,10 +252,6 @@ TEST_CASE("shared storage preserves overwrite settings", "[store][storage]")
     REQUIRE_FALSE(rejected.has_value());
     CHECK(rejected.error().code() == Error::Code::AlreadyExists);
     CHECK(storage.load(root).value() == 1);
-
-    storage.settings().allow_overwrite = true;
-    REQUIRE(storage.save(root, 2).has_value());
-    CHECK(storage.load(root).value() == 2);
 }
 
 TEST_CASE("raw storage requires and removes every codec path", "[store][storage]")
@@ -294,7 +290,6 @@ TEST_CASE("storage moves transfer and finalize dirty index state", "[store][stor
 
     {
         auto destination = make_indexed_storage(first_directory.path());
-        destination.settings().allow_overwrite = true;
         REQUIRE(destination.save(octree::Id::root(), 2).has_value());
         auto source = make_indexed_storage(second_directory.path());
         REQUIRE(source.save(octree::Id::root(), 3).has_value());

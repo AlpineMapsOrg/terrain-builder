@@ -18,7 +18,6 @@
 # *****************************************************************************
 
 add_library(dagbuilderlib
-    ContinuationMode.h
     Partitioning.h
     TextureSet.h
     VertexInCluster.h
@@ -34,6 +33,7 @@ add_library(dagbuilderlib
     dag_node.h
     fixed.h
     fixed_point.h
+    inputs.h
     meshopt.h
     metadata.h
     optimize.h

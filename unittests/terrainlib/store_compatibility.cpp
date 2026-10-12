@@ -120,22 +120,6 @@ TEST_CASE("storage hard-links matching payload formats")
     REQUIRE(target.save_index().has_value());
 }
 
-TEST_CASE("storage supports enabled overwrites")
-{
-    TemporaryDirectory directory("overwrite");
-    auto storage = make_storage(directory.path(), octree::store_layout::flat(), ".sfmesh");
-    storage.settings().allow_overwrite = true;
-
-    const octree::Id root = octree::Id::root();
-    REQUIRE(storage.save(root, triangle_mesh(1.0)).has_value());
-    REQUIRE(storage.save(root, triangle_mesh(9.0)).has_value());
-    const auto loaded = storage.load(root);
-    REQUIRE(loaded.has_value());
-    REQUIRE_FALSE(loaded->positions.empty());
-    CHECK(loaded->positions.front().x == 9.0);
-    REQUIRE(storage.save_index().has_value());
-}
-
 TEST_CASE("folder opening persists and reopens metadata-driven storage")
 {
     TemporaryDirectory directory("folder-open");

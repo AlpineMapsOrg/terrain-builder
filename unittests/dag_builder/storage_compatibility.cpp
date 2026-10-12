@@ -235,3 +235,44 @@ TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf
     CHECK(built.error().to_string().contains(root.to_string()));
     CHECK(output.index().empty());
 }
+
+TEST_CASE("DAG builds stop on request and reuse cached nodes", "[dag][snapshot]")
+{
+    TemporaryDirectory input_directory;
+    TemporaryDirectory output_directory;
+    auto input_result = mesh::storage::open_folder_indexed(input_directory.path());
+    REQUIRE(input_result.has_value());
+    auto input = std::move(input_result.value());
+    REQUIRE(input.save(octree::Id::root(), sample_mesh()).has_value());
+    const dag::BuildOptions options {
+        .clusters_per_partition = 1,
+        .target_ratio = 1.0f,
+        .relative_target_error = std::nullopt,
+        .write_debug_meshes = false,
+    };
+
+    SECTION("stop")
+    {
+        auto output = dag::storage::create(output_directory.path() / "stopped").value();
+        const auto built = dag::build_levels(input, output, options, RangeFull {}, nullptr, [] { return true; });
+        REQUIRE_FALSE(built.has_value());
+        CHECK(built.error().code() == Error::Code::Cancelled);
+        CHECK(output.index().empty());
+    }
+
+    SECTION("cache")
+    {
+        auto first = dag::storage::create(output_directory.path() / "first").value();
+        REQUIRE(dag::build_levels(input, first, options, RangeFull {}).has_value());
+        REQUIRE_FALSE(first.index().empty());
+
+        auto output = dag::storage::create(output_directory.path() / "second").value();
+        REQUIRE(dag::build_levels(input, output, options, RangeFull {}, &first).has_value());
+        CHECK(output.index().size() == first.index().size());
+        for (const auto& [id, status] : first.index()) {
+            if (status != store::NodeStatus::Virtual) {
+                CHECK(std::filesystem::equivalent(first.paths(id)->front(), output.paths(id)->front()));
+            }
+        }
+    }
+}

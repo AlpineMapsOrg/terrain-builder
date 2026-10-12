@@ -25,6 +25,7 @@
 #include "codec.h"
 #include "octree/StoreTraits.h"
 #include "octree/storage/IndexFile.h"
+#include "octree/storage/create.h"
 #include "octree/storage/open_runtime.h"
 #include "store/IndexedStorage.h"
 
@@ -68,6 +69,15 @@ open_folder_indexed(const std::filesystem::path &path, OpenOptions options = {})
         dag::codec::cluster_batch_from_extension,
         std::move(options));
 }
+
+// Creates an empty storage in <path>.part; see store::snapshot.
+inline Expected<IndexedStorage> create(const std::filesystem::path& path)
+{
+    return octree::storage::create<dag::ClusterBatch>(
+        path, std::string(payload_class), ".dag", dag::codec::cluster_batch_from_extension, octree::storage::default_mapping());
+}
+
+inline Expected<void> publish(IndexedStorage storage) { return octree::storage::publish(std::move(storage)); }
 
 inline Expected<IndexedMetadataStorage>
 open_metadata_indexed(const std::filesystem::path &path) {

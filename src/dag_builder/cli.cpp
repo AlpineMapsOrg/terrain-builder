@@ -106,36 +106,6 @@ octree::Id make_octree_id(const std::vector<uint64_t> &values) {
     throw CLI::ValidationError("--root-node expects either: <level> <index> or <level> <x> <y> <z>");
 }
 
-ContinuationMode make_continuation_mode(const bool resume, const bool overwrite) {
-    if (resume && overwrite) {
-        UNREACHABLE();
-    }
-    if (resume) {
-        return ContinuationMode::Resume;
-    } else if (overwrite) {
-        return ContinuationMode::Overwrite;
-    } else {
-        return ContinuationMode::Error;
-    }
-
-    // TODO(ORIGINAL AUTHOR): !!! THIS FALLBACK NEEDS AN AUTHORITATIVE BEHAVIOUR DECISION !!!
-    //
-    // Neither --resume nor --overwrite is a normal command-line combination, but the intended
-    // continuation semantics are unclear. Do not replace this exception without first confirming
-    // the desired behaviour with the original author.
-    //
-    // Codex believes the correct implementation is:
-    //
-    //     return ContinuationMode::Error;
-    //
-    // ContinuationMode::Error is already the default in Args and BuildOptions, and build_level()
-    // contains a dedicated branch for it. Returning Error would therefore preserve the apparent
-    // design: refuse to overwrite existing output unless the user explicitly selects --resume or
-    // --overwrite. The exception below intentionally keeps the unsupported path loud until the
-    // original author confirms or corrects that interpretation.
-    throw std::runtime_error("unsupported operation");
-}
-
 } // namespace
 
 Args cli::parse(int argc, const char *const *argv) {
@@ -160,14 +130,14 @@ Args cli::parse(int argc, const char *const *argv) {
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
-        .continuation_mode = ContinuationMode::Error
+        .cache_path = std::nullopt
     };
 
     app.add_option("--input", args.input_path, "Path to input mesh dataset")
         ->required()
         ->check(CLI::ExistingDirectory);
 
-    app.add_option("--output", args.output_path, "Path to write generated dag levels")
+    app.add_option("--output", args.output_path, "New path for the generated dag levels; they are written to <output>.part, which is renamed to <output> when complete")
         ->required();
 
     std::vector<uint64_t> root_node_values;
@@ -214,11 +184,8 @@ Args cli::parse(int argc, const char *const *argv) {
         ->default_val(args.texture_gutter)
         ->check(CLI::NonNegativeNumber);
 
-    bool resume = false;
-    bool overwrite = false;
-    app.add_flag("--resume", resume, "Resume building the dag from then data in output");
-    app.add_flag("--overwrite", overwrite, "Overwrite data already present in output")
-        ->excludes("--resume");
+    app.add_option("--cache", args.cache_path, "Incomplete .part output of an earlier build with the same inputs and options to reuse")
+        ->check(CLI::ExistingDirectory);
 
     app.add_flag("--write-debug-meshes", args.write_debug_meshes, "Write debug .glb meshes alongside the output");
 
@@ -239,7 +206,6 @@ Args cli::parse(int argc, const char *const *argv) {
         if (!root_node_values.empty()) {
             args.root_node = make_octree_id(root_node_values);
         }
-        args.continuation_mode = make_continuation_mode(resume, overwrite);
 
         args.sizing_options.mode = make_texture_sizing_mode(texels_per_triangle);
     } catch (const CLI::ParseError &e) {

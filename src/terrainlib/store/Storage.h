@@ -32,10 +32,6 @@
 
 namespace store {
 
-struct StorageSettings {
-    bool allow_overwrite = false;
-};
-
 template <HierarchyTraits Traits, typename NodeData>
 class Storage {
 public:
@@ -73,7 +69,6 @@ public:
         : m_raw(std::move(other.m_raw))
         , m_index(std::move(other.m_index))
         , m_persistence(std::move(other.m_persistence))
-        , m_settings(other.m_settings)
         , m_dirty(std::exchange(other.m_dirty, false))
     {
         other.m_index.reset();
@@ -89,7 +84,6 @@ public:
         m_raw = std::move(other.m_raw);
         m_index = std::move(other.m_index);
         m_persistence = std::move(other.m_persistence);
-        m_settings = other.m_settings;
         m_dirty = std::exchange(other.m_dirty, false);
         other.m_index.reset();
         other.m_persistence.reset();
@@ -122,7 +116,7 @@ public:
         if (!exists) {
             return Error::propagate(std::move(exists), "check whether node " + Traits::key_to_string(key) + " exists before saving");
         }
-        if (exists.value() && !m_settings.allow_overwrite) {
+        if (exists.value()) {
             const auto node_paths = m_raw.paths(key).value();
             return Error::fail(Error::Code::AlreadyExists, "save node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
         }
@@ -268,9 +262,6 @@ public:
         return save_index();
     }
 
-    const StorageSettings& settings() const { return m_settings; }
-    StorageSettings& settings() { return m_settings; }
-
 protected:
     Index<Traits>& index_mut() { return m_index.value(); }
     const Index<Traits>& index_ref() const { return m_index.value(); }
@@ -292,7 +283,6 @@ private:
     RawStorage<Traits, NodeData> m_raw;
     std::optional<Index<Traits>> m_index;
     std::optional<Persistence> m_persistence = std::nullopt;
-    StorageSettings m_settings;
     mutable bool m_dirty = false;
 };
 

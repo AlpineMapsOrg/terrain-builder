@@ -51,7 +51,7 @@ struct Args {
     bool write_debug_meshes;
     bool parallelize;
     dag::IncludeMode include_mode;
-    ContinuationMode continuation_mode;
+    std::optional<std::filesystem::path> cache_path;
 };
 
 Args parse(int argc, const char *const *argv);

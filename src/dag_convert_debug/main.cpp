@@ -29,6 +29,7 @@
 #include "mesh/storage.h"
 #include "cli_support/ProgressIndicator.h"
 #include "storage.h"
+#include "store/snapshot.h"
 #include "utils.h"
 
 namespace {
@@ -49,6 +50,10 @@ void export_node(const cli::Args &args) {
 
     const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
 
+    if (const auto absent = store::snapshot::require_absent(args.output_path); !absent) {
+        LOG_ERROR("Output must be new: {}", absent.error().to_string());
+        return;
+    }
     const auto save_result = mesh::io::save_to_path(mesh, args.output_path);
     if (!save_result) {
         LOG_ERROR("Failed to save mesh to {}: {}", args.output_path, save_result.error().to_string());
@@ -66,6 +71,10 @@ void export_storage(const cli::Args &args) {
     }
     const dag::storage::IndexedStorage input_storage = std::move(input_result.value());
 
+    if (const auto absent = store::snapshot::require_absent(args.output_path); !absent) {
+        LOG_ERROR("Output must be new: {}", absent.error().to_string());
+        return;
+    }
     mesh::storage::OpenOptions options;
     options.preferred_extension = ".glb";
     auto output_result = mesh::storage::open_folder(
@@ -79,7 +88,6 @@ void export_storage(const cli::Args &args) {
         return;
     }
     mesh::storage::Storage output_storage = std::move(output_result.value());
-    output_storage.settings().allow_overwrite = true;
 
     size_t exported_count = 0;
 

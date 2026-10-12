@@ -18,7 +18,10 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -56,7 +59,7 @@
 #include "utils.h"
 #include "vertex_lock.h"
 #include "parallel.h"
-#include "ContinuationMode.h"
+#include "store/snapshot.h"
 #include "sf/validate_index.h"
 
 namespace dag {
@@ -174,6 +177,10 @@ struct BuildContext {
     const octree::Space &space;
     const octree::OddLevelShifted &shifted_space;
     const radix::geometry::Aabb3d &root_bounds;
+    const dag::storage::IndexedStorage* cache;
+    const std::function<bool()>& stop_requested;
+    mutable std::atomic_bool stopped = false;
+    mutable std::atomic<std::chrono::steady_clock::rep> last_checkpoint = std::chrono::steady_clock::now().time_since_epoch().count();
 };
 
 // Assemble a node's metadata from a build_lod result.
@@ -506,6 +513,19 @@ std::optional<uint32_t> find_max_input_level(const std::vector<std::vector<octre
 
 } // namespace
 
+std::filesystem::path debug_mesh_path(const std::filesystem::path& output_path)
+{
+    auto path = output_path.lexically_normal();
+    if (!path.has_filename()) {
+        path = path.parent_path();
+    }
+    if (store::snapshot::is_partial(path)) {
+        path.replace_extension();
+    }
+    path += "-debug";
+    return path;
+}
+
 // Build a single level of the DAG, returning the set of nodes that were built.
 std::unordered_set<octree::Id> build_level(
     const uint32_t level,
@@ -521,27 +541,12 @@ std::unordered_set<octree::Id> build_level(
 
     LOG_INFO("Building level {} ({} targets)", level, targets.size());
 
-    std::unordered_set<octree::Id> already_built;
-    if (ctx.options.continuation_mode != ContinuationMode::Overwrite) {
-        for (const octree::Id &target : targets) {
-            if (DEBUG_ASSERT_VAL(ctx.output_storage.has(target)).value()) {
-                already_built.insert(target);
-            }
-        }
-    }
-
-    if (ctx.options.continuation_mode == ContinuationMode::Error && !already_built.empty()) {
-        LOG_ERROR_AND_EXIT("Found some of target nodes already in built in the output directory, use --resume or --overwrite");
-    }
-
     // Initialize debug storage if requested (contains .glb meshes)
     std::optional<store::ThreadSafeStorage<mesh::storage::Storage>> debug_storage = std::nullopt;
     if (ctx.options.write_debug_meshes) {
         mesh::storage::OpenOptions options;
         options.preferred_extension = ".glb";
-        auto debug_result = mesh::storage::open_folder(
-            ctx.output_storage.base_path().string() + "-debug",
-            std::move(options));
+        auto debug_result = mesh::storage::open_folder(debug_mesh_path(ctx.output_storage.base_path()), std::move(options));
         if (!debug_result) {
             LOG_ERROR_AND_EXIT(
                 "Failed to open debug mesh storage: {}",
@@ -555,8 +560,32 @@ std::unordered_set<octree::Id> build_level(
     cli_support::ProgressIndicator progress(targets.size());
     auto progress_thread = progress.start_monitoring();
 
+    tbb::concurrent_vector<octree::Id> linked_ids;
+    // One task at a time saves the index once the checkpoint interval has passed.
+    const auto checkpoint = [&] {
+        const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        auto last = ctx.last_checkpoint.load();
+        if (now - std::chrono::steady_clock::duration(last) < store::snapshot::checkpoint_interval
+            || !ctx.last_checkpoint.compare_exchange_strong(last, now.count())) {
+            return;
+        }
+        if (const auto saved = ctx.output_storage.save_or_create_index(); !saved) {
+            LOG_WARN("Could not checkpoint the index: {}", saved.error().to_string());
+        }
+    };
+
     parallel_foreach(targets, [&](const octree::Id &target) {
-        if (already_built.contains(target)) {
+        if (ctx.stopped || (ctx.stop_requested && ctx.stop_requested())) {
+            ctx.stopped = true;
+            progress.task_finished();
+            return;
+        }
+        if (ctx.cache != nullptr && DEBUG_ASSERT_VAL(ctx.cache->has(target)).value()) {
+            const auto linked = ctx.output_storage.link_from(target, *ctx.cache);
+            if (!linked) {
+                LOG_ERROR_AND_EXIT("Failed to link cached node {}: {}", target, linked.error().to_string());
+            }
+            linked_ids.push_back(target);
             progress.task_finished();
             return;
         }
@@ -586,12 +615,13 @@ std::unordered_set<octree::Id> build_level(
                     save_result.error().to_string());
             }
         }
+        checkpoint();
         progress.task_finished();
     }, ctx.options.parallelize);
 
     progress_thread.join();
 
-    std::unordered_set<octree::Id> built = std::move(already_built);
+    std::unordered_set<octree::Id> built(linked_ids.begin(), linked_ids.end());
     for (const octree::Id &id : saved_ids) {
         built.insert(id);
     }
@@ -606,7 +636,9 @@ Expected<void> build_levels(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,
-    const AnyRange<uint32_t> &level_range) {
+    const AnyRange<uint32_t> &level_range,
+    const dag::storage::IndexedStorage *cache,
+    const std::function<bool()> &stop_requested) {
     auto validation = sf::validate_index(input_storage.index());
     if (!validation) {
         return validation;
@@ -636,16 +668,8 @@ Expected<void> build_levels(
         return {};
     }
 
-    // Seed prev_level_built with any already-built nodes one level finer than the first level.
-    // TODO: use hierachical lookup here based on root_bounds and IdRect
     std::unordered_set<octree::Id> prev_level_built;
-    for (const auto &[id, status] : output_storage.index()) {
-        if (id.level() == range.end && status != store::NodeStatus::Virtual) {
-            prev_level_built.insert(id);
-        }
-    }
-
-    BuildContext ctx{input_storage, store::ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds};
+    BuildContext ctx{input_storage, store::ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds, cache, stop_requested};
 
     for (uint32_t level = range.end; level-- > range.start;) {
         prev_level_built = build_level(
@@ -660,6 +684,10 @@ Expected<void> build_levels(
                 "Could not save index after level {}: {}",
                 level,
                 result.error().to_string());
+        }
+        if (ctx.stopped) {
+            output_storage = std::move(ctx.output_storage).release();
+            return Error::fail(Error::Code::Cancelled, "DAG build cancelled; incomplete snapshot retained");
         }
     }
 
