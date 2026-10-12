@@ -109,7 +109,7 @@ public:
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Unchanged>) {
                 LOG_DEBUG("[{}] remains unchanged (same as {})", id, (result.source == merge::Source::Left ? "left" : "right"));
-                // If the node should remain unchanged, but its not present on disk we cannot copy it.
+                // If the node should remain unchanged, but its not present on disk we cannot link it.
                 if (result.source == merge::Source::Left && left_status == Status::Missing) {
                     auto mesh_opt = this->_left.load_node(id);
                     if (mesh_opt.has_value()) {
@@ -127,11 +127,11 @@ public:
                         }
                     }
                 } else {
-                    auto copy_result = this->_output.copy_subtree_to_output(
+                    auto link_result = this->_output.link_subtree_to_output(
                         id,
                         result.source == merge::Source::Left ? this->_left : this->_right);
-                    if (!copy_result) {
-                        return copy_result;
+                    if (!link_result) {
+                        return link_result;
                     }
                 }
                 return {};

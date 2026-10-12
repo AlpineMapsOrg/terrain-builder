@@ -68,6 +68,13 @@ public:
         return m_storage.save(key, value);
     }
 
+    template <typename Source>
+    auto link_from(const key_type& key, const Source& source) const
+    {
+        std::unique_lock lock(m_mutex);
+        return m_storage.link_from(key, source);
+    }
+
     auto save_or_create_index() const
     {
         std::unique_lock lock(m_mutex);

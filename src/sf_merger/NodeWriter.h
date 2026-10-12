@@ -71,7 +71,7 @@ public:
         return {};
     }
 
-    Expected<void> copy_subtree_to_output(
+    Expected<void> link_subtree_to_output(
         const octree::Id &id,
         const NodeLoader &loader) {
         std::optional<Error> error = std::nullopt;
@@ -86,7 +86,7 @@ public:
                 }
                 DEBUG_ASSERT(status == store::NodeStatus::Leaf);
 
-                auto result = this->_storage.copy_from(child_id, loader.storage());
+                auto result = this->_storage.link_from(child_id, loader.storage());
                 if (!result) {
                     error = std::move(result).error();
                 }
@@ -95,11 +95,11 @@ public:
             id);
         if (!traversal) {
             return Error::propagate(
-                std::move(traversal), "traverse source subtree rooted at " + id.to_string() + " while copying");
+                std::move(traversal), "traverse source subtree rooted at " + id.to_string() + " while linking");
         }
         if (error.has_value()) {
             return Error::propagate(
-                std::move(error.value()), "copy subtree rooted at " + id.to_string() + " to output");
+                std::move(error.value()), "link subtree rooted at " + id.to_string() + " to output");
         }
         return {};
     }

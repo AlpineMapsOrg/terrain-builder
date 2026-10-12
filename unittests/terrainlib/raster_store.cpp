@@ -390,7 +390,7 @@ TEST_CASE("cross-root hard links and independent attribution survive RF removal"
         REQUIRE(target_result);
         auto [target, target_metadata] = std::move(*target_result);
         for (const auto key : { radix::tile::Id { 0, { 0, 0 } }, radix::tile::Id { 2, { 1, 1 } } }) {
-            REQUIRE(target->copy_from(key, *source));
+            REQUIRE(target->link_from(key, *source));
             CHECK(std::filesystem::equivalent(source->path_for(key).value(), target->path_for(key).value()));
         }
         CHECK_FALSE(std::filesystem::equivalent(rf_root / attribution::file_name, target->base_path() / attribution::file_name));

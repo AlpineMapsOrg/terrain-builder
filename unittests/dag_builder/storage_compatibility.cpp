@@ -195,7 +195,7 @@ TEST_CASE("DAG storage hard-links both files for the same format", "[store][copy
     auto target = std::move(*target_result);
     const octree::Id root = octree::Id::root();
     REQUIRE(source.save(root, sample_batch()).has_value());
-    REQUIRE(target.copy_from(root, source).has_value());
+    REQUIRE(target.link_from(root, source).has_value());
 
     const auto source_paths = source.paths(root);
     const auto target_paths = target.paths(root);

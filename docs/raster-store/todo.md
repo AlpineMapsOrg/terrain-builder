@@ -8,7 +8,7 @@
   TB dependency checks would become in-memory lookups instead of one envelope
   header read per source tile, which matters for millions of tiles and on
   network filesystems. Saving a tile knows the hash from the envelope write,
-  and `copy_from` takes it from the source index. The cost is 8 bytes per
+  and `link_from` takes it from the source index. The cost is 8 bytes per
   entry, about 1.6 times the current index size. Either the generic
   `store::Index` carries per-node data beyond `NodeStatus`, or the raster
   store keeps a separate hash table beside it. Header reads remain available

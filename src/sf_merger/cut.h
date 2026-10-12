@@ -65,9 +65,9 @@ inline Expected<void> cut_leaf_node(
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        auto copy_result = ctx.output.copy_from(id, ctx.input);
-        if (!copy_result) {
-            return copy_result;
+        auto link_result = ctx.output.link_from(id, ctx.input);
+        if (!link_result) {
+            return link_result;
         }
     } else {
         const SimpleMesh &clipped_mesh = clipped;
@@ -177,8 +177,8 @@ inline Expected<void> cut_dataset(
     std::filesystem::create_directories(output_path);
 
     mesh::storage::OpenOptions options;
-    options.default_mapping = octree::store_layout::level_and_coordinate_directories();
-    options.preferred_extension = ".glb";
+    options.default_mapping = input_dataset.layout().mapping();
+    options.preferred_extension = std::string(input_dataset.codec_selector().value_or(".sfmesh"));
     auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
     if (!output_result) {
         return Error::propagate(

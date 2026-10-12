@@ -24,6 +24,7 @@
 #include "cut.h"
 #include "merge.h"
 #include "mesh/storage.h"
+#include "octree/store_layout/Mappings.h"
 
 namespace {
 
@@ -193,4 +194,26 @@ TEST_CASE("SF cut hard-links unchanged leaves and writes clipped leaves", "[sfme
         REQUIRE(clipped.has_value());
         CHECK_FALSE(clipped->is_empty());
     }
+}
+
+TEST_CASE("SF cut output keeps the input layout and codec", "[sfmerger][sf][link]")
+{
+    const octree::Id root = octree::Id::root();
+    TemporaryDirectory input_directory("cut-format-input");
+    TemporaryDirectory output_directory("cut-format-output");
+    mesh::storage::OpenOptions options;
+    options.default_mapping = octree::store_layout::flat();
+    options.preferred_extension = ".glb";
+    auto input_result = mesh::storage::open_folder_indexed(input_directory.path(), std::move(options));
+    REQUIRE(input_result.has_value());
+    auto input = std::move(input_result.value());
+    REQUIRE(input.save(root, triangle()).has_value());
+    REQUIRE(input.save_index().has_value());
+
+    const auto output_path = output_directory.path() / "cut";
+    REQUIRE(cut_dataset(input, MeshMask {}, output_path, false).has_value());
+    const auto output = indexed_storage(output_path);
+    CHECK(output.codec_selector() == input.codec_selector());
+    CHECK(output.layout().mapping().id == input.layout().mapping().id);
+    CHECK(std::filesystem::equivalent(input.paths(root)->front(), output.paths(root)->front()));
 }

@@ -114,26 +114,8 @@ TEST_CASE("storage hard-links matching payload formats")
 
     const octree::Id root = octree::Id::root();
     REQUIRE(source.save(root, triangle_mesh(0.0)).has_value());
-    REQUIRE(target.copy_from(root, source).has_value());
+    REQUIRE(target.link_from(root, source).has_value());
     CHECK(std::filesystem::equivalent(source.path_for(root).value(), target.path_for(root).value()));
-    REQUIRE(source.save_index().has_value());
-    REQUIRE(target.save_index().has_value());
-}
-
-TEST_CASE("storage re-encodes differing payload formats")
-{
-    TemporaryDirectory source_directory("reencode-source");
-    TemporaryDirectory target_directory("reencode-target");
-    auto source = make_storage(source_directory.path(), octree::store_layout::flat(), ".sfmesh");
-    auto target = make_storage(target_directory.path(), octree::store_layout::flat(), ".glb");
-
-    const octree::Id root = octree::Id::root();
-    REQUIRE(source.save(root, triangle_mesh(4.0)).has_value());
-    REQUIRE(target.copy_from(root, source).has_value());
-    CHECK_FALSE(std::filesystem::equivalent(source.path_for(root).value(), target.path_for(root).value()));
-    const auto loaded = target.load(root);
-    REQUIRE(loaded.has_value());
-    CHECK(loaded->face_count() == 1);
     REQUIRE(source.save_index().has_value());
     REQUIRE(target.save_index().has_value());
 }

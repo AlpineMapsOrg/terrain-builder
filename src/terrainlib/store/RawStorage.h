@@ -113,13 +113,9 @@ public:
         return removed;
     }
 
-    Expected<void> copy_from(const Key& key, const RawStorage& source) const
-    {
-        return copy_from(key, source, []() -> Expected<void> { return {}; });
-    }
-
-    template <typename BeforeModify>
-    Expected<void> copy_from(const Key& key, const RawStorage& source, BeforeModify&& before_modify) const
+    // Hard-links the node's files from source. Both storages must use the same codec,
+    // and the target files must not exist.
+    Expected<void> link_from(const Key& key, const RawStorage& source) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
@@ -134,19 +130,7 @@ public:
 
         const std::filesystem::path probe("__codec_probe__/node");
         if (m_codec->paths(probe) != source.m_codec->paths(probe)) {
-            auto loaded = source.m_codec->read(source.m_layout.node_path(key));
-            if (!loaded) {
-                return Error::propagate(std::move(loaded), "read source node while copying");
-            }
-            const auto prepared = before_modify();
-            if (!prepared) {
-                return prepared;
-            }
-            auto written = m_codec->write(m_layout.node_path(key), loaded.value());
-            if (!written) {
-                return Error::propagate(std::move(written), "write target node while copying");
-            }
-            return {};
+            return Error::fail(Error::Code::Unsupported, "link node " + Traits::key_to_string(key) + " between storages with different codecs");
         }
 
         const auto source_paths = source.m_codec->paths(source.m_layout.node_path(key));
@@ -154,19 +138,8 @@ public:
         if (source_paths.size() != target_paths.size()) {
             return Error::fail(Error::Code::Internal, "matching codec probes produced different actual path counts");
         }
-        if (source_paths == target_paths) {
-            return {};
-        }
-        const auto prepared = before_modify();
-        if (!prepared) {
-            return prepared;
-        }
         for (size_t index = 0; index < source_paths.size(); ++index) {
             std::error_code error;
-            std::filesystem::remove(target_paths[index], error);
-            if (error) {
-                return Error::fail(Error::Code::Io, "remove", target_paths[index], error);
-            }
             std::filesystem::create_directories(target_paths[index].parent_path(), error);
             if (error) {
                 return Error::fail(Error::Code::Io, "create directories", target_paths[index].parent_path(), error);

@@ -141,39 +141,28 @@ public:
         return {};
     }
 
-    Expected<void> copy_from(const Key& key, const Storage& source)
+    Expected<void> link_from(const Key& key, const Storage& source)
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
         auto exists = has(key);
         if (!exists) {
-            return Error::propagate(std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before copying");
+            return Error::propagate(std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before linking");
         }
-        if (exists.value() && !m_settings.allow_overwrite) {
+        if (exists.value()) {
             const auto node_paths = m_raw.paths(key).value();
-            return Error::fail(Error::Code::AlreadyExists, "copy node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
+            return Error::fail(Error::Code::AlreadyExists, "link node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
         }
-        const auto prepare_target = [&]() -> Expected<void> {
-            if (!exists.value() || !m_index.has_value()) {
-                return {};
-            }
-            auto removed = m_index->remove(key);
-            if (!removed) {
-                return Error::propagate(std::move(removed), "remove overwritten node " + Traits::key_to_string(key) + " from storage index");
-            }
-            m_dirty = m_dirty || removed.value();
-            return {};
-        };
 
-        auto result = m_raw.copy_from(key, source.m_raw, prepare_target);
+        auto result = m_raw.link_from(key, source.m_raw);
         if (!result) {
             return result;
         }
         if (m_index.has_value()) {
             auto added = m_index->add(key);
             if (!added) {
-                return Error::propagate(std::move(added), "add copied node " + Traits::key_to_string(key) + " to storage index");
+                return Error::propagate(std::move(added), "add linked node " + Traits::key_to_string(key) + " to storage index");
             }
             m_dirty = m_dirty || added.value();
         }

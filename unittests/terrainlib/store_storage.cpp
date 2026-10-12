@@ -143,43 +143,6 @@ public:
     }
 };
 
-class ConfigurableCodec final : public store::Codec<int> {
-public:
-    explicit ConfigurableCodec(std::string extension)
-        : extension(std::move(extension))
-    {
-    }
-
-    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, extension) }; }
-
-    Expected<int> read(const std::filesystem::path& node_path) const override
-    {
-        if (fail_read) {
-            return Error::fail(Error::Code::CorruptData, "injected decode failure");
-        }
-        auto value = read_int(paths(node_path).front());
-        if (!value) {
-            return Error::propagate(std::move(value), "read configurable test value");
-        }
-        return value.value();
-    }
-
-    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override
-    {
-        if (fail_write) {
-            return Error::fail(Error::Code::InvalidInput, "injected encode failure");
-        }
-        if (!write_int(value, paths(node_path).front())) {
-            return Error::fail(Error::Code::Io, "configurable test write failed");
-        }
-        return {};
-    }
-
-    std::string extension;
-    bool fail_read = false;
-    bool fail_write = false;
-};
-
 std::atomic_uint32_t index_writes = 0;
 
 Expected<store::IndexMetadata<octree::StoreTraits>> unused_index_read(const std::filesystem::path& path)
@@ -341,19 +304,19 @@ TEST_CASE("storage moves transfer and finalize dirty index state", "[store][stor
     CHECK(index_writes == 3);
 }
 
-TEST_CASE("copy_from hard-links every matching codec file", "[store][storage][copy]")
+TEST_CASE("link_from hard-links every codec file", "[store][storage][link]")
 {
     const octree::Id root = octree::Id::root();
 
     SECTION("one file")
     {
-        TemporaryDirectory source_directory("copy-one-source");
-        TemporaryDirectory target_directory("copy-one-target");
+        TemporaryDirectory source_directory("link-one-source");
+        TemporaryDirectory target_directory("link-one-target");
         auto source = make_indexed_storage(source_directory.path());
         auto target = make_indexed_storage(target_directory.path());
         REQUIRE(source.save(root, 41).has_value());
 
-        REQUIRE(target.copy_from(root, source).has_value());
+        REQUIRE(target.link_from(root, source).has_value());
         REQUIRE(target.has(root).value());
         CHECK(target.load(root).value() == 41);
         CHECK(std::filesystem::equivalent(source.paths(root)->front(), target.paths(root)->front()));
@@ -361,13 +324,13 @@ TEST_CASE("copy_from hard-links every matching codec file", "[store][storage][co
 
     SECTION("multiple files")
     {
-        TemporaryDirectory source_directory("copy-many-source");
-        TemporaryDirectory target_directory("copy-many-target");
+        TemporaryDirectory source_directory("link-many-source");
+        TemporaryDirectory target_directory("link-many-target");
         auto source = make_indexed_storage(source_directory.path(), std::make_unique<MultiFileCodec>());
         auto target = make_indexed_storage(target_directory.path(), std::make_unique<MultiFileCodec>());
         REQUIRE(source.save(root, 42).has_value());
 
-        REQUIRE(target.copy_from(root, source).has_value());
+        REQUIRE(target.link_from(root, source).has_value());
         const auto source_paths = source.paths(root).value();
         const auto target_paths = target.paths(root).value();
         REQUIRE(source_paths.size() == 2);
@@ -375,137 +338,51 @@ TEST_CASE("copy_from hard-links every matching codec file", "[store][storage][co
         CHECK(std::filesystem::equivalent(source_paths[0], target_paths[0]));
         CHECK(std::filesystem::equivalent(source_paths[1], target_paths[1]));
     }
+}
 
-    SECTION("same storage")
+TEST_CASE("link_from rejects existing targets, missing sources and different codecs", "[store][storage][link]")
+{
+    const octree::Id root = octree::Id::root();
+
+    SECTION("existing target")
     {
-        TemporaryDirectory directory("copy-self");
-        auto storage = make_indexed_storage(directory.path());
-        REQUIRE(storage.save(root, 43).has_value());
-        storage.settings().allow_overwrite = true;
+        TemporaryDirectory source_directory("link-existing-source");
+        TemporaryDirectory target_directory("link-existing-target");
+        auto source = make_indexed_storage(source_directory.path());
+        auto target = make_indexed_storage(target_directory.path());
+        REQUIRE(source.save(root, 44).has_value());
+        REQUIRE(target.save(root, 1).has_value());
 
-        REQUIRE(storage.copy_from(root, storage).has_value());
-        CHECK(storage.load(root).value() == 43);
+        const auto linked = target.link_from(root, source);
+        REQUIRE_FALSE(linked.has_value());
+        CHECK(linked.error().code() == Error::Code::AlreadyExists);
+        CHECK(target.load(root).value() == 1);
     }
-}
-
-TEST_CASE("copy_from re-encodes differing path lists", "[store][storage][copy]")
-{
-    const octree::Id root = octree::Id::root();
-    TemporaryDirectory source_directory("copy-reencode-source");
-    TemporaryDirectory target_directory("copy-reencode-target");
-    auto source = make_indexed_storage(source_directory.path(), std::make_unique<MultiFileCodec>());
-    auto target = make_indexed_storage(target_directory.path());
-    REQUIRE(source.save(root, 43).has_value());
-
-    REQUIRE(target.copy_from(root, source).has_value());
-    CHECK(target.load(root).value() == 43);
-    CHECK(target.paths(root)->size() == 1);
-    CHECK(source.paths(root)->size() == 2);
-    CHECK_FALSE(std::filesystem::equivalent(source.paths(root)->front(), target.paths(root)->front()));
-}
-
-TEST_CASE("copy_from enforces overwrite settings", "[store][storage][copy]")
-{
-    const octree::Id root = octree::Id::root();
-    TemporaryDirectory source_directory("copy-overwrite-source");
-    TemporaryDirectory target_directory("copy-overwrite-target");
-    auto source = make_indexed_storage(source_directory.path());
-    auto target = make_indexed_storage(target_directory.path());
-    REQUIRE(source.save(root, 44).has_value());
-    REQUIRE(target.save(root, 1).has_value());
-
-    const auto rejected = target.copy_from(root, source);
-    REQUIRE_FALSE(rejected.has_value());
-    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
-    CHECK(target.load(root).value() == 1);
-
-    target.settings().allow_overwrite = true;
-    REQUIRE(target.copy_from(root, source).has_value());
-    CHECK(target.load(root).value() == 44);
-    CHECK(std::filesystem::equivalent(source.paths(root)->front(), target.paths(root)->front()));
-}
-
-TEST_CASE("failed multi-file overwrite leaves the target node unindexed", "[store][storage][copy]")
-{
-    const octree::Id root = octree::Id::root();
-    TemporaryDirectory source_directory("copy-partial-source");
-    TemporaryDirectory target_directory("copy-partial-target");
-    auto source = make_indexed_storage(source_directory.path(), std::make_unique<MultiFileCodec>());
-    auto target = make_indexed_storage(target_directory.path(), std::make_unique<MultiFileCodec>());
-    REQUIRE(source.save(root, 45).has_value());
-    REQUIRE(target.save(root, 1).has_value());
-    target.settings().allow_overwrite = true;
-
-    const auto target_paths = target.paths(root).value();
-    REQUIRE(std::filesystem::remove(target_paths[1]));
-    REQUIRE(std::filesystem::create_directory(target_paths[1]));
-    REQUIRE(write_int(9, target_paths[1] / "blocker.data").has_value());
-
-    const auto copied = target.copy_from(root, source);
-    REQUIRE_FALSE(copied.has_value());
-    CHECK(copied.error().code() == Error::Code::Io);
-    CHECK_FALSE(target.has(root).value());
-    CHECK_FALSE(target.index().get(root).value().has_value());
-    CHECK(std::filesystem::equivalent(source.paths(root)->front(), target_paths.front()));
-    CHECK(std::filesystem::is_directory(target_paths[1]));
-}
-
-TEST_CASE("copy_from propagates source and codec failures", "[store][storage][copy]")
-{
-    const octree::Id root = octree::Id::root();
 
     SECTION("missing source")
     {
-        TemporaryDirectory source_directory("copy-missing-source");
-        TemporaryDirectory target_directory("copy-missing-target");
+        TemporaryDirectory source_directory("link-missing-source");
+        TemporaryDirectory target_directory("link-missing-target");
         auto source = make_indexed_storage(source_directory.path());
         auto target = make_indexed_storage(target_directory.path());
-        REQUIRE(target.save(root, 7).has_value());
-        target.settings().allow_overwrite = true;
 
-        const auto copied = target.copy_from(root, source);
-        REQUIRE_FALSE(copied.has_value());
-        CHECK(copied.error().code() == Error::Code::NotFound);
-        CHECK(target.has(root).value());
-        CHECK(target.load(root).value() == 7);
+        const auto linked = target.link_from(root, source);
+        REQUIRE_FALSE(linked.has_value());
+        CHECK(linked.error().code() == Error::Code::NotFound);
+        CHECK_FALSE(target.has(root).value());
     }
 
-    SECTION("decode failure")
+    SECTION("different codecs")
     {
-        TemporaryDirectory source_directory("copy-decode-source");
-        TemporaryDirectory target_directory("copy-decode-target");
-        auto source_codec = std::make_unique<ConfigurableCodec>(".source");
-        ConfigurableCodec* source_codec_ptr = source_codec.get();
-        auto source = make_indexed_storage(source_directory.path(), std::move(source_codec));
-        auto target = make_indexed_storage(target_directory.path(), std::make_unique<ConfigurableCodec>(".target"));
-        REQUIRE(source.save(root, 46).has_value());
-        REQUIRE(target.save(root, 7).has_value());
-        target.settings().allow_overwrite = true;
-        source_codec_ptr->fail_read = true;
+        TemporaryDirectory source_directory("link-codec-source");
+        TemporaryDirectory target_directory("link-codec-target");
+        auto source = make_indexed_storage(source_directory.path(), std::make_unique<MultiFileCodec>());
+        auto target = make_indexed_storage(target_directory.path());
+        REQUIRE(source.save(root, 43).has_value());
 
-        const auto copied = target.copy_from(root, source);
-        REQUIRE_FALSE(copied.has_value());
-        CHECK(copied.error().code() == Error::Code::CorruptData);
-        CHECK(target.has(root).value());
-        CHECK(target.load(root).value() == 7);
-    }
-
-    SECTION("encode failure")
-    {
-        TemporaryDirectory source_directory("copy-encode-source");
-        TemporaryDirectory target_directory("copy-encode-target");
-        auto source = make_indexed_storage(source_directory.path(), std::make_unique<ConfigurableCodec>(".source"));
-        auto target_codec = std::make_unique<ConfigurableCodec>(".target");
-        ConfigurableCodec* target_codec_ptr = target_codec.get();
-        auto target = make_indexed_storage(target_directory.path(), std::move(target_codec));
-        REQUIRE(source.save(root, 47).has_value());
-        REQUIRE(target.save(root, 7).has_value());
-        target.settings().allow_overwrite = true;
-        target_codec_ptr->fail_write = true;
-
-        const auto copied = target.copy_from(root, source);
-        REQUIRE_FALSE(copied.has_value());
-        CHECK(copied.error().code() == Error::Code::InvalidInput);
+        const auto linked = target.link_from(root, source);
+        REQUIRE_FALSE(linked.has_value());
+        CHECK(linked.error().code() == Error::Code::Unsupported);
         CHECK_FALSE(target.has(root).value());
     }
 }
