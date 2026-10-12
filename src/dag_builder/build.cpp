@@ -157,14 +157,18 @@ struct BuildContext {
 
 // Assemble a node's metadata from a build_lod result.
 dag::NodeMetadata build_node_metadata(
-    std::vector<uint32_t> group_assignment,
+    const std::vector<uint32_t> &group_assignment,
     const PartitionToClusters &group_children,
     const Clustering &merged,
     const Clustering &simplified,
     const std::vector<dag::Id> &cluster_sources,
     const std::unordered_map<octree::Id, dag::NodeMetadata> &cluster_metadata) {
     dag::NodeMetadata metadata;
-    metadata.group_assignment = std::move(group_assignment);
+    metadata.clusters.reserve(group_assignment.size());
+    for (const auto &[final_index, group_index] : enumerate(group_assignment)) {
+        const radix::geometry::Aabb3d bounds = compute_cluster_bounds(simplified.clusters[final_index], simplified.positions);
+        metadata.clusters.push_back(dag::ClusterMetadata{.group_index = group_index, .bounds = bounds});
+    }
     metadata.groups.resize(group_children.segment_count());
 
     // map child indices to dag ids
@@ -175,15 +179,15 @@ dag::NodeMetadata build_node_metadata(
     }
 
     // compute group bounds
-    for (dag::Group &group : metadata.groups) {
+    for (dag::GroupMetadata &group : metadata.groups) {
         for (const dag::Id &child : group.children) {
             group.bounds.expand_by(dag::get_group_bounds(cluster_metadata.at(child.source_batch), child.cluster_index));
         }
     }
 
     // compute group error
-    for (const auto &[final_index, group_index] : enumerate(metadata.group_assignment)) {
-        double &error = metadata.groups[group_index].error;
+    for (const auto &[final_index, cluster] : enumerate(metadata.clusters)) {
+        double &error = metadata.groups[cluster.group_index].error;
         error = std::max(error, simplified.clusters[final_index].absolute_error);
     }
 
@@ -237,7 +241,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     // Run nanite-style grouping, simplification, splitting.
     auto [simplified, group_assignment, group_children] = build_lod(merged, ctx.options, node_bounds, filter);
 
-    dag::NodeMetadata metadata = build_node_metadata(std::move(group_assignment), group_children, merged, simplified, cluster_sources, cluster_metadata);
+    dag::NodeMetadata metadata = build_node_metadata(group_assignment, group_children, merged, simplified, cluster_sources, cluster_metadata);
 
     return {std::move(metadata), std::move(simplified)};
 }
