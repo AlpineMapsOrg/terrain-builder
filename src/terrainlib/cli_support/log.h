@@ -27,6 +27,7 @@
 #include <atomic>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
 
 #include <fmt/core.h>
@@ -74,30 +75,32 @@ void log_assertion_failures();
 
 namespace cli_support {
 
-// Tracks call count per call site and reports whether the current call falls
-// on a power-of-two occurrence (1, 2, 4, 8, 16, ...).
+// Counts the occurrences at a call site; the power-of-two occurrences (1, 2, 4,
+// 8, 16, ...) are the ones to log.
 class LogBackoff {
 public:
-    bool should_log() {
-        this->_count++;
-        return is_power_of_two(this->_count);
-    }
-
-    uint64_t count() const {
-        return this->_count;
+    // Counts an occurrence and returns its number if it is to be logged; safe to
+    // call from any thread.
+    std::optional<uint64_t> count_occurrence()
+    {
+        const uint64_t occurrence = m_count.fetch_add(1, std::memory_order_relaxed) + 1;
+        if (!is_power_of_two(occurrence)) {
+            return std::nullopt;
+        }
+        return occurrence;
     }
 
 private:
-    uint64_t _count = 0;
+    std::atomic<uint64_t> m_count { 0 };
 };
 
 } // namespace cli_support
 
 // Logs on occurrence 1, 2, 4, 8, 16, ... per call site, with the occurrence count appended.
-#define LOG_WARN_BACKOFF(fmt_str, ...)                                  \
-    do {                                                                \
-        static ::cli_support::LogBackoff _log_warn_backoff;                            \
-        if (_log_warn_backoff.should_log()) {                           \
-            LOG_WARN(fmt_str " (occurrence {})", ##__VA_ARGS__, _log_warn_backoff.count()); \
-        }                                                                \
+#define LOG_WARN_BACKOFF(fmt_str, ...)                                                  \
+    do {                                                                                \
+        static ::cli_support::LogBackoff _log_warn_backoff;                             \
+        if (const auto _log_warn_occurrence = _log_warn_backoff.count_occurrence()) {   \
+            LOG_WARN(fmt_str " (occurrence {})", ##__VA_ARGS__, *_log_warn_occurrence); \
+        }                                                                               \
     } while (false)
