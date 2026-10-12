@@ -220,6 +220,28 @@ TEST_CASE("byte writes report directory creation errors", "[io][bytes]")
     CHECK(result.error().code() == Error::Code::Io);
 }
 
+TEST_CASE("byte replace swaps in a new file and leaves hard links to the old one alone", "[io][bytes]")
+{
+    TemporaryDirectory directory("write-replace");
+    const auto path = directory.path() / "index";
+    const auto temporary_path = directory.path() / "index.tmp";
+    const auto link = directory.path() / "link";
+    const io::byte::vector first { std::byte { 1 }, std::byte { 2 }, std::byte { 3 } };
+    const io::byte::vector second { std::byte { 4 }, std::byte { 5 } };
+    const io::byte::vector stale { std::byte { 6 }, std::byte { 7 }, std::byte { 8 }, std::byte { 9 } };
+
+    REQUIRE(io::byte::write(first, path, io::byte::WriteMode::Replace));
+    CHECK(*io::byte::read(path) == first);
+    std::filesystem::create_hard_link(path, link);
+    // A temporary file left behind by a crash is truncated.
+    REQUIRE(io::byte::write(stale, temporary_path, io::byte::WriteMode::CreateNew));
+
+    REQUIRE(io::byte::write(second, path, io::byte::WriteMode::Replace));
+    CHECK(*io::byte::read(path) == second);
+    CHECK(*io::byte::read(link) == first);
+    CHECK_FALSE(std::filesystem::exists(temporary_path));
+}
+
 TEMPLATE_TEST_CASE("shared storage has no hidden octree dependency", "[store][storage]", octree::StoreTraits, raster_store::StoreTraits)
 {
     using Traits = TestType;

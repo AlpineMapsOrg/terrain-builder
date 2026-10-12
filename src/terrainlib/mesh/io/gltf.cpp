@@ -334,6 +334,9 @@ try {
         }
     }
 
+    if (mode == ::io::byte::WriteMode::Replace) {
+        return Error::fail(Error::Code::Unsupported, "replace glTF file", path);
+    }
     auto directories = ::io::utils::create_parent_directories(path);
     if (!directories) {
         return Error::propagate(std::move(directories), "write glTF file");

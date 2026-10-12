@@ -31,6 +31,23 @@ Expected<void> write(const span bytes, const std::filesystem::path& path, WriteM
 {
     LOG_TRACE("Writing bytes to path {}", path);
 
+    if (mode == WriteMode::Replace) {
+        auto temporary_path = path;
+        temporary_path += ".tmp";
+        if (auto written = write(bytes, temporary_path, WriteMode::Overwrite, make_dirs); !written) {
+            return written;
+        }
+        if (auto synced = utils::sync_file(temporary_path); !synced) {
+            return synced;
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary_path, path, error);
+        if (error) {
+            return Error::fail(Error::Code::Io, "replace file", temporary_path, path, error);
+        }
+        return {};
+    }
+
     if (make_dirs) {
         auto directories = utils::create_parent_directories(path);
         if (!directories) {

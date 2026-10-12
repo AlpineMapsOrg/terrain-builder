@@ -121,16 +121,9 @@ Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::filesyste
 
 Expected<void> write_index_file(const std::filesystem::path& index_path, const store::IndexMetadata<StoreTraits>& metadata)
 {
-    auto temporary_path = index_path;
-    temporary_path += ".tmp";
-    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index), temporary_path, ::io::byte::WriteMode::Overwrite);
+    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index), index_path, ::io::byte::WriteMode::Replace);
     if (!written) {
         return Error::propagate(std::move(written), "checkpoint raster index");
-    }
-    std::error_code error;
-    std::filesystem::rename(temporary_path, index_path, error);
-    if (error) {
-        return Error::fail(Error::Code::Io, "replace raster index checkpoint", temporary_path, index_path, error);
     }
     return {};
 }

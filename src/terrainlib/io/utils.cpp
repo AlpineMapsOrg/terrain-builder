@@ -24,6 +24,7 @@
 
 #ifdef __linux__
 #include <fcntl.h>
+#include <unistd.h>
 #endif
 
 namespace io::utils {
@@ -58,6 +59,26 @@ Expected<void> rename_without_replacement(const std::filesystem::path& source, c
 #else
     return Error::fail(Error::Code::Unsupported, "rename without replacement is not implemented on this platform",
         source, destination, std::make_error_code(std::errc::operation_not_supported));
+#endif
+}
+
+Expected<void> sync_file(const std::filesystem::path& path)
+{
+#ifdef __linux__
+    const int file = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (file < 0) {
+        return Error::fail(Error::Code::Io, "open file for syncing", path, std::error_code(errno, std::generic_category()));
+    }
+    const int synced = ::fsync(file);
+    const std::error_code error(errno, std::generic_category());
+    ::close(file);
+    if (synced != 0) {
+        return Error::fail(Error::Code::Io, "sync file", path, error);
+    }
+    return {};
+#else
+    return Error::fail(
+        Error::Code::Unsupported, "syncing files is not implemented on this platform", path, std::make_error_code(std::errc::operation_not_supported));
 #endif
 }
 

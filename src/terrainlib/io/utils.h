@@ -28,5 +28,7 @@ namespace io::utils {
 
 [[nodiscard]] Expected<void> create_parent_directories(const std::filesystem::path& path);
 Expected<void> rename_without_replacement(const std::filesystem::path& source, const std::filesystem::path& destination);
+// Flushes the file's data to the storage device.
+Expected<void> sync_file(const std::filesystem::path& path);
 
 } // namespace io::utils

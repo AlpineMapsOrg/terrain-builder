@@ -34,7 +34,10 @@ namespace io::byte {
 using vector = std::vector<std::byte>;
 using span = std::span<const std::byte>;
 
-enum class WriteMode { Overwrite, CreateNew };
+// Replace writes and syncs <path>.tmp, then renames it over path, so path holds the old or the
+// new bytes even after a crash, and hard links to the old file keep the old bytes. Replace writes
+// of the same path must not run concurrently.
+enum class WriteMode { Overwrite, CreateNew, Replace };
 
 Expected<void> write(span bytes, const std::filesystem::path& path, WriteMode mode, bool make_dirs = true);
 // Reads the whole file, or its first max_size bytes if it is longer.
