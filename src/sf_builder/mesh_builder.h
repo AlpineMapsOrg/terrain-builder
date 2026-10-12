@@ -21,8 +21,8 @@
 
 #include <expected>
 
-#include "Dataset.h"
-#include "srs.h"
+#include "gis/Dataset.h"
+#include "gis/srs.h"
 
 #include "mesh/SimpleMesh.h"
 #include "border.h"
@@ -45,7 +45,7 @@ Expected<std::vector<radix::tile::SrsBounds>> native_read_windows(
 
 /// Builds a mesh from the given height dataset.
 std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
     const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds);

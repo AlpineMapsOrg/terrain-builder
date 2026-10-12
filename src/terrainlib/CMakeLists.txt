@@ -19,9 +19,6 @@
 
 add_library(terrainlib
     Error.h Error.cpp
-    DatasetReader.h DatasetReader.cpp
-    vector_mask.h
-    Dataset.h Dataset.cpp
     ImageKey.h
     ProgressIndicator.h ProgressIndicator.cpp
     Range.h
@@ -34,15 +31,12 @@ add_library(terrainlib
     fmt_impls.h
     glm_utils.h
     hash_utils.h
-    init.h init.cpp
     log.h log.cpp
     macros.h
     opencv_utils.h
     optional_utils.h
     pch.h
     range_utils.h
-    srs.h srs.cpp
-    srs/detail.h srs/detail.cpp
     string_utils.h
     tile_path.h
     type_utils.h
@@ -68,6 +62,14 @@ add_library(terrainlib
     geometry/PlaneFrame.h
     geometry/Rect.h
     geometry/geometry.h
+
+    gis/Dataset.h gis/Dataset.cpp
+    gis/DatasetReader.h gis/DatasetReader.cpp
+    gis/gdal.h gis/gdal.cpp
+    gis/srs.h gis/srs.cpp
+    gis/srs/detail.h gis/srs/detail.cpp
+    gis/vector_mask.h
+    gis/webmercator.h gis/webmercator.cpp
 
     io/bytes.h io/bytes.cpp
     io/compression.h io/compression.cpp

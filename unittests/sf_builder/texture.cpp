@@ -24,15 +24,15 @@
 #include <set>
 
 #include "../catch2_helpers.h"
-#include "Dataset.h"
-#include "srs.h"
+#include "gis/Dataset.h"
+#include "gis/webmercator.h"
 
 #include "mesh/SimpleMesh.h"
 #include "texture_assembler.h"
 
 TEST_CASE("estimate_zoom_level", "[terrainbuilder]") {
     const radix::tile::Id tile(20, glm::uvec2(0, 1));
-    const radix::tile::SrsBounds tile_bounds = srs::webmercator_tile_bounds(tile);
+    const radix::tile::SrsBounds tile_bounds = gis::webmercator::tile_bounds(tile);
     const radix::tile::SrsBounds shifted_bounds(tile_bounds.min + glm::dvec2(-100, 420), tile_bounds.max + glm::dvec2(-100, 420));
 
     CHECK(terrainbuilder::estimate_zoom_level(tile.zoom_level, tile_bounds, shifted_bounds) == tile.zoom_level);
@@ -74,7 +74,7 @@ TEST_CASE("texture assembler takes root tile if only available ", "[terrainbuild
 
     std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
-        srs::webmercator_tile_bounds(root_tile),
+        gis::webmercator::tile_bounds(root_tile),
         tile_provider);
     std::set<radix::tile::Id> actual_tiles(std::make_move_iterator(actual_tiles_vec.begin()),
                                     std::make_move_iterator(actual_tiles_vec.end()));
@@ -100,7 +100,7 @@ TEST_CASE("texture assembler ignores parent if all children are present", "[terr
 
     std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
-        srs::webmercator_tile_bounds(root_tile),
+        gis::webmercator::tile_bounds(root_tile),
         tile_provider);
     std::set<radix::tile::Id> actual_tiles(std::make_move_iterator(actual_tiles_vec.begin()),
                                     std::make_move_iterator(actual_tiles_vec.end()));
@@ -123,7 +123,7 @@ TEST_CASE("texture assembler considers max zoom level", "[terrainbuilder]") {
 
     std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
-        srs::webmercator_tile_bounds(root_tile),
+        gis::webmercator::tile_bounds(root_tile),
         tile_provider,
         3);
     std::set<radix::tile::Id> actual_tiles(std::make_move_iterator(actual_tiles_vec.begin()),
@@ -206,7 +206,7 @@ TEST_CASE("texture assembler assembles single tile", "[terrainbuilder]") {
     const radix::tile::Id root_tile(0, {0, 0});
     cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
-        srs::webmercator_tile_bounds(root_tile),
+        gis::webmercator::tile_bounds(root_tile),
         tile_provider,
         tiles_to_splatter,
         cv::INTER_NEAREST_EXACT).image;
@@ -231,7 +231,7 @@ TEST_CASE("texture assembler assembles two tiles", "[terrainbuilder]") {
     const radix::tile::Id root_tile(0, {0, 0});
     cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
-        srs::webmercator_tile_bounds(root_tile),
+        gis::webmercator::tile_bounds(root_tile),
         tile_provider,
         tiles_to_splatter,
         cv::INTER_NEAREST_EXACT).image;
@@ -260,7 +260,7 @@ TEST_CASE("texture assembler correct order of texture writes", "[terrainbuilder]
     const radix::tile::Id root_tile(0, {0, 0});
     cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
-        srs::webmercator_tile_bounds(root_tile),
+        gis::webmercator::tile_bounds(root_tile),
         tile_provider,
         tiles_to_splatter,
         cv::INTER_NEAREST_EXACT).image;
@@ -336,7 +336,7 @@ TEST_CASE("texture assembler reports the content region", "[terrainbuilder]") {
     const StaticTileProvider tile_provider({{root_tile, tile_image}});
     const std::vector<radix::tile::Id> tiles_to_splatter = {root_tile};
 
-    const radix::tile::SrsBounds root_tile_bounds = srs::webmercator_tile_bounds(root_tile);
+    const radix::tile::SrsBounds root_tile_bounds = gis::webmercator::tile_bounds(root_tile);
     const radix::tile::SrsBounds target_bounds = bounds_of_root_tile_pixels(root_tile_bounds, glm::uvec2(100, 70), glm::uvec2(150, 160));
 
     const terrainbuilder::AssembledTexture assembled = terrainbuilder::splatter_tiles_to_texture(

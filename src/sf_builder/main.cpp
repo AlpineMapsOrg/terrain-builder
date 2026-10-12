@@ -31,15 +31,16 @@
 #include <radix/geometry.h>
 #include <tbb/global_control.h>
 
-#include "Dataset.h"
+#include "gis/Dataset.h"
 #include "log.h"
-#include "srs.h"
+#include "gis/srs.h"
+#include "gis/webmercator.h"
 #include "terrainbuilder.h"
 #include "octree/Space.h"
 #include "tile_provider.h"
 
 OGRSpatialReference parse_srs(const std::string &user_input) {
-    const auto result = srs::from_user_input(user_input);
+    const auto result = gis::srs::from_user_input(user_input);
     if (!result) {
         LOG_ERROR(result.error());
         exit(1);
@@ -87,7 +88,7 @@ radix::geometry::Aabb3d parse_bounds_from_tile(
     const std::vector<uint32_t> &data,
     const OGRSpatialReference &srs) {
 
-    const OGRSpatialReference &webmercator_srs = srs::webmercator();
+    const OGRSpatialReference &webmercator_srs = gis::srs::webmercator();
     if (!srs.IsSame(&webmercator_srs)) {
         LOG_ERROR_AND_EXIT("Only WebMercator (EPSG:3857) supported for --tile.");
     }
@@ -96,12 +97,12 @@ radix::geometry::Aabb3d parse_bounds_from_tile(
     const glm::uvec2 tile_coords(data[1], data[2]);
     const radix::tile::Id target_tile(zoom_level, tile_coords);
 
-    return extend_bounds_to_3d(srs::webmercator_tile_bounds(target_tile));
+    return extend_bounds_to_3d(gis::webmercator::tile_bounds(target_tile));
 }
 
 radix::geometry::Aabb3d parse_bounds_from_node(const std::vector<uint64_t> &data, const OGRSpatialReference &srs) {
     // Validate node SRS (only ECEF)
-    const OGRSpatialReference &ecef_srs = srs::ecef();
+    const OGRSpatialReference &ecef_srs = gis::srs::ecef();
     if (!srs.IsSame(&ecef_srs)) {
         LOG_ERROR_AND_EXIT("Only ECEF (EPSG:4978) supported for --node.");
     }
@@ -145,7 +146,7 @@ radix::geometry::Aabb3d parse_target_bounds(
     UNREACHABLE();
 }
 
-void log_dataset_overview(const Dataset &dataset) {
+void log_dataset_overview(const gis::Dataset &dataset) {
     const std::string name = dataset.name();
 
     const uint32_t widthPx = dataset.widthInPixels();
@@ -165,7 +166,7 @@ void log_dataset_overview(const Dataset &dataset) {
     }
     const auto bounds = *boundsResult;
 
-    const auto boundsEcefResult = srs::ecef_coverage(datasetSrs, bounds);
+    const auto boundsEcefResult = gis::srs::ecef_coverage(datasetSrs, bounds);
     if (!boundsEcefResult) {
         LOG_ERROR("Failed to transform dataset bounds to ECEF: {}", boundsEcefResult.error().to_string());
         return;
@@ -182,7 +183,7 @@ void log_dataset_overview(const Dataset &dataset) {
     LOG_INFO("Dataset");
     LOG_INFO("  name        : {}", name);
     LOG_INFO("  size        : {} x {} px | bands={}", widthPx, heightPx, bands);
-    LOG_INFO("  srs         : {}", srs::friendly_name(datasetSrs));
+    LOG_INFO("  srs         : {}", gis::srs::friendly_name(datasetSrs));
     LOG_INFO("  bounds      : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
              bounds.min.x, bounds.min.y, bounds.min.z,
              bounds.max.x, bounds.max.y, bounds.max.z);
@@ -297,10 +298,10 @@ int run(std::span<char *> args) {
 
     Log::init(log_level);
 
-    Dataset dataset(dataset_path.string());
+    gis::Dataset dataset(dataset_path.string());
     log_dataset_overview(dataset);
     OGRSpatialReference mesh_srs = parse_srs(mesh_srs_input);
-    OGRSpatialReference texture_srs = srs::webmercator();
+    OGRSpatialReference texture_srs = gis::srs::webmercator();
 
     std::unique_ptr<TileProvider> tile_provider;
     if (texture_base_path.has_value()) {

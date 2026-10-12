@@ -16,9 +16,9 @@
  * under the License.
  *******************************************************************************/
 
-#include "DatasetReader.h"
-#include "Dataset.h"
-#include "srs.h"
+#include "gis/DatasetReader.h"
+#include "gis/Dataset.h"
+#include "gis/srs.h"
 
 #include <algorithm>
 #include <climits>
@@ -42,6 +42,8 @@
 
 #include <radix/raster.h>
 #include "log.h"
+
+namespace gis {
 
 namespace {
 std::string toWkt(const OGRSpatialReference& srs)
@@ -372,3 +374,5 @@ Expected<glm::dvec2> DatasetReader<Pixel>::min_pixel_size(const radix::tile::Srs
 
 template class DatasetReader<float>;
 template class DatasetReader<glm::u8vec3>;
+
+} // namespace gis

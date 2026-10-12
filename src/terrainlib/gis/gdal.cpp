@@ -21,8 +21,12 @@
 
 #include <gdal.h>
 
-#include "init.h"
+#include "gis/gdal.h"
 #include "log.h"
+
+namespace gis::gdal {
+
+namespace {
 
 std::once_flag g_gdal_initialized_once_flag;
 
@@ -52,7 +56,9 @@ inline void GdalErrorHandler(CPLErr eErrClass, int err_no, const char *msg) {
     Log::get_logger().get()->log(level, "GDAL({}): {}", err_no, msg);
 }
 
-void initialize_gdal_once() {
+} // namespace
+
+void initialize_once() {
     std::call_once(g_gdal_initialized_once_flag, []() {
         LOG_DEBUG("calling GDALAllRegister...");
         CPLSetErrorHandler(GdalErrorHandler);
@@ -61,3 +67,5 @@ void initialize_gdal_once() {
         GDALGetCacheMax64();
     });
 }
+
+} // namespace gis::gdal

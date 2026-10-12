@@ -39,7 +39,7 @@ namespace terrainbuilder {
 
 class RawDatasetReader {
 public:
-    RawDatasetReader(Dataset &target_dataset)
+    RawDatasetReader(gis::Dataset &target_dataset)
         : RawDatasetReader(target_dataset.gdalDataset()) {}
     RawDatasetReader(GDALDataset *target_dataset)
         : dataset(target_dataset) {

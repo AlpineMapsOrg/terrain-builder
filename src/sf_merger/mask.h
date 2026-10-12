@@ -29,15 +29,15 @@
 #include <gdal_priv.h>
 #include <glm/gtx/norm.hpp>
 
-#include "Dataset.h"
-#include "vector_mask.h"
+#include "gis/Dataset.h"
+#include "gis/vector_mask.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
 #include "mesh/validate_cgal.h"
 #include "mesh/bounds.h"
-#include "srs.h"
+#include "gis/srs.h"
 #include "SphereProjector.h"
 
 #include <CGAL/Boolean_set_operations_2.h>
@@ -52,13 +52,13 @@
 #include <CGAL/Triangulation_face_base_with_info_2.h>
 #include <CGAL/mark_domain_in_triangulation.h>
 
-using vector_mask::Kernel;
-using vector_mask::Point2;
-using vector_mask::Polygon2;
-using vector_mask::PolygonWithHoles2;
-using vector_mask::PolygonSet2;
-using vector_mask::MultipolygonWithHoles2;
-using vector_mask::ReferencedPolygonMask;
+using gis::vector_mask::Kernel;
+using gis::vector_mask::Point2;
+using gis::vector_mask::Polygon2;
+using gis::vector_mask::PolygonWithHoles2;
+using gis::vector_mask::PolygonSet2;
+using gis::vector_mask::MultipolygonWithHoles2;
+using gis::vector_mask::ReferencedPolygonMask;
 
 struct SpherePolygonMask {
     MultipolygonWithHoles2 polygons;
@@ -106,16 +106,16 @@ namespace {
     }
 }
 
-using vector_mask::LoadErrorKind;
-using vector_mask::LoadError;
-using vector_mask::simplification_tolerance_metres;
-using vector_mask::simplification_tolerance;
-using vector_mask::point_count;
-using vector_mask::simplify_geometry;
-using vector_mask::convert_ring;
-using vector_mask::convert_polygon;
-using vector_mask::process_geometry;
-using vector_mask::load_referenced_from_dataset;
+using gis::vector_mask::LoadErrorKind;
+using gis::vector_mask::LoadError;
+using gis::vector_mask::simplification_tolerance_metres;
+using gis::vector_mask::simplification_tolerance;
+using gis::vector_mask::point_count;
+using gis::vector_mask::simplify_geometry;
+using gis::vector_mask::convert_ring;
+using gis::vector_mask::convert_polygon;
+using gis::vector_mask::process_geometry;
+using gis::vector_mask::load_referenced_from_dataset;
 
 namespace {
     template <typename Function>
@@ -177,8 +177,8 @@ inline SpherePolygonMask project_onto_sphere(ReferencedPolygonMask ref_mask, con
     // Translate to ecef and project onto sphere
     std::vector<glm::dvec3> ecef_points;
     for_each_point(mask_2d, [&](const Point2& cgal_point) { ecef_points.emplace_back(convert::to_glm_point(cgal_point), 0); });
-    const auto srs_transform = Error::asserting_unwrap(srs::transformation(srs, srs::ecef()));
-    Error::asserting_unwrap(srs::transform_points_inplace(srs_transform.get(), ecef_points));
+    const auto srs_transform = Error::asserting_unwrap(gis::srs::transformation(srs, gis::srs::ecef()));
+    Error::asserting_unwrap(gis::srs::transform_points_inplace(srs_transform.get(), ecef_points));
     // Unlike the bounds in the source srs, the bounds of the points stay on the mask's side of the
     // earth for masks split at the antimeridian.
     const radix::geometry::Aabb3d ecef_bounds = radix::geometry::find_bounds(std::span<const glm::dvec3>(ecef_points));
@@ -350,12 +350,12 @@ inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path
         return std::unexpected(LoadErrorKind::FileNotFound);
     }
 
-    auto opened = Dataset::open_vector(path);
+    auto opened = gis::Dataset::open_vector(path);
     if (!opened) {
         LOG_ERROR("Failed to load mask dataset: {}", opened.error().to_string());
         return std::unexpected(LoadErrorKind::FileNotFound);
     }
-    Dataset dataset = std::move(*opened);
+    gis::Dataset dataset = std::move(*opened);
     return load_referenced_from_dataset(dataset);
 }
 

@@ -25,7 +25,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "detail.h"
+#include "gis/srs/detail.h"
 
 #include <algorithm>
 #include <cmath>
@@ -37,9 +37,10 @@
 #include <glm/glm.hpp>
 #include <ogr_spatialref.h>
 
-#include "srs.h"
+#include "gis/srs.h"
+#include "gis/webmercator.h"
 
-namespace srs::detail {
+namespace gis::srs::detail {
 
 // Extraction of GDAL 3.10.3's TransformBounds with fixed performance: cache the
 // auxiliary transformation used by the projected-output pole and seam checks.
@@ -121,7 +122,7 @@ int ogr_transform_bounds(OGRCoordinateTransformation* transform,
         double pole_latitude = 90;
         const char* projection = target->GetAttrValue("PROJECTION");
         if (projection && EQUAL(projection, SRS_PT_MERCATOR_1SP) && central_meridian == 0) {
-            pole_latitude = webmercator_latitude_limit;
+            pole_latitude = webmercator::latitude_limit;
         }
         constexpr double epsilon = 1e-8;
         bool includes_pole = false;
@@ -148,4 +149,4 @@ int ogr_transform_bounds(OGRCoordinateTransformation* transform,
     return *out_xmin != HUGE_VAL && *out_ymin != HUGE_VAL && *out_xmax != HUGE_VAL && *out_ymax != HUGE_VAL;
 }
 
-} // namespace srs::detail
+} // namespace gis::srs::detail

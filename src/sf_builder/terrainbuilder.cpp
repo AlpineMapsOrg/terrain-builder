@@ -44,8 +44,8 @@
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
 
-#include "Dataset.h"
-#include "srs.h"
+#include "gis/Dataset.h"
+#include "gis/srs.h"
 
 #include "ProgressIndicator.h"
 #include "log.h"
@@ -76,7 +76,7 @@ std::string format_secs_since(const std::chrono::high_resolution_clock::time_poi
 }
 
 std::optional<SimpleMesh> build_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
@@ -144,7 +144,7 @@ std::optional<SimpleMesh> build_patch(
 }
 
 void build_and_save_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
@@ -198,7 +198,7 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 
 Expected<void> build_all_patches(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
     const TileProvider *tile_provider,
@@ -248,8 +248,8 @@ Expected<void> build_all_patches(
     }
     const auto dataset_coverage = *dataset_coverage_result;
 
-    const auto ecef_srs = srs::ecef();
-    auto ecef_bounds_result = srs::ecef_coverage(dataset_srs, dataset_bounds);
+    const auto ecef_srs = gis::srs::ecef();
+    auto ecef_bounds_result = gis::srs::ecef_coverage(dataset_srs, dataset_bounds);
     if (!ecef_bounds_result) {
         return Error::propagate(std::move(ecef_bounds_result), "transform dataset bounds to ECEF");
     }
@@ -289,7 +289,7 @@ Expected<void> build_all_patches(
     std::function<void(octree::Id)> process_node;
 
     // SRS objects are not shared between threads.
-    tbb::enumerable_thread_specific<OGRSpatialReference> local_wgs84_srs([]() { return srs::wgs84(); });
+    tbb::enumerable_thread_specific<OGRSpatialReference> local_wgs84_srs([]() { return gis::srs::wgs84(); });
     tbb::enumerable_thread_specific<OGRSpatialReference> local_dataset_srs([&]() { return dataset_srs; });
     const auto native_bounds = radix::tile::SrsBounds(dataset_bounds);
 
@@ -305,7 +305,7 @@ Expected<void> build_all_patches(
 
         // Check if node coverage intersects with dataset in geographic coordinates
         if (node.level() >= min_target_level) {
-            const auto node_coverage = srs::ecef2srs_coverage(node_bounds, local_wgs84_srs.local());
+            const auto node_coverage = gis::srs::ecef2srs_coverage(node_bounds, local_wgs84_srs.local());
             if (!node_coverage) {
                 // Keep the node, dropping it could lose terrain.
                 LOG_WARN("Failed to compute coverage of node {}: {}", node, node_coverage.error().to_string());
@@ -340,17 +340,17 @@ Expected<void> build_all_patches(
     std::jthread progress_thread = progress.start_monitoring();
 
     // Clone dataset and SRSs for each thread
-    tbb::enumerable_thread_specific<Dataset> local_dataset([&]() {
+    tbb::enumerable_thread_specific<gis::Dataset> local_dataset([&]() {
         return dataset.clone();
     });
     tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_ecef_srs([&]() {
-        return srs::clone(ecef_srs);
+        return gis::srs::clone(ecef_srs);
     });
     tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_texture_srs([&]() {
-        return srs::clone(texture_srs);
+        return gis::srs::clone(texture_srs);
     });
     tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_mesh_srs([&]() {
-        return srs::clone(mesh_srs);
+        return gis::srs::clone(mesh_srs);
     });
 
     // Decrease log level to error to avoid excessive logging during mesh building

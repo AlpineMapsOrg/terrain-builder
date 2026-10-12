@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "Dataset.h"
+#include "gis/Dataset.h"
 
 #include <algorithm>
 #include <cassert>
@@ -30,9 +30,11 @@
 #include <libassert/assert.hpp>
 #include <ogrsf_frmts.h>
 
-#include "init.h"
+#include "gis/gdal.h"
+#include "gis/srs.h"
 #include "log.h"
-#include "srs.h"
+
+namespace gis {
 
 void GDALDatasetDeleter::operator()(GDALDataset *dataset) const {
     if (dataset) {
@@ -41,7 +43,7 @@ void GDALDatasetDeleter::operator()(GDALDataset *dataset) const {
 }
 
 static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigned int flags) {
-    initialize_gdal_once();
+    gdal::initialize_once();
     const std::string path_str = path.string();
     static std::mutex gdal_open_mutex;
     const std::lock_guard lock(gdal_open_mutex);
@@ -239,3 +241,5 @@ GDALDataset *Dataset::gdalDataset() {
 const GDALDataset *Dataset::gdalDataset() const {
     return m_gdal_dataset.get();
 }
+
+} // namespace gis

@@ -22,9 +22,9 @@
 #include <catch2/catch_approx.hpp>
 #include <gdal_priv.h>
 
-#include "Dataset.h"
-#include "init.h"
-#include "srs.h"
+#include "gis/Dataset.h"
+#include "gis/gdal.h"
+#include "gis/webmercator.h"
 
 using namespace radix;
 using Catch::Approx;
@@ -44,8 +44,8 @@ void checkBounds(const radix::tile::SrsBounds &a, const radix::tile::SrsBounds &
 }
 
 TEST_CASE("datasets are as expected") {
-    auto d_mgi = Dataset(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
-    auto d_wgs84 = Dataset(ALP_TEST_DATA_DIR "/austria/at_wgs84.tif");
+    auto d_mgi = gis::Dataset(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
+    auto d_wgs84 = gis::Dataset(ALP_TEST_DATA_DIR "/austria/at_wgs84.tif");
 
     SECTION("file name") {
         CHECK(d_mgi.name() == "at_mgi");
@@ -84,7 +84,7 @@ TEST_CASE("datasets are as expected") {
 }
 
 TEST_CASE("vector datasets use the layer spatial reference") {
-    initialize_gdal_once();
+    gis::gdal::initialize_once();
     GDALDriver *driver = GetGDALDriverManager()->GetDriverByName("Memory");
     REQUIRE(driver != nullptr);
 
@@ -96,18 +96,18 @@ TEST_CASE("vector datasets use the layer spatial reference") {
     expected_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     REQUIRE(raw_dataset->CreateLayer("mask", &expected_srs, wkbPolygon, nullptr) != nullptr);
 
-    Dataset dataset(raw_dataset);
+    gis::Dataset dataset(raw_dataset);
     const OGRSpatialReference actual_srs = dataset.srs().value();
     CHECK(actual_srs.IsSame(&expected_srs));
 }
 
 namespace {
-Dataset memory_raster(std::array<double, 6> geotransform, glm::uvec2 size, int epsg)
+gis::Dataset memory_raster(std::array<double, 6> geotransform, glm::uvec2 size, int epsg)
 {
-    initialize_gdal_once();
+    gis::gdal::initialize_once();
     GDALDriver* driver = GetGDALDriverManager()->GetDriverByName("MEM");
     REQUIRE(driver != nullptr);
-    Dataset dataset(driver->Create("", int(size.x), int(size.y), 1, GDT_Float32, nullptr));
+    gis::Dataset dataset(driver->Create("", int(size.x), int(size.y), 1, GDT_Float32, nullptr));
     REQUIRE(dataset.gdalDataset()->SetGeoTransform(geotransform.data()) == CE_None);
     OGRSpatialReference reference;
     REQUIRE(reference.importFromEPSG(epsg) == OGRERR_NONE);
@@ -165,7 +165,7 @@ TEST_CASE("dataset coverage beyond the polar limit is empty in web mercator")
 TEST_CASE("web mercator dataset coverage is exact")
 {
     // Tile (3, {4, 3}) in XYZ order.
-    const double side = srs::webmercator_half_extent / 4;
+    const double side = gis::webmercator::half_extent / 4;
     const auto dataset = memory_raster({ 0, side / 32, 0, side, 0, -side / 32 }, { 32, 32 }, 3857);
 
     const auto mercator_bounds = dataset.mercator_coverage();
@@ -187,7 +187,7 @@ TEST_CASE("global dataset coverage is a single world rectangle")
     const auto mercator_bounds = dataset.mercator_coverage();
     REQUIRE(mercator_bounds);
     REQUIRE(mercator_bounds->size() == 1);
-    const double half = srs::webmercator_half_extent;
+    const double half = gis::webmercator::half_extent;
     check_bounds_near(mercator_bounds->front(), { { -half, -half }, { half, half } }, 1e-3);
 }
 

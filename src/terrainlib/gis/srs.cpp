@@ -17,8 +17,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "srs.h"
-#include "srs/detail.h"
+#include "gis/srs.h"
+#include "gis/srs/detail.h"
+#include "gis/webmercator.h"
 
 #include <algorithm>
 #include <cmath>
@@ -26,7 +27,7 @@
 #include <iterator>
 #include <limits>
 
-namespace srs {
+namespace gis::srs {
 
 std::optional<int> epsg_code(const OGRSpatialReference& srs)
 {
@@ -243,17 +244,9 @@ namespace {
     }
 } // namespace
 
-radix::tile::SrsBounds webmercator_tile_bounds(const radix::tile::Id& key)
-{
-    // ldexp avoids both 1u << 32 and tile-coordinate * tile-dimension overflow.
-    const double side = std::ldexp(2 * webmercator_half_extent, -int(key.zoom_level));
-    return { { -webmercator_half_extent + double(key.coords.x) * side, webmercator_half_extent - (double(key.coords.y) + 1) * side },
-        { -webmercator_half_extent + (double(key.coords.x) + 1) * side, webmercator_half_extent - double(key.coords.y) * side } };
-}
-
 Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds)
 {
-    if ((bounds.min.x < -webmercator_half_extent || bounds.max.x > webmercator_half_extent) && webmercator().IsSame(&reference)) {
+    if ((bounds.min.x < -webmercator::half_extent || bounds.max.x > webmercator::half_extent) && webmercator().IsSame(&reference)) {
         return Error::fail(Error::Code::Unsupported, "coverage of Web Mercator bounds outside the world extent");
     }
     const auto geographic = wgs84();
@@ -281,9 +274,9 @@ Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage(const OGRSpati
 Expected<std::vector<radix::tile::SrsBounds>> mercator_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds)
 {
     const auto mercator = webmercator();
-    const glm::dvec2 half_extent(webmercator_half_extent);
+    const glm::dvec2 half_extent(webmercator::half_extent);
     // Avoid the geographic round trip, it would widen exact Web Mercator bounds by a guard band.
-    if (reference.IsSame(&mercator) && bounds.min.x >= -webmercator_half_extent && bounds.max.x <= webmercator_half_extent) {
+    if (reference.IsSame(&mercator) && bounds.min.x >= -webmercator::half_extent && bounds.max.x <= webmercator::half_extent) {
         const radix::tile::SrsBounds clipped { glm::max(bounds.min, -half_extent), glm::min(bounds.max, half_extent) };
         if (clipped.min.x >= clipped.max.x || clipped.min.y >= clipped.max.y) {
             return std::vector<radix::tile::SrsBounds> {};
@@ -297,8 +290,8 @@ Expected<std::vector<radix::tile::SrsBounds>> mercator_coverage(const OGRSpatial
     std::vector<radix::tile::SrsBounds> result;
     for (const auto& longitude_latitude : *geographic) {
         // Web Mercator diverges towards the poles; PROJ returns large finite values there.
-        const double south = std::max(-webmercator_latitude_limit, longitude_latitude.min.y);
-        const double north = std::min(webmercator_latitude_limit, longitude_latitude.max.y);
+        const double south = std::max(-webmercator::latitude_limit, longitude_latitude.min.y);
+        const double north = std::min(webmercator::latitude_limit, longitude_latitude.max.y);
         if (south >= north) {
             continue;
         }
@@ -486,4 +479,4 @@ Expected<std::vector<radix::geometry::Aabb3d>> ecef2srs_coverage(const radix::ge
     return result;
 }
 
-} // namespace srs
+} // namespace gis::srs

@@ -5,7 +5,7 @@
 
 class OGRCoordinateTransformation;
 
-namespace srs::detail {
+namespace gis::srs::detail {
 
 // Drop-in replacement for OGRCoordinateTransformation::TransformBounds.
 int ogr_transform_bounds(OGRCoordinateTransformation* transform,
@@ -19,4 +19,4 @@ int ogr_transform_bounds(OGRCoordinateTransformation* transform,
     double* out_ymax,
     int densify_pts);
 
-} // namespace srs::detail
+} // namespace gis::srs::detail

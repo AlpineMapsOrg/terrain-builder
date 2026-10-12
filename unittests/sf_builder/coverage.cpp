@@ -26,10 +26,10 @@
 #include <glm/glm.hpp>
 
 #include "../temporary_directory.h"
-#include "Dataset.h"
+#include "gis/Dataset.h"
 #include "mesh/io.h"
 #include "mesh_builder.h"
-#include "srs.h"
+#include "gis/srs.h"
 #include "terrainbuilder.h"
 
 using test::TemporaryDirectory;
@@ -63,7 +63,7 @@ std::filesystem::path write_raster(
 // ECEF bounds of the given longitude/latitude bounds in degrees, between heights 0 and 200 m.
 radix::geometry::Aabb3d ecef_bounds(const glm::dvec2& longitudes, const glm::dvec2& latitudes)
 {
-    return srs::ecef_coverage(srs::wgs84(), { { longitudes.x, latitudes.x, 0 }, { longitudes.y, latitudes.y, 200 } }).value();
+    return gis::srs::ecef_coverage(gis::srs::wgs84(), { { longitudes.x, latitudes.x, 0 }, { longitudes.y, latitudes.y, 200 } }).value();
 }
 
 double longitude(const glm::dvec3& ecef_position) { return glm::degrees(std::atan2(ecef_position.y, ecef_position.x)); }
@@ -72,7 +72,7 @@ double longitude(const glm::dvec3& ecef_position) { return glm::degrees(std::ata
 
 TEST_CASE("native read windows follow the longitudes of the dataset", "[terrainbuilder][coverage]")
 {
-    const auto wgs84 = srs::wgs84();
+    const auto wgs84 = gis::srs::wgs84();
     const auto near_minus_175 = ecef_bounds({ -175.1, -174.9 }, { -0.1, 0.1 });
 
     SECTION("dataset stored at [0, 360]")
@@ -107,9 +107,9 @@ TEST_CASE("native read windows follow the longitudes of the dataset", "[terrainb
 
     SECTION("projected datasets are not shifted")
     {
-        const auto austria_lambert = srs::from_epsg(31287).value();
+        const auto austria_lambert = gis::srs::from_epsg(31287).value();
         const radix::tile::SrsBounds native_bounds { { 100000, 250000 }, { 700000, 600000 } };
-        const glm::dvec3 vienna = srs::transform_point(wgs84, austria_lambert, glm::dvec3(16.37, 48.2, 0)).value();
+        const glm::dvec3 vienna = gis::srs::transform_point(wgs84, austria_lambert, glm::dvec3(16.37, 48.2, 0)).value();
         const auto windows = terrainbuilder::native_read_windows(austria_lambert, native_bounds, ecef_bounds({ 16.36, 16.38 }, { 48.19, 48.21 })).value();
         REQUIRE(windows.size() == 1);
         CHECK(windows[0].contains(glm::dvec2(vienna)));
@@ -120,14 +120,14 @@ TEST_CASE("native read windows follow the longitudes of the dataset", "[terrainb
 TEST_CASE("reference meshes are built across longitude seams", "[terrainbuilder][coverage]")
 {
     TemporaryDirectory directory("sf-coverage");
-    const auto wgs84 = srs::wgs84();
-    const auto ecef = srs::ecef();
-    const auto webmercator = srs::webmercator();
+    const auto wgs84 = gis::srs::wgs84();
+    const auto ecef = gis::srs::ecef();
+    const auto webmercator = gis::srs::webmercator();
     radix::tile::SrsBounds texture_bounds;
 
     SECTION("dataset stored at [180, 190]")
     {
-        Dataset dataset(write_raster(directory.path(), wgs84, { { 180, -5 }, { 190, 5 } }, { 1000, 1000 }));
+        gis::Dataset dataset(write_raster(directory.path(), wgs84, { { 180, -5 }, { 190, 5 } }, { 1000, 1000 }));
         const auto mesh
             = terrainbuilder::build_reference_mesh_patch(dataset, ecef, ecef, ecef_bounds({ -175.2, -174.8 }, { -0.2, 0.2 }), webmercator, texture_bounds);
         REQUIRE(mesh.has_value());
@@ -140,7 +140,7 @@ TEST_CASE("reference meshes are built across longitude seams", "[terrainbuilder]
 
     SECTION("dataset across the antimeridian")
     {
-        Dataset dataset(write_raster(directory.path(), wgs84, { { -180, -5 }, { 180, 5 } }, { 3600, 100 }));
+        gis::Dataset dataset(write_raster(directory.path(), wgs84, { { -180, -5 }, { 180, 5 } }, { 3600, 100 }));
         const auto mesh
             = terrainbuilder::build_reference_mesh_patch(dataset, ecef, ecef, ecef_bounds({ 179.5, 180.5 }, { -0.5, 0.5 }), webmercator, texture_bounds);
         REQUIRE(mesh.has_value());
@@ -158,11 +158,11 @@ TEST_CASE("reference meshes are built across longitude seams", "[terrainbuilder]
 TEST_CASE("batch builds datasets crossing the prime meridian", "[terrainbuilder][coverage]")
 {
     TemporaryDirectory directory("sf-coverage-batch");
-    const auto wgs84 = srs::wgs84();
-    const auto ecef = srs::ecef();
-    const auto webmercator = srs::webmercator();
+    const auto wgs84 = gis::srs::wgs84();
+    const auto ecef = gis::srs::ecef();
+    const auto webmercator = gis::srs::webmercator();
     // Crosses the plane between two level-one nodes, so traversal starts at the root.
-    Dataset dataset(write_raster(directory.path(), wgs84, { { -0.02, 51.47 }, { 0.02, 51.49 } }, { 400, 200 }));
+    gis::Dataset dataset(write_raster(directory.path(), wgs84, { { -0.02, 51.47 }, { 0.02, 51.49 } }, { 400, 200 }));
     const auto output = directory.path() / "output";
 
     SECTION("target levels below the minimum are rejected")

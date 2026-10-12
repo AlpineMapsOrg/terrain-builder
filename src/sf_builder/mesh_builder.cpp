@@ -31,14 +31,14 @@
 #include <glm/gtx/norm.hpp>
 #include <libassert/assert.hpp>
 
-#include "Dataset.h"
+#include "gis/Dataset.h"
 #include "log.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
 #include "mesh_builder.h"
 #include <radix/raster.h>
 #include "raw_dataset_reader.h"
-#include "srs.h"
+#include "gis/srs.h"
 #include "mesh/clip.h"
 #include "mesh/validate.h"
 #include "mesh/bounds.h"
@@ -138,11 +138,11 @@ SimpleMesh meshify(const radix::Raster<glm::dvec3>& source_points, const radix::
 
 Expected<SimpleMesh> transform_mesh(SimpleMesh&& source_mesh, const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs)
 {
-    auto transform = srs::transformation(source_srs, target_srs);
+    auto transform = gis::srs::transformation(source_srs, target_srs);
     if (!transform) {
         return Error::propagate(std::move(transform));
     }
-    if (auto result = srs::transform_points_inplace(transform->get(), source_mesh.positions); !result) {
+    if (auto result = gis::srs::transform_points_inplace(transform->get(), source_mesh.positions); !result) {
         return Error::propagate(std::move(result));
     }
     return std::move(source_mesh);
@@ -150,7 +150,7 @@ Expected<SimpleMesh> transform_mesh(SimpleMesh&& source_mesh, const OGRSpatialRe
 /*
 SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
     SimpleMesh target_mesh;
-    target_mesh.positions = srs::transform_points(source_srs, target_srs, source_mesh.positions);
+    target_mesh.positions = gis::srs::transform_points(source_srs, target_srs, source_mesh.positions);
     target_mesh.triangles = source_mesh.triangles;
     target_mesh.uvs = source_mesh.uvs;
     target_mesh.texture = source_mesh.texture;
@@ -163,11 +163,11 @@ Expected<std::vector<glm::dvec2>> generate_uv_space(const std::vector<glm::dvec3
     const OGRSpatialReference& texture_srs,
     radix::tile::SrsBounds& texture_bounds)
 {
-    auto transform = srs::transformation(mesh_srs, texture_srs);
+    auto transform = gis::srs::transformation(mesh_srs, texture_srs);
     if (!transform) {
         return Error::propagate(std::move(transform));
     }
-    auto transformed = srs::transform_points_to_2d(transform->get(), positions);
+    auto transformed = gis::srs::transform_points_to_2d(transform->get(), positions);
     if (!transformed) {
         return Error::propagate(std::move(transformed));
     }
@@ -221,7 +221,7 @@ SimpleMesh concatenate(std::vector<SimpleMesh>&& meshes)
 Expected<std::vector<radix::tile::SrsBounds>> native_read_windows(
     const OGRSpatialReference& dataset_srs, const radix::tile::SrsBounds& native_bounds, const radix::geometry::Aabb3d& ecef_bounds)
 {
-    auto coverage = srs::ecef2srs_coverage(ecef_bounds, dataset_srs);
+    auto coverage = gis::srs::ecef2srs_coverage(ecef_bounds, dataset_srs);
     if (!coverage) {
         return Error::propagate(std::move(coverage));
     }
@@ -242,7 +242,7 @@ Expected<std::vector<radix::tile::SrsBounds>> native_read_windows(
 }
 
 std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
     const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds) {
@@ -255,7 +255,7 @@ std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     // Coverage in the source srs is computed from ECEF bounds.
     const bool unbounded_height = !std::isfinite(clip_bounds.min.z) || !std::isfinite(clip_bounds.max.z);
     radix::geometry::Aabb3d ecef_clip_bounds = clip_bounds;
-    if (const auto ecef_srs = srs::ecef(); !clip_srs.IsSame(&ecef_srs)) {
+    if (const auto ecef_srs = gis::srs::ecef(); !clip_srs.IsSame(&ecef_srs)) {
         // The source srs is 2D, so the windows for bounds unbounded in height don't depend on the
         // height they are computed at.
         radix::geometry::Aabb3d finite_clip_bounds = clip_bounds;
@@ -265,7 +265,7 @@ std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
         if (!std::isfinite(finite_clip_bounds.max.z)) {
             finite_clip_bounds.max.z = finite_clip_bounds.min.z;
         }
-        const auto ecef_bounds = srs::ecef_coverage(clip_srs, finite_clip_bounds);
+        const auto ecef_bounds = gis::srs::ecef_coverage(clip_srs, finite_clip_bounds);
         if (!ecef_bounds) {
             return std::unexpected(log_transformation_error(ecef_bounds.error()));
         }
@@ -332,7 +332,7 @@ std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     // the clip bounds, so this only applies to their heights.
     if (!unbounded_height) {
         const radix::geometry::Aabb3d actual_source_bounds = calculate_bounds(mesh_in_source_srs);
-        const auto actual_ecef_bounds = srs::ecef_coverage(source_srs, actual_source_bounds);
+        const auto actual_ecef_bounds = gis::srs::ecef_coverage(source_srs, actual_source_bounds);
         if (!actual_ecef_bounds) {
             return std::unexpected(log_transformation_error(actual_ecef_bounds.error()));
         }

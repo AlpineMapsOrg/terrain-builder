@@ -1,7 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2022 Adam Celarek-Litofcenko
- * Copyright (C) 2022 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +16,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#pragma once
+#include "gis/webmercator.h"
 
-void initialize_gdal_once();
+#include <cmath>
+
+namespace gis::webmercator {
+
+radix::tile::SrsBounds tile_bounds(const radix::tile::Id& key)
+{
+    // ldexp avoids both 1u << 32 and tile-coordinate * tile-dimension overflow.
+    const double side = std::ldexp(2 * half_extent, -int(key.zoom_level));
+    return { { -half_extent + double(key.coords.x) * side, half_extent - (double(key.coords.y) + 1) * side },
+        { -half_extent + (double(key.coords.x) + 1) * side, half_extent - double(key.coords.y) * side } };
+}
+
+} // namespace gis::webmercator

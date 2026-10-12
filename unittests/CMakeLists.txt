@@ -37,13 +37,15 @@ add_executable(unittests_terrainlib
 
     terrainlib/convert.cpp
     terrainlib/cow.cpp
-    terrainlib/dataset.cpp
-    terrainlib/dataset_reading.cpp
     terrainlib/enumerate.cpp
     terrainlib/envelope.cpp
     terrainlib/error.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/geometry_frames.cpp
+    terrainlib/gis_dataset.cpp
+    terrainlib/gis_dataset_reading.cpp
+    terrainlib/gis_srs_bounds.cpp
+    terrainlib/gis_srs_coverage.cpp
     terrainlib/glm_serialization.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
@@ -91,8 +93,6 @@ add_executable(unittests_terrainlib
     terrainlib/raster_view.cpp
     terrainlib/raster_store.cpp
     terrainlib/spatial_lookup.cpp
-    terrainlib/srs_coverage.cpp
-    terrainlib/srs_bounds.cpp
     terrainlib/string_utils.cpp
     terrainlib/texture_dilate_colors.cpp
     terrainlib/tiny_vector.cpp

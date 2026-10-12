@@ -24,7 +24,7 @@
 
 #include <radix/geometry.h>
 
-#include "Dataset.h"
+#include "gis/Dataset.h"
 #include "octree/Id.h"
 #include "mesh/SimpleMesh.h"
 #include "tile_provider.h"
@@ -37,7 +37,7 @@ namespace terrainbuilder {
 constexpr octree::Id::Level min_target_level = 2;
 
 void build_and_save_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
@@ -46,7 +46,7 @@ void build_and_save_patch(
     const std::filesystem::path &output_path);
 
 std::optional<SimpleMesh> build_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
@@ -54,7 +54,7 @@ std::optional<SimpleMesh> build_patch(
     const OGRSpatialReference &mesh_srs);
 
 Expected<void> build_all_patches(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
     const TileProvider *tile_provider,

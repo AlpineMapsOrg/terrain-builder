@@ -25,11 +25,11 @@
 #include <ogrsf_frmts.h>
 #include <CGAL/Multipolygon_with_holes_2.h>
 #include <CGAL/Polygon_set_2.h>
-#include "Dataset.h"
+#include "gis/Dataset.h"
+#include "gis/srs.h"
 #include "mesh/cgal.h"
-#include "srs.h"
 
-namespace vector_mask {
+namespace gis::vector_mask {
 
 using Kernel = cgal::kernel::epeck::Kernel;
 using Point2 = Kernel::Point_2;
@@ -284,4 +284,4 @@ inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_data
 }
 
 
-} // namespace vector_mask
+} // namespace gis::vector_mask

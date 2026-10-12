@@ -40,11 +40,12 @@
 #include <fmt/core.h>
 #include <gdal_priv.h>
 #include "../temporary_directory.h"
-#include "Dataset.h"
-#include "DatasetReader.h"
-#include "init.h"
+#include "gis/Dataset.h"
+#include "gis/DatasetReader.h"
+#include "gis/gdal.h"
+#include "gis/srs.h"
+#include "gis/webmercator.h"
 #include "io/image.h"
-#include "srs.h"
 
 using namespace radix;
 
@@ -65,13 +66,13 @@ Expected<void> debug_out(const radix::Raster<T>& image, const std::filesystem::p
     return io::image::write(gray, path, { .overwrite = true });
 }
 
-void require_projection_available(const Dataset& dataset, const OGRSpatialReference& target_srs)
+void require_projection_available(const gis::Dataset& dataset, const OGRSpatialReference& target_srs)
 {
     const auto dataset_srs = dataset.srs().value();
     const auto source_bounds = dataset.bounds().value();
 
     std::shared_ptr<OGRCoordinateTransformation> transform;
-    REQUIRE_NOTHROW(transform = srs::transformation(dataset_srs, target_srs).value());
+    REQUIRE_NOTHROW(transform = gis::srs::transformation(dataset_srs, target_srs).value());
     REQUIRE(transform != nullptr);
 
     std::array xs = { (source_bounds.min.x + source_bounds.max.x) / 2.0 };
@@ -80,17 +81,17 @@ void require_projection_available(const Dataset& dataset, const OGRSpatialRefere
 }
 
 template <typename Pixel>
-DatasetReader<Pixel> make_reader(
-    std::shared_ptr<Dataset> dataset, srs::Projection projection, std::array<unsigned, DatasetReader<Pixel>::channel_count> bands, Pixel default_pixel)
+gis::DatasetReader<Pixel> make_reader(
+    std::shared_ptr<gis::Dataset> dataset, gis::srs::Projection projection, std::array<unsigned, gis::DatasetReader<Pixel>::channel_count> bands, Pixel default_pixel)
 {
-    auto reader = DatasetReader<Pixel>::make(std::move(dataset), projection, bands, default_pixel);
+    auto reader = gis::DatasetReader<Pixel>::make(std::move(dataset), projection, bands, default_pixel);
     INFO((reader ? "" : reader.error().to_string()));
     REQUIRE(reader);
     return std::move(*reader);
 }
 
 template <typename Pixel>
-typename DatasetReader<Pixel>::Samples read_samples(DatasetReader<Pixel>& reader, const radix::tile::SrsBounds& bounds, glm::uvec2 size)
+typename gis::DatasetReader<Pixel>::Samples read_samples(gis::DatasetReader<Pixel>& reader, const radix::tile::SrsBounds& bounds, glm::uvec2 size)
 {
     auto samples = reader.read(bounds, size);
     INFO((samples ? "" : samples.error().to_string()));
@@ -112,14 +113,14 @@ std::array<double, 6> geo_transform_for(const radix::tile::SrsBounds& bounds, gl
 
 // Each band is filled with 10 times its number. An empty path creates an
 // in-memory raster, otherwise a GeoTIFF.
-std::shared_ptr<Dataset> make_raster(
+std::shared_ptr<gis::Dataset> make_raster(
     const std::filesystem::path& path, glm::uvec2 size, unsigned bands, GDALDataType type, std::array<double, 6> geo_transform, int epsg = 3857)
 {
-    initialize_gdal_once();
+    gis::gdal::initialize_once();
     auto* driver = GetGDALDriverManager()->GetDriverByName(path.empty() ? "MEM" : "GTiff");
     REQUIRE(driver != nullptr);
-    auto dataset = std::make_shared<Dataset>(driver->Create(path.c_str(), int(size.x), int(size.y), int(bands), type, nullptr));
-    const auto reference = srs::from_epsg(epsg).value();
+    auto dataset = std::make_shared<gis::Dataset>(driver->Create(path.c_str(), int(size.x), int(size.y), int(bands), type, nullptr));
+    const auto reference = gis::srs::from_epsg(epsg).value();
     REQUIRE(dataset->gdalDataset()->SetSpatialRef(&reference) == CE_None);
     REQUIRE(dataset->gdalDataset()->SetGeoTransform(geo_transform.data()) == CE_None);
     for (unsigned band = 1; band <= bands; ++band) {
@@ -174,7 +175,7 @@ protected:
 class FailingDataset final : public GDALDataset {
 public:
     FailingDataset()
-        : m_reference(srs::webmercator())
+        : m_reference(gis::srs::webmercator())
     {
         nRasterXSize = 16;
         nRasterYSize = 16;
@@ -227,8 +228,8 @@ TEST_CASE("reading")
     SECTION("check for min and max heights")
     {
         const std::array test_projections = {
-            std::make_pair(srs::Projection::Geographic, 4326),
-            std::make_pair(srs::Projection::WebMercator, 3857),
+            std::make_pair(gis::srs::Projection::Geographic, 4326),
+            std::make_pair(gis::srs::Projection::WebMercator, 3857),
         };
         const std::array test_locations = {
         // CRS bounds, [lower limit, at least one value smaller, at least one value larger, upper limit]
@@ -255,13 +256,13 @@ TEST_CASE("reading")
             const auto [test_name, test_datasets, geographic_bounds, limits] = test;
 
             for (std::string dataset_name : test_datasets) {
-                const auto dataset = Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
+                const auto dataset = Error::throwing_unwrap(gis::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
                 for (const auto& [test_projection, test_srs] : test_projections) {
                     OGRSpatialReference srs;
                     srs.importFromEPSG(test_srs);
                     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-                    const auto srs_corners = srs::transform_points(geographic_srs, srs, std::array { geographic_bounds.min, geographic_bounds.max }).value();
+                    const auto srs_corners = gis::srs::transform_points(geographic_srs, srs, std::array { geographic_bounds.min, geographic_bounds.max }).value();
                     const radix::tile::SrsBounds srs_bounds { srs_corners[0], srs_corners[1] };
 
                     require_projection_available(*dataset, srs);
@@ -319,9 +320,9 @@ TEST_CASE("reading")
         for (const auto& test : test_data) {
             auto [test_name, datasets, ref_bounds, render_width, render_height, max_abs_diff, max_mse] = test;
 
-            const auto ref_dataset = Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())));
+            const auto ref_dataset = Error::throwing_unwrap(gis::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())));
             require_projection_available(*ref_dataset, geographic_srs);
-            auto ref_reader = make_reader(ref_dataset, srs::Projection::Geographic, { 1 }, 0.0F);
+            auto ref_reader = make_reader(ref_dataset, gis::srs::Projection::Geographic, { 1 }, 0.0F);
             const auto ref_samples = read_samples(ref_reader, ref_bounds, { render_width, render_height });
             CHECK(all_valid(ref_samples.valid));
             const auto& ref_heights = ref_samples.data;
@@ -330,9 +331,9 @@ TEST_CASE("reading")
             }
 
             for (std::string dataset_name : datasets) {
-                const auto dataset = Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
+                const auto dataset = Error::throwing_unwrap(gis::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
                 require_projection_available(*dataset, geographic_srs);
-                auto reader = make_reader(dataset, srs::Projection::Geographic, { 1 }, 0.0F);
+                auto reader = make_reader(dataset, gis::srs::Projection::Geographic, { 1 }, 0.0F);
                 const auto samples = read_samples(reader, ref_bounds, { render_width, render_height });
                 CHECK(all_valid(samples.valid));
                 const auto& heights = samples.data;
@@ -364,10 +365,10 @@ TEST_CASE("reading")
 
 TEST_CASE("min pixel size")
 {
-    using Projection = srs::Projection;
-    const auto open = [](const char* name) { return Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(name))); };
-    const auto reader = [](const std::shared_ptr<Dataset>& dataset, Projection projection) { return make_reader(dataset, projection, { 1 }, 0.0F); };
-    const auto pixel_size = [](const std::shared_ptr<Dataset>& dataset) {
+    using Projection = gis::srs::Projection;
+    const auto open = [](const char* name) { return Error::throwing_unwrap(gis::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(name))); };
+    const auto reader = [](const std::shared_ptr<gis::Dataset>& dataset, Projection projection) { return make_reader(dataset, projection, { 1 }, 0.0F); };
+    const auto pixel_size = [](const std::shared_ptr<gis::Dataset>& dataset) {
         std::array<double, 6> geo_transform {};
         REQUIRE(dataset->gdalDataset()->GetGeoTransform(geo_transform.data()) == CE_None);
         return glm::dvec2(geo_transform[1], -geo_transform[5]);
@@ -375,7 +376,7 @@ TEST_CASE("min pixel size")
     const double metres_per_degree = 6378137.0 * std::numbers::pi / 180;
     // Within all Austrian test datasets.
     const radix::tile::SrsBounds geographic_bounds { { 12.0, 47.0 }, { 14.0, 48.0 } };
-    const auto mercator_corners = srs::transform_points(srs::wgs84(), srs::webmercator(), std::array { geographic_bounds.min, geographic_bounds.max }).value();
+    const auto mercator_corners = gis::srs::transform_points(gis::srs::wgs84(), gis::srs::webmercator(), std::array { geographic_bounds.min, geographic_bounds.max }).value();
     const radix::tile::SrsBounds mercator_bounds { mercator_corners[0], mercator_corners[1] };
 
     SECTION("same srs as the dataset")
@@ -407,7 +408,7 @@ TEST_CASE("min pixel size")
     SECTION("bounds larger than the dataset are clipped to its coverage")
     {
         const auto dataset = open("/austria/at_100m_epsg4326.tif");
-        const radix::tile::SrsBounds world { glm::dvec2(-srs::webmercator_half_extent), glm::dvec2(srs::webmercator_half_extent) };
+        const radix::tile::SrsBounds world { glm::dvec2(-gis::webmercator::half_extent), glm::dvec2(gis::webmercator::half_extent) };
         const auto size = reader(dataset, Projection::WebMercator).min_pixel_size(world);
         REQUIRE(size);
         const double south = dataset->bounds().value().min.y * std::numbers::pi / 180;
@@ -435,17 +436,17 @@ TEST_CASE("min pixel size")
 
 TEST_CASE("geographic datasets wider than 360 degrees wrap around their centre")
 {
-    initialize_gdal_once();
+    gis::gdal::initialize_once();
     // 0.5° pixels from -0.5 to 360.5, each storing its centre longitude. GDAL only wraps
     // sources overlapping themselves by at most about one pixel.
     constexpr int width = 722;
     constexpr int height = 240;
     auto* driver = GetGDALDriverManager()->GetDriverByName("MEM");
     REQUIRE(driver != nullptr);
-    const auto dataset = std::make_shared<Dataset>(driver->Create("", width, height, 1, GDT_Float32, nullptr));
+    const auto dataset = std::make_shared<gis::Dataset>(driver->Create("", width, height, 1, GDT_Float32, nullptr));
     std::array<double, 6> geo_transform { -0.5, 0.5, 0, 60, 0, -0.5 };
     REQUIRE(dataset->gdalDataset()->SetGeoTransform(geo_transform.data()) == CE_None);
-    const auto reference = srs::wgs84();
+    const auto reference = gis::srs::wgs84();
     REQUIRE(dataset->gdalDataset()->SetSpatialRef(&reference) == CE_None);
     std::vector<float> longitudes(std::size_t(width) * height);
     for (std::size_t i = 0; i < longitudes.size(); ++i) {
@@ -453,8 +454,8 @@ TEST_CASE("geographic datasets wider than 360 degrees wrap around their centre")
     }
     REQUIRE(dataset->gdalDataset()->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, width, height, longitudes.data(), width, height, GDT_Float32, 0, 0) == CE_None);
 
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1 }, 0.0F);
-    const double degree = srs::webmercator_half_extent / 180;
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1 }, 0.0F);
+    const double degree = gis::webmercator::half_extent / 180;
     for (const double longitude : { -90.0, 90.0 }) {
         const auto samples = read_samples(reader, { { (longitude - 1) * degree, -degree }, { (longitude + 1) * degree, degree } }, { 4, 4 });
         CHECK(all_valid(samples.valid));
@@ -466,11 +467,11 @@ TEST_CASE("geographic datasets wider than 360 degrees wrap around their centre")
 
 TEST_CASE("dataset reader reads the selected bands in order", "[dataset_reader]")
 {
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     const auto geo_transform = geo_transform_for(bounds, glm::uvec2(32));
     SECTION("scalar")
     {
-        auto reader = make_reader(make_raster({}, glm::uvec2(32), 3, GDT_Float32, geo_transform), srs::Projection::WebMercator, { 2 }, 0.0F);
+        auto reader = make_reader(make_raster({}, glm::uvec2(32), 3, GDT_Float32, geo_transform), gis::srs::Projection::WebMercator, { 2 }, 0.0F);
         for (const auto size : { glm::uvec2(32), glm::uvec2(24, 40) }) {
             const auto samples = read_samples(reader, bounds, size);
             CHECK(all_valid(samples.valid));
@@ -479,7 +480,7 @@ TEST_CASE("dataset reader reads the selected bands in order", "[dataset_reader]"
     }
     SECTION("RGB")
     {
-        auto reader = make_reader(make_raster({}, glm::uvec2(32), 4, GDT_Byte, geo_transform), srs::Projection::WebMercator, { 3, 1, 4 }, glm::u8vec3(0));
+        auto reader = make_reader(make_raster({}, glm::uvec2(32), 4, GDT_Byte, geo_transform), gis::srs::Projection::WebMercator, { 3, 1, 4 }, glm::u8vec3(0));
         for (const auto size : { glm::uvec2(32), glm::uvec2(24, 40) }) {
             const auto samples = read_samples(reader, bounds, size);
             CHECK(all_valid(samples.valid));
@@ -490,32 +491,32 @@ TEST_CASE("dataset reader reads the selected bands in order", "[dataset_reader]"
 
 TEST_CASE("dataset reader rejects unsupported sources and invalid requests", "[dataset_reader]")
 {
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     const auto geo_transform = geo_transform_for(bounds, glm::uvec2(16));
     const auto raster = [&](GDALDataType type) { return make_raster({}, glm::uvec2(16), 3, type, geo_transform); };
     const auto require_code = [](const auto& result, Error::Code code) {
         REQUIRE_FALSE(result);
         CHECK(result.error().code() == code);
     };
-    using Projection = srs::Projection;
+    using Projection = gis::srs::Projection;
 
     // No source type conversion.
     for (const auto type : { GDT_Byte, GDT_Int16, GDT_Float64 }) {
-        require_code(DatasetReader<float>::make(raster(type), Projection::WebMercator, { 1 }, 0.0F), Error::Code::Unsupported);
+        require_code(gis::DatasetReader<float>::make(raster(type), Projection::WebMercator, { 1 }, 0.0F), Error::Code::Unsupported);
     }
     for (const auto type : { GDT_Float32, GDT_UInt16 }) {
-        require_code(DatasetReader<glm::u8vec3>::make(raster(type), Projection::WebMercator, { 1, 2, 3 }, glm::u8vec3(0)), Error::Code::Unsupported);
+        require_code(gis::DatasetReader<glm::u8vec3>::make(raster(type), Projection::WebMercator, { 1, 2, 3 }, glm::u8vec3(0)), Error::Code::Unsupported);
     }
     for (const unsigned band : { 0u, 4u }) {
-        require_code(DatasetReader<float>::make(raster(GDT_Float32), Projection::WebMercator, { band }, 0.0F), Error::Code::InvalidInput);
-        require_code(DatasetReader<glm::u8vec3>::make(raster(GDT_Byte), Projection::WebMercator, { 1, band, 3 }, glm::u8vec3(0)), Error::Code::InvalidInput);
+        require_code(gis::DatasetReader<float>::make(raster(GDT_Float32), Projection::WebMercator, { band }, 0.0F), Error::Code::InvalidInput);
+        require_code(gis::DatasetReader<glm::u8vec3>::make(raster(GDT_Byte), Projection::WebMercator, { 1, band, 3 }, glm::u8vec3(0)), Error::Code::InvalidInput);
     }
     for (const float default_pixel : { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity() }) {
-        require_code(DatasetReader<float>::make(raster(GDT_Float32), Projection::WebMercator, { 1 }, default_pixel), Error::Code::InvalidInput);
+        require_code(gis::DatasetReader<float>::make(raster(GDT_Float32), Projection::WebMercator, { 1 }, default_pixel), Error::Code::InvalidInput);
     }
     auto unreferenced = raster(GDT_Float32);
     REQUIRE(unreferenced->gdalDataset()->SetSpatialRef(nullptr) == CE_None);
-    require_code(DatasetReader<float>::make(unreferenced, Projection::WebMercator, { 1 }, 0.0F), Error::Code::InvalidInput);
+    require_code(gis::DatasetReader<float>::make(unreferenced, Projection::WebMercator, { 1 }, 0.0F), Error::Code::InvalidInput);
 
     // Sizes and bounds are validated before allocation and narrowing to GDAL's int.
     auto reader = make_reader(raster(GDT_Float32), Projection::WebMercator, { 1 }, 0.0F);
@@ -543,8 +544,8 @@ TEST_CASE("dataset reader rejects unsupported sources and invalid requests", "[d
 
 TEST_CASE("dataset reader returns GDAL read failures", "[dataset_reader]")
 {
-    initialize_gdal_once();
-    auto reader = make_reader(std::make_shared<Dataset>(new FailingDataset()), srs::Projection::WebMercator, { 1 }, 0.0F);
+    gis::gdal::initialize_once();
+    auto reader = make_reader(std::make_shared<gis::Dataset>(new FailingDataset()), gis::srs::Projection::WebMercator, { 1 }, 0.0F);
     const auto samples = reader.read({ { 0, 0 }, { 16, 16 } }, { 8, 8 });
     REQUIRE_FALSE(samples);
     CHECK(samples.error().code() == Error::Code::Io);
@@ -552,7 +553,7 @@ TEST_CASE("dataset reader returns GDAL read failures", "[dataset_reader]")
 
 TEST_CASE("dataset reader combines the effective source masks", "[dataset_reader]")
 {
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     const glm::uvec2 size(32);
     const glm::u8vec3 fallback(1, 2, 3);
     auto dataset = make_raster({}, size, 4, GDT_Byte, geo_transform_for(bounds, size));
@@ -596,7 +597,7 @@ TEST_CASE("dataset reader combines the effective source masks", "[dataset_reader
         mask(3, 0, top);
         expected = [&](unsigned x, unsigned y) { return left(x, y) && top(x, y); };
     }
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1, 2, 3 }, fallback);
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1, 2, 3 }, fallback);
     const auto samples = read_samples(reader, bounds, size);
     for (unsigned y = 0; y < size.y; ++y) {
         for (unsigned x = 0; x < size.x; ++x) {
@@ -609,13 +610,13 @@ TEST_CASE("dataset reader combines the effective source masks", "[dataset_reader
 
 TEST_CASE("dataset reader prefers an explicit mask over a conflicting NoData value", "[dataset_reader]")
 {
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     auto dataset = make_raster({}, glm::uvec2(32), 1, GDT_Float32, geo_transform_for(bounds, glm::uvec2(32)));
     auto* band = dataset->gdalDataset()->GetRasterBand(1);
     REQUIRE(band->SetNoDataValue(10) == CE_None);
     REQUIRE(band->CreateMaskBand(0) == CE_None);
     REQUIRE(band->GetMaskBand()->Fill(255) == CE_None);
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1 }, 0.0F);
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1 }, 0.0F);
     const auto samples = read_samples(reader, bounds, glm::uvec2(24));
     CHECK(all_valid(samples.valid));
     CHECK(std::ranges::all_of(samples.data, [](float value) { return value == Catch::Approx(10); }));
@@ -623,7 +624,7 @@ TEST_CASE("dataset reader prefers an explicit mask over a conflicting NoData val
 
 TEST_CASE("dataset reader keeps valid pixels equal to sentinels or the default", "[dataset_reader]")
 {
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     const auto geo_transform = geo_transform_for(bounds, glm::uvec2(32));
     SECTION("black RGB with a black default")
     {
@@ -631,14 +632,14 @@ TEST_CASE("dataset reader keeps valid pixels equal to sentinels or the default",
         for (int band = 1; band <= 3; ++band) {
             REQUIRE(dataset->gdalDataset()->GetRasterBand(band)->Fill(0) == CE_None);
         }
-        auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1, 2, 3 }, glm::u8vec3(0));
+        auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1, 2, 3 }, glm::u8vec3(0));
         const auto samples = read_samples(reader, bounds, glm::uvec2(32));
         CHECK(all_valid(samples.valid));
         CHECK(std::ranges::all_of(samples.data, [](glm::u8vec3 value) { return value == glm::u8vec3(0); }));
     }
     SECTION("scalar equal to the default")
     {
-        auto reader = make_reader(make_raster({}, glm::uvec2(32), 1, GDT_Float32, geo_transform), srs::Projection::WebMercator, { 1 }, 10.0F);
+        auto reader = make_reader(make_raster({}, glm::uvec2(32), 1, GDT_Float32, geo_transform), gis::srs::Projection::WebMercator, { 1 }, 10.0F);
         const auto samples = read_samples(reader, bounds, glm::uvec2(32));
         CHECK(all_valid(samples.valid));
         CHECK(std::ranges::all_of(samples.data, [](float value) { return value == 10; }));
@@ -647,7 +648,7 @@ TEST_CASE("dataset reader keeps valid pixels equal to sentinels or the default",
     {
         auto dataset = make_raster({}, glm::uvec2(32), 1, GDT_Float32, geo_transform);
         REQUIRE(dataset->gdalDataset()->GetRasterBand(1)->Fill(-32768) == CE_None);
-        auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1 }, 0.0F);
+        auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1 }, 0.0F);
         const auto samples = read_samples(reader, bounds, glm::uvec2(32));
         CHECK(all_valid(samples.valid));
         CHECK(std::ranges::all_of(samples.data, [](float value) { return value == -32768; }));
@@ -656,13 +657,13 @@ TEST_CASE("dataset reader keeps valid pixels equal to sentinels or the default",
 
 namespace {
 template <typename Pixel>
-void check_coverage(GDALDataType type, std::array<unsigned, DatasetReader<Pixel>::channel_count> bands, Pixel inside, Pixel fallback)
+void check_coverage(GDALDataType type, std::array<unsigned, gis::DatasetReader<Pixel>::channel_count> bands, Pixel inside, Pixel fallback)
 {
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     const glm::uvec2 size(32);
     // The source covers the western half of the output.
     auto dataset = make_raster({}, { 16, 32 }, unsigned(bands.size()), type, geo_transform_for(bounds, size));
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, bands, fallback);
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, bands, fallback);
     const auto partial = read_samples(reader, bounds, size);
     for (unsigned y = 0; y < size.y; ++y) {
         for (unsigned x = 0; x < size.x; ++x) {
@@ -671,7 +672,7 @@ void check_coverage(GDALDataType type, std::array<unsigned, DatasetReader<Pixel>
             CHECK(partial.data.pixel({ x, y }) == (x < 16 ? inside : fallback));
         }
     }
-    const auto absent = read_samples(reader, srs::webmercator_tile_bounds({ 5, { 2, 2 } }), size);
+    const auto absent = read_samples(reader, gis::webmercator::tile_bounds({ 5, { 2, 2 } }), size);
     CHECK(std::ranges::none_of(absent.valid, [](std::uint8_t value) { return value != 0; }));
     CHECK(std::ranges::all_of(absent.data, [&](Pixel value) { return value == fallback; }));
 }
@@ -686,10 +687,10 @@ TEST_CASE("dataset reader returns defaults outside the source coverage", "[datas
 TEST_CASE("dataset reader replaces nonfinite float results with the default", "[dataset_reader]")
 {
     const float nonfinite = GENERATE(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity());
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     auto dataset = make_raster({}, glm::uvec2(32), 1, GDT_Float32, geo_transform_for(bounds, glm::uvec2(32)));
     auto* band = dataset->gdalDataset()->GetRasterBand(1);
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1 }, 7.5F);
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1 }, 7.5F);
     SECTION("everywhere")
     {
         REQUIRE(band->Fill(nonfinite) == CE_None);
@@ -718,7 +719,7 @@ TEST_CASE("dataset reader replaces nonfinite float results with the default", "[
 
 TEST_CASE("dataset reader excludes a sample invalid in one channel from all channels", "[dataset_reader]")
 {
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     auto dataset = make_raster({}, glm::uvec2(32), 3, GDT_Byte, geo_transform_for(bounds, glm::uvec2(32)));
     auto* gdal_dataset = dataset->gdalDataset();
     for (int band = 1; band <= 3; ++band) {
@@ -729,7 +730,7 @@ TEST_CASE("dataset reader excludes a sample invalid in one channel from all chan
     write_pixel(gdal_dataset->GetRasterBand(2), { 16, 16 }, 0);
     REQUIRE(gdal_dataset->GetRasterBand(2)->SetNoDataValue(0) == CE_None);
     const glm::u8vec3 fallback(1, 2, 3);
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1, 2, 3 }, fallback);
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1, 2, 3 }, fallback);
     // GDAL does not write outputs centred on an invalid sample. The Lanczos
     // supports of the others contain valid samples. Warping each channel with
     // its own mask, red would include the outlier around it.
@@ -751,12 +752,12 @@ TEST_CASE("dataset reader reprojects within the approximation tolerance", "[data
     auto dataset = make_raster({}, glm::uvec2(side), 2, GDT_Float32, { 0, 0.1, 0, 20, 0, -0.1 }, 4326);
     write(dataset->gdalDataset()->GetRasterBand(1), generate(glm::uvec2(side), [](unsigned x, unsigned) { return float((x + 0.5) * 0.1); }));
     write(dataset->gdalDataset()->GetRasterBand(2), generate(glm::uvec2(side), [](unsigned, unsigned y) { return float(20 - (y + 0.5) * 0.1); }));
-    const auto corners = srs::transform_points(srs::wgs84(), srs::webmercator(), std::array { glm::dvec2(5, 5), glm::dvec2(15, 15) }).value();
+    const auto corners = gis::srs::transform_points(gis::srs::wgs84(), gis::srs::webmercator(), std::array { glm::dvec2(5, 5), glm::dvec2(15, 15) }).value();
     const radix::tile::SrsBounds bounds { corners[0], corners[1] };
     const glm::uvec2 size(64, 80);
     const double radius = 6378137;
     for (const unsigned band : { 1u, 2u }) {
-        auto reader = make_reader(dataset, srs::Projection::WebMercator, { band }, 0.0F);
+        auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { band }, 0.0F);
         const auto samples = read_samples(reader, bounds, size);
         CHECK(all_valid(samples.valid));
         for (unsigned y = 0; y < size.y; ++y) {
@@ -793,12 +794,12 @@ TEST_CASE("dataset reader reads a VRT mosaic like a single raster at base resolu
             (directory.path() / "right.tif").string());
         REQUIRE(vrt.good());
     }
-    auto mosaic = make_reader(Error::throwing_unwrap(Dataset::open_shared_raster(vrt_path)), srs::Projection::WebMercator, { 1 }, 0.0F);
+    auto mosaic = make_reader(Error::throwing_unwrap(gis::Dataset::open_shared_raster(vrt_path)), gis::srs::Projection::WebMercator, { 1 }, 0.0F);
     const radix::tile::SrsBounds window { { 8.25, 0.25 }, { 24.25, 16.25 } };
     const auto combined = read_samples(mosaic, window, glm::uvec2(16));
     auto reference = make_raster({}, glm::uvec2(32), 1, GDT_Float32, { 0, 1, 0, 16, 0, -1 });
     write(reference->gdalDataset()->GetRasterBand(1), generate(glm::uvec2(32), [](unsigned x, unsigned) { return x < 16 ? 10.f : 50.f; }));
-    auto single = make_reader(reference, srs::Projection::WebMercator, { 1 }, 0.0F);
+    auto single = make_reader(reference, gis::srs::Projection::WebMercator, { 1 }, 0.0F);
     const auto expected = read_samples(single, window, glm::uvec2(16));
     // Compare the source assembly, not GDAL's filter formula.
     for (unsigned x = 0; x < 16; ++x) {
@@ -818,8 +819,8 @@ TEST_CASE("dataset reader agrees across adjacent output windows", "[dataset_read
     // 0.25° pixels storing the sum of their column and row, away from the antimeridian.
     auto dataset = make_raster({}, glm::uvec2(64), 1, GDT_Float32, { 0, 0.25, 0, 8, 0, -0.25 }, 4326);
     write(dataset->gdalDataset()->GetRasterBand(1), generate(glm::uvec2(64), [](unsigned x, unsigned y) { return float(x + y); }));
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1 }, 0.0F);
-    const double width = 2 * srs::webmercator_half_extent / 180;
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1 }, 0.0F);
+    const double width = 2 * gis::webmercator::half_extent / 180;
     const glm::dvec2 centre(4 * width, 0);
     const auto west = read_samples(reader, { centre - glm::dvec2(width, width / 2), centre + glm::dvec2(0, width / 2) }, glm::uvec2(16));
     const auto east = read_samples(reader, { centre - glm::dvec2(0, width / 2), centre + glm::dvec2(width, width / 2) }, glm::uvec2(16));
@@ -853,9 +854,9 @@ TEST_CASE("dataset reader ignores the GDAL threading environment", "[dataset_rea
     };
     const Configuration threads("GDAL_NUM_THREADS", "2");
     const Configuration chunks("WARP_THREAD_CHUNK_SIZE", "1");
-    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = gis::webmercator::tile_bounds({ 5, { 16, 15 } });
     auto reader
-        = make_reader(make_raster({}, glm::uvec2(32), 1, GDT_Float32, geo_transform_for(bounds, glm::uvec2(32))), srs::Projection::WebMercator, { 1 }, 0.0F);
+        = make_reader(make_raster({}, glm::uvec2(32), 1, GDT_Float32, geo_transform_for(bounds, glm::uvec2(32))), gis::srs::Projection::WebMercator, { 1 }, 0.0F);
     const auto samples = read_samples(reader, bounds, glm::uvec2(24));
     CHECK(CPLGetLastErrorType() < CE_Failure);
     CHECK(all_valid(samples.valid));
@@ -865,8 +866,8 @@ TEST_CASE("dataset reader finds a coarse projected source in a world tile", "[da
 {
     // Many probes of the world tile fail to transform into UTM.
     auto dataset = make_raster({}, glm::uvec2(4), 1, GDT_Float32, { -3500000, 2000000, 0, 4000000, 0, -2000000 }, 32632);
-    auto reader = make_reader(dataset, srs::Projection::WebMercator, { 1 }, 0.0F);
-    const auto samples = read_samples(reader, srs::webmercator_tile_bounds({ 0, { 0, 0 } }), glm::uvec2(16));
+    auto reader = make_reader(dataset, gis::srs::Projection::WebMercator, { 1 }, 0.0F);
+    const auto samples = read_samples(reader, gis::webmercator::tile_bounds({ 0, { 0, 0 } }), glm::uvec2(16));
     // Around 11° east and north, inside the footprint.
     CHECK(samples.valid.pixel({ 8, 7 }) != 0);
     CHECK(samples.data.pixel({ 8, 7 }) == Catch::Approx(10));
@@ -874,7 +875,7 @@ TEST_CASE("dataset reader finds a coarse projected source in a world tile", "[da
 
 TEST_CASE("dataset reader finds a source smaller than GDAL's probe spacing", "[dataset_reader]")
 {
-    auto reader = make_reader(make_raster({}, glm::uvec2(32), 1, GDT_Float32, { 100, 1, 0, 200, 0, -1 }), srs::Projection::WebMercator, { 1 }, 0.0F);
+    auto reader = make_reader(make_raster({}, glm::uvec2(32), 1, GDT_Float32, { 100, 1, 0, 200, 0, -1 }), gis::srs::Projection::WebMercator, { 1 }, 0.0F);
     const auto samples = read_samples(reader, { { 0, 0 }, { 4096, 4096 } }, glm::uvec2(4096));
     CHECK(samples.valid.pixel({ 116, 4096 - 184 }) != 0);
     CHECK(samples.data.pixel({ 116, 4096 - 184 }) == Catch::Approx(10));

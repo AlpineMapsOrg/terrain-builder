@@ -29,7 +29,9 @@
 #include <radix/tile.h>
 #include <glm/gtc/type_precision.hpp>
 #include "Error.h"
-#include "srs.h"
+#include "gis/srs.h"
+
+namespace gis {
 
 class Dataset;
 
@@ -95,5 +97,7 @@ private:
 
 extern template class DatasetReader<float>;
 extern template class DatasetReader<glm::u8vec3>;
+
+} // namespace gis
 
 #endif // DATASETREADER_H

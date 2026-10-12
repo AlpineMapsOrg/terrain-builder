@@ -186,7 +186,7 @@ TEST_CASE("masks split at the antimeridian are projected around their centre")
     MultipolygonWithHoles2 polygons;
     polygons.add_polygon(make_square(glm::dvec2(170, -20), glm::dvec2(180, -15)));
     polygons.add_polygon(make_square(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
-    const SpherePolygonMask mask = mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), srs::wgs84() }, earth::radius());
+    const SpherePolygonMask mask = mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), gis::srs::wgs84() }, earth::radius());
     REQUIRE(mask.polygons.number_of_polygons_with_holes() == 2);
     radix::geometry::Aabb2d projected_bounds;
     for (const auto& polygon : mask.polygons.polygons_with_holes()) {

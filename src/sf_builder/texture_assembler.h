@@ -40,7 +40,8 @@
 #include "geometry/geometry.h"
 #include "numeric/glm_math.h"
 #include "numeric/int_math.h"
-#include "srs.h"
+#include "gis/srs.h"
+#include "gis/webmercator.h"
 
 #include "tile_provider.h"
 #include "log.h"
@@ -69,7 +70,7 @@ namespace terrainbuilder {
 
     const std::array<glm::dvec2, 4> points = { bounds.min, bounds.max, glm::dvec2(bounds.min.x, bounds.max.y), glm::dvec2(bounds.max.x, bounds.min.y) };
     const auto all_points_inside = [&](const radix::tile::Id& tile) {
-        const radix::tile::SrsBounds tile_bounds = srs::webmercator_tile_bounds(tile);
+        const radix::tile::SrsBounds tile_bounds = gis::webmercator::tile_bounds(tile);
         return std::ranges::all_of(points, [&](const glm::dvec2& point) { return tile_bounds.contains_inclusive(point); });
     };
 
@@ -108,7 +109,7 @@ namespace terrainbuilder {
     // at a high zoom level. So we try to estimate the actual zoom level of the target bounds and recurse at least
     // to that level to find relevant textures.
     if (!min_zoom_level_to_examine.has_value()) {
-        min_zoom_level_to_examine = estimate_zoom_level(root_tile.zoom_level, srs::webmercator_tile_bounds(root_tile), target_bounds) + 1;
+        min_zoom_level_to_examine = estimate_zoom_level(root_tile.zoom_level, gis::webmercator::tile_bounds(root_tile), target_bounds) + 1;
     }
     
     // A list of tiles determined to be relevant for the target bounds.
@@ -121,7 +122,7 @@ namespace terrainbuilder {
         }
 
         // Check if we even require this tile to fill the target region.
-        const radix::tile::SrsBounds tile_bounds = srs::webmercator_tile_bounds(tile);
+        const radix::tile::SrsBounds tile_bounds = gis::webmercator::tile_bounds(tile);
         if (!radix::geometry::intersect(target_bounds, tile_bounds)) {
             return true;
         }
@@ -415,7 +416,7 @@ inline AssembledTexture splatter_tiles_to_texture(
         return {};
     }
 
-    const radix::tile::SrsBounds root_tile_bounds = srs::webmercator_tile_bounds(root_tile);
+    const radix::tile::SrsBounds root_tile_bounds = gis::webmercator::tile_bounds(root_tile);
 
     const uint32_t max_zoom_level = find_max_zoom_level(tiles_to_splatter);
     DEBUG_ASSERT(max_zoom_level >= root_tile.zoom_level);
@@ -512,7 +513,7 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     }
 
     // The texture is linear in the srs of the tiles, the uvs are linear in the target srs.
-    ASSERT(srs::webmercator().IsSame(&target_srs));
+    ASSERT(gis::srs::webmercator().IsSame(&target_srs));
     const radix::tile::SrsBounds& encompassing_bounds = target_bounds;
     // Find the smallest tile (id) that encompasses these bounds.
     radix::tile::Id smallest_encompassing_tile = find_smallest_encompassing_tile(encompassing_bounds).value();
@@ -528,7 +529,7 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     }
 
     // Very small target bounds can push the examined zoom level arbitrarily deep, but
-    // srs::webmercator_tile_bounds is only valid up to this zoom level; never recurse deeper than that.
+    // gis::webmercator::tile_bounds is only valid up to this zoom level; never recurse deeper than that.
     const uint32_t max_safe_zoom_level = 32;
     const uint32_t clamped_max_zoom = std::min(max_zoom.value_or(max_safe_zoom_level), max_safe_zoom_level);
 
