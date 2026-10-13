@@ -36,8 +36,8 @@ tile-base-root/
 ```
 
 The default layout ID is `zoom/x/y_google`, mapping tiles to `<zoom>/<x>/<y>`
-with the codec adding `.amort`. Other layouts may map the same tile IDs
-differently. [Dataset organization](architecture.md#dataset-organization)
+with the codec adding `.amort` or `.amoit`. Other layouts may map the same
+tile IDs differently. [Dataset organization](architecture.md#dataset-organization)
 explains shared RF tables and independent TB copies.
 
 ## Source-attribution table
@@ -102,7 +102,8 @@ for the first codec. Existing mesh stores retain extension-based selectors.
 
 ### Version 1 representation
 
-The metadata codec selector is `amort`; payload filenames end in `.amort`.
+The metadata codec selector is `amort` or `amoit`; payload filenames end in
+`.amort` or `.amoit`.
 The versioned payloads use the existing `io::envelope` serialization. Version 1
 was revised directly for halo metadata and index tile hashes; no compatibility
 with earlier V1 payloads is provided. Size fields are 32-bit unsigned on
@@ -113,6 +114,7 @@ supported platforms; mapping enum values are 0 for Linear and 1 for SRGBA:
 | `raster_store.Metadata` | 1 | layout ID string, payload-type string, codec-selector string, `unsigned` stored_tile_size, nominal_tile_size, halo_width, `pixel::Mapping` value_mapping |
 | `raster_store.Index` | 1 | vector of entries: `uint32_t` zoom, x, y, then `uint8_t` status; vector of hash entries: `uint32_t` zoom, x, y, then hash byte vector |
 | `raster_store.Tile` | 1 | `uint32_t` width, height, data byte vector, attribution byte vector |
+| `raster_store.ImageTile` | 1 | as `raster_store.Tile`, but the data byte vector holds a JPEG XL codestream |
 
 Both index vectors are written in `(zoom, x, y)` order. Readers reject
 duplicate keys, invalid keys/statuses, and inconsistent parent/child topology.
@@ -190,10 +192,14 @@ to standard Zstandard compression, and always uses an XXH3-64 hash. Readers
 accept the algorithms supported by `io::envelope`; each envelope records its
 selected algorithms. Tiles hard-linked from another snapshot keep the hash of
 their source, which is copied from the source index without reading the
-tile. Writing is lossless to preserve data through repeated merging and
-overview generation. Different codecs may be used for writing and reading
-when their representations are compatible. The first version stores no
-derived tile metadata such as extrema or contributing-attribution lists.
+tile. AMORT writing is lossless to preserve data through repeated merging and
+overview generation. AMOIT (`.amoit`, AlpineMapsOrg image tile) supports only
+RGB8 data, which it stores as a lossy JPEG XL codestream (distance 0.6, effort
+3, sRGB); attribution stays lossless. RF builder uses AMOIT by default for
+sRGB RGB8 snapshots; RF merger keeps the shared codec of its inputs.
+Different codecs may be used for writing and reading when their
+representations are compatible. The first version stores no derived tile
+metadata such as extrema or contributing-attribution lists.
 
 ### Pixel serialization scope
 
@@ -221,7 +227,7 @@ index nor the fields of attribution entry 0 determine payload usability.
 Attribution is not a validity mask: an ordinary numeric value with index 0
 participates in generic scaling just like any other supplied data value.
 
-Storage preserves all payloads losslessly, including NaNs and values with
+AMORT preserves all payloads losslessly, including NaNs and values with
 attribution zero. Callers of numerical algorithms must supply usable values;
 storage does not repair or validate payloads for them. Source NoData remains
 an importer concern, separate from stored attribution. See the

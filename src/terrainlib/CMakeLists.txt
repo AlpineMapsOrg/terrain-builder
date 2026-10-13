@@ -287,3 +287,5 @@ target_link_libraries(terrainlib PUBLIC
 target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
 # Only io/hash.cpp includes xxHash.
 target_link_libraries(terrainlib PRIVATE xxhash)
+# Only io/image.cpp includes libjxl.
+target_link_libraries(terrainlib PRIVATE JpegXL::jxl)

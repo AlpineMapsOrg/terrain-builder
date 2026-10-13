@@ -21,6 +21,7 @@
 #include <cstdint>
 
 #include <catch2/catch_test_macros.hpp>
+#include <glm/glm.hpp>
 #include <opencv2/imgcodecs.hpp>
 
 #include "../temporary_directory.h"
@@ -113,6 +114,60 @@ TEST_CASE("PNG compression and JPEG quality options reach encoders", "[io-image]
     CHECK(rgba->pixel({ 0, 0 }).w == 255);
 }
 
+TEST_CASE("JPEG XL is lossy by default, lossless at distance zero and keeps row order", "[io-image]")
+{
+    image::RGB8 source({ 64, 48 });
+    for (unsigned y = 0; y < source.height(); ++y) {
+        for (unsigned x = 0; x < source.width(); ++x) {
+            source.pixel({ x, y }) = glm::u8vec3(100 + x, 80 + y, 120);
+        }
+    }
+    const auto lossy = image::encode(source, image::Format::JpegXl);
+    REQUIRE(lossy);
+    // A bare codestream, not the container format.
+    REQUIRE(lossy->size() > 2);
+    CHECK((*lossy)[0] == std::byte { 0xff });
+    CHECK((*lossy)[1] == std::byte { 0x0a });
+    const auto decoded = image::decode_rgb8(*lossy);
+    REQUIRE(decoded);
+    REQUIRE(decoded->size() == source.size());
+    int max_error = 0;
+    for (std::size_t i = 0; i < source.buffer_length(); ++i) {
+        const auto difference = glm::abs(glm::ivec3(decoded->buffer()[i]) - glm::ivec3(source.buffer()[i]));
+        max_error = std::max({ max_error, difference.x, difference.y, difference.z });
+    }
+    // JPEG XL optimises perceived error; strongly saturated colours deviate more.
+    CHECK(max_error > 0);
+    CHECK(max_error <= 4);
+    const auto opaque = image::decode_rgba8(*lossy);
+    REQUIRE(opaque);
+    CHECK(opaque->pixel({ 0, 0 }).w == 255);
+
+    const auto coarse = image::encode(source, image::Format::JpegXl, { .jpegxl_distance = 4 });
+    const auto fast = image::encode(source, image::Format::JpegXl, { .jpegxl_effort = 1 });
+    REQUIRE(coarse);
+    REQUIRE(fast);
+    CHECK(coarse->size() < lossy->size());
+    CHECK(*fast != *lossy);
+
+    const auto rgba = colours();
+    const auto lossless = image::encode(rgba, image::Format::JpegXl, { .jpegxl_distance = 0 });
+    REQUIRE(lossless);
+    const auto exact = image::decode_rgba8(*lossless);
+    REQUIRE(exact);
+    CHECK(std::ranges::equal(exact->bytes(), rgba.bytes()));
+    const auto rgb = image::decode_rgb8(*lossless);
+    REQUIRE(rgb);
+    CHECK(rgb->pixel({ 1, 0 }) == glm::u8vec3(0, 255, 0));
+
+    test::TemporaryDirectory directory;
+    const auto path = directory.path() / "image.JXL";
+    REQUIRE(image::write(source, path, { .encoding = { .jpegxl_distance = 0 } }));
+    const auto read = image::read_rgb8(path);
+    REQUIRE(read);
+    CHECK(std::ranges::equal(read->bytes(), source.bytes()));
+}
+
 TEST_CASE("image I/O rejects invalid inputs without silent alpha loss", "[io-image]")
 {
     const auto source = colours();
@@ -121,10 +176,18 @@ TEST_CASE("image I/O rejects invalid inputs without silent alpha loss", "[io-ima
     CHECK_FALSE(image::encode(source, image::Format::Png, { .png_compression = 10 }));
     CHECK_FALSE(image::encode(source, image::Format::Png, { .jpeg_quality = -1 }));
     CHECK_FALSE(image::encode(source, image::Format::Png, { .jpeg_quality = 101 }));
+    CHECK_FALSE(image::encode(source, image::Format::JpegXl, { .jpegxl_distance = -0.5f }));
+    CHECK_FALSE(image::encode(source, image::Format::JpegXl, { .jpegxl_distance = 25.5f }));
+    CHECK_FALSE(image::encode(source, image::Format::JpegXl, { .jpegxl_effort = 0 }));
+    CHECK_FALSE(image::encode(source, image::Format::JpegXl, { .jpegxl_effort = 11 }));
     CHECK_FALSE(image::encode(image::RGB8 {}, image::Format::Png));
+    CHECK(image::encode(image::RGB8 {}, image::Format::JpegXl).error().code() == Error::Code::InvalidInput);
     CHECK_FALSE(image::decode_rgb8({}));
     const std::array junk { std::byte { 1 }, std::byte { 2 }, std::byte { 3 }, std::byte { 4 } };
     CHECK(image::decode_rgba8(junk).error().code() == Error::Code::CorruptData);
+    auto truncated = image::encode(source, image::Format::JpegXl).value();
+    truncated.resize(truncated.size() / 2);
+    CHECK(image::decode_rgba8(truncated).error().code() == Error::Code::CorruptData);
 }
 
 TEST_CASE("disk image I/O preserves RGBA and honours overwrite and directory policies", "[io-image]")

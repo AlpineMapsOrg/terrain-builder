@@ -22,9 +22,12 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <type_traits>
 
 #include "io/byte.h"
 #include "io/envelope.h"
+#include "io/image.h"
 #include "raster_store/Tile.h"
 #include "raster_store/pixel.h"
 #include "store/Codec.h"
@@ -38,6 +41,7 @@ namespace tile_codec {
         struct RasterTile {
             std::uint32_t width;
             std::uint32_t height;
+            // Native element bytes for AMORT, a JPEG XL codestream for AMOIT.
             ::io::byte::vector data;
             ::io::byte::vector source_attribution;
         };
@@ -45,12 +49,23 @@ namespace tile_codec {
     } // namespace detail::v1
 
     using TileSchema = ::io::envelope::PayloadSchema<"raster_store.Tile", ::io::envelope::Version<1, detail::v1::RasterTile>>;
+    using ImageTileSchema = ::io::envelope::PayloadSchema<"raster_store.ImageTile", ::io::envelope::Version<1, detail::v1::RasterTile>>;
+
+    // Storage of the data raster; attribution is always stored losslessly.
+    enum class DataEncoding {
+        Native, // AMORT: lossless native element bytes of any pixel type.
+        JpegXl, // AMOIT: lossy JPEG XL image of RGB8 pixels.
+    };
 
 } // namespace tile_codec
 
-template <typename PixelType>
+template <typename PixelType, tile_codec::DataEncoding Encoding = tile_codec::DataEncoding::Native>
 class TileCodec final : public store::Codec<Tile<PixelType>> {
     static_assert(sizeof(pixel::detail::Format<PixelType>) > 0);
+    static constexpr bool is_image = Encoding == tile_codec::DataEncoding::JpegXl;
+    static_assert(!is_image || std::is_same_v<PixelType, glm::u8vec3>, "AMOIT stores only RGB8 tiles");
+    using Schema = std::conditional_t<is_image, tile_codec::ImageTileSchema, tile_codec::TileSchema>;
+    static constexpr std::string_view name = is_image ? "AMOIT" : "AMORT";
 
 public:
     explicit TileCodec(const glm::uvec2 dimensions = glm::uvec2(default_tile_side),
@@ -62,7 +77,7 @@ public:
 
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        return { this->add_extension(node_path, ".amort") };
+        return { this->add_extension(node_path, is_image ? ".amoit" : ".amort") };
     }
 
     Expected<Tile<PixelType>> read(
@@ -71,21 +86,29 @@ public:
         if (auto valid = validate_dimensions(m_dimensions); !valid) {
             return Error::propagate(std::move(valid));
         }
-        auto encoded = ::io::envelope::read<tile_codec::TileSchema>(paths(node_path).front(), expected_hash);
+        auto encoded = ::io::envelope::read<Schema>(paths(node_path).front(), expected_hash);
         if (!encoded) {
-            return Error::propagate(std::move(encoded), "read AMORT tile");
+            return Error::propagate(std::move(encoded), "read " + std::string(name) + " tile");
         }
         if (glm::uvec2(encoded->width, encoded->height) != m_dimensions) {
-            return Error::fail(Error::Code::CorruptData, "AMORT tile dimensions do not match snapshot metadata");
+            return Error::fail(Error::Code::CorruptData, std::string(name) + " tile dimensions do not match snapshot metadata");
         }
         const std::uint64_t count = std::uint64_t { encoded->width } * encoded->height;
-        if (encoded->data.size() % sizeof(PixelType) != 0 || encoded->data.size() / sizeof(PixelType) != count
+        if ((!is_image && (encoded->data.size() % sizeof(PixelType) != 0 || encoded->data.size() / sizeof(PixelType) != count))
             || encoded->source_attribution.size() % sizeof(std::uint16_t) != 0
             || encoded->source_attribution.size() / sizeof(std::uint16_t) != count) {
-            return Error::fail(Error::Code::CorruptData, "AMORT raster buffer byte counts do not match dimensions and payload type");
+            return Error::fail(Error::Code::CorruptData, std::string(name) + " raster buffer byte counts do not match dimensions and payload type");
         }
         Tile<PixelType> tile(encoded->width);
-        std::memcpy(tile.data.bytes().data(), encoded->data.data(), encoded->data.size());
+        if constexpr (is_image) {
+            auto data = ::io::image::decode_rgb8(encoded->data, m_dimensions);
+            if (!data) {
+                return Error::propagate(std::move(data), "decode AMOIT tile data");
+            }
+            tile.data = std::move(*data);
+        } else {
+            std::memcpy(tile.data.bytes().data(), encoded->data.data(), encoded->data.size());
+        }
         std::memcpy(tile.attribution.bytes().data(), encoded->source_attribution.data(), encoded->source_attribution.size());
         return tile;
     }
@@ -98,12 +121,19 @@ public:
         if (tile.data.size() != m_dimensions || tile.attribution.size() != m_dimensions) {
             return Error::fail(Error::Code::InvalidInput, "both tile rasters must match snapshot dimensions");
         }
-        const auto data = tile.data.bytes();
         const auto source_attribution = tile.attribution.bytes();
-        const tile_codec::detail::v1::RasterTile encoded { m_dimensions.x, m_dimensions.y,
-            { data.begin(), data.end() }, { source_attribution.begin(), source_attribution.end() } };
-        return ::io::envelope::write<tile_codec::TileSchema>(
-            encoded, paths(node_path).front(), ::io::byte::WriteMode::CreateNew, true, m_compression_algorithm);
+        tile_codec::detail::v1::RasterTile encoded { m_dimensions.x, m_dimensions.y, {}, { source_attribution.begin(), source_attribution.end() } };
+        if constexpr (is_image) {
+            auto data = ::io::image::encode(tile.data, ::io::image::Format::JpegXl);
+            if (!data) {
+                return Error::propagate(std::move(data), "encode AMOIT tile data");
+            }
+            encoded.data = std::move(*data);
+        } else {
+            const auto data = tile.data.bytes();
+            encoded.data.assign(data.begin(), data.end());
+        }
+        return ::io::envelope::write<Schema>(encoded, paths(node_path).front(), ::io::byte::WriteMode::CreateNew, true, m_compression_algorithm);
     }
 
     bool supports_hashing() const override { return true; }
@@ -122,6 +152,13 @@ namespace tile_codec {
     {
         if (name == "amort") {
             return std::make_unique<TileCodec<PixelType>>(dimensions, compression_algorithm);
+        }
+        if (name == "amoit") {
+            if constexpr (std::is_same_v<PixelType, glm::u8vec3>) {
+                return std::make_unique<TileCodec<PixelType, DataEncoding::JpegXl>>(dimensions, compression_algorithm);
+            } else {
+                return Error::fail(Error::Code::Unsupported, "the amoit raster codec requires " + pixel::identifier<glm::u8vec3>() + " pixels");
+            }
         }
         return Error::fail(Error::Code::Unsupported, "unsupported raster codec selector: " + std::string(name));
     }
