@@ -62,6 +62,12 @@ public:
         return m_storage.has(key);
     }
 
+    auto hash_for(const key_type& key) const
+    {
+        std::shared_lock lock(m_mutex);
+        return m_storage.hash_for(key);
+    }
+
     std::filesystem::path base_path() const noexcept { return m_storage.base_path(); }
 
     // Saves of different keys encode and write their payloads in parallel. The
@@ -79,11 +85,12 @@ public:
                 return Error::fail(Error::Code::AlreadyExists, "save node to", Error::asserting_unwrap(m_storage.path_for(key)));
             }
         }
-        if (auto written = m_storage.write_payload(key, value); !written) {
-            return written;
+        auto hash = m_storage.write_payload(key, value);
+        if (!hash) {
+            return Error::propagate(std::move(hash));
         }
         std::unique_lock lock(m_mutex);
-        return m_storage.commit(key);
+        return m_storage.commit(key, std::move(*hash));
     }
 
     template <typename Source>

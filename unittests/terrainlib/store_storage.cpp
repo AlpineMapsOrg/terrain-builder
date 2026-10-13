@@ -16,12 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <future>
 #include <latch>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -33,10 +36,12 @@
 #include "io/byte.h"
 #include "io/utils.h"
 #include "octree/StoreTraits.h"
+#include "octree/storage/IndexFile.h"
 #include "octree/store_layout/Mappings.h"
 #include "raster_store/StoreTraits.h"
 #include "store/IndexedStorage.h"
 #include "store/ThreadSafeStorage.h"
+#include "store/open.h"
 #include "string_utils.h"
 
 namespace {
@@ -81,7 +86,19 @@ store::path_layout::Mapping<radix::tile::Id> test_mapping<raster_store::StoreTra
     return { "test_tiles", tile_to_path, path_to_tile };
 }
 
-Expected<int> read_int(const std::filesystem::path& path)
+using store::NodeDataHash;
+using store::NodeDataHashView;
+
+// The test codecs identify an integer by its bytes, followed by filler up to the hash size.
+NodeDataHash int_hash(const int value, const std::size_t size = sizeof(int))
+{
+    const auto bytes = std::as_bytes(std::span(&value, 1));
+    NodeDataHash hash(bytes.begin(), bytes.end());
+    hash.resize(size, std::byte { 0x5a });
+    return hash;
+}
+
+Expected<int> read_int(const std::filesystem::path& path, const std::optional<NodeDataHashView> expected_hash = std::nullopt)
 {
     auto bytes = io::byte::read(path);
     if (!bytes) {
@@ -92,6 +109,9 @@ Expected<int> read_int(const std::filesystem::path& path)
     }
     int value;
     std::memcpy(&value, bytes->data(), sizeof(value));
+    if (expected_hash.has_value() && !std::ranges::equal(*expected_hash, int_hash(value, expected_hash->size()))) {
+        return Error::fail(Error::Code::CorruptData, "test integer does not match its expected hash");
+    }
     return value;
 }
 
@@ -109,9 +129,20 @@ class IntCodec final : public store::Codec<int> {
 public:
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".data") }; }
 
-    Expected<int> read(const std::filesystem::path& node_path) const override { return read_int(paths(node_path).front()); }
+    Expected<int> read(const std::filesystem::path& node_path, std::optional<NodeDataHashView> expected_hash = std::nullopt) const override
+    {
+        return read_int(paths(node_path).front(), expected_hash);
+    }
 
-    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override { return write_int(value, paths(node_path).front()); }
+    Expected<NodeDataHash> write(const std::filesystem::path& node_path, const int& value) const override
+    {
+        if (auto written = write_int(value, paths(node_path).front()); !written) {
+            return Error::propagate(std::move(written));
+        }
+        return int_hash(value);
+    }
+
+    bool supports_hashing() const override { return true; }
 };
 
 class MultiFileCodec final : public store::Codec<int> {
@@ -121,23 +152,25 @@ public:
         return { add_extension(node_path, ".data"), add_extension(node_path, ".metadata") };
     }
 
-    Expected<int> read(const std::filesystem::path& node_path) const override
+    Expected<int> read(const std::filesystem::path& node_path, std::optional<NodeDataHashView> expected_hash = std::nullopt) const override
     {
-        auto value = read_int(paths(node_path).front());
+        auto value = read_int(paths(node_path).front(), expected_hash);
         if (!value) {
             return Error::propagate(std::move(value), "read multi-file test value");
         }
         return value.value();
     }
 
-    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override
+    Expected<NodeDataHash> write(const std::filesystem::path& node_path, const int& value) const override
     {
         const auto node_paths = paths(node_path);
         if (!write_int(value, node_paths[0]) || !write_int(value + 1, node_paths[1])) {
             return Error::fail(Error::Code::Io, "multi-file test write failed");
         }
-        return {};
+        return int_hash(value);
     }
+
+    bool supports_hashing() const override { return true; }
 };
 
 std::atomic_uint32_t index_writes = 0;
@@ -182,6 +215,7 @@ store::IndexedStorage<Traits, int> make_indexed_storage(
     return store::IndexedStorage<Traits, int>(
         store::RawStorage<Traits, int>(store::path_layout::Resolver<typename Traits::Key>(path, mapping), std::move(codec)),
         store::Index<Traits> {},
+        store::Key2Hash_Map<Traits> {},
         typename store::Storage<Traits, int>::Persistence {
             counting_index_format<Traits>(),
             path / "test.storeindex",
@@ -195,6 +229,30 @@ std::vector<octree::Id> root_children()
 {
     const auto children = octree::Id::root().children().value();
     return { children.begin(), children.end() };
+}
+
+// Uses the octree index format, so that the storage can be reopened.
+store::IndexedStorage<octree::StoreTraits, int> make_persistent_storage(const std::filesystem::path& path)
+{
+    return store::IndexedStorage<octree::StoreTraits, int>(
+        store::RawStorage<octree::StoreTraits, int>(store::path_layout::Resolver<octree::Id>(path, octree::store_layout::flat()), std::make_unique<IntCodec>()),
+        store::Index<octree::StoreTraits> {},
+        store::Key2Hash_Map<octree::StoreTraits> {},
+        store::Storage<octree::StoreTraits, int>::Persistence {
+            octree::storage::index_format(),
+            path / "octree.storeindex",
+            "flat",
+            "test.Int",
+            ".data",
+        });
+}
+
+Expected<store::IndexedStorage<octree::StoreTraits, int>> reopen(const std::filesystem::path& path)
+{
+    return store::open_index<octree::StoreTraits, int>(
+        path / "octree.storeindex", octree::storage::index_format(), "test.Int", [](std::string_view) -> Expected<std::unique_ptr<store::Codec<int>>> {
+            return std::make_unique<IntCodec>();
+        });
 }
 
 } // namespace
@@ -301,17 +359,18 @@ TEST_CASE("written payloads become available after exactly one commit", "[store]
     auto storage = make_indexed_storage(directory.path());
     const octree::Id root = octree::Id::root();
 
-    REQUIRE(storage.write_payload(root, 7).has_value());
+    const auto hash = storage.write_payload(root, 7);
+    REQUIRE(hash.has_value());
     CHECK_FALSE(storage.has(root).value());
     const auto uncommitted = storage.load(root);
     REQUIRE_FALSE(uncommitted.has_value());
     CHECK(uncommitted.error().code() == Error::Code::NotFound);
 
-    REQUIRE(storage.commit(root).has_value());
+    REQUIRE(storage.commit(root, *hash).has_value());
     CHECK(storage.has(root).value());
     CHECK(storage.load(root).value() == 7);
 
-    const auto recommitted = storage.commit(root);
+    const auto recommitted = storage.commit(root, *hash);
     REQUIRE_FALSE(recommitted.has_value());
     CHECK(recommitted.error().code() == Error::Code::AlreadyExists);
 }
@@ -488,4 +547,142 @@ TEST_CASE("link_from rejects existing targets, missing sources and different cod
         CHECK(linked.error().code() == Error::Code::Unsupported);
         CHECK_FALSE(target.has(root).value());
     }
+}
+
+TEST_CASE("storage records codec hashes and checkpoints them without node-file access", "[store][storage][hash]")
+{
+    TemporaryDirectory directory("hash-checkpoint");
+    const octree::Id root = octree::Id::root();
+    const octree::Id child = root.child(2).value();
+    {
+        auto storage = make_persistent_storage(directory.path());
+        REQUIRE(storage.save(root, 0).has_value());
+        REQUIRE(storage.save(child, 7).has_value());
+        // The all-zero hash of zero is an identity like any other.
+        CHECK(storage.hash_for(root).value() == NodeDataHash(sizeof(int), std::byte { 0 }));
+        CHECK(storage.hash_for(child).value() == int_hash(7));
+        REQUIRE(storage.save_index().has_value());
+    }
+
+    auto reopened = reopen(directory.path());
+    REQUIRE(reopened.has_value());
+    CHECK(reopened->load(child).value() == 7);
+    REQUIRE(std::filesystem::remove(reopened->path_for(child).value()));
+    CHECK(reopened->hash_for(child).value() == int_hash(7));
+    CHECK(reopened->hash_for(root).value() == NodeDataHash(sizeof(int), std::byte { 0 }));
+}
+
+TEST_CASE("hash lookups report missing and virtual nodes", "[store][storage][hash]")
+{
+    TemporaryDirectory directory("hash-lookup");
+    const octree::Id root = octree::Id::root();
+    auto storage = make_indexed_storage(directory.path());
+    REQUIRE(storage.save(root.child(3).value(), 1).has_value());
+    REQUIRE(storage.index().is(store::NodeStatus::Virtual, root).value());
+    CHECK(storage.hash_for(root).error().code() == Error::Code::NotFound);
+    CHECK(storage.hash_for(root.child(1).value()).error().code() == Error::Code::NotFound);
+    CHECK(storage.hash_for(root.child(3).value()).value() == int_hash(1));
+}
+
+TEST_CASE("links transfer recorded hashes", "[store][storage][link][hash]")
+{
+    const octree::Id root = octree::Id::root();
+    TemporaryDirectory source_directory("hash-link-source");
+    TemporaryDirectory target_directory("hash-link-target");
+    auto source = make_indexed_storage(source_directory.path());
+    auto target = make_indexed_storage(target_directory.path());
+    REQUIRE(source.save(root, 5).has_value());
+    REQUIRE(target.link_from(root, source).has_value());
+    CHECK(std::filesystem::equivalent(source.path_for(root).value(), target.path_for(root).value()));
+    CHECK(target.hash_for(root).value() == source.hash_for(root).value());
+}
+
+TEST_CASE("indexed sources are authoritative for links", "[store][storage][link][hash]")
+{
+    const octree::Id root = octree::Id::root();
+    TemporaryDirectory source_directory("hash-authority-source");
+    TemporaryDirectory target_directory("hash-authority-target");
+    auto source = make_indexed_storage(source_directory.path());
+    auto target = make_indexed_storage(target_directory.path());
+    REQUIRE(write_int(4, source.path_for(root).value()).has_value());
+    const auto linked = target.link_from(root, source);
+    REQUIRE_FALSE(linked.has_value());
+    CHECK(linked.error().code() == Error::Code::NotFound);
+    CHECK_FALSE(target.has(root).value());
+}
+
+TEST_CASE("indexed loads reject valid payloads that differ from the index", "[store][storage][hash]")
+{
+    TemporaryDirectory directory("hash-mismatch");
+    const octree::Id root = octree::Id::root();
+    auto storage = make_indexed_storage(directory.path());
+    REQUIRE(storage.save(root, 13).has_value());
+    REQUIRE(std::filesystem::remove(storage.path_for(root).value()));
+    REQUIRE(write_int(14, storage.path_for(root).value()).has_value());
+    CHECK(storage.load(root).error().code() == Error::Code::CorruptData);
+}
+
+TEST_CASE("storage moves, destruction and thread-safe access keep hashes", "[store][storage][hash]")
+{
+    const octree::Id root = octree::Id::root();
+    const octree::Id child = root.child(4).value();
+    TemporaryDirectory first_directory("hash-move-first");
+    TemporaryDirectory second_directory("hash-move-second");
+
+    {
+        auto original = make_persistent_storage(first_directory.path());
+        REQUIRE(original.save(root, 30).has_value());
+        auto moved = std::move(original);
+        CHECK(moved.hash_for(root).value() == int_hash(30));
+
+        auto destination = make_indexed_storage(second_directory.path());
+        destination = std::move(moved);
+        CHECK(destination.hash_for(root).value() == int_hash(30));
+
+        store::ThreadSafeStorage synchronized(std::move(destination));
+        REQUIRE(synchronized.save(child, 31).has_value());
+        CHECK(synchronized.hash_for(child).value() == int_hash(31));
+    }
+
+    // Destruction checkpoints the dirty state.
+    auto reopened = reopen(first_directory.path());
+    REQUIRE(reopened.has_value());
+    CHECK(reopened->hash_for(root).value() == int_hash(30));
+    CHECK(reopened->hash_for(child).value() == int_hash(31));
+}
+
+TEST_CASE("opening rejects indexes that lack required hashes", "[store][storage][hash]")
+{
+    TemporaryDirectory directory("hash-required");
+    store::IndexMetadata<octree::StoreTraits> index_file {
+        .index = {},
+        .hashes = {},
+        .layout_id = "flat",
+        .payload_class = "test.Int",
+        .codec_selector = ".data",
+    };
+    REQUIRE(index_file.index.add(octree::Id::root()));
+    REQUIRE(octree::storage::write_index_file(directory.path() / "octree.storeindex", index_file).has_value());
+    CHECK(reopen(directory.path()).error().code() == Error::Code::CorruptData);
+}
+
+TEST_CASE("index hashes must match the physical nodes and the codec", "[store][index][hash]")
+{
+    const octree::Id root = octree::Id::root();
+    const octree::Id child = root.child(1).value();
+    store::Index<octree::StoreTraits> index;
+    REQUIRE(index.add(child));
+    store::Key2Hash_Map<octree::StoreTraits> hashes { { child, int_hash(1) } };
+    REQUIRE(store::validate_hashes(index, hashes, true).has_value());
+    REQUIRE(store::validate_hashes(index, {}, false).has_value());
+
+    bool codec_hashes = true;
+    SECTION("missing hash") { hashes.clear(); }
+    SECTION("short hash") { hashes[child].resize(store::min_hash_size - 1); }
+    SECTION("hash of a virtual node") { hashes.emplace(root, int_hash(2)); }
+    SECTION("hash of an absent node") { hashes.emplace(root.child(2).value(), int_hash(3)); }
+    SECTION("hash with a codec that does not support hashing") { codec_hashes = false; }
+    const auto valid = store::validate_hashes(index, hashes, codec_hashes);
+    REQUIRE_FALSE(valid.has_value());
+    CHECK(valid.error().code() == Error::Code::CorruptData);
 }

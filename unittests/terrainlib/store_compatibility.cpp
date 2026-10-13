@@ -16,11 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -51,6 +55,7 @@ mesh::storage::IndexedStorage make_storage(
     return mesh::storage::IndexedStorage(
         store::RawStorage<octree::StoreTraits, mesh::Simple>(store::path_layout::Resolver<octree::Id>(path, mapping), std::move(codec.value())),
         store::Index<octree::StoreTraits> {},
+        store::Key2Hash_Map<octree::StoreTraits> {},
         mesh::storage::Storage::Persistence {
             octree::storage::index_format(),
             path / "octree.storeindex",
@@ -83,11 +88,14 @@ TEST_CASE("octree layouts round-trip boundary IDs")
 
 TEST_CASE("versioned octree and SF payload validation is free-standing")
 {
-    const octree::storage::StoreIndex invalid_index { { {
-        .level = std::numeric_limits<std::uint8_t>::max(),
-        .index = 0,
-        .status = static_cast<std::uint8_t>(store::NodeStatus::Leaf),
-    } } };
+    const octree::storage::StoreIndex invalid_index {
+        .entries = { {
+            .level = std::numeric_limits<std::uint8_t>::max(),
+            .index = 0,
+            .status = static_cast<std::uint8_t>(store::NodeStatus::Leaf),
+        } },
+        .hashes = {},
+    };
     const auto decoded_index = octree::storage::decode_index(invalid_index);
     REQUIRE_FALSE(decoded_index.has_value());
     CHECK(decoded_index.error().code() == Error::Code::CorruptData);
@@ -179,6 +187,7 @@ TEST_CASE("octree opening rejects a mismatched metadata payload class", "[store]
     const std::filesystem::path index_path = directory.path() / "octree.storeindex";
     const store::IndexMetadata<octree::StoreTraits> index_file {
         .index = {},
+        .hashes = {},
         .layout_id = "flat",
         .payload_class = "dag.ClusterBatch",
         .codec_selector = ".sfmesh",
@@ -197,6 +206,7 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
 
     store::IndexMetadata<octree::StoreTraits> index_file {
         .index = {},
+        .hashes = {},
         .layout_id = "unknown-layout",
         .payload_class = std::string(mesh::storage::payload_class),
         .codec_selector = ".sfmesh",
@@ -224,4 +234,43 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
     const auto independent_metadata = octree::storage::read_store_metadata(directory.path());
     REQUIRE(independent_metadata.has_value());
     CHECK(independent_metadata->codec_selector == ".unknown");
+}
+
+TEST_CASE("octree indexes round-trip sorted sparse hashes", "[store][index][hash]")
+{
+    const octree::Id root = octree::Id::root();
+    const std::vector children { root.child(0).value(), root.child(5).value(), root.child(7).value() };
+    store::Index<octree::StoreTraits> index;
+    store::Key2Hash_Map<octree::StoreTraits> hashes;
+    for (std::size_t position = 0; position < children.size(); ++position) {
+        REQUIRE(index.add(children[position]));
+        hashes.emplace(children[position], store::NodeDataHash(4 + position, std::byte(position)));
+    }
+
+    const auto encoded = octree::storage::encode_index(index, hashes);
+    REQUIRE(encoded.hashes.size() == children.size());
+    for (std::size_t position = 0; position < children.size(); ++position) {
+        CHECK(encoded.hashes[position].index == children[position].index_on_level());
+    }
+    CHECK(std::ranges::is_sorted(encoded.entries, {}, [](const auto& entry) { return std::pair(entry.level, entry.index); }));
+
+    const auto decoded = octree::storage::decode_index(encoded);
+    REQUIRE(decoded.has_value());
+    CHECK(decoded->hashes == hashes);
+}
+
+TEST_CASE("octree index decoding rejects duplicate and invalid hash keys", "[store][index][hash]")
+{
+    const octree::Id root = octree::Id::root();
+    const octree::Id child = root.child(2).value();
+    store::Index<octree::StoreTraits> index;
+    REQUIRE(index.add(child));
+    auto encoded = octree::storage::encode_index(index, { { child, store::NodeDataHash(8, std::byte { 1 }) } });
+    REQUIRE(octree::storage::decode_index(encoded).has_value());
+
+    SECTION("duplicate key") { encoded.hashes.push_back(encoded.hashes.front()); }
+    SECTION("invalid key") { encoded.hashes.front().level = std::numeric_limits<std::uint8_t>::max(); }
+    const auto decoded = octree::storage::decode_index(encoded);
+    REQUIRE_FALSE(decoded.has_value());
+    CHECK(decoded.error().code() == Error::Code::CorruptData);
 }

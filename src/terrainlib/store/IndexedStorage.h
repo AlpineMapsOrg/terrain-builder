@@ -35,8 +35,8 @@ public:
     {
     }
 
-    IndexedStorage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Persistence persistence)
-        : Base(std::move(raw), std::move(index), std::move(persistence))
+    IndexedStorage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Key2Hash_Map<Traits> hashes, Persistence persistence)
+        : Base(std::move(raw), std::move(index), std::move(hashes), std::move(persistence))
     {
     }
 

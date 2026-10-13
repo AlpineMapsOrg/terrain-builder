@@ -16,8 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <cstddef>
 #include <filesystem>
 #include <future>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -26,6 +28,7 @@
 #include "codec.h"
 #include "dag_node.h"
 #include "io/byte.h"
+#include "io/envelope.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/storage.h"
 #include "storage.h"
@@ -297,4 +300,58 @@ TEST_CASE("DAG builds stop on request and reuse cached nodes", "[dag][snapshot]"
             }
         }
     }
+}
+
+TEST_CASE("DAG node hashes concatenate the clustering and metadata hashes", "[dag][codec][hash]")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto hash = codec.write(node_path, sample_batch());
+    REQUIRE(hash.has_value());
+    REQUIRE(hash->size() == 16);
+    const auto node_paths = codec.paths(node_path);
+    CHECK(std::vector(hash->begin(), hash->begin() + 8) == io::envelope::read_header(node_paths[0])->hash);
+    CHECK(std::vector(hash->begin() + 8, hash->end()) == io::envelope::read_header(node_paths[1])->hash);
+}
+
+TEST_CASE("DAG reads verify each half of an expected node hash", "[dag][codec][hash]")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto node_paths = codec.paths(node_path);
+    const auto hash = codec.write(node_path, sample_batch());
+    REQUIRE(hash.has_value());
+    REQUIRE(codec.read(node_path, *hash).has_value());
+
+    auto expected = *hash;
+    SECTION("clustering half") { expected.front() ^= std::byte { 1 }; }
+    SECTION("metadata half") { expected.back() ^= std::byte { 1 }; }
+    SECTION("another length") { expected.resize(8); }
+    const auto result = codec.read(node_path, expected);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().code() == Error::Code::CorruptData);
+}
+
+TEST_CASE("DAG metadata reads verify only the metadata half", "[dag][codec][hash]")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    dag::codec::Metadata metadata_codec;
+    CHECK(metadata_codec.supports_hashing());
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto hash = codec.write(node_path, sample_batch());
+    REQUIRE(hash.has_value());
+    REQUIRE(std::filesystem::remove(codec.paths(node_path).front()));
+
+    CHECK(metadata_codec.read(node_path, *hash).has_value());
+    auto wrong_clustering = *hash;
+    wrong_clustering.front() ^= std::byte { 1 };
+    CHECK(metadata_codec.read(node_path, wrong_clustering).has_value());
+
+    auto wrong_metadata = *hash;
+    wrong_metadata.back() ^= std::byte { 1 };
+    CHECK(metadata_codec.read(node_path, wrong_metadata).error().code() == Error::Code::CorruptData);
+    CHECK(metadata_codec.read(node_path, store::NodeDataHash(8)).error().code() == Error::Code::CorruptData);
 }

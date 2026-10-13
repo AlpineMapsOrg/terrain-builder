@@ -58,10 +58,10 @@ Expected<Metadata> read_metadata(const std::filesystem::path& base_path)
 
 Expected<void> write_metadata(const Metadata& metadata, const std::filesystem::path& base_path)
 {
-    return ::io::envelope::write<MetadataSchema>(metadata, base_path / metadata_file_name, ::io::byte::WriteMode::Overwrite);
+    return ::io::envelope::write<MetadataSchema>(metadata, base_path / metadata_file_name, ::io::byte::WriteMode::Overwrite).transform([](auto&&) { });
 }
 
-detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index)
+detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index, const store::Key2Hash_Map<StoreTraits>& hashes)
 {
     detail::v1::Hierarchy encoded;
     encoded.entries.reserve(index.size());
@@ -69,12 +69,18 @@ detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index)
         encoded.entries.push_back({ key, status });
     }
     std::ranges::sort(encoded.entries, [](const auto& left, const auto& right) { return left.id < right.id; });
+    encoded.hashes.reserve(hashes.size());
+    for (const auto& [key, hash] : hashes) {
+        encoded.hashes.push_back({ key, hash });
+    }
+    std::ranges::sort(encoded.hashes, [](const auto& left, const auto& right) { return left.id < right.id; });
     return encoded;
 }
 
-Expected<store::Index<StoreTraits>> decode_index(const detail::v1::Hierarchy& encoded)
+Expected<store::IndexContents<StoreTraits>> decode_index(const detail::v1::Hierarchy& encoded)
 {
-    store::Index<StoreTraits> index;
+    store::IndexContents<StoreTraits> decoded;
+    store::Index<StoreTraits>& index = decoded.index;
     std::unordered_set<radix::tile::Id, StoreTraits::Hasher> seen;
     for (const auto& entry : encoded.entries) {
         if (!StoreTraits::is_valid(entry.id)) {
@@ -94,10 +100,18 @@ Expected<store::Index<StoreTraits>> decode_index(const detail::v1::Hierarchy& en
     if (auto valid = index.validate(); !valid) {
         return Error::propagate(std::move(valid), "validate raster index topology");
     }
-    return index;
+    for (const auto& entry : encoded.hashes) {
+        if (!StoreTraits::is_valid(entry.id)) {
+            return Error::fail(Error::Code::CorruptData, "raster index contains a hash for an invalid tile ID");
+        }
+        if (!decoded.hashes.emplace(entry.id, entry.hash).second) {
+            return Error::fail(Error::Code::CorruptData, "raster index contains a duplicate tile hash");
+        }
+    }
+    return decoded;
 }
 
-Expected<store::Index<StoreTraits>> read_hierarchy(const std::filesystem::path& index_path)
+Expected<store::IndexContents<StoreTraits>> read_hierarchy(const std::filesystem::path& index_path)
 {
     auto encoded = ::io::envelope::read<IndexSchema>(index_path);
     if (!encoded) {
@@ -112,16 +126,18 @@ Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::filesyste
     if (!metadata) {
         return Error::propagate(std::move(metadata));
     }
-    auto index = read_hierarchy(index_path);
-    if (!index) {
-        return Error::propagate(std::move(index));
+    auto contents = read_hierarchy(index_path);
+    if (!contents) {
+        return Error::propagate(std::move(contents));
     }
-    return store::IndexMetadata<StoreTraits> { std::move(*index), metadata->layout_id, metadata->payload_type, metadata->codec_selector };
+    return store::IndexMetadata<StoreTraits> {
+        std::move(contents->index), std::move(contents->hashes), metadata->layout_id, metadata->payload_type, metadata->codec_selector
+    };
 }
 
 Expected<void> write_index_file(const std::filesystem::path& index_path, const store::IndexMetadata<StoreTraits>& metadata)
 {
-    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index), index_path, ::io::byte::WriteMode::Replace);
+    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index, metadata.hashes), index_path, ::io::byte::WriteMode::Replace);
     if (!written) {
         return Error::propagate(std::move(written), "checkpoint raster index");
     }

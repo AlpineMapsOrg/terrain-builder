@@ -20,6 +20,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -28,17 +29,24 @@
 
 namespace dag::codec {
 
+// A node's identity is the sixteen-byte concatenation of the .dag and .dagmeta envelope hashes,
+// so that each file can be verified on its own.
 class ClusterBatch final : public store::Codec<dag::ClusterBatch> {
 public:
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override;
-    Expected<dag::ClusterBatch> read(const std::filesystem::path& node_path) const override;
-    Expected<void> write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const override;
+    Expected<dag::ClusterBatch> read(
+        const std::filesystem::path& node_path, std::optional<store::NodeDataHashView> expected_hash = std::nullopt) const override;
+    Expected<store::NodeDataHash> write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const override;
+    bool supports_hashing() const override { return true; }
 };
 
+// Reads only the .dagmeta file and verifies it against the second half of an expected node identity.
 class Metadata final : public store::Codec<dag::NodeMetadata> {
 public:
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override;
-    Expected<dag::NodeMetadata> read(const std::filesystem::path& node_path) const override;
+    Expected<dag::NodeMetadata> read(
+        const std::filesystem::path& node_path, std::optional<store::NodeDataHashView> expected_hash = std::nullopt) const override;
+    bool supports_hashing() const override { return true; }
 };
 
 Expected<std::unique_ptr<store::Codec<dag::ClusterBatch>>> cluster_batch_from_extension(std::string_view extension);

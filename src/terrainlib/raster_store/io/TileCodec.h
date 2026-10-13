@@ -20,6 +20,7 @@
 
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "io/byte.h"
@@ -53,11 +54,9 @@ class TileCodec final : public store::Codec<Tile<PixelType>> {
 
 public:
     explicit TileCodec(const glm::uvec2 dimensions = glm::uvec2(default_tile_side),
-        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression,
-        const ::io::hash::Algorithm hash_algorithm = ::io::hash::Algorithm::Xxh3_64)
+        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression)
         : m_dimensions(dimensions)
         , m_compression_algorithm(compression_algorithm)
-        , m_hash_algorithm(hash_algorithm)
     {
     }
 
@@ -66,12 +65,13 @@ public:
         return { this->add_extension(node_path, ".amort") };
     }
 
-    Expected<Tile<PixelType>> read(const std::filesystem::path& node_path) const override
+    Expected<Tile<PixelType>> read(
+        const std::filesystem::path& node_path, const std::optional<store::NodeDataHashView> expected_hash = std::nullopt) const override
     {
         if (auto valid = validate_dimensions(m_dimensions); !valid) {
             return Error::propagate(std::move(valid));
         }
-        auto encoded = ::io::envelope::read<tile_codec::TileSchema>(paths(node_path).front());
+        auto encoded = ::io::envelope::read<tile_codec::TileSchema>(paths(node_path).front(), expected_hash);
         if (!encoded) {
             return Error::propagate(std::move(encoded), "read AMORT tile");
         }
@@ -90,10 +90,10 @@ public:
         return tile;
     }
 
-    Expected<void> write(const std::filesystem::path& node_path, const Tile<PixelType>& tile) const override
+    Expected<store::NodeDataHash> write(const std::filesystem::path& node_path, const Tile<PixelType>& tile) const override
     {
         if (auto valid = validate_dimensions(m_dimensions); !valid) {
-            return valid;
+            return Error::propagate(std::move(valid));
         }
         if (tile.data.size() != m_dimensions || tile.attribution.size() != m_dimensions) {
             return Error::fail(Error::Code::InvalidInput, "both tile rasters must match snapshot dimensions");
@@ -103,24 +103,25 @@ public:
         const tile_codec::detail::v1::RasterTile encoded { m_dimensions.x, m_dimensions.y,
             { data.begin(), data.end() }, { source_attribution.begin(), source_attribution.end() } };
         return ::io::envelope::write<tile_codec::TileSchema>(
-            encoded, paths(node_path).front(), ::io::byte::WriteMode::CreateNew, true, m_compression_algorithm, m_hash_algorithm);
+            encoded, paths(node_path).front(), ::io::byte::WriteMode::CreateNew, true, m_compression_algorithm);
     }
+
+    bool supports_hashing() const override { return true; }
 
 private:
     glm::uvec2 m_dimensions;
     ::io::envelope::CompressionAlgorithm m_compression_algorithm;
-    ::io::hash::Algorithm m_hash_algorithm;
 };
 
 namespace tile_codec {
 
     template <typename PixelType>
-    Expected<std::unique_ptr<store::Codec<Tile<PixelType>>>> from_name(const std::string_view name, const glm::uvec2 dimensions,
-        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression,
-        const ::io::hash::Algorithm hash_algorithm = ::io::hash::Algorithm::Xxh3_64)
+    Expected<std::unique_ptr<store::Codec<Tile<PixelType>>>> from_name(const std::string_view name,
+        const glm::uvec2 dimensions,
+        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression)
     {
         if (name == "amort") {
-            return std::make_unique<TileCodec<PixelType>>(dimensions, compression_algorithm, hash_algorithm);
+            return std::make_unique<TileCodec<PixelType>>(dimensions, compression_algorithm);
         }
         return Error::fail(Error::Code::Unsupported, "unsupported raster codec selector: " + std::string(name));
     }

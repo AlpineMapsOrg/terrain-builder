@@ -77,7 +77,9 @@ tiles use an abbreviated form of attribution information.
 ## Index and metadata
 
 `raster_store.index` and `raster_store.metadata` use separate versioned
-`io::envelope` payloads. The index contains the sparse hierarchy. Metadata
+`io::envelope` payloads. The index contains the sparse hierarchy and the
+content hash of every physical tile, so that dependency checks need no
+tile-file access. Metadata
 contains the layout ID, codec selector, exact payload-type identifier, and
 nominal/stored tile sizes, halo width, and resolved value mapping. All tiles
 in a snapshot share these values. `nominal_tile_size` defaults to 4096 and
@@ -102,19 +104,29 @@ for the first codec. Existing mesh stores retain extension-based selectors.
 
 The metadata codec selector is `amort`; payload filenames end in `.amort`.
 The versioned payloads use the existing `io::envelope` serialization. Version 1
-was revised directly for halo metadata; no compatibility with earlier V1
-metadata is provided. Size fields are 32-bit unsigned on supported platforms;
-mapping enum values are 0 for Linear and 1 for SRGBA:
+was revised directly for halo metadata and index tile hashes; no compatibility
+with earlier V1 payloads is provided. Size fields are 32-bit unsigned on
+supported platforms; mapping enum values are 0 for Linear and 1 for SRGBA:
 
 | Envelope class | Version | Payload fields in serialization order |
 |---|---|---|
 | `raster_store.Metadata` | 1 | layout ID string, payload-type string, codec-selector string, `unsigned` stored_tile_size, nominal_tile_size, halo_width, `pixel::Mapping` value_mapping |
-| `raster_store.Index` | 1 | vector of entries: `uint32_t` zoom, x, y, then `uint8_t` status |
+| `raster_store.Index` | 1 | vector of entries: `uint32_t` zoom, x, y, then `uint8_t` status; vector of hash entries: `uint32_t` zoom, x, y, then hash byte vector |
 | `raster_store.Tile` | 1 | `uint32_t` width, height, data byte vector, attribution byte vector |
 
-Index entries are written in `(zoom, x, y)` order. Readers reject duplicate
-keys, invalid keys/statuses, and inconsistent parent/child topology. Status
-values are 0 for `Leaf`, 1 for `Inner`, and 2 for `Virtual`.
+Both index vectors are written in `(zoom, x, y)` order. Readers reject
+duplicate keys, invalid keys/statuses, and inconsistent parent/child topology.
+Status values are 0 for `Leaf`, 1 for `Inner`, and 2 for `Virtual`.
+
+A tile hash is the envelope hash of the tile payload, as written by the codec;
+the index stores it as opaque bytes. Opening a snapshot also rejects missing
+hashes of physical tiles, hashes shorter than four bytes, and hashes for
+virtual or absent tiles. Indexed reads compare the recorded hash with the one
+verified during the envelope read, which detects a tile file replaced by
+another valid one. `octree.StoreIndex` version 1, used for meshes and DAGs, has
+the same structure with `uint8_t` level and `uint64_t` index keys. Its hashes
+are required in the same way, except for codecs that do not hash, such as
+glTF, whose indexes must not contain any.
 
 Scalar payload identifiers encode representation, such as `float32`,
 `float64`, `int16`, and `uint32`. GLM vectors use `vecN<scalar>`, for example
@@ -144,8 +156,8 @@ enumerators and oversized names or hashes, and verify the recorded hash
 against the decompressed payload.
 
 `io::envelope::read_header` decodes only the header from a file prefix. Its
-hash identifies the payload content, for example for TB dependency records,
-but that read does not verify it. See the
+hash identifies the payload content, but that read does not verify it. Indexed
+tile hashes make header reads unnecessary for dependency checks. See the
 [hash decision](../adr/0005-xxh3-64-envelope-hashes.md).
 
 ### Sparse quadtree index
@@ -173,11 +185,12 @@ the source-attribution table. A tile is represented by two rasters, data and
 source attribution.
 
 Tile files use the `.amort` extension (AlpineMapsOrg raster tile) and
-`io::envelope`. The writer exposes the envelope compression and hash options,
-defaulting to standard Zstandard compression and an XXH3-64 hash. Readers
+`io::envelope`. The writer exposes the envelope compression option, defaulting
+to standard Zstandard compression, and always uses an XXH3-64 hash. Readers
 accept the algorithms supported by `io::envelope`; each envelope records its
 selected algorithms. Tiles hard-linked from another snapshot keep the hash of
-their source. Writing is lossless to preserve data through repeated merging and
+their source, which is copied from the source index without reading the
+tile. Writing is lossless to preserve data through repeated merging and
 overview generation. Different codecs may be used for writing and reading
 when their representations are compatible. The first version stores no
 derived tile metadata such as extrema or contributing-attribution lists.

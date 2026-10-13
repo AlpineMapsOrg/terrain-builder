@@ -21,6 +21,7 @@
 #include <exception>
 #include <filesystem>
 #include <new>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -48,7 +49,9 @@ public:
         return { add_extension(node_path, m_container == GltfContainer::Binary ? ".glb" : ".gltf") };
     }
 
-    Expected<mesh::Simple> read(const std::filesystem::path& node_path) const override
+    // glTF nodes have no identities, so expected hashes are ignored.
+    Expected<mesh::Simple> read(
+        const std::filesystem::path& node_path, std::optional<store::NodeDataHashView> /* expected_hash */ = std::nullopt) const override
     {
         const std::filesystem::path path = paths(node_path).front();
         auto result = mesh::io::gltf::load_from_path(path);
@@ -58,7 +61,7 @@ public:
         return std::move(*result);
     }
 
-    Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
+    Expected<store::NodeDataHash> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
     {
         const std::filesystem::path path = paths(node_path).front();
         try {
@@ -66,7 +69,7 @@ public:
             if (!result) {
                 return Error::propagate(std::move(result), "write glTF mesh \"" + path.string() + "\"");
             }
-            return {};
+            return store::NodeDataHash {};
         } catch (const std::bad_alloc&) {
             return Error::fail(Error::Code::ResourceExhausted, "write glTF mesh \"" + path.string() + "\": out of memory");
         } catch (const std::exception& error) {

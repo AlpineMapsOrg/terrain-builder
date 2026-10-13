@@ -20,6 +20,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -50,21 +51,23 @@ public:
     RawStorage(RawStorage&&) noexcept = default;
     RawStorage& operator=(RawStorage&&) noexcept = default;
 
-    Expected<NodeData> load(const Key& key) const
+    Expected<NodeData> load(const Key& key, const std::optional<NodeDataHashView> expected_hash = std::nullopt) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
-        return m_codec->read(m_layout.node_path(key));
+        return m_codec->read(m_layout.node_path(key), expected_hash);
     }
 
-    Expected<void> save(const Key& key, const NodeData& data) const
+    Expected<NodeDataHash> save(const Key& key, const NodeData& data) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
         return m_codec->write(m_layout.node_path(key), data);
     }
+
+    bool supports_hashing() const { return m_codec->supports_hashing(); }
 
     Expected<std::vector<std::filesystem::path>> paths(const Key& key) const
     {
@@ -96,19 +99,12 @@ public:
         return true;
     }
 
-    // Hard-links the node's files from source. Both storages must use the same codec,
-    // and the target files must not exist.
+    // Hard-links the node's files from source, whose existence the caller has checked. Both
+    // storages must use the same codec, and the target files must not exist.
     Expected<void> link_from(const Key& key, const RawStorage& source) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
-        }
-        auto source_exists = source.has(key);
-        if (!source_exists) {
-            return Error::propagate(std::move(source_exists));
-        }
-        if (!source_exists.value()) {
-            return Error::fail(Error::Code::NotFound, "source node " + Traits::key_to_string(key) + " is missing");
         }
 
         const std::filesystem::path probe("__codec_probe__/node");

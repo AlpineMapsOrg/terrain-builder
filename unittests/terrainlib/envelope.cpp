@@ -492,7 +492,7 @@ TEST_CASE("Envelope rejects incompatible metadata")
     SECTION("uncompressed size exceeds a caller limit")
     {
         auto envelope = decode_envelope(*serialized);
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope), static_cast<std::size_t>(envelope.header.uncompressed_size - 1)),
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope), std::nullopt, static_cast<std::size_t>(envelope.header.uncompressed_size - 1)),
             Error::Code::ResourceExhausted);
     }
 }
@@ -659,4 +659,33 @@ TEST_CASE("Envelope headers are read without the payload")
     }
 
     SECTION("a missing file") { check_error(io::envelope::read_header(directory.path() / "missing"), Error::Code::NotFound); }
+}
+
+TEST_CASE("Envelope files return and verify their payload hash", "[io][envelope][hash]")
+{
+    test::TemporaryDirectory directory("envelope-hash");
+    const auto path = directory.path() / "payload.envelope";
+    const v3::Payload payload { .id = 5, .label = "identity", .enabled = true, .samples = { 4, 5 } };
+    const auto hash = io::envelope::write<Schema>(payload, path, io::byte::WriteMode::Overwrite);
+    REQUIRE(hash.has_value());
+    CHECK(*hash == io::envelope::read_header(path)->hash);
+    CHECK(*hash == io::hash::data(encode_value(payload), io::hash::Algorithm::Xxh3_64));
+    CHECK(io::envelope::read<Schema>(path, *hash).value() == payload);
+
+    SECTION("a different expected hash")
+    {
+        auto different = *hash;
+        different.front() ^= std::byte { 1 };
+        check_error(io::envelope::read<Schema>(path, different), Error::Code::CorruptData);
+    }
+
+    SECTION("a hashless payload with an expected hash")
+    {
+        const auto hashless = io::envelope::write<Schema>(
+            payload, path, io::byte::WriteMode::Overwrite, true, io::envelope::CompressionAlgorithm::ZstdDefaultCompression, io::hash::Algorithm::None);
+        REQUIRE(hashless.has_value());
+        CHECK(hashless->empty());
+        CHECK(io::envelope::read<Schema>(path).has_value());
+        check_error(io::envelope::read<Schema>(path, *hash), Error::Code::CorruptData);
+    }
 }

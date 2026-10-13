@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -158,7 +159,7 @@ TEMPLATE_TEST_CASE("AMORT preserves native scalar and packed vector bytes", "[ra
     check_bytes(read->data, tile.data);
     check_bytes(read->attribution, tile.attribution);
 
-    TileCodec<TestType> uncompressed({ 3, 3 }, io::envelope::CompressionAlgorithm::None, io::hash::Algorithm::Xxh3_64);
+    TileCodec<TestType> uncompressed({ 3, 3 }, io::envelope::CompressionAlgorithm::None);
     const auto uncompressed_path = directory.path() / "uncompressed";
     REQUIRE(uncompressed.write(uncompressed_path, tile));
     read = writer.read(uncompressed_path);
@@ -238,12 +239,12 @@ TEST_CASE("raster index adapters preserve mixed hierarchy and reject corrupt top
     const auto root = raster_store::StoreTraits::root();
     REQUIRE(index.add(root));
     REQUIRE(index.add({ 2, { 1, 1 } }));
-    auto encoded = manifest::encode_index(index);
+    auto encoded = manifest::encode_index(index, {});
     auto decoded = manifest::decode_index(encoded);
     REQUIRE(decoded);
-    CHECK(decoded->is(store::NodeStatus::Inner, root).value());
-    CHECK(decoded->is(store::NodeStatus::Virtual, { 1, { 0, 0 } }).value());
-    CHECK(decoded->is(store::NodeStatus::Leaf, { 2, { 1, 1 } }).value());
+    CHECK(decoded->index.is(store::NodeStatus::Inner, root).value());
+    CHECK(decoded->index.is(store::NodeStatus::Virtual, { 1, { 0, 0 } }).value());
+    CHECK(decoded->index.is(store::NodeStatus::Leaf, { 2, { 1, 1 } }).value());
     REQUIRE(encoded.entries.size() == 3);
     CHECK(encoded.entries[0].id == root);
     CHECK(encoded.entries[1].id == radix::tile::Id { 1, { 0, 0 } });
@@ -591,4 +592,71 @@ TEST_CASE("snapshot geometry and mapping validation precede creation", "[raster-
     SECTION("unknown mapping") { options.value_mapping = static_cast<raster_store::pixel::Mapping>(99); }
     CHECK_FALSE(storage::create<float>(directory.path() / "snapshot", options));
     CHECK_FALSE(std::filesystem::exists(directory.path() / "snapshot.part"));
+}
+
+TEST_CASE("AMORT tiles return and verify their payload hash", "[raster-store][codec][hash]")
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "tile";
+    raster_store::Tile<float> tile(3);
+    tile.data.fill(2.5f);
+    const TileCodec<float> amort({ 3, 3 });
+    const auto hash = amort.write(path, tile);
+    REQUIRE(hash);
+    CHECK(hash->size() == 8);
+    CHECK(*hash == io::envelope::read_header(path.string() + ".amort")->hash);
+    CHECK(amort.read(path, *hash));
+
+    auto different = *hash;
+    different.front() ^= std::byte { 1 };
+    CHECK(amort.read(path, different).error().code() == Error::Code::CorruptData);
+}
+
+TEST_CASE("raster index adapters round-trip sorted tile hashes and reject duplicate and invalid keys", "[raster-store][index][hash]")
+{
+    store::Index<raster_store::StoreTraits> index;
+    const radix::tile::Id first { 1, { 1, 0 } };
+    const radix::tile::Id second { 1, { 0, 1 } };
+    REQUIRE(index.add(first));
+    REQUIRE(index.add(second));
+    store::Key2Hash_Map<raster_store::StoreTraits> hashes { { second, store::NodeDataHash(8, std::byte { 2 }) },
+        { first, store::NodeDataHash(5, std::byte { 1 }) } };
+    auto encoded = manifest::encode_index(index, hashes);
+    REQUIRE(encoded.hashes.size() == 2);
+    CHECK(encoded.hashes[0].id == std::min(first, second));
+    CHECK(encoded.hashes[1].id == std::max(first, second));
+    const auto decoded = manifest::decode_index(encoded);
+    REQUIRE(decoded);
+    CHECK(decoded->hashes == hashes);
+
+    SECTION("duplicate key") { encoded.hashes.push_back(encoded.hashes.front()); }
+    SECTION("invalid key") { encoded.hashes.front().id.coords.x = 2; }
+    CHECK(manifest::decode_index(encoded).error().code() == Error::Code::CorruptData);
+}
+
+TEST_CASE("raster snapshots checkpoint tile hashes and verify loads against them", "[raster-store][storage][hash]")
+{
+    TemporaryDirectory directory;
+    write_table(directory.path());
+    const auto final = directory.path() / "snapshot";
+    const radix::tile::Id key { 0, { 0, 0 } };
+    raster_store::Tile<float> tile(4);
+    tile.data.fill(1.5f);
+    {
+        auto created = storage::create<float>(final, small_options());
+        REQUIRE(created);
+        REQUIRE(created->first->save(key, tile));
+        CHECK(created->first->hash_for(key).value() == io::envelope::read_header(created->first->path_for(key).value())->hash);
+        REQUIRE(storage::publish(std::move(created->first)));
+    }
+
+    auto opened = storage::open<float>(final);
+    REQUIRE(opened);
+    const auto path = opened->first->path_for(key).value();
+    CHECK(opened->first->hash_for(key).value() == io::envelope::read_header(path)->hash);
+
+    tile.data.fill(2.5f);
+    REQUIRE(std::filesystem::remove(path));
+    REQUIRE(TileCodec<float>({ 4, 4 }).write(path.parent_path() / path.stem(), tile));
+    CHECK(opened->first->load(key).error().code() == Error::Code::CorruptData);
 }

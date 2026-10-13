@@ -48,8 +48,6 @@ struct CreateOptions {
     std::optional<pixel::Mapping> value_mapping = std::nullopt;
     std::string codec_selector = "amort";
     ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression;
-    // Tile hashes serve as content identities, for example for TB dependency records; with None, tiles have none.
-    ::io::hash::Algorithm hash_algorithm = ::io::hash::Algorithm::Xxh3_64;
     std::optional<std::filesystem::path> copy_attribution_from_index;
 };
 
@@ -77,9 +75,9 @@ Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique
         return Error::propagate(std::move(metadata), "open raster snapshot");
     }
     const auto index_path = normalized_path / io::manifest::index_file_name;
-    auto index = io::manifest::read_hierarchy(index_path);
-    if (!index) {
-        return Error::propagate(std::move(index), "open raster snapshot");
+    auto contents = io::manifest::read_hierarchy(index_path);
+    if (!contents) {
+        return Error::propagate(std::move(contents), "open raster snapshot");
     }
     auto table = attribution::read_table(index_path);
     if (!table) {
@@ -89,7 +87,7 @@ Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique
         = [&metadata](const std::string_view name) { return io::tile_codec::from_name<PixelType>(name, glm::uvec2(metadata->stored_tile_size)); };
     auto storage = store::open_index<StoreTraits, Tile<PixelType>>(index_path,
         io::manifest::index_format(),
-        { std::move(*index), metadata->layout_id, metadata->payload_type, metadata->codec_selector },
+        { std::move(contents->index), std::move(contents->hashes), metadata->layout_id, metadata->payload_type, metadata->codec_selector },
         pixel::identifier<PixelType>(),
         resolve_codec);
     if (!storage) {
@@ -120,8 +118,7 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (auto valid = io::manifest::validate(*metadata); !valid) {
         return Error::propagate(std::move(valid));
     }
-    auto codec = io::tile_codec::from_name<PixelType>(
-        options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm, options.hash_algorithm);
+    auto codec = io::tile_codec::from_name<PixelType>(options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm);
     if (!codec) {
         return Error::propagate(std::move(codec));
     }

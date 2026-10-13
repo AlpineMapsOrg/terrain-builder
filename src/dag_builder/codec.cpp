@@ -17,13 +17,16 @@
  *****************************************************************************/
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include <libassert/assert.hpp>
 #include <meshoptimizer.h>
 #include <opencv2/core.hpp>
 
@@ -378,9 +381,30 @@ namespace {
         return {};
     }
 
-    Expected<dag::NodeMetadata> read_metadata(const std::filesystem::path& path)
+    constexpr std::size_t file_hash_size = 8;
+
+    struct FileHashes {
+        std::optional<store::NodeDataHashView> clustering;
+        std::optional<store::NodeDataHashView> metadata;
+    };
+
+    Expected<FileHashes> split_node_hash(const std::optional<store::NodeDataHashView> node_hash)
     {
-        auto payload = io::envelope::read<format::MetadataSchema>(path);
+        if (!node_hash.has_value()) {
+            return FileHashes {};
+        }
+        if (node_hash->size() != 2 * file_hash_size) {
+            return Error::fail(Error::Code::CorruptData, "expected DAG node hash has " + std::to_string(node_hash->size()) + " bytes instead of 16");
+        }
+        return FileHashes {
+            .clustering = node_hash->first(file_hash_size),
+            .metadata = node_hash->subspan(file_hash_size),
+        };
+    }
+
+    Expected<dag::NodeMetadata> read_metadata(const std::filesystem::path& path, const std::optional<store::NodeDataHashView> expected_hash)
+    {
+        auto payload = io::envelope::read<format::MetadataSchema>(path, expected_hash);
         if (!payload) {
             return Error::propagate(std::move(payload), "read DAG metadata");
         }
@@ -401,14 +425,18 @@ std::vector<std::filesystem::path> ClusterBatch::paths(const std::filesystem::pa
     };
 }
 
-Expected<dag::ClusterBatch> ClusterBatch::read(const std::filesystem::path& node_path) const
+Expected<dag::ClusterBatch> ClusterBatch::read(const std::filesystem::path& node_path, const std::optional<store::NodeDataHashView> expected_hash) const
 {
     const auto node_paths = paths(node_path);
-    auto clustering_payload = io::envelope::read<format::ClusteringSchema>(node_paths[0]);
+    auto expected_file_hashes = split_node_hash(expected_hash);
+    if (!expected_file_hashes) {
+        return Error::propagate(std::move(expected_file_hashes), "read DAG files \"" + node_paths[0].string() + "\" and \"" + node_paths[1].string() + "\"");
+    }
+    auto clustering_payload = io::envelope::read<format::ClusteringSchema>(node_paths[0], expected_file_hashes->clustering);
     if (!clustering_payload) {
         return Error::propagate(std::move(clustering_payload), "read DAG clustering");
     }
-    auto metadata = read_metadata(node_paths[1]);
+    auto metadata = read_metadata(node_paths[1], expected_file_hashes->metadata);
     if (!metadata) {
         return Error::propagate(std::move(metadata));
     }
@@ -426,7 +454,7 @@ Expected<dag::ClusterBatch> ClusterBatch::read(const std::filesystem::path& node
     return batch;
 }
 
-Expected<void> ClusterBatch::write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const
+Expected<store::NodeDataHash> ClusterBatch::write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const
 {
     const auto node_paths = paths(node_path);
     if (auto valid = validate_batch(batch, Error::Code::InvalidInput); !valid) {
@@ -443,20 +471,31 @@ Expected<void> ClusterBatch::write(const std::filesystem::path& node_path, const
     if (auto valid = format::validate(metadata); !valid) {
         return Error::propagate(std::move(valid), "validate DAG metadata for \"" + node_paths[1].string() + "\"");
     }
-    auto data_written = io::envelope::write<format::ClusteringSchema>(*clustering, node_paths[0], io::byte::WriteMode::CreateNew);
-    if (!data_written) {
-        return Error::propagate(std::move(data_written), "write DAG clustering");
+    auto clustering_hash = io::envelope::write<format::ClusteringSchema>(*clustering, node_paths[0], io::byte::WriteMode::CreateNew);
+    if (!clustering_hash) {
+        return Error::propagate(std::move(clustering_hash), "write DAG clustering");
     }
-    auto metadata_written = io::envelope::write<format::MetadataSchema>(metadata, node_paths[1], io::byte::WriteMode::CreateNew);
-    if (!metadata_written) {
-        return Error::propagate(std::move(metadata_written), "write DAG metadata");
+    auto metadata_hash = io::envelope::write<format::MetadataSchema>(metadata, node_paths[1], io::byte::WriteMode::CreateNew);
+    if (!metadata_hash) {
+        return Error::propagate(std::move(metadata_hash), "write DAG metadata");
     }
-    return {};
+    ASSERT(clustering_hash->size() == file_hash_size && metadata_hash->size() == file_hash_size);
+    store::NodeDataHash node_hash = std::move(*clustering_hash);
+    node_hash.insert(node_hash.end(), metadata_hash->begin(), metadata_hash->end());
+    return node_hash;
 }
 
 std::vector<std::filesystem::path> Metadata::paths(const std::filesystem::path& node_path) const { return { add_extension(node_path, ".dagmeta") }; }
 
-Expected<dag::NodeMetadata> Metadata::read(const std::filesystem::path& node_path) const { return read_metadata(paths(node_path).front()); }
+Expected<dag::NodeMetadata> Metadata::read(const std::filesystem::path& node_path, const std::optional<store::NodeDataHashView> expected_hash) const
+{
+    const std::filesystem::path path = paths(node_path).front();
+    auto expected_file_hashes = split_node_hash(expected_hash);
+    if (!expected_file_hashes) {
+        return Error::propagate(std::move(expected_file_hashes), "read DAG metadata \"" + path.string() + "\"");
+    }
+    return read_metadata(path, expected_file_hashes->metadata);
+}
 
 Expected<std::unique_ptr<store::Codec<dag::ClusterBatch>>> cluster_batch_from_extension(const std::string_view extension)
 {

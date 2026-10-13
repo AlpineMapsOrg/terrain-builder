@@ -53,8 +53,14 @@ namespace detail::v1 {
         store::NodeStatus::Value status;
     };
 
+    struct HashEntry {
+        radix::tile::Id id;
+        store::NodeDataHash hash;
+    };
+
     struct Hierarchy {
         std::vector<IndexEntry> entries;
+        std::vector<HashEntry> hashes;
     };
 
 } // namespace detail::v1
@@ -66,9 +72,9 @@ using Metadata = MetadataSchema::latest_type;
 Expected<void> validate(const Metadata& metadata);
 Expected<Metadata> read_metadata(const std::filesystem::path& base_path);
 Expected<void> write_metadata(const Metadata& metadata, const std::filesystem::path& base_path);
-Expected<store::Index<StoreTraits>> read_hierarchy(const std::filesystem::path& index_path);
-Expected<store::Index<StoreTraits>> decode_index(const detail::v1::Hierarchy& encoded);
-detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index);
+Expected<store::IndexContents<StoreTraits>> read_hierarchy(const std::filesystem::path& index_path);
+Expected<store::IndexContents<StoreTraits>> decode_index(const detail::v1::Hierarchy& encoded);
+detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index, const store::Key2Hash_Map<StoreTraits>& hashes);
 Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::filesystem::path& index_path);
 Expected<void> write_index_file(const std::filesystem::path& index_path, const store::IndexMetadata<StoreTraits>& metadata);
 store::IndexFormat<StoreTraits> index_format();

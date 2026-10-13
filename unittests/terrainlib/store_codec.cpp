@@ -26,6 +26,7 @@
 
 #include "../temporary_directory.h"
 #include "io/byte.h"
+#include "io/envelope.h"
 #include "mesh/codec/Gltf.h"
 #include "mesh/codec/SfMesh.h"
 #include "store/Codec.h"
@@ -45,10 +46,10 @@ public:
 class WriteOnlyCodec final : public store::Codec<int> {
 public:
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".out") }; }
-    Expected<void> write(const std::filesystem::path&, const int&) const override
+    Expected<store::NodeDataHash> write(const std::filesystem::path&, const int&) const override
     {
         ++writes;
-        return {};
+        return store::NodeDataHash {};
     }
 
     mutable std::atomic_uint32_t writes = 0;
@@ -156,4 +157,24 @@ TEST_CASE("runtime glTF codec reports writer IO errors", "[store][codec]")
     const auto result = codec.write(blocker / "node", triangle_mesh(0.0));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code() == Error::Code::Io);
+}
+
+TEST_CASE("SF mesh codec returns and verifies its payload hash", "[store][codec][hash]")
+{
+    TemporaryDirectory directory("sfmesh-hash");
+    const mesh::codec::SfMesh codec;
+    CHECK(codec.supports_hashing());
+    const std::filesystem::path node_path = directory.path() / "node";
+    const auto hash = codec.write(node_path, triangle_mesh(0.0));
+    REQUIRE(hash.has_value());
+    CHECK(*hash == io::envelope::read_header(codec.paths(node_path).front())->hash);
+    CHECK(codec.read(node_path, *hash).has_value());
+
+    REQUIRE(std::filesystem::remove(codec.paths(node_path).front()));
+    const auto other_hash = codec.write(node_path, triangle_mesh(1.0));
+    REQUIRE(other_hash.has_value());
+    CHECK(*other_hash != *hash);
+    const auto mismatched = codec.read(node_path, *hash);
+    REQUIRE_FALSE(mismatched.has_value());
+    CHECK(mismatched.error().code() == Error::Code::CorruptData);
 }

@@ -18,12 +18,15 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
+#include "io/byte.h"
 #include "io/envelope.h"
 #include "octree/StoreTraits.h"
 #include "octree/store_layout/Mappings.h"
@@ -49,8 +52,15 @@ namespace v1 {
         std::uint8_t status;
     };
 
+    struct HashEntry {
+        std::uint8_t level;
+        std::uint64_t index;
+        store::NodeDataHash hash;
+    };
+
     struct StoreIndex {
         std::vector<IndexEntry> entries;
+        std::vector<HashEntry> hashes;
     };
 
 } // namespace v1
@@ -75,8 +85,9 @@ inline Expected<void> validate(const StoreMetadata& metadata)
     return {};
 }
 
-inline StoreIndex encode_index(const store::Index<StoreTraits>& index)
+inline StoreIndex encode_index(const store::Index<StoreTraits>& index, const store::Key2Hash_Map<StoreTraits>& hashes)
 {
+    const auto by_id = [](const auto& left, const auto& right) { return std::tie(left.level, left.index) < std::tie(right.level, right.index); };
     StoreIndex result;
     result.entries.reserve(index.size());
     for (const auto& [id, status] : index) {
@@ -86,12 +97,23 @@ inline StoreIndex encode_index(const store::Index<StoreTraits>& index)
             .status = static_cast<std::uint8_t>(static_cast<store::NodeStatus::Value>(status)),
         });
     }
+    std::ranges::sort(result.entries, by_id);
+    result.hashes.reserve(hashes.size());
+    for (const auto& [id, hash] : hashes) {
+        result.hashes.push_back({
+            .level = id.level(),
+            .index = id.index_on_level(),
+            .hash = hash,
+        });
+    }
+    std::ranges::sort(result.hashes, by_id);
     return result;
 }
 
-inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encoded)
+inline Expected<store::IndexContents<StoreTraits>> decode_index(const StoreIndex& encoded)
 {
-    store::Index<StoreTraits> result;
+    store::IndexContents<StoreTraits> decoded;
+    store::Index<StoreTraits>& result = decoded.index;
     std::unordered_set<Id> seen;
     for (const v1::IndexEntry& entry : encoded.entries) {
         const auto id = Id::try_make(static_cast<Id::Level>(entry.level), static_cast<Id::Index>(entry.index));
@@ -113,7 +135,16 @@ inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encode
     if (auto valid = result.validate(); !valid) {
         return Error::propagate(std::move(valid), "validate octree index topology");
     }
-    return result;
+    for (const v1::HashEntry& entry : encoded.hashes) {
+        const auto id = Id::try_make(static_cast<Id::Level>(entry.level), static_cast<Id::Index>(entry.index));
+        if (!id) {
+            return Error::fail(Error::Code::CorruptData, "index contains a hash for an invalid octree ID");
+        }
+        if (!decoded.hashes.emplace(*id, entry.hash).second) {
+            return Error::fail(Error::Code::CorruptData, "index contains a duplicate octree node hash");
+        }
+    }
+    return decoded;
 }
 
 inline Expected<StoreMetadata> read_store_metadata(const std::filesystem::path& base_path)
@@ -140,12 +171,13 @@ inline Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::fi
     if (!encoded_index) {
         return Error::propagate(std::move(encoded_index), "read octree store index \"" + path.string() + "\"");
     }
-    auto index = decode_index(*encoded_index);
-    if (!index) {
-        return Error::propagate(std::move(index), "decode store index read from \"" + path.string() + "\"");
+    auto contents = decode_index(*encoded_index);
+    if (!contents) {
+        return Error::propagate(std::move(contents), "decode store index read from \"" + path.string() + "\"");
     }
     return store::IndexMetadata<StoreTraits> {
-        std::move(*index),
+        std::move(contents->index),
+        std::move(contents->hashes),
         std::move(metadata->layout_id),
         std::move(metadata->payload_class),
         std::move(metadata->codec_selector),
@@ -167,7 +199,7 @@ inline Expected<void> write_index_file(const std::filesystem::path& path, const 
         return Error::propagate(std::move(written), "write octree store metadata " + metadata_path.string());
     }
 
-    const StoreIndex encoded_index = encode_index(metadata.index);
+    const StoreIndex encoded_index = encode_index(metadata.index, metadata.hashes);
     if (auto written = io::envelope::write<StoreIndexSchema>(encoded_index, path, io::byte::WriteMode::Replace); !written) {
         return Error::propagate(std::move(written), "write octree store index " + path.string());
     }

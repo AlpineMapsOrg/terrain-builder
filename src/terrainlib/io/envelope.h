@@ -33,6 +33,7 @@
 #include <expected>
 #include <filesystem>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -164,8 +165,10 @@ Expected<byte::vector> serialize(const typename Schema::latest_type& payload,
     CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdDefaultCompression,
     hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64);
 
+// A given expected hash must equal the header hash, which is verified against the payload.
 template <typename Schema>
-Expected<typename Schema::latest_type> deserialize(byte::span bytes, std::size_t max_decompressed_size = default_max_decompressed_size);
+Expected<typename Schema::latest_type> deserialize(
+    byte::span bytes, std::optional<byte::span> expected_hash = std::nullopt, std::size_t max_decompressed_size = default_max_decompressed_size);
 
 // Reads and decodes only the header of an envelope file. It checks the magic and the algorithm
 // enumerators, but neither the class nor the payload, which it does not read.
@@ -236,18 +239,14 @@ Expected<typename Schema::latest_type> deserialize_version(
     }
 }
 
-} // namespace detail
-
 template <typename Schema, std::uint32_t VersionNumber>
-Expected<byte::vector> serialize(
-    const typename Schema::template payload_type<VersionNumber> &payload,
+Expected<Envelope> make_envelope(const typename Schema::template payload_type<VersionNumber>& payload,
     const CompressionAlgorithm compression_algorithm,
     const hash::Algorithm hash_algorithm)
 {
-    static_assert(Schema::template supports_version<VersionNumber>,
-                  "the requested payload version is not part of the schema");
+    static_assert(Schema::template supports_version<VersionNumber>, "the requested payload version is not part of the schema");
 
-    auto payload_bytes = detail::serialize_to_bytes(payload);
+    auto payload_bytes = serialize_to_bytes(payload);
     if (!payload_bytes) {
         return Error::propagate(std::move(payload_bytes), "serializing envelope payload");
     }
@@ -257,10 +256,10 @@ Expected<byte::vector> serialize(
         return Error::propagate(std::move(compressed), "compressing envelope payload");
     }
 
-    const Envelope envelope{
+    Envelope envelope {
         .header = {
             .magic = magic,
-            .class_name = std::string{Schema::class_name},
+            .class_name = std::string { Schema::class_name },
             .class_version = VersionNumber,
             .hash_algorithm = hash_algorithm,
             .hash = hash::data(*payload_bytes, hash_algorithm),
@@ -270,7 +269,21 @@ Expected<byte::vector> serialize(
         .compressed_data = std::move(*compressed),
     };
     ASSERT(envelope.header.hash.size() <= max_hash_size);
-    return detail::serialize_to_bytes(envelope);
+    return envelope;
+}
+
+} // namespace detail
+
+template <typename Schema, std::uint32_t VersionNumber>
+Expected<byte::vector> serialize(const typename Schema::template payload_type<VersionNumber>& payload,
+    const CompressionAlgorithm compression_algorithm,
+    const hash::Algorithm hash_algorithm)
+{
+    auto envelope = detail::make_envelope<Schema, VersionNumber>(payload, compression_algorithm, hash_algorithm);
+    if (!envelope) {
+        return Error::propagate(std::move(envelope));
+    }
+    return detail::serialize_to_bytes(*envelope);
 }
 
 template <typename Schema>
@@ -287,8 +300,7 @@ Expected<byte::vector> serialize(
 
 template <typename Schema>
 Expected<typename Schema::latest_type> deserialize(
-    const byte::span bytes,
-    const std::size_t max_decompressed_size)
+    const byte::span bytes, const std::optional<byte::span> expected_hash, const std::size_t max_decompressed_size)
 {
     auto envelope = detail::deserialize_from_bytes<Envelope>(bytes);
     if (!envelope) {
@@ -328,34 +340,44 @@ Expected<typename Schema::latest_type> deserialize(
     if (hash::data(*payload_bytes, header.hash_algorithm) != header.hash) {
         return Error::fail(Error::Code::CorruptData, "envelope payload hash mismatch");
     }
+    if (expected_hash.has_value() && !std::ranges::equal(header.hash, *expected_hash)) {
+        return Error::fail(Error::Code::CorruptData, "envelope payload hash does not match the expected hash");
+    }
 
     return detail::deserialize_version<Schema>(header.class_version, *payload_bytes);
 }
 
+// A given expected hash must equal the header hash, which is verified against the payload.
 template <typename Schema>
-Expected<typename Schema::latest_type> read(
-    const std::filesystem::path& path, const std::size_t max_decompressed_size = default_max_decompressed_size)
+Expected<typename Schema::latest_type> read(const std::filesystem::path& path,
+    const std::optional<byte::span> expected_hash = std::nullopt,
+    const std::size_t max_decompressed_size = default_max_decompressed_size)
 {
     auto file_bytes = ::io::byte::read(path);
     if (!file_bytes) {
         return Error::propagate(std::move(file_bytes), "reading envelope file \"" + path.string() + "\"");
     }
-    auto result = deserialize<Schema>(*file_bytes, max_decompressed_size);
+    auto result = deserialize<Schema>(*file_bytes, expected_hash, max_decompressed_size);
     if (!result) {
         return Error::propagate(std::move(result), "decoding envelope file \"" + path.string() + "\"");
     }
     return std::move(*result);
 }
 
+// Returns the hash of the uncompressed payload recorded in the header.
 template <typename Schema>
-Expected<void> write(const typename Schema::latest_type& payload,
+Expected<byte::vector> write(const typename Schema::latest_type& payload,
     const std::filesystem::path& path,
     const byte::WriteMode mode,
     const bool make_dirs = true,
     const CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdDefaultCompression,
     const hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64)
 {
-    auto serialized = serialize<Schema>(payload, compression_algorithm, hash_algorithm);
+    auto envelope = detail::make_envelope<Schema, Schema::latest_version>(payload, compression_algorithm, hash_algorithm);
+    if (!envelope) {
+        return Error::propagate(std::move(envelope), "encoding envelope file \"" + path.string() + "\"");
+    }
+    auto serialized = detail::serialize_to_bytes(*envelope);
     if (!serialized) {
         return Error::propagate(std::move(serialized), "encoding envelope file \"" + path.string() + "\"");
     }
@@ -363,7 +385,7 @@ Expected<void> write(const typename Schema::latest_type& payload,
     if (!result) {
         return Error::propagate(std::move(result), "writing envelope file \"" + path.string() + "\"");
     }
-    return {};
+    return std::move(envelope->header.hash);
 }
 
 } // namespace io::envelope

@@ -19,6 +19,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 #include "io/envelope.h"
@@ -32,10 +33,11 @@ class SfMesh final : public store::Codec<mesh::Simple> {
 public:
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".sfmesh") }; }
 
-    Expected<mesh::Simple> read(const std::filesystem::path& node_path) const override
+    Expected<mesh::Simple> read(
+        const std::filesystem::path& node_path, const std::optional<store::NodeDataHashView> expected_hash = std::nullopt) const override
     {
         const std::filesystem::path path = paths(node_path).front();
-        auto payload = ::io::envelope::read<mesh::sf::Schema>(path);
+        auto payload = ::io::envelope::read<mesh::sf::Schema>(path, expected_hash);
         if (!payload) {
             return Error::propagate(std::move(payload), "read SF mesh");
         }
@@ -49,12 +51,12 @@ public:
         return std::move(*decoded);
     }
 
-    Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
+    Expected<store::NodeDataHash> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
     {
         return write(node_path, mesh, {}, ::io::byte::WriteMode::CreateNew);
     }
 
-    Expected<void> write(
+    Expected<store::NodeDataHash> write(
         const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options, const ::io::byte::WriteMode mode) const
     {
         const std::filesystem::path path = paths(node_path).front();
@@ -65,12 +67,14 @@ public:
         if (auto valid = mesh::sf::validate(*payload); !valid) {
             return Error::propagate(std::move(valid), "validate SF mesh for \"" + path.string() + "\"");
         }
-        auto result = ::io::envelope::write<mesh::sf::Schema>(*payload, path, mode);
-        if (!result) {
-            return Error::propagate(std::move(result), "write SF mesh");
+        auto hash = ::io::envelope::write<mesh::sf::Schema>(*payload, path, mode);
+        if (!hash) {
+            return Error::propagate(std::move(hash), "write SF mesh");
         }
-        return {};
+        return std::move(*hash);
     }
+
+    bool supports_hashing() const override { return true; }
 };
 
 } // namespace mesh::codec
