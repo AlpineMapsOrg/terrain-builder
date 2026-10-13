@@ -25,7 +25,7 @@
 
 OGRSpatialReference parse_srs(const std::string &user_input) {
     const auto result = srs::from_user_input(user_input);
-    if (!result.has_value()) {
+    if (!result) {
         LOG_ERROR(result.error());
         exit(1);
     }
@@ -231,7 +231,7 @@ int run(std::span<char *> args) {
         ->expected(2, 4);
     target->require_option(1);
 
-    single->add_option("--output", output_path, "Output path were the mesh is written to (.terrain, .gltf or .glb)")
+    single->add_option("--output", output_path, "Output path were the mesh is written to (.sfmesh, .gltf or .glb)")
         ->required();
 
     single->add_option("--srs", target_srs_input, "EPSG code of the srs of the target bounds or id");
@@ -259,8 +259,8 @@ int run(std::span<char *> args) {
         ->required();
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")
-        ->check(CLI::IsMember({".glb", ".gltf", ".terrain"}))
-        ->default_val(".terrain");
+        ->check(CLI::IsMember({".glb", ".gltf", ".sfmesh"}))
+        ->default_val(".sfmesh");
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);
@@ -317,7 +317,7 @@ int run(std::span<char *> args) {
         const auto maybe_s = actual_num_threads == 1 ? "" : "s";
         LOG_INFO("Using {} thread{} for batch processing.", actual_num_threads, maybe_s);
 
-        terrainbuilder::build_all_patches(
+        const auto build_result = terrainbuilder::build_all_patches(
             dataset,
             target_level,
             texture_srs,
@@ -326,6 +326,12 @@ int run(std::span<char *> args) {
             output_base_path,
             output_format,
             overwrite_existing);
+        if (!build_result) {
+            LOG_ERROR(
+                "Failed to finalize Structura Fundamentalis output: {}",
+                build_result.error().to_string());
+            return 1;
+        }
     }
 
     return 0;

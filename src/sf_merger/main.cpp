@@ -7,8 +7,8 @@
 #include "cut.h"
 #include "log.h"
 #include "mask.h"
+#include "mesh/storage.h"
 #include "merge.h"
-#include "octree/Storage.h"
 #include "optional_utils.h"
 #include "earth.h"
 
@@ -17,7 +17,7 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
         LOG_INFO("Loading mask file from {}", path);
         const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2);
         auto result = mask::load_from_path(path, radius_range);
-        if (result.has_value()) {
+        if (result) {
             const auto mask = result.value();
             LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)",
                 mask.vertex_count(), mask.face_count());
@@ -34,25 +34,70 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
 
 void run(const cli::MergeArgs& args) {
     LOG_TRACE("Loading base dataset from {}", args.base_path);
-    octree::IndexedStorage base_dataset = octree::open_folder_indexed(args.base_path);
+    auto base_result = mesh::storage::open_folder_indexed(args.base_path);
+    if (!base_result) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open base dataset {}: {}",
+            args.base_path,
+            base_result.error().to_string());
+    }
+    mesh::storage::IndexedStorage base_dataset = std::move(base_result.value());
 
     LOG_TRACE("Loading new dataset from {}", args.new_path);
-    octree::IndexedStorage new_dataset = octree::open_folder_indexed(args.new_path);
+    auto new_result = mesh::storage::open_folder_indexed(args.new_path);
+    if (!new_result) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open new dataset {}: {}",
+            args.new_path,
+            new_result.error().to_string());
+    }
+    mesh::storage::IndexedStorage new_dataset = std::move(new_result.value());
 
     LOG_TRACE("Creating output dataset at {}", args.output_path);
     std::filesystem::create_directories(args.output_path);
-    octree::Storage output_dataset = octree::open_folder(args.output_path, false, octree::OpenOptions{.preferred_extension_with_dot = std::string(base_dataset.layout().extension_with_dot())});
+    mesh::storage::OpenOptions options;
+    options.default_mapping = base_dataset.layout().mapping();
+    options.preferred_extension = std::string(base_dataset.codec_selector().value_or(".sfmesh"));
+    auto output_result = mesh::storage::open_folder(args.output_path, std::move(options));
+    if (!output_result) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open output dataset {}: {}",
+            args.output_path,
+            output_result.error().to_string());
+    }
+    mesh::storage::Storage output_dataset = std::move(output_result.value());
 
     std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
 
-    return merge_datasets(base_dataset, new_dataset, output_dataset, mask);
+    const auto merge_result = merge_datasets(
+        base_dataset,
+        new_dataset,
+        output_dataset,
+        mask);
+    if (!merge_result) {
+        LOG_ERROR_AND_EXIT("Failed to merge datasets: {}", merge_result.error().to_string());
+    }
 }
 
 void run(const cli::CutArgs& args) {
     LOG_TRACE("Loading input dataset from {}", args.input_path);
-    const octree::IndexedStorage input_dataset = octree::open_folder_indexed(args.input_path);
+    auto input_result = mesh::storage::open_folder_indexed(args.input_path);
+    if (!input_result) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open input dataset {}: {}",
+            args.input_path,
+            input_result.error().to_string());
+    }
+    const mesh::storage::IndexedStorage input_dataset = std::move(input_result.value());
     const MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
-    cut_dataset(input_dataset, mask, args.output_path, args.keep_inside);
+    const auto cut_result = cut_dataset(
+        input_dataset,
+        mask,
+        args.output_path,
+        args.keep_inside);
+    if (!cut_result) {
+        LOG_ERROR_AND_EXIT("Failed to cut dataset: {}", cut_result.error().to_string());
+    }
 }
 
 void run(const cli::Args &args) {

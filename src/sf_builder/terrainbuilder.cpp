@@ -41,9 +41,9 @@
 
 #include "octree/Id.h"
 #include "octree/Space.h"
-#include "octree/Storage.h"
-#include "octree/disk/layout/strategy/LevelAndCoordinateDirectories.h"
 #include "octree/utils.h"
+#include "store/ThreadSafeStorage.h"
+#include "sf/finalize_storage.h"
 
 namespace terrainbuilder {
 
@@ -75,7 +75,7 @@ std::optional<SimpleMesh> build_patch(
         mesh_srs,
         target_bounds_srs, target_bounds,
         texture_srs, texture_bounds);
-    if (!mesh_result.has_value()) {
+    if (!mesh_result) {
         const BuildMeshError error = mesh_result.error();
         if (error == BuildMeshError::OutOfBounds) {
             const radix::tile::SrsBounds dataset_bounds = dataset.bounds();
@@ -154,8 +154,9 @@ void build_and_save_patch(
     // metadata["texture_bounds"] = fmt::format(
     //     "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
     //    texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
-    if (!mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata}).has_value()) {
-        LOG_ERROR("Failed to save mesh to file {}", output_path);
+    const auto saved = mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata});
+    if (!saved) {
+        LOG_ERROR("Failed to save mesh to file {}: {}", output_path, saved.error().to_string());
         std::exit(2);
     }
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
@@ -172,7 +173,7 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 }
 
-void build_all_patches(
+Expected<void> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
@@ -189,14 +190,18 @@ void build_all_patches(
         LOG_ERROR_AND_EXIT("Output base path {} exists but is not a directory", output_base_path);
     }
 
-    octree::Storage storage = octree::open_folder(
+    mesh::storage::OpenOptions open_options;
+    open_options.preferred_extension = output_format;
+    auto storage_result = mesh::storage::open_folder(
         output_base_path,
-        false,
-        octree::OpenOptions {
-            .preferred_extension_with_dot = output_format
-        }
-    );
-    storage.settings().allow_overwrite = overwrite_existing;
+        std::move(open_options));
+    if (!storage_result) {
+        return Error::propagate(
+            std::move(storage_result), "open output terrain dataset \"" + output_base_path.string() + "\"");
+    }
+    mesh::storage::Storage raw_storage = std::move(storage_result.value());
+    raw_storage.settings().allow_overwrite = overwrite_existing;
+    store::ThreadSafeStorage<mesh::storage::Storage> storage(std::move(raw_storage));
 
     const auto dataset_srs = dataset.srs();
     const auto dataset_bounds = dataset.bounds3d(true);
@@ -281,7 +286,17 @@ void build_all_patches(
     tbb::task_group_context context;
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        if (!overwrite_existing && storage.has(node)) {
+        const auto already_exists = storage.has(node);
+        if (!already_exists) {
+            LOG_ERROR(
+                "Failed to inspect node {}: {}",
+                node,
+                already_exists.error().to_string());
+            progress.task_finished();
+            context.cancel_group_execution();
+            return;
+        }
+        if (!overwrite_existing && already_exists.value()) {
             progress.task_finished(); // TODO: correctly handle virtual nodes
             return;
         }
@@ -304,8 +319,11 @@ void build_all_patches(
             const auto mesh = std::move(mesh_result.value());
             mesh::validate(mesh);
             const auto save_result = storage.save(node, mesh);
-            if (!save_result.has_value()) {
-                LOG_ERROR("Failed to save mesh for node {}: {}", node, save_result.error());
+            if (!save_result) {
+                LOG_ERROR(
+                    "Failed to save mesh for node {}: {}",
+                    node,
+                    save_result.error().to_string());
                 progress.task_finished();
                 context.cancel_group_execution();
                 return;
@@ -327,9 +345,12 @@ void build_all_patches(
         LOG_ERROR_AND_EXIT("Failed to build all terrain patches");
     }
 
-    const auto index_result = storage.save_or_create_index();
-    if (!index_result.has_value()) {
-        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", storage.base_path(), index_result.error());
+    auto finalized_storage = std::move(storage).release();
+    auto finalized = sf::finalize_storage(finalized_storage);
+    if (!finalized) {
+        return Error::propagate(
+            std::move(finalized), "finalize generated terrain storage \"" + output_base_path.string() + "\"");
     }
+    return {};
 }
 }

@@ -1,25 +1,28 @@
 #include "mesh/io.h"
 #include "log.h"
 #include "mesh/io/gltf.h"
-#include "mesh/io/terrain.h"
+#include "mesh/codec/SfMesh.h"
 #include "mesh/validate.h"
 
 namespace mesh::io {
 
-std::expected<SimpleMesh, LoadMeshError> load_from_path(
+Expected<SimpleMesh> load_from_path(
     const std::filesystem::path &path,
     const LoadOptions& options) {
     const std::filesystem::path extension = path.extension();
     if (extension == ".glb" || extension == ".gltf") {
         return gltf::load_from_path(path, options);
-    } else if (extension == ".terrain") {
-        return terrain::load_from_path(path, options);
+    } else if (extension == ".sfmesh") {
+        std::filesystem::path node_path = path;
+        node_path.replace_extension();
+        const mesh::codec::SfMesh codec;
+        return codec.read(node_path);
     } else {
-        return std::unexpected(LoadMeshErrorKind::UnsupportedFormat);
+        return Error::fail(Error::Code::Unsupported, "unsupported mesh input format: " + extension.string());
     }
 }
 
-std::expected<void, SaveMeshError> save_to_path(
+Expected<void> save_to_path(
     const SimpleMesh &mesh,
     const std::filesystem::path &path,
     const SaveOptions &options) {
@@ -30,10 +33,13 @@ std::expected<void, SaveMeshError> save_to_path(
     const std::filesystem::path extension = path.extension();
     if (extension == ".glb" || extension == ".gltf") {
         return gltf::save_to_path(mesh, path, options);
-    } else if (extension == ".terrain") {
-        return terrain::save_to_path(mesh, path, options);
+    } else if (extension == ".sfmesh") {
+        std::filesystem::path node_path = path;
+        node_path.replace_extension();
+        const mesh::codec::SfMesh codec;
+        return codec.write(node_path, mesh, mesh::EncodeOptions{.texture_format = options.texture_format});
     } else {
-        return std::unexpected(SaveMeshErrorKind::UnsupportedFormat);
+        return Error::fail(Error::Code::Unsupported, "unsupported mesh output format: " + extension.string());
     }
 }
 

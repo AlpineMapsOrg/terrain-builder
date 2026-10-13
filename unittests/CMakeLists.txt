@@ -15,23 +15,31 @@ endfunction()
 add_executable(unittests_terrainlib
     catch2_helpers.h
     opencv_helpers.h
+    temporary_directory.h
 
     terrainlib/convert.cpp
     terrainlib/cow.cpp
     terrainlib/dataset.cpp
     terrainlib/enumerate.cpp
     terrainlib/envelope.cpp
+    terrainlib/error.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/geometry_frames.cpp
     terrainlib/grid.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
+    terrainlib/io_conversion.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
+    terrainlib/sf_validate_index.cpp
     terrainlib/stamp_set.cpp
-    terrainlib/index_map.cpp
-    terrainlib/index_traverse.cpp
+    terrainlib/store_compatibility.cpp
+    terrainlib/store_codec.cpp
+    terrainlib/store_index.cpp
+    terrainlib/store_layout.cpp
+    terrainlib/store_storage.cpp
+    terrainlib/store_traverse.cpp
     terrainlib/mesh_boundary.cpp
     terrainlib/mesh_bounds.cpp
     terrainlib/mesh_cleanup.cpp
@@ -91,6 +99,16 @@ if(TARGET sfbuilderlib)
     )
     target_link_libraries(unittests_sfbuilder PRIVATE sfbuilderlib Catch2::Catch2WithMain)
     atb_configure_test(unittests_sfbuilder)
+
+    add_executable(unittests_sfbuilder_finalization
+        catch2_helpers.h
+        temporary_directory.h
+        sf_builder/storage_finalization.cpp
+    )
+    target_link_libraries(
+        unittests_sfbuilder_finalization
+        PRIVATE sfbuilderlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_sfbuilder_finalization)
 endif()
 
 if(TARGET tile-downloader)
@@ -110,6 +128,7 @@ endif()
 if(TARGET dagbuilderlib)
     add_executable(unittests_dagbuilder
         catch2_helpers.h
+        temporary_directory.h
         dag_builder/bake_cluster_texture.cpp
         dag_builder/correspondence.cpp
         dag_builder/reprojection.cpp
@@ -121,6 +140,7 @@ if(TARGET dagbuilderlib)
         dag_builder/fixed_point.cpp
         dag_builder/texture_sizing.cpp
         dag_builder/texture_reuse.cpp
+        dag_builder/storage_compatibility.cpp
     )
     target_link_libraries(unittests_dagbuilder PUBLIC dagbuilderlib Catch2::Catch2WithMain)
     atb_configure_test(unittests_dagbuilder)
@@ -129,8 +149,10 @@ endif()
 if(TARGET sfmergerlib)
     add_executable(unittests_sfmerger
         catch2_helpers.h
+        temporary_directory.h
         sf_merger/mask.cpp
         sf_merger/sphere_projector.cpp
+        sf_merger/storage_boundaries.cpp
     )
     target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)
     if(TARGET sf-builder AND TARGET sf-merger)

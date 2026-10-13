@@ -5,9 +5,7 @@
 #include "cli.h"
 #include "build.h"
 #include "log.h"
-#include "octree/storage/Storage.h"
-#include "octree/storage/MeshStorage.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 #include "storage.h"
 #include "ContinuationMode.h"
 
@@ -17,8 +15,24 @@ int main(int argc, char **argv) {
     Log::init(args.log_level);
 
     try {
-        const octree::IndexedMeshStorage input_storage = octree::open_folder_indexed(args.input_path);
-        octree::IndexedDagStorage output_storage = octree::open_folder_indexed<dag::ClusterBatch>(args.output_path);
+        auto input_result = mesh::storage::open_folder_indexed(args.input_path);
+        if (!input_result) {
+            LOG_ERROR(
+                "Failed to open input dataset {}: {}",
+                args.input_path,
+                input_result.error().to_string());
+            return EXIT_FAILURE;
+        }
+        auto output_result = dag::storage::open_folder_indexed(args.output_path);
+        if (!output_result) {
+            LOG_ERROR(
+                "Failed to open output dataset {}: {}",
+                args.output_path,
+                output_result.error().to_string());
+            return EXIT_FAILURE;
+        }
+        const mesh::storage::IndexedStorage input_storage = std::move(input_result.value());
+        dag::storage::IndexedStorage output_storage = std::move(output_result.value());
         output_storage.settings().allow_overwrite = args.continuation_mode == ContinuationMode::Overwrite;
 
         dag::BuildOptions options{
@@ -43,10 +57,21 @@ int main(int argc, char **argv) {
             options.relative_target_error = 0.001f;
         }
 
-        dag::build_levels(input_storage, output_storage, options, args.level_range);
+        const auto build_result = dag::build_levels(
+            input_storage,
+            output_storage,
+            options,
+            args.level_range);
+        if (!build_result) {
+            LOG_ERROR("Invalid Structura Fundamentalis input: {}", build_result.error().to_string());
+            return EXIT_FAILURE;
+        }
         const auto index_result = output_storage.save_index();
-        if (!index_result.has_value()) {
-            LOG_ERROR("Failed to save output index in {}: {}", args.output_path, index_result.error());
+        if (!index_result) {
+            LOG_ERROR(
+                "Failed to save output index in {}: {}",
+                args.output_path,
+                index_result.error().to_string());
             return EXIT_FAILURE;
         }
 

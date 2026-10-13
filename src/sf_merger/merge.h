@@ -1,5 +1,6 @@
 #pragma once
 
+#include <expected>
 #include <string>
 #include <optional>
 
@@ -12,10 +13,14 @@
 #include "merge/visitor/Simple.h"
 #include "merge/visitor/Visitor.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
-#include "octree/storage/cache/Dummy.h"
+#include "mesh/storage.h"
+#include "store/NodeStatusOrMissing.h"
+#include "store/cache/Dummy.h"
+#include "Error.h"
+#include "sf/finalize_storage.h"
+#include "sf/validate_index.h"
 
-inline std::string get_dataset_name(const octree::Storage &storage) {
+inline std::string get_dataset_name(const mesh::storage::Storage &storage) {
     return storage.layout().base_path().filename().string();
 }
 
@@ -29,7 +34,7 @@ using smallest_uint_t =
 template <merge::Visitor Visitor>
 class Merger {
 public:
-    using Status = octree::NodeStatusOrMissing;
+    using Status = store::NodeStatusOrMissing;
     using Context = Visitor::Context;
     using Result = merge::Result<Context>;
 
@@ -40,62 +45,87 @@ public:
         NodeWriter output) : _visitor(visitor), _left(left), _right(right), _output(output) {
     }
 
-    void merge_root() {
+    Expected<void> merge_root() {
         const octree::Id id = octree::Id::root();
         const Context ctx = this->_visitor.make_root_context();
-        merge_node(id, ctx);
+        return merge_node(id, ctx);
     }
 
-    void merge_node(const octree::Id &id, const Context& ctx) {
+    Expected<void> merge_node(const octree::Id &id, const Context& ctx) {
         const Status left_status = this->_left.get_status(id);
         const Status right_status = this->_right.get_status(id);
         return this->merge_node(id, left_status, right_status, ctx);
     }
 
-    void merge_node(
+    Expected<void> merge_node(
         const octree::Id &id,
         const Status left_status,
         const Status right_status,
         const Context& ctx
     ) {
         LOG_DEBUG("[{}] Start merging (left = {}, right = {})", id, left_status, right_status);
-        if (this->_output.has_node(id)) {
+        auto has_result = this->_output.has_node(id);
+        if (!has_result) {
+            return Error::propagate(
+                std::move(has_result), "check merged output for node " + id.to_string());
+        }
+        if (has_result.value()) {
             LOG_DEBUG("[{}] Already merged, skipping...", id);
-            return; // Already merged previously
+            return {}; // Already merged previously
         }
 
         const auto merge_result = this->call_merge(id, left_status, right_status, ctx);
-        std::visit([&](const auto &result) {
+        return std::visit([&](const auto &result) -> Expected<void> {
             using Result = std::decay_t<decltype(result)>;
             if constexpr (std::is_same_v<Result, merge::Recurse<Context>>) {
                 LOG_DEBUG("[{}] needs recursion", id);
                 DEBUG_ASSERT(id.has_children());
                 const auto children = id.children().value();
                 for (const auto &child_id : children) {
-                    this->merge_node(child_id, result.context);
+                    auto child_result = this->merge_node(child_id, result.context);
+                    if (!child_result) {
+                        return child_result;
+                    }
                 }
+                return {};
             } else if constexpr (std::is_same_v<Result, merge::Unchanged>) {
                 LOG_DEBUG("[{}] remains unchanged (same as {})", id, (result.source == merge::Source::Left ? "left" : "right"));
                 // If the node should remain unchanged, but its not present on disk we cannot copy it.
                 if (result.source == merge::Source::Left && left_status == Status::Missing) {
                     auto mesh_opt = this->_left.load_node(id);
                     if (mesh_opt.has_value()) {
-                        this->_output.write_node(id, mesh_opt.value());
+                        auto write_result = this->_output.write_node(id, *mesh_opt);
+                        if (!write_result) {
+                            return write_result;
+                        }
                     }
                 } else if (result.source == merge::Source::Right && right_status == Status::Missing) {
                     auto mesh_opt = this->_right.load_node(id);
                     if (mesh_opt.has_value()) {
-                        this->_output.write_node(id, mesh_opt.value());
+                        auto write_result = this->_output.write_node(id, *mesh_opt);
+                        if (!write_result) {
+                            return write_result;
+                        }
                     }
                 } else {
-                    this->_output.copy_subtree_to_output(id, result.source == merge::Source::Left ? this->_left : this->_right);
+                    auto copy_result = this->_output.copy_subtree_to_output(
+                        id,
+                        result.source == merge::Source::Left ? this->_left : this->_right);
+                    if (!copy_result) {
+                        return copy_result;
+                    }
                 }
+                return {};
             } else if constexpr (std::is_same_v<Result, merge::Merged>) {
                 LOG_DEBUG("[{}] was merged", id);
-                this->_output.write_node(id, result.mesh);
+                auto write_result = this->_output.write_node(id, result.mesh);
+                if (!write_result) {
+                    return write_result;
+                }
+                return {};
             } else if constexpr (std::is_same_v<Result, merge::Ignore>) {
                 LOG_DEBUG("[{}] was ignored", id);
-                // do nothing
+                return {};
             }
         }, merge_result);
     }
@@ -151,34 +181,50 @@ private:
     NodeWriter _output;
 };
 
-inline void merge_datasets(
-    const octree::IndexedStorage &left_dataset,
-    const octree::IndexedStorage &right_dataset,
-    octree::Storage &output_dataset,
+inline Expected<void> merge_datasets(
+    const mesh::storage::IndexedStorage &left_dataset,
+    const mesh::storage::IndexedStorage &right_dataset,
+    mesh::storage::Storage &output_dataset,
     const std::optional<MeshMask> mask = std::nullopt) {
+    for (const mesh::storage::IndexedStorage *input : {&left_dataset, &right_dataset}) {
+        auto validation = sf::validate_index(input->index());
+        if (!validation) {
+            return Error::propagate(
+                std::move(validation), "validate merge input dataset \"" + get_dataset_name(*input) + "\"");
+        }
+    }
+
     LOG_TRACE("Merging {} and {} into {}",
         get_dataset_name(left_dataset),
         get_dataset_name(right_dataset),
         get_dataset_name(output_dataset));
 
     octree::Space space = octree::Space::earth();
-    octree::cache::Dummy<mesh::Simple> left_cache;
+    store::cache::Dummy<octree::StoreTraits, mesh::Simple> left_cache;
     NodeLoader left(left_dataset, left_cache, space);
-    octree::cache::Dummy<mesh::Simple> right_cache;
+    store::cache::Dummy<octree::StoreTraits, mesh::Simple> right_cache;
     NodeLoader right(right_dataset, right_cache, space);
     NodeWriter output(output_dataset);
     if (mask.has_value()) {
         merge::visitor::Masked visitor {mask.value(), space};
         Merger<merge::visitor::Masked> merger(visitor, left, right, output);
-        merger.merge_root();
+        auto result = merger.merge_root();
+        if (!result) {
+            return Error::propagate(std::move(result), "merge masked datasets");
+        }
     } else {
         merge::visitor::Simple visitor;
         Merger<merge::visitor::Simple> merger(visitor, left, right, output);
-        merger.merge_root();
+        auto result = merger.merge_root();
+        if (!result) {
+            return Error::propagate(std::move(result), "merge datasets");
+        }
     }
 
-    const auto index_result = output_dataset.save_or_create_index();
-    if (!index_result.has_value()) {
-        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", output_dataset.base_path(), index_result.error());
+    auto finalized = sf::finalize_storage(output_dataset);
+    if (!finalized) {
+        return Error::propagate(
+            std::move(finalized), "finalize merged output dataset \"" + get_dataset_name(output_dataset) + "\"");
     }
+    return {};
 }
