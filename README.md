@@ -2,6 +2,13 @@
 
 See the project [code style](docs/code-style.md) before contributing.
 
+The RF import, merge, and image-export tools live in
+[tile-foundry](https://github.com/AlpineMapsOrg/tile-foundry).
+This repository provides their `terrainlib` dependency, including raster-store.
+
+When included as a CMake subproject, tools and tests default to disabled.
+Enable individual `ALP_BUILD_*` options explicitly when needed.
+
 Sanitizer exclusions are maintained in `misc/suppression/`. CI's ASan job also
 enables UBSan and loads [ubsan.txt](misc/suppression/ubsan.txt) for the known CGAL
 arrangement downcasts and the ignored old Boolean value in

@@ -2,7 +2,8 @@
 
 This directory describes authoritative raster tile storage and the planned
 generation of delivery tile pyramids from it. RF import and merging are
-implemented; TB generation and the tile server remain future work.
+implemented in [tile-foundry](https://github.com/AlpineMapsOrg/tile-foundry);
+TB generation and the tile server remain future work.
 
 ## Documents
 

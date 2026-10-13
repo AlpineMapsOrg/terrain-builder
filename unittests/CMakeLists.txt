@@ -24,7 +24,7 @@ endif()
 function(atb_configure_test target)
     target_compile_definitions(${target} PRIVATE
         CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS
-        ALP_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
+        ALP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/"
         ALP_UNITTESTS_EXTENDED=$<BOOL:${ALP_UNITTESTS_EXTENDED}>
         ALP_UNITTESTS_DEBUG_IMAGES=$<BOOL:${ALP_UNITTESTS_DEBUG_IMAGES}>
     )
@@ -47,6 +47,7 @@ add_executable(unittests_terrainlib
     terrainlib/gis_srs_bounds.cpp
     terrainlib/gis_srs_coverage.cpp
     terrainlib/gis_vector_mask.cpp
+    terrainlib/gis_vector_mask_read_errors.cpp
     terrainlib/glm_serialization.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
@@ -92,6 +93,7 @@ add_executable(unittests_terrainlib
     terrainlib/range_utils.cpp
     terrainlib/raster_algorithm.cpp
     terrainlib/raster_fold.cpp
+    terrainlib/raster_tile_pool.cpp
     terrainlib/raster_view.cpp
     terrainlib/raster_store.cpp
     terrainlib/spatial_lookup.cpp
@@ -108,7 +110,7 @@ atb_configure_test(unittests_terrainlib)
 add_executable(unittests_glm_serialization_aligned terrainlib/glm_serialization.cpp)
 target_compile_features(unittests_glm_serialization_aligned PRIVATE cxx_std_23)
 target_compile_definitions(unittests_glm_serialization_aligned PRIVATE GLM_FORCE_INTRINSICS GLM_FORCE_ALIGNED_GENTYPES)
-target_include_directories(unittests_glm_serialization_aligned PRIVATE ${CMAKE_SOURCE_DIR}/src/terrainlib)
+target_include_directories(unittests_glm_serialization_aligned PRIVATE ${PROJECT_SOURCE_DIR}/src/terrainlib)
 target_link_libraries(unittests_glm_serialization_aligned PRIVATE glm::glm zpp_bits Catch2::Catch2WithMain)
 
 if(TARGET sfbuilderlib)
@@ -142,7 +144,7 @@ if(TARGET tile-downloader)
         tile_downloader/url_builder.cpp
         tile_downloader/write_file.cpp
     )
-    target_include_directories(unittests_tile_downloader PRIVATE ${CMAKE_SOURCE_DIR}/src/tile_downloader)
+    target_include_directories(unittests_tile_downloader PRIVATE ${PROJECT_SOURCE_DIR}/src/tile_downloader)
     target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain CURL::libcurl)
     atb_configure_test(unittests_tile_downloader)
 endif()
