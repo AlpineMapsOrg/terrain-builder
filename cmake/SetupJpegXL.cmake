@@ -29,6 +29,7 @@ function(alp_setup_jpegxl version)
             -DBUILD_SHARED_LIBS=OFF
             -DBUILD_TESTING=OFF
             -DJPEGXL_ENABLE_TOOLS=OFF
+            -DJPEGXL_ENABLE_FUZZERS=OFF
             -DJPEGXL_ENABLE_DOXYGEN=OFF
             -DJPEGXL_ENABLE_MANPAGES=OFF
             -DJPEGXL_ENABLE_BENCHMARK=OFF

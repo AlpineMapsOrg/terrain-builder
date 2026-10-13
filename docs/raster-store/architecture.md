@@ -8,8 +8,7 @@ part of the `terrainlib` target.
 
 [Storage format](storage-format.md) defines the directory layout, serialized
 data, and format invariants. [Terminology](terminology.md) defines the domain
-language, and [sampling and generation](sampling-and-generation.md) covers
-sampling and filtering policy.
+language.
 
 ## System boundary
 
@@ -132,8 +131,6 @@ Tile-base adds overviews to one RF and retains the data. It holds one
 channel; derived channels such as shadings are produced by separate tools. Every level is occupied
 and selects an adequate source. It must support at least minimum, maximum, and average
 aggregation. A TB may choose different tile dimensions from its RF input.
-See [sampling and generation](sampling-and-generation.md) for filtering and
-source-selection policy.
 
 Planned location: `src/tb-builder`.
 

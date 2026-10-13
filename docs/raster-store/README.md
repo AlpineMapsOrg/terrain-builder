@@ -11,8 +11,6 @@ TB generation and the tile server remain future work.
 - [Architecture](architecture.md): components, lifecycle, and the planned
   TB builder and tile server
 - [Storage format](storage-format.md)
-- [Sampling and pyramid generation](sampling-and-generation.md): sampling
-  theory, TB generation requirements, and the implemented scaling rules
 - [TODO](todo.md)
 
 Decisions and their rationale are recorded in the [ADRs](../adr/).

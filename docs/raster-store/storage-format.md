@@ -230,5 +230,4 @@ participates in generic scaling just like any other supplied data value.
 AMORT preserves all payloads losslessly, including NaNs and values with
 attribution zero. Callers of numerical algorithms must supply usable values;
 storage does not repair or validate payloads for them. Source NoData remains
-an importer concern, separate from stored attribution. See the
-[scaling rules](sampling-and-generation.md#implemented-scaling-rules).
+an importer concern, separate from stored attribution.
