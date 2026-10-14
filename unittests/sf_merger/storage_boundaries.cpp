@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <filesystem>
 
 #include <catch2/catch_test_macros.hpp>
@@ -6,6 +24,7 @@
 #include "cut.h"
 #include "merge.h"
 #include "mesh/storage.h"
+#include "store/inputs.h"
 
 namespace {
 
@@ -174,5 +193,49 @@ TEST_CASE("SF cut hard-links unchanged leaves and writes clipped leaves", "[sfme
         const auto clipped = output.load(root);
         REQUIRE(clipped.has_value());
         CHECK_FALSE(clipped->is_empty());
+    }
+}
+
+TEST_CASE("SF merge stops on request and reuses cached nodes", "[sfmerger][sf][snapshot]")
+{
+    const octree::Id root = octree::Id::root();
+    TemporaryDirectory directory("merge-snapshot");
+    const auto left_path = directory.path() / "left";
+    const auto right_path = directory.path() / "right";
+    auto left = indexed_storage(left_path);
+    auto right = indexed_storage(right_path);
+    REQUIRE(left.save(root, triangle()).has_value());
+    REQUIRE(right.save(root, triangle(10.0)).has_value());
+    REQUIRE(left.save_index().has_value());
+    REQUIRE(right.save_index().has_value());
+    const auto record = sf_merger::inputs::make_record(left_path, right_path, std::nullopt);
+    REQUIRE(record.has_value());
+    const auto output = directory.path() / "output";
+
+    SECTION("a stop request retains the incomplete snapshot")
+    {
+        const auto merged = merge_datasets(left, right, output, std::nullopt, *record, std::nullopt, [] { return true; });
+        REQUIRE_FALSE(merged.has_value());
+        CHECK(merged.error().code() == Error::Code::Cancelled);
+        CHECK_FALSE(std::filesystem::exists(output));
+        const auto partial = directory.path() / "output.part";
+        CHECK(std::filesystem::exists(partial / store::inputs::file_name));
+        CHECK(mesh::storage::open_index(partial / octree::storage::index_file_name).has_value());
+    }
+
+    SECTION("cached nodes are linked")
+    {
+        const auto first = directory.path() / "first";
+        REQUIRE(merge_datasets(left, right, first, std::nullopt, *record).has_value());
+        CHECK_FALSE(std::filesystem::exists(first / store::inputs::file_name));
+        // Turn the published output into what an interrupted merge leaves behind.
+        const auto cache = directory.path() / "cache.part";
+        std::filesystem::rename(first, cache);
+        REQUIRE(store::inputs::write<sf_merger::inputs::Schema>(cache, *record).has_value());
+
+        REQUIRE(merge_datasets(left, right, output, std::nullopt, *record, cache).has_value());
+        const auto cached = indexed_storage(cache);
+        const auto merged = indexed_storage(output);
+        CHECK(std::filesystem::equivalent(cached.paths(root)->front(), merged.paths(root)->front()));
     }
 }

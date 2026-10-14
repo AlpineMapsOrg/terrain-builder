@@ -2,7 +2,8 @@
 
 # Repeatable, non-unit end-to-end verification for the current 3D SF/DAG path.
 # Inputs are prepared once under INPUT_ROOT. Completed steps are skipped through
-# explicit state markers, so an interrupted SF or DAG run can be resumed.
+# explicit state markers. The tools write <output>.part and publish <output> when
+# complete; an interrupted run's .part is reused as the next run's --cache.
 
 set -Eeuo pipefail
 
@@ -136,6 +137,31 @@ verify_snapshot()
     printf 'Verified %s: %s payloads\n' "${snapshot}" "${payload_count}"
 }
 
+# Moves an interrupted run's <output>.part to <output>-cache.part and sets
+# CACHE_ARGUMENTS to reuse it. The tools refuse an existing <output>.
+CACHE_ARGUMENTS=()
+prepare_cache()
+{
+    local output="$1"
+    local cache="${output}-cache.part"
+
+    CACHE_ARGUMENTS=()
+    if [[ -d "${output}.part" ]]; then
+        # A resumed run's .part already links every node of the older cache.
+        rm -rf "${cache}"
+        mv "${output}.part" "${cache}"
+    fi
+    if [[ -d "${cache}" ]]; then
+        printf '[%s] Reusing %s as cache\n' "$(timestamp)" "${cache}"
+        CACHE_ARGUMENTS=(--cache "${cache}")
+    fi
+}
+
+discard_cache()
+{
+    rm -rf "${1}-cache.part"
+}
+
 build_sf()
 {
     local name="$1"
@@ -150,7 +176,7 @@ build_sf()
         return
     fi
 
-    mkdir -p "${output}"
+    prepare_cache "${output}"
     run_timed "${name}" \
         "${SF_BUILDER}" \
         --dataset "${dataset}" \
@@ -163,9 +189,11 @@ build_sf()
         --target-level "${SF_TARGET_LEVEL}" \
         --output "${output}" \
         --format .sfmesh \
-        --threads "${SF_THREADS}"
+        --threads "${SF_THREADS}" \
+        "${CACHE_ARGUMENTS[@]}"
 
     verify_snapshot "${output}" ".sfmesh"
+    discard_cache "${output}"
     touch "${marker}"
 }
 
@@ -179,29 +207,24 @@ merge_sf()
         return
     fi
 
-    if [[ -d "${SF_MERGED}" ]] && [[ -n "$(find "${SF_MERGED}" -mindepth 1 -print -quit)" ]]; then
-        printf 'Partial merge output exists at %s.\n' "${SF_MERGED}" >&2
-        printf 'The current sf-merger cannot safely resume this output; refusing to overwrite it.\n' >&2
-        return 1
-    fi
-
-    mkdir -p "${SF_MERGED}"
+    prepare_cache "${SF_MERGED}"
     run_timed merge_sf \
         "${SF_MERGER}" merge \
         --base "${SF_BASEMAP}" \
         --new "${SF_GATAKI}" \
         --mask "${TIROL_MASK}" \
         --output "${SF_MERGED}" \
+        "${CACHE_ARGUMENTS[@]}" \
         --verbosity info
 
     verify_snapshot "${SF_MERGED}" ".sfmesh"
+    discard_cache "${SF_MERGED}"
     touch "${marker}"
 }
 
 build_dag()
 {
     local marker="${STATE_ROOT}/build_dag.complete"
-    local continuation=(--overwrite)
 
     if [[ -f "${marker}" ]]; then
         printf '[%s] SKIP build_dag: completion marker exists\n' "$(timestamp)"
@@ -209,19 +232,16 @@ build_dag()
         return
     fi
 
-    mkdir -p "${DAG_MERGED}"
-    if [[ -s "${DAG_MERGED}/octree.storeindex" ]]; then
-        continuation=(--resume)
-    fi
-
+    prepare_cache "${DAG_MERGED}"
     run_timed build_dag \
         "${DAG_BUILDER}" \
         --input "${SF_MERGED}" \
         --output "${DAG_MERGED}" \
-        "${continuation[@]}" \
+        "${CACHE_ARGUMENTS[@]}" \
         --verbosity info
 
     verify_snapshot "${DAG_MERGED}" ".dag" ".dagmeta"
+    discard_cache "${DAG_MERGED}"
     touch "${marker}"
 }
 

@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <filesystem>
@@ -7,6 +25,8 @@
 #include <utility>
 
 #include <expected>
+
+#include "Error.h"
 
 namespace store {
 
@@ -42,12 +62,42 @@ public:
         return m_storage.has(key);
     }
 
+    auto hash_for(const key_type& key) const
+    {
+        std::shared_lock lock(m_mutex);
+        return m_storage.hash_for(key);
+    }
+
     std::filesystem::path base_path() const noexcept { return m_storage.base_path(); }
 
-    auto save(const key_type& key, const value_type& value) const
+    // Saves of different keys encode and write their payloads in parallel. The
+    // existence check holds the shared lock and only the index update holds the
+    // exclusive lock.
+    Expected<void> save(const key_type& key, const value_type& value) const
+    {
+        {
+            std::shared_lock lock(m_mutex);
+            auto exists = m_storage.has(key);
+            if (!exists) {
+                return Error::propagate(std::move(exists), "check whether node exists before saving");
+            }
+            if (exists.value()) {
+                return Error::fail(Error::Code::AlreadyExists, "save node to", Error::asserting_unwrap(m_storage.path_for(key)));
+            }
+        }
+        auto hash = m_storage.write_payload(key, value);
+        if (!hash) {
+            return Error::propagate(std::move(hash));
+        }
+        std::unique_lock lock(m_mutex);
+        return m_storage.commit(key, std::move(*hash));
+    }
+
+    template <typename Source>
+    auto link_from(const key_type& key, const Source& source) const
     {
         std::unique_lock lock(m_mutex);
-        return m_storage.save(key, value);
+        return m_storage.link_from(key, source);
     }
 
     auto save_or_create_index() const

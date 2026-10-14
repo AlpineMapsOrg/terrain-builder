@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <list>
 #include <numeric>
 #include <string>
@@ -11,7 +30,7 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
-#include "log.h"
+#include "cli_support/log.h"
 #include "octree/Id.h"
 #include "mesh/storage.h"
 #include "mesh/storage.h"
@@ -303,7 +322,7 @@ int run(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    Log::init(args.log_level);
+    cli_support::Log::init(args.log_level);
 
     const std::string arg_str = std::accumulate(argv, argv + argc, std::string(),
                                                 [](const std::string &acc, const char *arg) {

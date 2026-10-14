@@ -1,3 +1,23 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2024 Martin Braunsperger
+ * Copyright (C) 2024 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdlib>
@@ -15,6 +35,7 @@
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 #include <ogr_spatialref.h>
 #include <opencv2/core/mat.hpp>
 #include <radix/geometry.h>
@@ -24,13 +45,11 @@
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
 
-#include "Dataset.h"
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/Grid.hpp"
-#include "srs.h"
+#include "gis/Dataset.h"
+#include "gis/srs.h"
 
-#include "ProgressIndicator.h"
-#include "log.h"
+#include "cli_support/ProgressIndicator.h"
+#include "cli_support/log.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
 #include "mesh_builder.h"
@@ -42,8 +61,10 @@
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "octree/utils.h"
-#include "store/ThreadSafeStorage.h"
 #include "sf/finalize_storage.h"
+#include "store/ThreadSafeStorage.h"
+#include "store/inputs.h"
+#include "store/snapshot.h"
 
 namespace terrainbuilder {
 
@@ -58,13 +79,12 @@ std::string format_secs_since(const std::chrono::high_resolution_clock::time_poi
 }
 
 std::optional<SimpleMesh> build_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
     const TileProvider* tile_provider,
     const OGRSpatialReference &mesh_srs) {
-    const ctb::Grid grid = ctb::GlobalMercator();
     radix::tile::SrsBounds texture_bounds;
 
     std::chrono::high_resolution_clock::time_point start;
@@ -78,7 +98,12 @@ std::optional<SimpleMesh> build_patch(
     if (!mesh_result) {
         const BuildMeshError error = mesh_result.error();
         if (error == BuildMeshError::OutOfBounds) {
-            const radix::tile::SrsBounds dataset_bounds = dataset.bounds();
+            const auto dataset_bounds_result = dataset.bounds();
+            if (!dataset_bounds_result) {
+                LOG_ERROR("Target bounds are fully outside of dataset region: {}", dataset_bounds_result.error().to_string());
+                return std::nullopt;
+            }
+            const radix::tile::SrsBounds dataset_bounds = *dataset_bounds_result;
             LOG_ERROR("Target bounds are fully outside of dataset region\n"
                       "Dataset {{\n"
                       "\t x={}, y={}, w={}, h={}.\n"
@@ -93,6 +118,8 @@ std::optional<SimpleMesh> build_patch(
             LOG_WARN("Target bounds are inside dataset, but the region is empty");
             return std::nullopt;
         }
+        // Transformation failures are logged where they occur.
+        return std::nullopt;
     }
     SimpleMesh mesh = mesh_result.value();
     LOG_DEBUG("Mesh building took {}s", format_secs_since(start));
@@ -101,7 +128,7 @@ std::optional<SimpleMesh> build_patch(
     if (tile_provider != nullptr) {
         start = std::chrono::high_resolution_clock::now();
         LOG_INFO("Assembling mesh texture");
-        std::optional<AssembledTexture> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, *tile_provider);
+        std::optional<AssembledTexture> texture = assemble_texture_from_tiles(texture_srs, texture_bounds, *tile_provider);
         if (!texture.has_value()) {
             LOG_ERROR("Failed to assemble texture");
             // TODO: should we return nullopt here?
@@ -120,7 +147,7 @@ std::optional<SimpleMesh> build_patch(
 }
 
 void build_and_save_patch(
-    Dataset &dataset,
+    gis::Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
@@ -173,58 +200,107 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 }
 
-Expected<void> build_all_patches(
-    Dataset &dataset,
-    const octree::Id::Level target_level,
-    const OGRSpatialReference &texture_srs,
-    const TileProvider *tile_provider,
-    const OGRSpatialReference &mesh_srs,
-    const std::filesystem::path &output_base_path,
-    const std::string &output_format,
-    const bool overwrite_existing
-) {
-    if (!std::filesystem::exists(output_base_path)) {
-        LOG_TRACE("Output base path {} does not exist, creating it", output_base_path);
-        std::filesystem::create_directories(output_base_path);
-    } else if (!std::filesystem::is_directory(output_base_path)) {
-        LOG_ERROR_AND_EXIT("Output base path {} exists but is not a directory", output_base_path);
+Expected<void> build_all_patches(gis::Dataset& dataset,
+    const OGRSpatialReference& texture_srs,
+    const TileProvider* tile_provider,
+    const OGRSpatialReference& mesh_srs,
+    const std::filesystem::path& output_path,
+    const inputs::Record& record,
+    const std::optional<std::filesystem::path>& cache_path,
+    const std::function<bool()>& stop_requested)
+{
+    if (record.target_level < min_target_level || record.target_level > octree::Id::max_level()) {
+        return Error::fail(Error::Code::InvalidInput,
+            fmt::format("target level {} is outside of {}..{}", record.target_level, unsigned(min_target_level), unsigned(octree::Id::max_level())));
+    }
+    const auto target_level = octree::Id::Level(record.target_level);
+
+    std::optional<mesh::storage::IndexedStorage> cache;
+    if (cache_path.has_value()) {
+        if (auto valid = store::inputs::validate_cache<inputs::Schema>(*cache_path, record); !valid) {
+            return Error::propagate(std::move(valid), "validate SF builder cache");
+        }
+        if (auto linkable = store::snapshot::check_link_filesystem(*cache_path, output_path); !linkable) {
+            return linkable;
+        }
+        auto opened = mesh::storage::open_index(*cache_path / octree::storage::index_file_name);
+        if (!opened) {
+            return Error::propagate(std::move(opened), "open SF builder cache");
+        }
+        cache.emplace(std::move(*opened));
     }
 
-    mesh::storage::OpenOptions open_options;
-    open_options.preferred_extension = output_format;
-    auto storage_result = mesh::storage::open_folder(
-        output_base_path,
-        std::move(open_options));
+    mesh::storage::OpenOptions create_options;
+    create_options.preferred_extension = record.format;
+    auto storage_result = mesh::storage::create(output_path, std::move(create_options));
     if (!storage_result) {
-        return Error::propagate(
-            std::move(storage_result), "open output terrain dataset \"" + output_base_path.string() + "\"");
+        return Error::propagate(std::move(storage_result), "create output terrain dataset \"" + output_path.string() + "\"");
     }
-    mesh::storage::Storage raw_storage = std::move(storage_result.value());
-    raw_storage.settings().allow_overwrite = overwrite_existing;
-    store::ThreadSafeStorage<mesh::storage::Storage> storage(std::move(raw_storage));
+    if (auto written = store::inputs::write<inputs::Schema>(storage_result->base_path(), record); !written) {
+        return written;
+    }
+    store::ThreadSafeStorage<mesh::storage::IndexedStorage> storage(std::move(storage_result.value()));
 
-    const auto dataset_srs = dataset.srs();
-    const auto dataset_bounds = dataset.bounds3d(true);
+    auto dataset_srs_result = dataset.srs();
+    if (!dataset_srs_result) {
+        return Error::propagate(std::move(dataset_srs_result), "read dataset SRS");
+    }
+    const auto dataset_srs = *dataset_srs_result;
+    auto dataset_bounds_result = dataset.bounds3d(false);
+    if (!dataset_bounds_result) {
+        return Error::propagate(std::move(dataset_bounds_result), "read dataset bounds");
+    }
+    const auto dataset_bounds = *dataset_bounds_result;
+    auto dataset_coverage_result = dataset.geographic_coverage();
+    if (!dataset_coverage_result) {
+        return Error::propagate(std::move(dataset_coverage_result), "read dataset coverage");
+    }
+    const auto dataset_coverage = *dataset_coverage_result;
 
-    const auto ecef_srs = srs::ecef();
-    const auto ecef_bounds = srs::encompassing_bounds_transfer(
-        dataset_srs, ecef_srs, dataset_bounds);
+    const auto ecef_srs = gis::srs::ecef();
+    auto ecef_bounds_result = gis::srs::ecef_coverage(dataset_srs, dataset_bounds);
+    if (!ecef_bounds_result) {
+        return Error::propagate(std::move(ecef_bounds_result), "transform dataset bounds to ECEF");
+    }
+    const auto ecef_bounds = *ecef_bounds_result;
     const auto space = octree::Space::earth();
     const auto root_node = expect(
         space.find_smallest_node_encompassing_bounds(ecef_bounds),
         "Dataset is outside the octree root node.");
+
+    // Nodes within this radius contain no terrain: it is 100 km below the earth's mean radius.
+    constexpr double terrain_free_radius = 6371008 - 100000;
+    const auto within_terrain_free_radius = [](const radix::geometry::Aabb3d& bounds) {
+        const glm::dvec3 farthest_corner = glm::max(glm::abs(bounds.min), glm::abs(bounds.max));
+        return glm::length(farthest_corner) < terrain_free_radius;
+    };
+    // Below min_target_level, nodes touch the centre and are traversed without coverage checks.
+    // From there on, those nodes are within the terrain free radius, which keeps the remaining
+    // ones far enough from the centre for ecef2srs_coverage.
+    ASSERT(glm::length(space.get_node_size_at_level(min_target_level)) < terrain_free_radius);
+    const auto intersects_dataset = [&](const std::vector<radix::geometry::Aabb3d>& node_coverage) {
+        for (const radix::geometry::Aabb3d& node_part : node_coverage) {
+            if (node_part.max.z < dataset_bounds.min.z || dataset_bounds.max.z < node_part.min.z) {
+                continue;
+            }
+            for (const radix::tile::SrsBounds& dataset_part : dataset_coverage) {
+                if (radix::geometry::intersect(radix::tile::SrsBounds(node_part), dataset_part)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
 
     tbb::concurrent_vector<octree::Id> concurrent_targets;
 
     tbb::task_group tg;
     std::function<void(octree::Id)> process_node;
 
-    tbb::enumerable_thread_specific<std::shared_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
-        auto local_ecef_srs = ecef_srs;
-        auto local_dataset_srs = dataset_srs;
-        auto transform = srs::transformation(local_ecef_srs, local_dataset_srs);
-        return transform;
-    });
+    // SRS objects are not shared between threads.
+    tbb::enumerable_thread_specific<OGRSpatialReference> local_wgs84_srs([]() { return gis::srs::wgs84(); });
+    tbb::enumerable_thread_specific<OGRSpatialReference> local_dataset_srs([&]() { return dataset_srs; });
+    const auto native_bounds = radix::tile::SrsBounds(dataset_bounds);
 
     process_node = [&](octree::Id node) {
         // Check if node intersects with ecef bounds of dataset
@@ -232,12 +308,19 @@ Expected<void> build_all_patches(
         if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
             return;
         }
-
-        // Check if node bounds in dataset srs intersect with dataset
-        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
-            &*transform_ecef_dataset.local(), node_bounds, 7, 3);
-        if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
+        if (within_terrain_free_radius(node_bounds)) {
             return;
+        }
+
+        // Check if node coverage intersects with dataset in geographic coordinates
+        if (node.level() >= min_target_level) {
+            const auto node_coverage = gis::srs::ecef2srs_coverage(node_bounds, local_wgs84_srs.local());
+            if (!node_coverage) {
+                // Keep the node, dropping it could lose terrain.
+                LOG_WARN("Failed to compute coverage of node {}: {}", node, node_coverage.error().to_string());
+            } else if (!intersects_dataset(*node_coverage)) {
+                return;
+            }
         }
 
         if (node.level() < target_level) {
@@ -247,6 +330,11 @@ Expected<void> build_all_patches(
                 }
             }
         } else if (node.level() == target_level) {
+            // Geographic coverage includes nodes outside of the native bounds of projected datasets.
+            const auto windows = native_read_windows(local_dataset_srs.local(), native_bounds, node_bounds);
+            if (windows && windows->empty()) {
+                return;
+            }
             concurrent_targets.push_back(node);
         }
     };
@@ -257,25 +345,25 @@ Expected<void> build_all_patches(
     std::vector<octree::Id> target_nodes;
     target_nodes.assign(concurrent_targets.begin(), concurrent_targets.end());
 
-    ProgressIndicator progress(target_nodes.size());
+    cli_support::ProgressIndicator progress(target_nodes.size());
     std::jthread progress_thread = progress.start_monitoring();
 
     // Clone dataset and SRSs for each thread
-    tbb::enumerable_thread_specific<Dataset> local_dataset([&]() {
+    tbb::enumerable_thread_specific<gis::Dataset> local_dataset([&]() {
         return dataset.clone();
     });
     tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_ecef_srs([&]() {
-        return srs::clone(ecef_srs);
+        return gis::srs::clone(ecef_srs);
     });
     tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_texture_srs([&]() {
-        return srs::clone(texture_srs);
+        return gis::srs::clone(texture_srs);
     });
     tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_mesh_srs([&]() {
-        return srs::clone(mesh_srs);
+        return gis::srs::clone(mesh_srs);
     });
 
     // Decrease log level to error to avoid excessive logging during mesh building
-    auto logger = Log::get_logger();
+    auto logger = cli_support::Log::get_logger();
     const auto original_level = logger->level();
     const auto new_level = spdlog::level::err;
     // Only set to if it's more restrictive than current level
@@ -283,22 +371,46 @@ Expected<void> build_all_patches(
         logger->set_level(new_level);
     }
 
+    std::atomic_bool stopped = false;
+    std::atomic<std::chrono::steady_clock::rep> last_checkpoint = std::chrono::steady_clock::now().time_since_epoch().count();
+    // One task at a time saves the index once the checkpoint interval has passed.
+    const auto checkpoint = [&]() -> Expected<void> {
+        const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        auto last = last_checkpoint.load();
+        if (now - std::chrono::steady_clock::duration(last) < store::snapshot::checkpoint_interval
+            || !last_checkpoint.compare_exchange_strong(last, now.count())) {
+            return {};
+        }
+        return storage.save_or_create_index();
+    };
     tbb::task_group_context context;
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        const auto already_exists = storage.has(node);
-        if (!already_exists) {
-            LOG_ERROR(
-                "Failed to inspect node {}: {}",
-                node,
-                already_exists.error().to_string());
+        if (stop_requested && stop_requested()) {
+            stopped = true;
             progress.task_finished();
             context.cancel_group_execution();
             return;
         }
-        if (!overwrite_existing && already_exists.value()) {
-            progress.task_finished(); // TODO: correctly handle virtual nodes
-            return;
+        if (cache.has_value()) {
+            const auto cached = cache->has(node);
+            if (!cached) {
+                LOG_ERROR("Failed to inspect cached node {}: {}", node, cached.error().to_string());
+                progress.task_finished();
+                context.cancel_group_execution();
+                return;
+            }
+            if (cached.value()) {
+                const auto linked = storage.link_from(node, *cache);
+                if (!linked) {
+                    LOG_ERROR("Failed to link cached node {}: {}", node, linked.error().to_string());
+                    progress.task_finished();
+                    context.cancel_group_execution();
+                    return;
+                }
+                progress.task_finished();
+                return;
+            }
         }
 
         auto &dataset = local_dataset.local();
@@ -330,6 +442,12 @@ Expected<void> build_all_patches(
             }
         }
 
+        if (const auto saved = checkpoint(); !saved) {
+            LOG_ERROR("Failed to checkpoint the index: {}", saved.error().to_string());
+            progress.task_finished();
+            context.cancel_group_execution();
+            return;
+        }
         progress.task_finished();
     }, context);
 
@@ -341,15 +459,25 @@ Expected<void> build_all_patches(
     }
     progress_thread.join();
 
+    auto finalized_storage = std::move(storage).release();
     if (context.is_group_execution_cancelled()) {
-        LOG_ERROR_AND_EXIT("Failed to build all terrain patches");
+        if (auto saved = finalized_storage.save_index(); !saved) {
+            return Error::propagate(std::move(saved), "checkpoint incomplete terrain storage");
+        }
+        if (stopped) {
+            return Error::fail(Error::Code::Cancelled, "SF build cancelled; incomplete snapshot retained at " + finalized_storage.base_path().string());
+        }
+        return Error::fail(
+            Error::Code::Internal, "failed to build all terrain patches; incomplete snapshot retained at " + finalized_storage.base_path().string());
     }
 
-    auto finalized_storage = std::move(storage).release();
     auto finalized = sf::finalize_storage(finalized_storage);
     if (!finalized) {
-        return Error::propagate(
-            std::move(finalized), "finalize generated terrain storage \"" + output_base_path.string() + "\"");
+        return Error::propagate(std::move(finalized), "finalize generated terrain storage \"" + finalized_storage.base_path().string() + "\"");
+    }
+    auto published = mesh::storage::publish(std::move(finalized_storage));
+    if (!published) {
+        return Error::propagate(std::move(published), "publish generated terrain storage \"" + output_path.string() + "\"");
     }
     return {};
 }

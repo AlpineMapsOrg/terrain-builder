@@ -1,3 +1,23 @@
+# *****************************************************************************
+# AlpineMaps.org
+# Copyright (C) 2023 Adam Celarek-Litofcenko
+# Copyright (C) 2023 Martin Braunsperger
+# Copyright (C) 2023 Adrian Gawor
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# *****************************************************************************
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
@@ -32,6 +52,9 @@ find_package(CGAL REQUIRED)
 include(../cmake/SetupOpenCV.cmake)
 alp_setup_opencv(4.11.0)
 
+include(../cmake/SetupJpegXL.cmake)
+alp_setup_jpegxl(v0.12.0)
+
 alp_add_git_repository(cgltf URL https://github.com/AlpineMapsOrgDependencies/cgltf.git COMMITISH 1549b07fe059e1917bbdda1f61ec36b5f4d6718a DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
 target_include_directories(cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
@@ -65,6 +88,10 @@ alp_setup_cmake_project(zstd
 )
 find_package(zstd CONFIG REQUIRED)
 
+alp_add_git_repository(xxhash URL https://github.com/Cyan4973/xxHash.git COMMITISH v0.8.3 DO_NOT_ADD_SUBPROJECT)
+add_library(xxhash INTERFACE)
+target_include_directories(xxhash SYSTEM INTERFACE ${xxhash_SOURCE_DIR})
+
 alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
 alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
@@ -75,7 +102,7 @@ set(LIBIGL_COPYLEFT_CORE ON)
 set(LIBIGL_RESTRICTED_TRIANGLE ON)
 alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
 
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 6babc632401cb95a701ce431cb68adf91e2c1b71 NOT_SYSTEM)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 39bf8b0c89459b3266048086a8d0121992c8f430 NOT_SYSTEM)
 
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_SF_MERGER
@@ -156,9 +183,6 @@ endif()
 
 add_subdirectory(terrainlib)
 
-if(ALP_BUILD_TILE_BUILDER)
-    add_subdirectory(tile_builder)
-endif()
 if(ALP_BUILD_SF_MERGER)
     add_subdirectory(sf_merger)
 endif()

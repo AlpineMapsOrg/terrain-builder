@@ -1,3 +1,22 @@
+# *****************************************************************************
+# AlpineMaps.org
+# Copyright (C) 2023 Adam Celarek-Litofcenko
+# Copyright (C) 2023 Martin Braunsperger
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# *****************************************************************************
+
 if(NOT TARGET Catch2::Catch2)
     alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.8.1)
 endif()
@@ -5,8 +24,7 @@ endif()
 function(atb_configure_test target)
     target_compile_definitions(${target} PRIVATE
         CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS
-        ALP_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
-        ALP_UNITTESTS_AUSTRIA_HIGHRES="${ALP_UNITTESTS_AUSTRIA_HIGHRES}"
+        ALP_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/"
         ALP_UNITTESTS_EXTENDED=$<BOOL:${ALP_UNITTESTS_EXTENDED}>
         ALP_UNITTESTS_DEBUG_IMAGES=$<BOOL:${ALP_UNITTESTS_DEBUG_IMAGES}>
     )
@@ -19,17 +37,24 @@ add_executable(unittests_terrainlib
 
     terrainlib/convert.cpp
     terrainlib/cow.cpp
-    terrainlib/dataset.cpp
     terrainlib/enumerate.cpp
     terrainlib/envelope.cpp
     terrainlib/error.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/geometry_frames.cpp
-    terrainlib/grid.cpp
+    terrainlib/gis_dataset.cpp
+    terrainlib/gis_dataset_reading.cpp
+    terrainlib/gis_srs_bounds.cpp
+    terrainlib/gis_srs_coverage.cpp
+    terrainlib/gis_vector_mask.cpp
+    terrainlib/gis_vector_mask_read_errors.cpp
+    terrainlib/glm_serialization.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
     terrainlib/io_conversion.cpp
+    terrainlib/io_hash.cpp
+    terrainlib/io_image.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
     terrainlib/sf_validate_index.cpp
@@ -38,6 +63,7 @@ add_executable(unittests_terrainlib
     terrainlib/store_codec.cpp
     terrainlib/store_index.cpp
     terrainlib/store_layout.cpp
+    terrainlib/store_snapshot.cpp
     terrainlib/store_storage.cpp
     terrainlib/store_traverse.cpp
     terrainlib/mesh_boundary.cpp
@@ -65,6 +91,11 @@ add_executable(unittests_terrainlib
     terrainlib/quantize.cpp
     terrainlib/range.cpp
     terrainlib/range_utils.cpp
+    terrainlib/raster_algorithm.cpp
+    terrainlib/raster_fold.cpp
+    terrainlib/raster_tile_pool.cpp
+    terrainlib/raster_view.cpp
+    terrainlib/raster_store.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/string_utils.cpp
     terrainlib/texture_dilate_colors.cpp
@@ -75,25 +106,18 @@ add_executable(unittests_terrainlib
 target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain)
 atb_configure_test(unittests_terrainlib)
 
-if(TARGET tilebuilderlib)
-    add_executable(unittests_tilebuilder
-        catch2_helpers.h
-        tilebuilder/alpine_raster_format.cpp
-        tilebuilder/dataset_reading.cpp
-        tilebuilder/depth_first_tile_traverser.cpp
-        tilebuilder/image_writer.cpp
-        tilebuilder/parallel_tile_generator.cpp
-        tilebuilder/parallel_tiler.cpp
-        tilebuilder/tile_heights_generator.cpp
-        tilebuilder/top_down_tiler.cpp
-    )
-    target_link_libraries(unittests_tilebuilder PRIVATE tilebuilderlib Catch2::Catch2WithMain)
-    atb_configure_test(unittests_tilebuilder)
-endif()
+# Keep the aligned GLM configuration isolated from terrainlib and its PCH.
+add_executable(unittests_glm_serialization_aligned terrainlib/glm_serialization.cpp)
+target_compile_features(unittests_glm_serialization_aligned PRIVATE cxx_std_23)
+target_compile_definitions(unittests_glm_serialization_aligned PRIVATE GLM_FORCE_INTRINSICS GLM_FORCE_ALIGNED_GENTYPES)
+target_include_directories(unittests_glm_serialization_aligned PRIVATE ${PROJECT_SOURCE_DIR}/src/terrainlib)
+target_link_libraries(unittests_glm_serialization_aligned PRIVATE glm::glm zpp_bits Catch2::Catch2WithMain)
 
 if(TARGET sfbuilderlib)
     add_executable(unittests_sfbuilder
         catch2_helpers.h
+        temporary_directory.h
+        sf_builder/coverage.cpp
         sf_builder/mesh.cpp
         sf_builder/texture.cpp
     )
@@ -120,7 +144,7 @@ if(TARGET tile-downloader)
         tile_downloader/url_builder.cpp
         tile_downloader/write_file.cpp
     )
-    target_include_directories(unittests_tile_downloader PRIVATE ${CMAKE_SOURCE_DIR}/src/tile_downloader)
+    target_include_directories(unittests_tile_downloader PRIVATE ${PROJECT_SOURCE_DIR}/src/tile_downloader)
     target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain CURL::libcurl)
     atb_configure_test(unittests_tile_downloader)
 endif()
@@ -165,3 +189,4 @@ if(TARGET sfmergerlib)
     endif()
     atb_configure_test(unittests_sfmerger)
 endif()
+

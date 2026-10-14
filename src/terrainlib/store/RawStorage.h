@@ -1,7 +1,26 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -32,21 +51,23 @@ public:
     RawStorage(RawStorage&&) noexcept = default;
     RawStorage& operator=(RawStorage&&) noexcept = default;
 
-    Expected<NodeData> load(const Key& key) const
+    Expected<NodeData> load(const Key& key, const std::optional<NodeDataHashView> expected_hash = std::nullopt) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
-        return m_codec->read(m_layout.node_path(key));
+        return m_codec->read(m_layout.node_path(key), expected_hash);
     }
 
-    Expected<void> save(const Key& key, const NodeData& data) const
+    Expected<NodeDataHash> save(const Key& key, const NodeData& data) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
         return m_codec->write(m_layout.node_path(key), data);
     }
+
+    bool supports_hashing() const { return m_codec->supports_hashing(); }
 
     Expected<std::vector<std::filesystem::path>> paths(const Key& key) const
     {
@@ -78,57 +99,17 @@ public:
         return true;
     }
 
-    Expected<bool> remove(const Key& key) const
-    {
-        auto node_paths = paths(key);
-        if (!node_paths) {
-            return Error::propagate(std::move(node_paths));
-        }
-        bool removed = false;
-        for (const auto& path : node_paths.value()) {
-            std::error_code error;
-            removed = std::filesystem::remove(path, error) || removed;
-            if (error) {
-                return Error::fail(Error::Code::Io, "remove", path, error);
-            }
-        }
-        return removed;
-    }
-
-    Expected<void> copy_from(const Key& key, const RawStorage& source) const
-    {
-        return copy_from(key, source, []() -> Expected<void> { return {}; });
-    }
-
-    template <typename BeforeModify>
-    Expected<void> copy_from(const Key& key, const RawStorage& source, BeforeModify&& before_modify) const
+    // Hard-links the node's files from source, whose existence the caller has checked. Both
+    // storages must use the same codec, and the target files must not exist.
+    Expected<void> link_from(const Key& key, const RawStorage& source) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
-        auto source_exists = source.has(key);
-        if (!source_exists) {
-            return Error::propagate(std::move(source_exists));
-        }
-        if (!source_exists.value()) {
-            return Error::fail(Error::Code::NotFound, "source node " + Traits::key_to_string(key) + " is missing");
-        }
 
         const std::filesystem::path probe("__codec_probe__/node");
         if (m_codec->paths(probe) != source.m_codec->paths(probe)) {
-            auto loaded = source.m_codec->read(source.m_layout.node_path(key));
-            if (!loaded) {
-                return Error::propagate(std::move(loaded), "read source node while copying");
-            }
-            const auto prepared = before_modify();
-            if (!prepared) {
-                return prepared;
-            }
-            auto written = m_codec->write(m_layout.node_path(key), loaded.value());
-            if (!written) {
-                return Error::propagate(std::move(written), "write target node while copying");
-            }
-            return {};
+            return Error::fail(Error::Code::Unsupported, "link node " + Traits::key_to_string(key) + " between storages with different codecs");
         }
 
         const auto source_paths = source.m_codec->paths(source.m_layout.node_path(key));
@@ -136,19 +117,8 @@ public:
         if (source_paths.size() != target_paths.size()) {
             return Error::fail(Error::Code::Internal, "matching codec probes produced different actual path counts");
         }
-        if (source_paths == target_paths) {
-            return {};
-        }
-        const auto prepared = before_modify();
-        if (!prepared) {
-            return prepared;
-        }
         for (size_t index = 0; index < source_paths.size(); ++index) {
             std::error_code error;
-            std::filesystem::remove(target_paths[index], error);
-            if (error) {
-                return Error::fail(Error::Code::Io, "remove", target_paths[index], error);
-            }
             std::filesystem::create_directories(target_paths[index].parent_path(), error);
             if (error) {
                 return Error::fail(Error::Code::Io, "create directories", target_paths[index].parent_path(), error);
@@ -162,7 +132,6 @@ public:
     }
 
     const path_layout::Resolver<Key>& layout() const { return m_layout; }
-    const Codec<NodeData>& codec() const { return *m_codec; }
 
 private:
     path_layout::Resolver<Key> m_layout;

@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <filesystem>
@@ -13,14 +31,10 @@ namespace store {
 
 template <HierarchyTraits Traits, typename NodeData, typename CodecResolver>
 Expected<IndexedStorage<Traits, NodeData>> open_index(
-    const std::filesystem::path& index_path, const IndexFormat<Traits> format, const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
+    const std::filesystem::path& index_path, const IndexFormat<Traits> format, IndexMetadata<Traits> metadata,
+    const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
 {
     using Key = typename Traits::Key;
-    auto metadata_result = format.read(index_path);
-    if (!metadata_result) {
-        return Error::propagate(std::move(metadata_result), "read storage index \"" + index_path.string() + "\"");
-    }
-    IndexMetadata<Traits> metadata = std::move(metadata_result.value());
     if (metadata.payload_class != expected_payload_class) {
         return Error::fail(Error::Code::Unsupported, "unexpected payload class: " + metadata.payload_class);
     }
@@ -39,11 +53,15 @@ Expected<IndexedStorage<Traits, NodeData>> open_index(
     if (!codec) {
         return Error::propagate(std::move(codec), "resolve storage codec \"" + metadata.codec_selector + "\"");
     }
+    if (auto valid = validate_hashes(metadata.index, metadata.hashes, codec.value()->supports_hashing()); !valid) {
+        return Error::propagate(std::move(valid), "validate storage index hashes");
+    }
 
     const std::filesystem::path base_path = index_path.parent_path();
     using Storage = store::Storage<Traits, NodeData>;
     return IndexedStorage<Traits, NodeData>(RawStorage<Traits, NodeData>(path_layout::Resolver<Key>(base_path, mapping.value()), std::move(codec.value())),
         std::move(metadata.index),
+        std::move(metadata.hashes),
         typename Storage::Persistence {
             format,
             index_path,
@@ -51,6 +69,19 @@ Expected<IndexedStorage<Traits, NodeData>> open_index(
             std::move(metadata.payload_class),
             std::move(metadata.codec_selector),
         });
+}
+
+template <HierarchyTraits Traits, typename NodeData, typename CodecResolver>
+Expected<IndexedStorage<Traits, NodeData>> open_index(
+    const std::filesystem::path& index_path, const IndexFormat<Traits> format,
+    const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
+{
+    auto metadata = format.read(index_path);
+    if (!metadata) {
+        return Error::propagate(std::move(metadata), "read storage index \"" + index_path.string() + "\"");
+    }
+    return open_index<Traits, NodeData>(index_path, format, std::move(*metadata),
+        expected_payload_class, std::forward<CodecResolver>(resolve_codec));
 }
 
 template <HierarchyTraits Traits, typename NodeData>
@@ -76,7 +107,7 @@ Expected<Storage<Traits, NodeData>> make_storage(const std::filesystem::path& ba
         std::move(codec_selector),
     };
     RawStorage<Traits, NodeData> raw(path_layout::Resolver<Key>(base_path, mapping), std::move(codec));
-    return Storage<Traits, NodeData>(std::move(raw), Index<Traits> {}, std::move(persistence), true);
+    return Storage<Traits, NodeData>(std::move(raw), Index<Traits> {}, Key2Hash_Map<Traits> {}, std::move(persistence), true);
 }
 
 } // namespace store

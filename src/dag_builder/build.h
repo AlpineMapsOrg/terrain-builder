@@ -1,10 +1,30 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <cstdint>
-#include <optional>
 #include <expected>
+#include <filesystem>
+#include <functional>
+#include <optional>
 
-#include "ContinuationMode.h"
 #include "Range.h"
 #include "build_config.h"
 #include "texturing.h"
@@ -29,18 +49,24 @@ struct BuildOptions {
     IncludeMode include_mode = IncludeMode::CurrentOnly;
     bool write_debug_meshes = IS_DEBUG_BUILD;
     bool parallelize = false;
-    ContinuationMode continuation_mode = ContinuationMode::Error;
 };
+
+// Debug meshes go beside the output as <output>-debug, also while it is built in <output>.part.
+std::filesystem::path debug_mesh_path(const std::filesystem::path& output_path);
 
 Expected<void> build_full(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options);
 
-Expected<void> build_levels(
-    const mesh::storage::IndexedStorage &input_storage,
-    dag::storage::IndexedStorage &output_storage,
-    const BuildOptions &options,
-    const AnyRange<uint32_t> &level_range);
+// Builds the levels into output_storage, linking nodes that the cache has instead of
+// building them. When stop_requested returns true, the active nodes are finished and
+// the result is an error with code Cancelled.
+Expected<void> build_levels(const mesh::storage::IndexedStorage& input_storage,
+    dag::storage::IndexedStorage& output_storage,
+    const BuildOptions& options,
+    const AnyRange<uint32_t>& level_range,
+    const dag::storage::IndexedStorage* cache = nullptr,
+    const std::function<bool()>& stop_requested = {});
 
 } // namespace dag

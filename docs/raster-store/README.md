@@ -1,25 +1,16 @@
 # Raster store design
 
-This directory describes a proposed authoritative raster store and the
-generation of delivery tile pyramids from it. The documents are a design
-baseline, not a finalized binary-format specification.
+This directory describes authoritative raster tile storage and the planned
+generation of delivery tile pyramids from it. RF import and merging are
+implemented in [tile-foundry](https://github.com/AlpineMapsOrg/tile-foundry);
+TB generation and the tile server remain future work.
 
 ## Documents
 
 - [Terminology](terminology.md)
-- [Status quo and reuse assessment](status-quo.md)
-- [Architecture](architecture.md)
+- [Architecture](architecture.md): components, lifecycle, and the planned
+  TB builder and tile server
 - [Storage format](storage-format.md)
-- [Sampling and pyramid generation](sampling-and-generation.md)
-- [Implemented refactor status](refactor-status.md)
+- [TODO](todo.md)
 
-## Plans
-
-- [Store refactoring plan](refactor-plan.md)
-- [Raster store TODO](todo.md)
-
-## Scope
-
-The documents mostly hold format information. The `rf_builder` and
-`rf_merger` documents are explicitly non-authoritative idea parking lots, not
-tool specifications or implementation plans.
+Decisions and their rationale are recorded in the [ADRs](../adr/).

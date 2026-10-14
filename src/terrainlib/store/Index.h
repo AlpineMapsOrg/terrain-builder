@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <cstddef>
@@ -7,7 +25,7 @@
 #include <utility>
 
 #include "Error.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "store/NodeStatus.h"
 #include "store/Traits.h"
 #include <libassert/assert.hpp>
@@ -164,6 +182,47 @@ public:
             return store::invalid_key_error<Traits>(key);
         }
         remove_raw_unchecked(key);
+        return {};
+    }
+
+    Expected<void> validate() const
+    {
+        for (const auto& [key, status] : m_index) {
+            if (!Traits::is_valid(key)) {
+                return Error::fail(Error::Code::CorruptData, "index contains an invalid hierarchy key");
+            }
+            if (static_cast<NodeStatus::Value>(status) > NodeStatus::Virtual) {
+                return Error::fail(Error::Code::CorruptData, "index contains an invalid node status");
+            }
+            bool has_child = false;
+            if (const auto children = Traits::children(key)) {
+                for (const auto& child : *children) {
+                    auto child_status = get(child);
+                    if (!child_status) {
+                        return Error::propagate(std::move(child_status), Error::Code::CorruptData, "validate indexed child");
+                    }
+                    has_child = has_child || child_status->has_value();
+                }
+            }
+            if ((status == NodeStatus::Leaf && has_child)
+                || ((status == NodeStatus::Inner || status == NodeStatus::Virtual) && !has_child)) {
+                return Error::fail(Error::Code::CorruptData, "index contains inconsistent node topology");
+            }
+            const auto parent = Traits::parent(key);
+            if (!parent) {
+                if (key != Traits::root()) {
+                    return Error::fail(Error::Code::CorruptData, "index contains a non-root node without a parent");
+                }
+                continue;
+            }
+            auto parent_status = get(*parent);
+            if (!parent_status) {
+                return Error::propagate(std::move(parent_status), Error::Code::CorruptData, "validate indexed parent");
+            }
+            if (!parent_status->has_value() || parent_status->value() == NodeStatus::Leaf) {
+                return Error::fail(Error::Code::CorruptData, "index contains a node without a valid indexed parent");
+            }
+        }
         return {};
     }
 

@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <filesystem>
@@ -8,15 +26,13 @@
 
 #include <expected>
 
-#include "log.h"
+#include <libassert/assert.hpp>
+
+#include "cli_support/log.h"
 #include "store/IndexFormat.h"
 #include "store/RawStorage.h"
 
 namespace store {
-
-struct StorageSettings {
-    bool allow_overwrite = false;
-};
 
 template <HierarchyTraits Traits, typename NodeData>
 class Storage {
@@ -33,14 +49,10 @@ public:
         std::string codec_selector;
     };
 
-    explicit Storage(RawStorage<Traits, NodeData> raw)
-        : m_raw(std::move(raw))
-    {
-    }
-
-    Storage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Persistence persistence, const bool dirty = false)
+    Storage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Key2Hash_Map<Traits> hashes, Persistence persistence, const bool dirty = false)
         : m_raw(std::move(raw))
         , m_index(std::move(index))
+        , m_hashes(std::move(hashes))
         , m_persistence(std::move(persistence))
         , m_dirty(dirty)
     {
@@ -54,11 +66,12 @@ public:
     Storage(Storage&& other) noexcept
         : m_raw(std::move(other.m_raw))
         , m_index(std::move(other.m_index))
+        , m_hashes(std::move(other.m_hashes))
         , m_persistence(std::move(other.m_persistence))
-        , m_settings(other.m_settings)
         , m_dirty(std::exchange(other.m_dirty, false))
     {
         other.m_index.reset();
+        other.m_hashes.clear();
         other.m_persistence.reset();
     }
 
@@ -70,29 +83,33 @@ public:
         finalize_displaced_state();
         m_raw = std::move(other.m_raw);
         m_index = std::move(other.m_index);
+        m_hashes = std::move(other.m_hashes);
         m_persistence = std::move(other.m_persistence);
-        m_settings = other.m_settings;
         m_dirty = std::exchange(other.m_dirty, false);
         other.m_index.reset();
+        other.m_hashes.clear();
         other.m_persistence.reset();
         return *this;
     }
 
+    // Compares the node's recorded hash with the identity of the files read.
     Expected<NodeData> load(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
-        if (m_index.has_value()) {
-            auto status = m_index->get(key);
-            if (!status) {
-                return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
-            }
-            if (!status->has_value() || status->value() == NodeStatus::Virtual) {
-                return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
-            }
+        auto status = m_index->get(key);
+        if (!status) {
+            return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
         }
-        return m_raw.load(key);
+        if (!status->has_value() || status->value() == NodeStatus::Virtual) {
+            return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
+        }
+        std::optional<NodeDataHashView> expected_hash;
+        if (const NodeDataHash* hash = recorded_hash(key)) {
+            expected_hash = *hash;
+        }
+        return m_raw.load(key, expected_hash);
     }
 
     Expected<void> save(const Key& key, const NodeData& data)
@@ -104,87 +121,89 @@ public:
         if (!exists) {
             return Error::propagate(std::move(exists), "check whether node " + Traits::key_to_string(key) + " exists before saving");
         }
-        if (exists.value() && !m_settings.allow_overwrite) {
+        if (exists.value()) {
             const auto node_paths = m_raw.paths(key).value();
             return Error::fail(Error::Code::AlreadyExists, "save node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
         }
 
-        auto result = m_raw.save(key, data);
-        if (!result) {
-            return result;
+        auto hash = write_payload(key, data);
+        if (!hash) {
+            return Error::propagate(std::move(hash));
         }
-        if (m_index.has_value()) {
-            auto added = m_index->add(key);
-            if (!added) {
-                return Error::propagate(std::move(added), "add saved node " + Traits::key_to_string(key) + " to storage index");
-            }
-            m_dirty = m_dirty || added.value();
+        return commit(key, std::move(*hash));
+    }
+
+    // Writes the node's payload files without recording the node in the index and
+    // returns the codec's hash of them; commit records both. save is the existence
+    // check, write_payload and commit.
+    // Thread safety: may run concurrently with itself and with any other method
+    // except construction, move, assignment and destruction. It reads only the
+    // layout and the codec, which never change after construction, and never the
+    // index. Codecs create files exclusively, so a second write of a key, concurrent
+    // or later, fails with AlreadyExists and leaves the first write's files intact.
+    // Payload files must not be removed or replaced externally while writes are
+    // outstanding. Linking from this storage requires completed, immutable payloads.
+    Expected<NodeDataHash> write_payload(const Key& key, const NodeData& data) const { return m_raw.save(key, data); }
+
+    // Records a node and the hash returned by write_payload in the index after
+    // write_payload has succeeded for that key. Without hashing support, the hash is
+    // ignored. Not thread safe. Fails with AlreadyExists if the node is already
+    // physically present in the index.
+    Expected<void> commit(const Key& key, NodeDataHash hash)
+    {
+        auto added = m_index->add(key);
+        if (!added) {
+            return Error::propagate(std::move(added), "add node " + Traits::key_to_string(key) + " to storage index");
         }
+        if (!added.value()) {
+            return Error::fail(Error::Code::AlreadyExists, "node " + Traits::key_to_string(key) + " is already physically present in the storage index");
+        }
+        if (supports_hashing()) {
+            ASSERT(hash.size() >= min_hash_size);
+            m_hashes.insert_or_assign(key, std::move(hash));
+        }
+        m_dirty = true;
         return {};
     }
 
-    Expected<void> copy_from(const Key& key, const Storage& source)
+    // The source must list the node as physically present. Linking transfers the source's
+    // recorded hash; both storages use the same codec, so the source has one if the target needs it.
+    Expected<void> link_from(const Key& key, const Storage& source)
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
         }
         auto exists = has(key);
         if (!exists) {
-            return Error::propagate(std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before copying");
+            return Error::propagate(std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before linking");
         }
-        if (exists.value() && !m_settings.allow_overwrite) {
+        if (exists.value()) {
             const auto node_paths = m_raw.paths(key).value();
-            return Error::fail(Error::Code::AlreadyExists, "copy node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
+            return Error::fail(Error::Code::AlreadyExists, "link node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
         }
-        const auto prepare_target = [&]() -> Expected<void> {
-            if (!exists.value() || !m_index.has_value()) {
-                return {};
-            }
-            auto removed = m_index->remove(key);
-            if (!removed) {
-                return Error::propagate(std::move(removed), "remove overwritten node " + Traits::key_to_string(key) + " from storage index");
-            }
-            m_dirty = m_dirty || removed.value();
-            return {};
-        };
+        auto source_exists = source.has(key);
+        if (!source_exists) {
+            return Error::propagate(std::move(source_exists), "check whether source node " + Traits::key_to_string(key) + " exists before linking");
+        }
+        if (!source_exists.value()) {
+            return Error::fail(Error::Code::NotFound, "source node " + Traits::key_to_string(key) + " is missing");
+        }
+        NodeDataHash source_hash;
+        if (const NodeDataHash* hash = source.recorded_hash(key)) {
+            source_hash = *hash;
+        }
 
-        auto result = m_raw.copy_from(key, source.m_raw, prepare_target);
+        auto result = m_raw.link_from(key, source.m_raw);
         if (!result) {
             return result;
         }
-        if (m_index.has_value()) {
-            auto added = m_index->add(key);
-            if (!added) {
-                return Error::propagate(std::move(added), "add copied node " + Traits::key_to_string(key) + " to storage index");
-            }
-            m_dirty = m_dirty || added.value();
-        }
-        return {};
-    }
-
-    Expected<bool> remove(const Key& key)
-    {
-        auto removed = m_raw.remove(key);
-        if (!removed) {
-            return removed;
-        }
-        if (m_index.has_value()) {
-            auto index_removed = m_index->remove(key);
-            if (!index_removed) {
-                return Error::propagate(std::move(index_removed), "remove node " + Traits::key_to_string(key) + " from storage index");
-            }
-            m_dirty = m_dirty || index_removed.value();
-        }
-        return removed.value();
+        return commit(key, std::move(source_hash));
     }
 
     Expected<bool> has(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
             return store::invalid_key_error<Traits>(key);
-        }
-        if (!m_index.has_value()) {
-            return m_raw.has(key);
         }
         auto status = m_index->get(key);
         if (!status) {
@@ -204,9 +223,22 @@ public:
         return node_paths->empty() ? m_raw.layout().node_path(key) : node_paths->front();
     }
 
+    // Returns the recorded identity of a physical node without accessing its files.
+    // Storage whose codec does not support hashing reports no hashes.
+    Expected<NodeDataHash> hash_for(const Key& key) const
+    {
+        if (!Traits::is_valid(key)) {
+            return store::invalid_key_error<Traits>(key);
+        }
+        const NodeDataHash* hash = recorded_hash(key);
+        if (hash == nullptr) {
+            return Error::fail(Error::Code::NotFound, "no hash is recorded for node " + Traits::key_to_string(key));
+        }
+        return *hash;
+    }
+
     const std::filesystem::path& base_path() const { return m_raw.layout().base_path(); }
     const path_layout::Resolver<Key>& layout() const { return m_raw.layout(); }
-    const Codec<NodeData>& codec() const { return m_raw.codec(); }
     std::optional<std::string_view> codec_selector() const
     {
         if (!m_persistence.has_value()) {
@@ -216,13 +248,6 @@ public:
     }
 
     bool is_indexed() const { return m_index.has_value(); }
-    void ensure_indexed()
-    {
-        if (!m_index.has_value()) {
-            m_index.emplace();
-            m_dirty = true;
-        }
-    }
 
     std::optional<std::reference_wrapper<const Index<Traits>>> index() const
     {
@@ -232,7 +257,7 @@ public:
         return std::cref(m_index.value());
     }
 
-    Expected<void> save_index() const
+    Expected<void> save_index()
     {
         if (!m_dirty) {
             return {};
@@ -242,6 +267,7 @@ public:
         }
         const IndexMetadata<Traits> metadata {
             m_index.value(),
+            m_hashes,
             m_persistence->layout_id,
             m_persistence->payload_class,
             m_persistence->codec_selector,
@@ -253,17 +279,7 @@ public:
         return result;
     }
 
-    Expected<void> save_or_create_index()
-    {
-        if (!m_index.has_value()) {
-            m_index.emplace();
-            m_dirty = true;
-        }
-        return save_index();
-    }
-
-    const StorageSettings& settings() const { return m_settings; }
-    StorageSettings& settings() { return m_settings; }
+    Expected<void> save_or_create_index() { return save_index(); }
 
 protected:
     Index<Traits>& index_mut() { return m_index.value(); }
@@ -272,6 +288,14 @@ protected:
     void set_index_dirty(const bool dirty = true) const { m_dirty = dirty; }
 
 private:
+    bool supports_hashing() const { return m_raw.supports_hashing(); }
+
+    const NodeDataHash* recorded_hash(const Key& key) const
+    {
+        const auto found = m_hashes.find(key);
+        return found == m_hashes.end() ? nullptr : &found->second;
+    }
+
     void finalize_displaced_state() noexcept
     {
         if (!m_dirty || !m_index.has_value()) {
@@ -285,8 +309,9 @@ private:
 
     RawStorage<Traits, NodeData> m_raw;
     std::optional<Index<Traits>> m_index;
+    // Identities of physical nodes; empty if the codec does not support hashing.
+    Key2Hash_Map<Traits> m_hashes;
     std::optional<Persistence> m_persistence = std::nullopt;
-    StorageSettings m_settings;
     mutable bool m_dirty = false;
 };
 

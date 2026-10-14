@@ -1,3 +1,23 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2023 Martin Braunsperger
+ * Copyright (C) 2023 Adrian Gawor
+ * Copyright (C) 2023 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <array>
 #include <fstream>
 #include <glm/glm.hpp>
@@ -6,6 +26,7 @@
 #include <limits>
 #include <new>
 #include <stdexcept>
+#include <system_error>
 
 #define CGLTF_IMPLEMENTATION
 #define CGLTF_WRITE_IMPLEMENTATION
@@ -15,7 +36,7 @@
 #undef CGLTF_WRITE_IMPLEMENTATION
 
 #include "io/utils.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/io/gltf.h"
 #include "mesh/io/texture.h"
 
@@ -274,7 +295,8 @@ Expected<void> write_serialized(
     const std::filesystem::path& path,
     const std::span<const std::uint8_t> json,
     const cgltf_data& data,
-    const bool binary_output)
+    const bool binary_output,
+    const ::io::byte::WriteMode mode)
 try {
     constexpr std::uint32_t glb_magic = 0x46546C67;
     constexpr std::uint32_t glb_version = 2;
@@ -312,13 +334,20 @@ try {
         }
     }
 
-    const std::error_code directory_error = ::io::utils::create_parent_directories(path);
-    if (directory_error) {
-        return Error::fail(Error::Code::Io, "create parent directories for", path, directory_error);
+    if (mode == ::io::byte::WriteMode::Replace) {
+        return Error::fail(Error::Code::Unsupported, "replace glTF file", path);
+    }
+    auto directories = ::io::utils::create_parent_directories(path);
+    if (!directories) {
+        return Error::propagate(std::move(directories), "write glTF file");
     }
 
-    std::ofstream file(path, std::ios::binary);
+    std::ofstream file(path, std::ios::binary | (mode == ::io::byte::WriteMode::CreateNew ? std::ios::noreplace : std::ios::trunc));
     if (!file.is_open()) {
+        std::error_code error;
+        if (mode == ::io::byte::WriteMode::CreateNew && std::filesystem::exists(std::filesystem::symlink_status(path, error))) {
+            return Error::fail(Error::Code::AlreadyExists, "create glTF file", path);
+        }
         return Error::fail(Error::Code::Io, "open glTF file for writing", path);
     }
 
@@ -874,7 +903,7 @@ Expected<void> save_to_path(
     if (!serialized) {
         return Error::propagate(std::move(serialized), "serialize glTF output");
     }
-    auto written = write_serialized(path, *serialized, data, binary_output);
+    auto written = write_serialized(path, *serialized, data, binary_output, options.write_mode);
     if (!written) {
         return Error::propagate(std::move(written), "write glTF output");
     }

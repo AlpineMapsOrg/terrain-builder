@@ -1,0 +1,152 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
+#include "raster_store/io/manifest.h"
+
+#include <algorithm>
+#include <bit>
+#include <limits>
+#include <system_error>
+#include <unordered_set>
+
+#include "raster_store/path_layout.h"
+
+namespace raster_store::io::manifest {
+
+Expected<void> validate(const Metadata& metadata)
+{
+    if (metadata.layout_id.empty() || metadata.payload_type.empty() || metadata.codec_selector.empty()) {
+        return Error::fail(Error::Code::InvalidInput, "raster metadata requires layout, payload type, and codec selector");
+    }
+    if (!std::has_single_bit(metadata.nominal_tile_size) || metadata.halo_width > metadata.nominal_tile_size
+        || metadata.halo_width > ((std::numeric_limits<unsigned>::max)() - metadata.nominal_tile_size) / 2
+        || metadata.stored_tile_size != metadata.nominal_tile_size + 2 * metadata.halo_width) {
+        return Error::fail(Error::Code::InvalidInput, "invalid raster nominal size, stored size, or halo width");
+    }
+    if (metadata.value_mapping != pixel::Mapping::Linear && metadata.value_mapping != pixel::Mapping::SRGBA) {
+        return Error::fail(Error::Code::InvalidInput, "unknown raster value mapping");
+    }
+    return {};
+}
+
+Expected<Metadata> read_metadata(const std::filesystem::path& base_path)
+{
+    auto metadata = ::io::envelope::read<MetadataSchema>(base_path / metadata_file_name);
+    if (!metadata) {
+        return metadata;
+    }
+    if (auto valid = validate(*metadata); !valid) {
+        return Error::propagate(std::move(valid), Error::Code::CorruptData, "validate raster metadata");
+    }
+    return metadata;
+}
+
+Expected<void> write_metadata(const Metadata& metadata, const std::filesystem::path& base_path)
+{
+    return ::io::envelope::write<MetadataSchema>(metadata, base_path / metadata_file_name, ::io::byte::WriteMode::Overwrite).transform([](auto&&) { });
+}
+
+detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index, const store::Key2Hash_Map<StoreTraits>& hashes)
+{
+    detail::v1::Hierarchy encoded;
+    encoded.entries.reserve(index.size());
+    for (const auto& [key, status] : index) {
+        encoded.entries.push_back({ key, status });
+    }
+    std::ranges::sort(encoded.entries, [](const auto& left, const auto& right) { return left.id < right.id; });
+    encoded.hashes.reserve(hashes.size());
+    for (const auto& [key, hash] : hashes) {
+        encoded.hashes.push_back({ key, hash });
+    }
+    std::ranges::sort(encoded.hashes, [](const auto& left, const auto& right) { return left.id < right.id; });
+    return encoded;
+}
+
+Expected<store::IndexContents<StoreTraits>> decode_index(const detail::v1::Hierarchy& encoded)
+{
+    store::IndexContents<StoreTraits> decoded;
+    store::Index<StoreTraits>& index = decoded.index;
+    std::unordered_set<radix::tile::Id, StoreTraits::Hasher> seen;
+    for (const auto& entry : encoded.entries) {
+        if (!StoreTraits::is_valid(entry.id)) {
+            return Error::fail(Error::Code::CorruptData, "raster index contains an invalid tile ID");
+        }
+        if (!seen.insert(entry.id).second) {
+            return Error::fail(Error::Code::CorruptData, "raster index contains a duplicate tile ID");
+        }
+        if (entry.status > store::NodeStatus::Virtual) {
+            return Error::fail(Error::Code::CorruptData, "raster index contains an invalid node status");
+        }
+        auto added = index.set_raw(entry.id, store::NodeStatus { entry.status });
+        if (!added) {
+            return Error::propagate(std::move(added), Error::Code::CorruptData, "decode raster index entry");
+        }
+    }
+    if (auto valid = index.validate(); !valid) {
+        return Error::propagate(std::move(valid), "validate raster index topology");
+    }
+    for (const auto& entry : encoded.hashes) {
+        if (!StoreTraits::is_valid(entry.id)) {
+            return Error::fail(Error::Code::CorruptData, "raster index contains a hash for an invalid tile ID");
+        }
+        if (!decoded.hashes.emplace(entry.id, entry.hash).second) {
+            return Error::fail(Error::Code::CorruptData, "raster index contains a duplicate tile hash");
+        }
+    }
+    return decoded;
+}
+
+Expected<store::IndexContents<StoreTraits>> read_hierarchy(const std::filesystem::path& index_path)
+{
+    auto encoded = ::io::envelope::read<IndexSchema>(index_path);
+    if (!encoded) {
+        return Error::propagate(std::move(encoded), "read raster hierarchy");
+    }
+    return decode_index(*encoded);
+}
+
+Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::filesystem::path& index_path)
+{
+    auto metadata = read_metadata(index_path.parent_path());
+    if (!metadata) {
+        return Error::propagate(std::move(metadata));
+    }
+    auto contents = read_hierarchy(index_path);
+    if (!contents) {
+        return Error::propagate(std::move(contents));
+    }
+    return store::IndexMetadata<StoreTraits> {
+        std::move(contents->index), std::move(contents->hashes), metadata->layout_id, metadata->payload_type, metadata->codec_selector
+    };
+}
+
+Expected<void> write_index_file(const std::filesystem::path& index_path, const store::IndexMetadata<StoreTraits>& metadata)
+{
+    auto written = ::io::envelope::write<IndexSchema>(encode_index(metadata.index, metadata.hashes), index_path, ::io::byte::WriteMode::Replace);
+    if (!written) {
+        return Error::propagate(std::move(written), "checkpoint raster index");
+    }
+    return {};
+}
+
+store::IndexFormat<StoreTraits> index_format()
+{
+    return { index_file_name, read_index_file, write_index_file, path_layout::zoom_xy_google::from_id, path_layout::zoom_xy_google::zoom_x_y_google };
+}
+
+} // namespace raster_store::io::manifest

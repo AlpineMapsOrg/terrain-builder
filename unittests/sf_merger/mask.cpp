@@ -1,8 +1,27 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "../catch2_helpers.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <filesystem>
 
 #include <CGAL/Polygon_mesh_processing/orientation.h>
@@ -18,58 +37,6 @@
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "utils.h"
-
-TEST_CASE("Mask simplification uses a fixed tenth of a metre") {
-    OGRSpatialReference projected;
-    REQUIRE(projected.importFromEPSG(31287) == OGRERR_NONE);
-
-    const std::optional<double> projected_tolerance = mask::simplification_tolerance(projected);
-    REQUIRE(projected_tolerance);
-    CHECK(*projected_tolerance == Catch::Approx(0.1));
-
-    OGRSpatialReference geographic;
-    REQUIRE(geographic.SetWellKnownGeogCS("WGS84") == OGRERR_NONE);
-
-    const std::optional<double> geographic_tolerance = mask::simplification_tolerance(geographic);
-    REQUIRE(geographic_tolerance);
-    CHECK(*geographic_tolerance == Catch::Approx(
-        0.1 / geographic.GetSemiMajor() / geographic.GetAngularUnits()));
-}
-
-TEST_CASE("Mask simplification preserves polygon topology") {
-    OGRLinearRing outer;
-    outer.addPoint(0.0, 0.0);
-    outer.addPoint(1.0, 0.01);
-    outer.addPoint(2.0, 0.0);
-    outer.addPoint(2.0, 2.0);
-    outer.addPoint(0.0, 2.0);
-    outer.addPoint(0.0, 0.0);
-
-    OGRLinearRing hole;
-    hole.addPoint(0.5, 0.5);
-    hole.addPoint(1.0, 0.51);
-    hole.addPoint(1.5, 0.5);
-    hole.addPoint(1.5, 1.5);
-    hole.addPoint(0.5, 1.5);
-    hole.addPoint(0.5, 0.5);
-
-    OGRPolygon polygon;
-    REQUIRE(polygon.addRing(&outer) == OGRERR_NONE);
-    REQUIRE(polygon.addRing(&hole) == OGRERR_NONE);
-    REQUIRE(polygon.IsValid());
-
-    const uint64_t original_point_count = mask::point_count(polygon);
-    std::unique_ptr<OGRGeometry> simplified = mask::simplify_geometry(polygon, 0.1);
-
-    REQUIRE(simplified);
-    REQUIRE_FALSE(simplified->IsEmpty());
-    REQUIRE(simplified->IsValid());
-    CHECK(mask::point_count(*simplified) < original_point_count);
-
-    const OGRPolygon *simplified_polygon = simplified->toPolygon();
-    REQUIRE(simplified_polygon);
-    CHECK(simplified_polygon->getNumInteriorRings() == 1);
-}
 
 namespace {
 
@@ -160,6 +127,28 @@ TEST_CASE("mask triangulation and extrusion preserve polygon components") {
             check_closed_volume(component);
         }
     }
+}
+
+TEST_CASE("masks split at the antimeridian are projected around their centre")
+{
+    MultipolygonWithHoles2 polygons;
+    polygons.add_polygon(make_square(glm::dvec2(170, -20), glm::dvec2(180, -15)));
+    polygons.add_polygon(make_square(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
+    const SpherePolygonMask mask = mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), gis::srs::wgs84() }, earth::radius());
+    REQUIRE(mask.polygons.number_of_polygons_with_holes() == 2);
+    radix::geometry::Aabb2d projected_bounds;
+    for (const auto& polygon : mask.polygons.polygons_with_holes()) {
+        for (const auto& point : polygon.outer_boundary()) {
+            const glm::dvec2 projected = convert::to_glm_point(point);
+            REQUIRE(std::isfinite(projected.x));
+            REQUIRE(std::isfinite(projected.y));
+            projected_bounds.expand_by(projected);
+        }
+    }
+    // In radians; the mask spans 20 by 5 degrees. A tangent point far from the mask would spread
+    // it over the projection, or, at a pole, make it degenerate.
+    CHECK(projected_bounds.width() < 0.5);
+    CHECK(projected_bounds.height() < 0.5);
 }
 
 TEST_CASE("multi-component masks use union semantics") {

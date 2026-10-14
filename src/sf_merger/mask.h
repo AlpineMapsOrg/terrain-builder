@@ -1,22 +1,43 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <cmath>
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include <gdal_priv.h>
 #include <glm/gtx/norm.hpp>
 
-#include "Dataset.h"
+#include "gis/Dataset.h"
+#include "gis/vector_mask.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
 #include "mesh/validate_cgal.h"
 #include "mesh/bounds.h"
-#include "srs.h"
+#include "gis/srs.h"
 #include "SphereProjector.h"
 
 #include <CGAL/Boolean_set_operations_2.h>
@@ -31,17 +52,13 @@
 #include <CGAL/Triangulation_face_base_with_info_2.h>
 #include <CGAL/mark_domain_in_triangulation.h>
 
-using Kernel = cgal::kernel::epeck::Kernel;
-using Point2 = Kernel::Point_2;
-using Polygon2 = CGAL::Polygon_2<Kernel>;
-using PolygonWithHoles2 = CGAL::Polygon_with_holes_2<Kernel>;
-using PolygonSet2 = CGAL::Polygon_set_2<Kernel>;
-using MultipolygonWithHoles2 = CGAL::Multipolygon_with_holes_2<Kernel>;
-
-struct ReferencedPolygonMask {
-    MultipolygonWithHoles2 polygons;
-    OGRSpatialReference srs;
-};
+using gis::vector_mask::Kernel;
+using gis::vector_mask::Point2;
+using gis::vector_mask::Polygon2;
+using gis::vector_mask::PolygonWithHoles2;
+using gis::vector_mask::PolygonSet2;
+using gis::vector_mask::MultipolygonWithHoles2;
+using gis::vector_mask::ReferencedPolygonMask;
 
 struct SpherePolygonMask {
     MultipolygonWithHoles2 polygons;
@@ -89,211 +106,23 @@ namespace {
     }
 }
 
-enum class LoadErrorKind {
-    UnsupportedFormat,
-    FileNotFound,
-    EmptySource,
-    InvalidGeometry,
-    UnsupportedSpatialReference
-};
-
-class LoadError {
-public:
-    LoadError() = default;
-    constexpr LoadError(LoadErrorKind kind)
-        : kind(kind) {}
-
-    operator LoadErrorKind() const {
-        return this->kind;
-    }
-    constexpr bool operator==(LoadError other) const {
-        return this->kind == other.kind;
-    }
-    constexpr bool operator!=(LoadError other) const {
-        return this->kind != other.kind;
-    }
-
-    std::string description() const {
-        switch (kind) {
-        case LoadErrorKind::UnsupportedFormat:
-            return "format not supported";
-        case LoadErrorKind::FileNotFound:
-            return "file not found";
-        case LoadErrorKind::EmptySource:
-            return "empty input source";
-        case LoadErrorKind::InvalidGeometry:
-            return "invalid geometry";
-        case LoadErrorKind::UnsupportedSpatialReference:
-            return "unsupported spatial reference";
-        default:
-            return "unknown error";
-        }
-    }
-
-    friend std::ostream &operator<<(std::ostream &os, const LoadError &err) {
-        return os << err.description();
-    }
-
-private:
-    LoadErrorKind kind;
-};
+inline constexpr double simplification_tolerance_m = 0.1;
 
 namespace {
-constexpr double simplification_tolerance_metres = 0.1;
-
-std::optional<double> simplification_tolerance(const OGRSpatialReference &srs) {
-    if (srs.IsProjected()) {
-        const double metres_per_unit = srs.GetLinearUnits();
-        if (metres_per_unit > 0) {
-            return simplification_tolerance_metres / metres_per_unit;
-        }
-    }
-
-    if (srs.IsGeographic()) {
-        OGRErr error = OGRERR_NONE;
-        const double semi_major_axis_metres = srs.GetSemiMajor(&error);
-        const double radians_per_unit = srs.GetAngularUnits();
-        if (error == OGRERR_NONE && semi_major_axis_metres > 0 && radians_per_unit > 0) {
-            return simplification_tolerance_metres / semi_major_axis_metres / radians_per_unit;
-        }
-    }
-
-    return std::nullopt;
-}
-
-uint64_t point_count(const OGRGeometry &geometry) {
-    const OGRwkbGeometryType geometry_type = wkbFlatten(geometry.getGeometryType());
-    if (geometry_type == wkbPolygon) {
-        const OGRPolygon *polygon = geometry.toPolygon();
-        const OGRLinearRing *exterior_ring = polygon->getExteriorRing();
-        uint64_t count = exterior_ring ? exterior_ring->getNumPoints() : 0;
-        for (int i = 0; i < polygon->getNumInteriorRings(); ++i) {
-            count += polygon->getInteriorRing(i)->getNumPoints();
-        }
-        return count;
-    }
-
-    if (geometry_type == wkbMultiPolygon || geometry_type == wkbGeometryCollection) {
-        const OGRGeometryCollection *collection = geometry.toGeometryCollection();
-        uint64_t count = 0;
-        for (int i = 0; i < collection->getNumGeometries(); ++i) {
-            count += point_count(*collection->getGeometryRef(i));
-        }
-        return count;
-    }
-
-    return 0;
-}
-
-std::unique_ptr<OGRGeometry> simplify_geometry(
-    const OGRGeometry &geometry,
-    const double tolerance
-) {
-    return std::unique_ptr<OGRGeometry>(geometry.SimplifyPreserveTopology(tolerance));
-}
-
-std::optional<Polygon2> convert_ring(const OGRLinearRing &ring, bool is_outer) {
-    uint32_t num_points = ring.getNumPoints();
-    if (ring.get_IsClosed()) {
-        num_points--;
-    }
-    if (num_points < 3) {
-        return std::nullopt;
-    }
-
-    Polygon2 polygon;
-    for (uint32_t i = 0; i < num_points; i++) {
-        polygon.push_back(Point2(ring.getX(i), ring.getY(i)));
-    }
-
-    if (!polygon.is_simple()) {
-        // Contains self intersections or duplicate points
-        LOG_WARN("Skipping non-simple polygon");
-        return std::nullopt;
-    }
-
-    if (is_outer != polygon.is_counterclockwise_oriented()) {
-        polygon.reverse_orientation();
-    }
-
-    return polygon;
-}
-
-std::optional<PolygonWithHoles2> convert_polygon(const OGRPolygon &ogr_polygon) {
-    const OGRLinearRing *outer_ring = ogr_polygon.getExteriorRing();
-    DEBUG_ASSERT(outer_ring);
-
-    auto outer_opt = convert_ring(*outer_ring, true);
-    if (!outer_opt) {
-        return std::nullopt;
-    }
-    const Polygon2 outer = std::move(outer_opt.value());
-
-    PolygonWithHoles2 polygon(outer);
-    const uint32_t num_holes = static_cast<uint32_t>(ogr_polygon.getNumInteriorRings());
-    for (uint32_t i = 0; i < num_holes; i++) {
-        const OGRLinearRing *inner = ogr_polygon.getInteriorRing(i);
-        DEBUG_ASSERT(inner);
-        auto hole_opt = convert_ring(*inner, false);
-        if (!hole_opt) {
-            continue;
-        }
-        Polygon2 hole = std::move(hole_opt.value());
-        polygon.add_hole(std::move(hole));
-    }
-
-    return polygon;
-}
-
-void process_geometry(const OGRGeometry &geometry, MultipolygonWithHoles2 &out) {
-    const OGRwkbGeometryType geometry_type = wkbFlatten(geometry.getGeometryType()); // map 2.5d to 2d
-
-    switch (geometry_type) {
-    case wkbPolygon: {
-        const OGRPolygon *polygon = geometry.toPolygon();
-        DEBUG_ASSERT(polygon);
-        if (auto result = convert_polygon(*polygon)) {
-            out.add_polygon_with_holes(std::move(*result));
-        }
-        break;
-    }
-
-    case wkbMultiPolygon:
-    case wkbGeometryCollection: {
-        const OGRGeometryCollection *collection = geometry.toGeometryCollection();
-        DEBUG_ASSERT(collection);
-        const uint32_t num_children = collection->getNumGeometries();
-        for (uint32_t i = 0; i < num_children; i++) {
-            process_geometry(*collection->getGeometryRef(i), out);
-        }
-        break;
-    }
-
-    default:
-        LOG_WARN("Skipping unsupported geometry type: {}", OGRGeometryTypeToName(geometry_type));
-        break;
-    }
-}
-
-void convert_to_ecef_and_project_onto_sphere(MultipolygonWithHoles2 &polygons, const SphereProjector &projector, const OGRSpatialReference &srs) {
-    const auto srs_transform = srs::transformation(srs, srs::ecef());
-    for (auto &polygon : polygons.polygons_with_holes()) {
-        for (auto &cgal_point : polygon.outer_boundary()) {
-            const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-            const glm::dvec3 ecef_point = srs::transform_point(srs_transform.get(), glm::dvec3(source_point, 0));
-            const glm::dvec2 projected_point = projector.project_point(ecef_point);
-            cgal_point = convert::to_cgal_point<Kernel>(projected_point);
-        }
-        for (auto &hole : polygon.holes()) {
-            for (auto &cgal_point : hole) {
-                const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-                const glm::dvec3 ecef_point = srs::transform_point(srs_transform.get(), glm::dvec3(source_point, 0));
-                const glm::dvec2 projected_point = projector.project_point(ecef_point);
-                cgal_point = convert::to_cgal_point<Kernel>(projected_point);
+    template <typename Function>
+    void for_each_point(MultipolygonWithHoles2& polygons, Function function)
+    {
+        for (auto& polygon : polygons.polygons_with_holes()) {
+            for (auto& cgal_point : polygon.outer_boundary()) {
+                function(cgal_point);
+            }
+            for (auto& hole : polygon.holes()) {
+                for (auto& cgal_point : hole) {
+                    function(cgal_point);
+                }
             }
         }
     }
-}
 
 /*
 glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
@@ -332,68 +161,22 @@ glm::dvec2 calculate_radius_range(const std::span<const SimpleMesh3d> meshes) {
 
 } // namespace
 
-inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_dataset(Dataset& mask_dataset) {
-    GDALDataset *dataset = mask_dataset.gdalDataset();
-
-    OGRSpatialReference srs;
-    // TODO: remove this try catch
-    try {
-        srs = mask_dataset.srs();
-    } catch (std::runtime_error &e) {
-        LOG_WARN("Mask does not reference an srs, assuming WGS84");
-        srs = srs::wgs84();
-        // srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT);
-    }
-
-    const std::optional<double> tolerance = simplification_tolerance(srs);
-    if (!tolerance) {
-        LOG_ERROR("Cannot express the {} m mask simplification tolerance in the source SRS",
-            simplification_tolerance_metres);
-        return std::unexpected(LoadErrorKind::UnsupportedSpatialReference);
-    }
-
-    MultipolygonWithHoles2 polygons;
-    for (auto &&feature_layer_pair : dataset->GetFeatures()) {
-        OGRGeometry *geometry = feature_layer_pair.feature->GetGeometryRef();
-        if (!geometry) {
-            LOG_ERROR("Mask feature has no geometry");
-            return std::unexpected(LoadErrorKind::InvalidGeometry);
-        }
-
-        const uint64_t original_point_count = point_count(*geometry);
-        std::unique_ptr<OGRGeometry> simplified = simplify_geometry(*geometry, *tolerance);
-        if (!simplified || simplified->IsEmpty() || !simplified->IsValid()) {
-            LOG_ERROR("Failed to simplify mask geometry while preserving its topology");
-            return std::unexpected(LoadErrorKind::InvalidGeometry);
-        }
-
-        LOG_DEBUG("Simplified mask with {} m tolerance from {} to {} points",
-            simplification_tolerance_metres, original_point_count, point_count(*simplified));
-        process_geometry(*simplified, polygons);
-    }
-
-    if (polygons.is_empty()) {
-        LOG_ERROR("No valid polygons found in mask dataset '{}'", mask_dataset.name());
-        return std::unexpected(LoadErrorKind::EmptySource);
-    }
-
-    return ReferencedPolygonMask{.polygons = std::move(polygons), .srs = std::move(srs)};
-}
-
 inline SpherePolygonMask project_onto_sphere(ReferencedPolygonMask ref_mask, const double radius) {
     auto mask_2d = std::move(ref_mask.polygons);
     auto srs = std::move(ref_mask.srs);
 
     // Translate to ecef and project onto sphere
-    const auto source_bounds_cgal = mask_2d.bbox();
-    const radix::geometry::Aabb3d source_bounds(
-        glm::dvec3(source_bounds_cgal.xmin(), source_bounds_cgal.ymin(), 0),
-        glm::dvec3(source_bounds_cgal.xmax(), source_bounds_cgal.ymax(), 0));
-    const radix::geometry::Aabb3d ecef_bounds = srs::non_exact_bounds_transform(source_bounds, srs, srs::ecef());
-    const glm::dvec3 bounds_center = ecef_bounds.centre();
-    const glm::dvec3 tangent_point = scale_to_length(bounds_center, radius);
+    std::vector<glm::dvec3> ecef_points;
+    for_each_point(mask_2d, [&](const Point2& cgal_point) { ecef_points.emplace_back(convert::to_glm_point(cgal_point), 0); });
+    const auto srs_transform = Error::asserting_unwrap(gis::srs::transformation(srs, gis::srs::ecef()));
+    Error::asserting_unwrap(gis::srs::transform_points_inplace(srs_transform.get(), ecef_points));
+    // Unlike the bounds in the source srs, the bounds of the points stay on the mask's side of the
+    // earth for masks split at the antimeridian.
+    const radix::geometry::Aabb3d ecef_bounds = radix::geometry::find_bounds(std::span<const glm::dvec3>(ecef_points));
+    const glm::dvec3 tangent_point = scale_to_length(ecef_bounds.centre(), radius);
     const SphereProjector projector(tangent_point);
-    convert_to_ecef_and_project_onto_sphere(mask_2d, projector, srs);
+    auto ecef_point = ecef_points.begin();
+    for_each_point(mask_2d, [&](Point2& cgal_point) { cgal_point = convert::to_cgal_point<Kernel>(projector.project_point(*ecef_point++)); });
     return SpherePolygonMask(mask_2d, projector);
 }
 
@@ -552,25 +335,18 @@ inline MeshMask extrude(
     return extrude(mask, padded_radius_range);
 }
 
-inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path(const std::filesystem::path &path) {
-    if (!std::filesystem::exists(path)) {
-        LOG_ERROR("Mask file does not exist: {}", path);
-        return std::unexpected(LoadErrorKind::FileNotFound);
+inline Expected<ReferencedPolygonMask> load_referenced_from_path(const std::filesystem::path &path) {
+    auto opened = gis::Dataset::open_vector(path);
+    if (!opened) {
+        return Error::propagate(std::move(opened));
     }
-
-    auto ds_opt = Dataset::open_vector(path);
-    if (!ds_opt.has_value()) {
-        LOG_ERROR("Failed to load mask datset: {}", path);
-        return std::unexpected(LoadErrorKind::FileNotFound);
-    }
-    Dataset dataset = std::move(ds_opt.value());
-    return load_referenced_from_dataset(dataset);
+    return gis::vector_mask::simplify(gis::vector_mask::load(*opened), simplification_tolerance_m);
 }
 
-inline std::expected<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
+inline Expected<MeshMask> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
     auto ref_mask_res = load_referenced_from_path(path);
     if (!ref_mask_res) {
-        return std::unexpected(ref_mask_res.error());
+        return Error::propagate(std::move(ref_mask_res));
     }
     ReferencedPolygonMask ref_polygon_mask = std::move(ref_mask_res.value());
     SpherePolygonMask sphere_polygon_mask = project_onto_sphere(std::move(ref_polygon_mask), radius_range.x);

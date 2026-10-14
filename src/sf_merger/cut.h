@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <expected>
@@ -5,7 +24,7 @@
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mask.h"
 #include "octree/Id.h"
 #include "mesh/storage.h"
@@ -46,9 +65,9 @@ inline Expected<void> cut_leaf_node(
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        auto copy_result = ctx.output.copy_from(id, ctx.input);
-        if (!copy_result) {
-            return copy_result;
+        auto link_result = ctx.output.link_from(id, ctx.input);
+        if (!link_result) {
+            return link_result;
         }
     } else {
         const SimpleMesh &clipped_mesh = clipped;
@@ -155,20 +174,22 @@ inline Expected<void> cut_dataset(
     const std::filesystem::path &output_path,
     const bool keep_inside) {
     LOG_TRACE("Creating output dataset at {}", output_path);
-    std::filesystem::create_directories(output_path);
-
     mesh::storage::OpenOptions options;
-    options.default_mapping = octree::store_layout::level_and_coordinate_directories();
-    options.preferred_extension = ".glb";
-    auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
+    options.default_mapping = input_dataset.layout().mapping();
+    options.preferred_extension = std::string(input_dataset.codec_selector().value_or(".sfmesh"));
+    auto output_result = mesh::storage::create(output_path, std::move(options));
     if (!output_result) {
-        return Error::propagate(
-            std::move(output_result), "open cut output dataset \"" + output_path.string() + "\"");
+        return Error::propagate(std::move(output_result), "create cut output dataset \"" + output_path.string() + "\"");
     }
     mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
-    if (!output_dataset.index().empty()) {
-        return Error::fail(Error::Code::AlreadyExists, "output dataset already contains nodes: " + output_path.string());
-    }
 
-    return cut_dataset(input_dataset, mask, output_dataset, keep_inside);
+    auto cut = cut_dataset(input_dataset, mask, output_dataset, keep_inside);
+    if (!cut) {
+        return cut;
+    }
+    auto published = mesh::storage::publish(std::move(output_dataset));
+    if (!published) {
+        return Error::propagate(std::move(published), "publish cut output dataset \"" + output_path.string() + "\"");
+    }
+    return {};
 }

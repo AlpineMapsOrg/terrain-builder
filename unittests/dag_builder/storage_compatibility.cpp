@@ -1,5 +1,25 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
+#include <cstddef>
 #include <filesystem>
 #include <future>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -7,6 +27,8 @@
 #include "build.h"
 #include "codec.h"
 #include "dag_node.h"
+#include "io/byte.h"
+#include "io/envelope.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/storage.h"
 #include "storage.h"
@@ -115,6 +137,27 @@ TEST_CASE("DAG codec rejects invalid batches and inconsistent files")
     }
 }
 
+TEST_CASE("DAG codec never replaces existing files")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto node_paths = codec.paths(node_path);
+    REQUIRE(codec.write(node_path, sample_batch()).has_value());
+    const auto original_data = io::byte::read(node_paths[0]);
+    const auto original_metadata = io::byte::read(node_paths[1]);
+    REQUIRE(original_data.has_value());
+    REQUIRE(original_metadata.has_value());
+
+    auto batch = sample_batch();
+    batch.metadata.groups.front().error = 99.0;
+    const auto rejected = codec.write(node_path, batch);
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
+    CHECK(io::byte::read(node_paths[0]).value() == original_data.value());
+    CHECK(io::byte::read(node_paths[1]).value() == original_metadata.value());
+}
+
 TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]")
 {
     const auto batch_codec = dag::codec::cluster_batch_from_extension(".dag");
@@ -177,7 +220,7 @@ TEST_CASE("DAG storage hard-links both files for the same format", "[store][copy
     auto target = std::move(*target_result);
     const octree::Id root = octree::Id::root();
     REQUIRE(source.save(root, sample_batch()).has_value());
-    REQUIRE(target.copy_from(root, source).has_value());
+    REQUIRE(target.link_from(root, source).has_value());
 
     const auto source_paths = source.paths(root);
     const auto target_paths = target.paths(root);
@@ -216,4 +259,99 @@ TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf
     CHECK(built.error().code() == Error::Code::CorruptData);
     CHECK(built.error().to_string().contains(root.to_string()));
     CHECK(output.index().empty());
+}
+
+TEST_CASE("DAG builds stop on request and reuse cached nodes", "[dag][snapshot]")
+{
+    TemporaryDirectory input_directory;
+    TemporaryDirectory output_directory;
+    auto input_result = mesh::storage::open_folder_indexed(input_directory.path());
+    REQUIRE(input_result.has_value());
+    auto input = std::move(input_result.value());
+    REQUIRE(input.save(octree::Id::root(), sample_mesh()).has_value());
+    const dag::BuildOptions options {
+        .clusters_per_partition = 1,
+        .target_ratio = 1.0f,
+        .relative_target_error = std::nullopt,
+        .write_debug_meshes = false,
+    };
+
+    SECTION("stop")
+    {
+        auto output = dag::storage::create(output_directory.path() / "stopped").value();
+        const auto built = dag::build_levels(input, output, options, RangeFull {}, nullptr, [] { return true; });
+        REQUIRE_FALSE(built.has_value());
+        CHECK(built.error().code() == Error::Code::Cancelled);
+        CHECK(output.index().empty());
+    }
+
+    SECTION("cache")
+    {
+        auto first = dag::storage::create(output_directory.path() / "first").value();
+        REQUIRE(dag::build_levels(input, first, options, RangeFull {}).has_value());
+        REQUIRE_FALSE(first.index().empty());
+
+        auto output = dag::storage::create(output_directory.path() / "second").value();
+        REQUIRE(dag::build_levels(input, output, options, RangeFull {}, &first).has_value());
+        CHECK(output.index().size() == first.index().size());
+        for (const auto& [id, status] : first.index()) {
+            if (status != store::NodeStatus::Virtual) {
+                CHECK(std::filesystem::equivalent(first.paths(id)->front(), output.paths(id)->front()));
+            }
+        }
+    }
+}
+
+TEST_CASE("DAG node hashes concatenate the clustering and metadata hashes", "[dag][codec][hash]")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto hash = codec.write(node_path, sample_batch());
+    REQUIRE(hash.has_value());
+    REQUIRE(hash->size() == 16);
+    const auto node_paths = codec.paths(node_path);
+    CHECK(std::vector(hash->begin(), hash->begin() + 8) == io::envelope::read_header(node_paths[0])->hash);
+    CHECK(std::vector(hash->begin() + 8, hash->end()) == io::envelope::read_header(node_paths[1])->hash);
+}
+
+TEST_CASE("DAG reads verify each half of an expected node hash", "[dag][codec][hash]")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto node_paths = codec.paths(node_path);
+    const auto hash = codec.write(node_path, sample_batch());
+    REQUIRE(hash.has_value());
+    REQUIRE(codec.read(node_path, *hash).has_value());
+
+    auto expected = *hash;
+    SECTION("clustering half") { expected.front() ^= std::byte { 1 }; }
+    SECTION("metadata half") { expected.back() ^= std::byte { 1 }; }
+    SECTION("another length") { expected.resize(8); }
+    const auto result = codec.read(node_path, expected);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().code() == Error::Code::CorruptData);
+}
+
+TEST_CASE("DAG metadata reads verify only the metadata half", "[dag][codec][hash]")
+{
+    TemporaryDirectory output;
+    dag::codec::ClusterBatch codec;
+    dag::codec::Metadata metadata_codec;
+    CHECK(metadata_codec.supports_hashing());
+    const std::filesystem::path node_path(output.path() / "node");
+    const auto hash = codec.write(node_path, sample_batch());
+    REQUIRE(hash.has_value());
+    REQUIRE(std::filesystem::remove(codec.paths(node_path).front()));
+
+    CHECK(metadata_codec.read(node_path, *hash).has_value());
+    auto wrong_clustering = *hash;
+    wrong_clustering.front() ^= std::byte { 1 };
+    CHECK(metadata_codec.read(node_path, wrong_clustering).has_value());
+
+    auto wrong_metadata = *hash;
+    wrong_metadata.back() ^= std::byte { 1 };
+    CHECK(metadata_codec.read(node_path, wrong_metadata).error().code() == Error::Code::CorruptData);
+    CHECK(metadata_codec.read(node_path, store::NodeDataHash(8)).error().code() == Error::Code::CorruptData);
 }

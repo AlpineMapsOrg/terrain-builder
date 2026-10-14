@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 Adam Celarek <last name at cg tuwien ac at>
- * Copyright (C) 2022 alpinemaps.org
+ * AlpineMaps.org
+ * Copyright (C) 2022 Adam Celarek-Litofcenko
+ * Copyright (C) 2022 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
 #include <CGAL/Unique_hash_map.h>
 
 #include "../catch2_helpers.h"
-#include "Dataset.h"
+#include "gis/Dataset.h"
 #include "mesh/merge.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh_builder.h"
@@ -41,7 +41,7 @@
 #include "mesh/connectivity/connected_components.h"
 #include "octree/Id.h"
 #include "octree/Space.h"
-#include "srs.h"
+#include "gis/srs.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 
@@ -123,15 +123,15 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
         double resolution; // in m
     };
 
-    const auto mgi_srs = srs::mgi();
-    const auto ecef_srs = srs::ecef();
-    const auto wgs84_srs = srs::wgs84();
-    const auto webmercator_srs = srs::webmercator();
+    const auto mgi_srs = gis::srs::mgi();
+    const auto ecef_srs = gis::srs::ecef();
+    const auto wgs84_srs = gis::srs::wgs84();
+    const auto webmercator_srs = gis::srs::webmercator();
 
     const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
-    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84);
+    const glm::dvec3 pizbuin_summit_ecef = gis::srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84).value();
     const glm::dvec3 steffl_wgs84(16.3735655, 48.2083264, 204);
-    const glm::dvec3 steffl_ecef = srs::transform_point(wgs84_srs, ecef_srs, steffl_wgs84);
+    const glm::dvec3 steffl_ecef = gis::srs::transform_point(wgs84_srs, ecef_srs, steffl_wgs84).value();
 
     const std::vector<TestData> test_data{
         {"/austria/pizbuin_1m_epsg4326.tif",
@@ -157,8 +157,8 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
 
     for (const auto &data : test_data) {
         DYNAMIC_SECTION(data.path_suffix) {
-            Dataset dataset(std::filesystem::path(ALP_TEST_DATA_DIR).concat(data.path_suffix));
-            const auto source_srs = dataset.srs();
+            gis::Dataset dataset(std::filesystem::path(ALP_TEST_DATA_DIR).concat(data.path_suffix));
+            const auto source_srs = dataset.srs().value();
             const auto &mesh_srs = data.mesh_srs;
             const auto &target_srs = data.target_srs;
             const auto &target_bounds = data.target_bounds;
@@ -183,7 +183,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
                 check_mesh_basics(mesh);
             }
 
-            const std::vector<glm::dvec3> positions_in_target_srs = srs::transform_points(mesh_srs, target_srs, mesh.positions);
+            const std::vector<glm::dvec3> positions_in_target_srs = gis::srs::transform_points(mesh_srs, target_srs, mesh.positions).value();
             SECTION("Vertices within target bounds") {
                 for (const auto &position : positions_in_target_srs) {
                     REQUIRE(radix::geometry::Aabb2d(target_bounds).contains_inclusive(glm::dvec2(position)));
@@ -202,12 +202,12 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
             }
 
             SECTION("Matches dataset resolution") {
-                const auto positions_in_source_srs = srs::transform_points(mesh_srs, source_srs, mesh.positions);
+                const auto positions_in_source_srs = gis::srs::transform_points(mesh_srs, source_srs, mesh.positions).value();
                 auto flat_positions_in_source_srs = positions_in_source_srs;
                 for (auto &pos : flat_positions_in_source_srs) {
                     pos.z = 0.0;
                 }
-                const auto flat_positions_in_ecef_srs = srs::transform_points(source_srs, ecef_srs, flat_positions_in_source_srs);
+                const auto flat_positions_in_ecef_srs = gis::srs::transform_points(source_srs, ecef_srs, flat_positions_in_source_srs).value();
 
                 const auto target_bounds_2d = radix::geometry::Aabb2d(target_bounds);
                 const auto padding = target_bounds_2d.size() * 0.1;
@@ -240,13 +240,13 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
 }
 
 TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
-    const auto mgi_srs = srs::mgi();
-    const auto ecef_srs = srs::ecef();
-    const auto wgs84_srs = srs::wgs84();
-    const auto webmercator_srs = srs::webmercator();
+    const auto mgi_srs = gis::srs::mgi();
+    const auto ecef_srs = gis::srs::ecef();
+    const auto wgs84_srs = gis::srs::wgs84();
+    const auto webmercator_srs = gis::srs::webmercator();
 
     const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
-    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84);
+    const glm::dvec3 pizbuin_summit_ecef = gis::srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84).value();
     const octree::Space space = octree::Space::earth();
     const octree::Id summit_node = space.find_node_at_level_containing_point(pizbuin_summit_ecef, 17).value();
     std::vector<octree::Id> nodes = summit_node.neighbours();
@@ -254,7 +254,7 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
 
     const std::string dataset_suffix = "/austria/pizbuin_1m_mgi.tif";
     const std::filesystem::path dataset_path = std::filesystem::path(ALP_TEST_DATA_DIR).concat(dataset_suffix);
-    Dataset dataset(dataset_path);
+    gis::Dataset dataset(dataset_path);
 
     std::vector<SimpleMesh> node_meshes;
     for (const octree::Id &node : nodes) {

@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2021 Adam Celarek-Litofcenko
+ * Copyright (C) 2021 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <algorithm>
 #include <execution>
 #include <filesystem>
@@ -12,19 +31,17 @@
 #include <radix/geometry.h>
 #include <tbb/global_control.h>
 
-#include "Dataset.h"
-#include "log.h"
-#include "srs.h"
-#include "terrainbuilder.h"
+#include "cli_support/log.h"
+#include "cli_support/stop_signal.h"
+#include "gis/Dataset.h"
+#include "gis/srs.h"
+#include "gis/webmercator.h"
 #include "octree/Space.h"
+#include "terrainbuilder.h"
 #include "tile_provider.h"
 
-#include "ctb/GlobalGeodetic.hpp"
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/Grid.hpp"
-
 OGRSpatialReference parse_srs(const std::string &user_input) {
-    const auto result = srs::from_user_input(user_input);
+    const auto result = gis::srs::from_user_input(user_input);
     if (!result) {
         LOG_ERROR(result.error());
         exit(1);
@@ -72,28 +89,21 @@ radix::geometry::Aabb3d parse_bounds_from_tile(
     const std::vector<uint32_t> &data,
     const OGRSpatialReference &srs) {
 
-    // Determine the correct Grid type based on SRS
-    std::optional<ctb::Grid> grid;
-    const OGRSpatialReference &webmercator_srs = srs::webmercator();
-    const OGRSpatialReference &wgs84_srs = srs::wgs84();
-    if (srs.IsSame(&webmercator_srs)) {
-        grid = ctb::GlobalMercator();
-    } else if (srs.IsSame(&wgs84_srs)) {
-        grid = ctb::GlobalGeodetic();
-    } else {
-        LOG_ERROR_AND_EXIT("Only WebMercator (EPSG:3857) or WGS84 (EPSG:4326) supported for --tile.");
+    const OGRSpatialReference &webmercator_srs = gis::srs::webmercator();
+    if (!srs.IsSame(&webmercator_srs)) {
+        LOG_ERROR_AND_EXIT("Only WebMercator (EPSG:3857) supported for --tile.");
     }
 
     const uint32_t zoom_level = data[0];
     const glm::uvec2 tile_coords(data[1], data[2]);
     const radix::tile::Id target_tile(zoom_level, tile_coords);
 
-    return extend_bounds_to_3d(grid->srsBounds(target_tile, false));
+    return extend_bounds_to_3d(gis::webmercator::tile_bounds(target_tile));
 }
 
 radix::geometry::Aabb3d parse_bounds_from_node(const std::vector<uint64_t> &data, const OGRSpatialReference &srs) {
     // Validate node SRS (only ECEF)
-    const OGRSpatialReference &ecef_srs = srs::ecef();
+    const OGRSpatialReference &ecef_srs = gis::srs::ecef();
     if (!srs.IsSame(&ecef_srs)) {
         LOG_ERROR_AND_EXIT("Only ECEF (EPSG:4978) supported for --node.");
     }
@@ -108,6 +118,9 @@ radix::geometry::Aabb3d parse_bounds_from_node(const std::vector<uint64_t> &data
         target_node = {zoom_level, coords};
     } else {
         LOG_ERROR_AND_EXIT("Invalid number of args for --node. Expected 2 or 4.");
+    }
+    if (target_node.level() < terrainbuilder::min_target_level) {
+        LOG_ERROR_AND_EXIT("The level of --node must be at least {}.", unsigned(terrainbuilder::min_target_level));
     }
 
     return octree::Space::earth().get_node_bounds(target_node);
@@ -134,18 +147,32 @@ radix::geometry::Aabb3d parse_target_bounds(
     UNREACHABLE();
 }
 
-void log_dataset_overview(const Dataset &dataset) {
+void log_dataset_overview(const gis::Dataset &dataset) {
     const std::string name = dataset.name();
 
     const uint32_t widthPx = dataset.widthInPixels();
     const uint32_t heightPx = dataset.heightInPixels();
     const uint32_t bands = dataset.n_bands();
 
-    const auto datasetSrs = dataset.srs();
-    const auto bounds = dataset.bounds3d(true);
+    const auto datasetSrsResult = dataset.srs();
+    if (!datasetSrsResult) {
+        LOG_ERROR("Failed to read dataset SRS: {}", datasetSrsResult.error().to_string());
+        return;
+    }
+    const auto datasetSrs = *datasetSrsResult;
+    const auto boundsResult = dataset.bounds3d(true);
+    if (!boundsResult) {
+        LOG_ERROR("Failed to read dataset bounds: {}", boundsResult.error().to_string());
+        return;
+    }
+    const auto bounds = *boundsResult;
 
-    const auto boundsEcef =
-        srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds);
+    const auto boundsEcefResult = gis::srs::ecef_coverage(datasetSrs, bounds);
+    if (!boundsEcefResult) {
+        LOG_ERROR("Failed to transform dataset bounds to ECEF: {}", boundsEcefResult.error().to_string());
+        return;
+    }
+    const auto boundsEcef = *boundsEcefResult;
 
     const octree::Space earth = octree::Space::earth();
     const auto enclosingNode =
@@ -157,7 +184,7 @@ void log_dataset_overview(const Dataset &dataset) {
     LOG_INFO("Dataset");
     LOG_INFO("  name        : {}", name);
     LOG_INFO("  size        : {} x {} px | bands={}", widthPx, heightPx, bands);
-    LOG_INFO("  srs         : {}", srs::friendly_name(datasetSrs));
+    LOG_INFO("  srs         : {}", gis::srs::friendly_name(datasetSrs));
     LOG_INFO("  bounds      : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
              bounds.min.x, bounds.min.y, bounds.min.z,
              bounds.max.x, bounds.max.y, bounds.max.z);
@@ -190,15 +217,6 @@ int run(std::span<char *> args) {
     std::filesystem::path output_path;
     spdlog::level::level_enum log_level = spdlog::level::level_enum::trace;
 
-    const std::map<std::string, spdlog::level::level_enum> log_level_names{
-        {"off", spdlog::level::level_enum::off},
-        {"critical", spdlog::level::level_enum::critical},
-        {"error", spdlog::level::level_enum::err},
-        {"warn", spdlog::level::level_enum::warn},
-        {"info", spdlog::level::level_enum::info},
-        {"debug", spdlog::level::level_enum::debug},
-        {"trace", spdlog::level::level_enum::trace}};
-
     app.add_option("--dataset", dataset_path, "Path to a heightmap dataset file")
         ->required()
         ->check(CLI::ExistingFile);
@@ -211,7 +229,7 @@ int run(std::span<char *> args) {
     app.add_option("--max-texture-level", max_texture_level, "Maximum texture zoom level to use for assembling textures.")
         ->needs("--textures");
     app.add_option("--verbosity", log_level, "Verbosity level of logging")
-        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case));
+        ->transform(CLI::CheckedTransformer(cli_support::log_level_names(), CLI::ignore_case));
 
     // === SINGLE COMMAND ===
     auto *single = app.add_subcommand("single", "Build a single reference mesh")
@@ -253,9 +271,10 @@ int run(std::span<char *> args) {
 
     octree::Id::Level target_level;
     batch->add_option("--target-level", target_level, "Level of detail for batch generation")
-        ->required();
+        ->required()
+        ->check(CLI::Range(unsigned(terrainbuilder::min_target_level), unsigned(octree::Id::max_level())));
     std::filesystem::path output_base_path;
-    batch->add_option("--output", output_base_path, "Output path were the meshes are written to.")
+    batch->add_option("--output", output_base_path, "New output path; the meshes are written to <output>.part, which is renamed to <output> when complete")
         ->required();
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")
@@ -264,17 +283,17 @@ int run(std::span<char *> args) {
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);
-    bool overwrite_existing = false;
-    batch->add_flag("--overwrite", overwrite_existing, "Overwrite existing mesh files");
+    std::optional<std::filesystem::path> cache_path;
+    batch->add_option("--cache", cache_path, "Incomplete .part output of an earlier batch build with the same inputs to reuse")->check(CLI::ExistingDirectory);
 
     CLI11_PARSE(app, argc, argv);
 
-    Log::init(log_level);
+    cli_support::Log::init(log_level);
 
-    Dataset dataset(dataset_path.string());
+    gis::Dataset dataset(dataset_path.string());
     log_dataset_overview(dataset);
     OGRSpatialReference mesh_srs = parse_srs(mesh_srs_input);
-    OGRSpatialReference texture_srs = srs::webmercator();
+    OGRSpatialReference texture_srs = gis::srs::webmercator();
 
     std::unique_ptr<TileProvider> tile_provider;
     if (texture_base_path.has_value()) {
@@ -317,19 +336,27 @@ int run(std::span<char *> args) {
         const auto maybe_s = actual_num_threads == 1 ? "" : "s";
         LOG_INFO("Using {} thread{} for batch processing.", actual_num_threads, maybe_s);
 
+        const auto identifier = [](const std::filesystem::path& path) { return std::filesystem::absolute(path).lexically_normal().string(); };
+        terrainbuilder::inputs::Record record;
+        record.dataset = identifier(dataset_path);
+        if (texture_base_path.has_value()) {
+            record.textures = identifier(*texture_base_path);
+        }
+        record.min_texture_level = min_texture_level;
+        record.max_texture_level = max_texture_level;
+        record.mesh_srs = mesh_srs_input;
+        record.target_level = target_level;
+        record.format = output_format;
+
+        cli_support::stop_signal::install();
         const auto build_result = terrainbuilder::build_all_patches(
-            dataset,
-            target_level,
-            texture_srs,
-            tile_provider.get(),
-            mesh_srs,
-            output_base_path,
-            output_format,
-            overwrite_existing);
+            dataset, texture_srs, tile_provider.get(), mesh_srs, output_base_path, record, cache_path, cli_support::stop_signal::requested);
         if (!build_result) {
-            LOG_ERROR(
-                "Failed to finalize Structura Fundamentalis output: {}",
-                build_result.error().to_string());
+            if (build_result.error().code() == Error::Code::Cancelled) {
+                LOG_INFO("{}", build_result.error().to_string());
+                return cli_support::stop_signal::exit_code();
+            }
+            LOG_ERROR("Failed to build Structura Fundamentalis output: {}", build_result.error().to_string());
             return 1;
         }
     }

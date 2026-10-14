@@ -1,8 +1,29 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "Error.h"
 
+#include <cstdlib>
 #include <utility>
 
+#include <cpptrace/cpptrace.hpp>
 #include <fmt/format.h>
+#include <libassert/assert.hpp>
 
 namespace {
 
@@ -23,6 +44,8 @@ std::string_view code_name(const Error::Code code)
         return "Io";
     case Error::Code::ResourceExhausted:
         return "ResourceExhausted";
+    case Error::Code::Cancelled:
+        return "Cancelled";
     case Error::Code::Internal:
         return "Internal";
     }
@@ -35,6 +58,8 @@ std::string describe_system_error(const std::error_code& cause) { return fmt::fo
 
 Error::Error(const Code code, Frame frame)
     : m_code(code)
+    // Only the raw addresses are captured here; symbols are resolved when printed.
+    , m_stacktrace(std::make_shared<const cpptrace::raw_trace>(cpptrace::generate_raw_trace(1)))
 {
     m_frames.push_back(std::move(frame));
 }
@@ -103,6 +128,46 @@ std::unexpected<Error> Error::propagate(Error&& error, std::string message, cons
     return std::unexpected<Error> { std::move(error).with_context(std::move(message), location) };
 }
 
+void Error::raise(const Code code, std::string message, const std::source_location location) { throw Exception(make(code, std::move(message), location)); }
+
+void Error::raise(const Code code, const std::string_view operation, const std::filesystem::path& path, const std::source_location location)
+{
+    throw Exception(make(code, operation, path, location));
+}
+
+void Error::raise(const Code code, const std::string_view operation, const std::error_code& cause, const std::source_location location)
+{
+    throw Exception(make(code, operation, cause, location));
+}
+
+void Error::raise(
+    const Code code, const std::string_view operation, const std::filesystem::path& path, const std::error_code& cause, const std::source_location location)
+{
+    throw Exception(make(code, operation, path, cause, location));
+}
+
+void Error::raise(const Code code,
+    const std::string_view operation,
+    const std::filesystem::path& source,
+    const std::filesystem::path& destination,
+    const std::error_code& cause,
+    const std::source_location location)
+{
+    throw Exception(make(code, operation, source, destination, cause, location));
+}
+
+void Error::panic(const Error& error, const std::source_location location)
+{
+    PANIC(fmt::format("unexpected failure at {}:{}\n{}\nError origin:\n{}", location.file_name(), location.line(), error.to_string(), error.stacktrace()));
+    std::abort();
+}
+
+Error::Exception::Exception(Error error)
+    : m_error(std::move(error))
+    , m_what(m_error.to_string())
+{
+}
+
 Error Error::with_context(std::string message, const std::source_location location) &&
 {
     Error result = std::move(*this);
@@ -137,3 +202,5 @@ std::string Error::to_string() const
     }
     return result;
 }
+
+std::string Error::stacktrace() const { return m_stacktrace ? m_stacktrace->resolve().to_string() : std::string {}; }

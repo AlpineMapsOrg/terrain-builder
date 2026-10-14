@@ -1,12 +1,33 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
-#include "io/envelope_file.h"
+#include "io/byte.h"
+#include "io/envelope.h"
 #include "octree/StoreTraits.h"
 #include "octree/store_layout/Mappings.h"
 #include "store/Index.h"
@@ -31,8 +52,15 @@ namespace v1 {
         std::uint8_t status;
     };
 
+    struct HashEntry {
+        std::uint8_t level;
+        std::uint64_t index;
+        store::NodeDataHash hash;
+    };
+
     struct StoreIndex {
         std::vector<IndexEntry> entries;
+        std::vector<HashEntry> hashes;
     };
 
 } // namespace v1
@@ -57,8 +85,9 @@ inline Expected<void> validate(const StoreMetadata& metadata)
     return {};
 }
 
-inline StoreIndex encode_index(const store::Index<StoreTraits>& index)
+inline StoreIndex encode_index(const store::Index<StoreTraits>& index, const store::Key2Hash_Map<StoreTraits>& hashes)
 {
+    const auto by_id = [](const auto& left, const auto& right) { return std::tie(left.level, left.index) < std::tie(right.level, right.index); };
     StoreIndex result;
     result.entries.reserve(index.size());
     for (const auto& [id, status] : index) {
@@ -68,12 +97,23 @@ inline StoreIndex encode_index(const store::Index<StoreTraits>& index)
             .status = static_cast<std::uint8_t>(static_cast<store::NodeStatus::Value>(status)),
         });
     }
+    std::ranges::sort(result.entries, by_id);
+    result.hashes.reserve(hashes.size());
+    for (const auto& [id, hash] : hashes) {
+        result.hashes.push_back({
+            .level = id.level(),
+            .index = id.index_on_level(),
+            .hash = hash,
+        });
+    }
+    std::ranges::sort(result.hashes, by_id);
     return result;
 }
 
-inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encoded)
+inline Expected<store::IndexContents<StoreTraits>> decode_index(const StoreIndex& encoded)
 {
-    store::Index<StoreTraits> result;
+    store::IndexContents<StoreTraits> decoded;
+    store::Index<StoreTraits>& result = decoded.index;
     std::unordered_set<Id> seen;
     for (const v1::IndexEntry& entry : encoded.entries) {
         const auto id = Id::try_make(static_cast<Id::Level>(entry.level), static_cast<Id::Index>(entry.index));
@@ -92,44 +132,25 @@ inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encode
         }
     }
 
-    for (const auto& [id, status] : result) {
-        const auto children = StoreTraits::children(id);
-        bool has_child = false;
-        if (children) {
-            for (const Id& child : *children) {
-                auto child_status = result.get(child);
-                if (!child_status) {
-                    return Error::propagate(std::move(child_status), Error::Code::CorruptData, "look up child while validating store index");
-                }
-                has_child = has_child || child_status->has_value();
-            }
+    if (auto valid = result.validate(); !valid) {
+        return Error::propagate(std::move(valid), "validate octree index topology");
+    }
+    for (const v1::HashEntry& entry : encoded.hashes) {
+        const auto id = Id::try_make(static_cast<Id::Level>(entry.level), static_cast<Id::Index>(entry.index));
+        if (!id) {
+            return Error::fail(Error::Code::CorruptData, "index contains a hash for an invalid octree ID");
         }
-        if ((status == store::NodeStatus::Leaf && has_child) || ((status == store::NodeStatus::Inner || status == store::NodeStatus::Virtual) && !has_child)) {
-            return Error::fail(Error::Code::CorruptData, "index contains inconsistent node topology");
-        }
-
-        const auto parent = StoreTraits::parent(id);
-        if (!parent) {
-            if (id != StoreTraits::root()) {
-                return Error::fail(Error::Code::CorruptData, "index contains a non-root node without a parent");
-            }
-            continue;
-        }
-        auto parent_status = result.get(*parent);
-        if (!parent_status) {
-            return Error::propagate(std::move(parent_status), Error::Code::CorruptData, "look up parent while validating store index");
-        }
-        if (!parent_status->has_value() || parent_status->value() == store::NodeStatus::Leaf) {
-            return Error::fail(Error::Code::CorruptData, "index contains a node without a valid indexed parent");
+        if (!decoded.hashes.emplace(*id, entry.hash).second) {
+            return Error::fail(Error::Code::CorruptData, "index contains a duplicate octree node hash");
         }
     }
-    return result;
+    return decoded;
 }
 
 inline Expected<StoreMetadata> read_store_metadata(const std::filesystem::path& base_path)
 {
     const std::filesystem::path path = base_path / metadata_file_name;
-    auto metadata = io::envelope::read_from_path<StoreMetadataSchema>(path);
+    auto metadata = io::envelope::read<StoreMetadataSchema>(path);
     if (!metadata) {
         return metadata;
     }
@@ -146,16 +167,17 @@ inline Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::fi
         return Error::propagate(std::move(metadata), "read octree store metadata");
     }
 
-    auto encoded_index = io::envelope::read_from_path<StoreIndexSchema>(path);
+    auto encoded_index = io::envelope::read<StoreIndexSchema>(path);
     if (!encoded_index) {
         return Error::propagate(std::move(encoded_index), "read octree store index \"" + path.string() + "\"");
     }
-    auto index = decode_index(*encoded_index);
-    if (!index) {
-        return Error::propagate(std::move(index), "decode store index read from \"" + path.string() + "\"");
+    auto contents = decode_index(*encoded_index);
+    if (!contents) {
+        return Error::propagate(std::move(contents), "decode store index read from \"" + path.string() + "\"");
     }
     return store::IndexMetadata<StoreTraits> {
-        std::move(*index),
+        std::move(contents->index),
+        std::move(contents->hashes),
         std::move(metadata->layout_id),
         std::move(metadata->payload_class),
         std::move(metadata->codec_selector),
@@ -173,12 +195,12 @@ inline Expected<void> write_index_file(const std::filesystem::path& path, const 
         return Error::propagate(std::move(valid), "validate store metadata for writing");
     }
     const std::filesystem::path metadata_path = path.parent_path() / metadata_file_name;
-    if (auto written = io::envelope::write_to_path<StoreMetadataSchema>(store_metadata, metadata_path); !written) {
+    if (auto written = io::envelope::write<StoreMetadataSchema>(store_metadata, metadata_path, io::byte::WriteMode::Replace); !written) {
         return Error::propagate(std::move(written), "write octree store metadata " + metadata_path.string());
     }
 
-    const StoreIndex encoded_index = encode_index(metadata.index);
-    if (auto written = io::envelope::write_to_path<StoreIndexSchema>(encoded_index, path); !written) {
+    const StoreIndex encoded_index = encode_index(metadata.index, metadata.hashes);
+    if (auto written = io::envelope::write<StoreIndexSchema>(encoded_index, path, io::byte::WriteMode::Replace); !written) {
         return Error::propagate(std::move(written), "write octree store index " + path.string());
     }
     return {};

@@ -1,8 +1,25 @@
+# *****************************************************************************
+# AlpineMaps.org
+# Copyright (C) 2026 Adam Celarek-Litofcenko
+# Copyright (C) 2026 Martin Braunsperger
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# *****************************************************************************
+
 add_library(terrainlib
     Error.h Error.cpp
-    Dataset.h Dataset.cpp
     ImageKey.h
-    ProgressIndicator.h ProgressIndicator.cpp
     Range.h
     SphereProjector.h
     VecHash.h
@@ -13,19 +30,20 @@ add_library(terrainlib
     fmt_impls.h
     glm_utils.h
     hash_utils.h
-    init.h init.cpp
-    log.h log.cpp
     macros.h
     opencv_utils.h
     optional_utils.h
     pch.h
     range_utils.h
-    srs.h
     string_utils.h
     tile_path.h
     type_utils.h
     variant_utils.h
     vector_utils.h
+
+    cli_support/log.h cli_support/log.cpp
+    cli_support/ProgressIndicator.h cli_support/ProgressIndicator.cpp
+    cli_support/stop_signal.h cli_support/stop_signal.cpp
 
     containers/Buffer.h
     containers/Cow.h
@@ -42,23 +60,26 @@ add_library(terrainlib
     containers/UnionFind.h
     containers/Vector2D.h
 
-    ctb/CTBException.hpp
-    ctb/GlobalGeodetic.hpp ctb/GlobalGeodetic.cpp
-    ctb/GlobalMercator.hpp ctb/GlobalMercator.cpp
-    ctb/Grid.hpp
-    ctb/TileCoordinate.hpp
-    ctb/types.hpp
-
     geometry/CoordFrame.h
     geometry/PlaneFrame.h
     geometry/Rect.h
     geometry/geometry.h
 
-    io/bytes.h io/bytes.cpp
+    gis/Dataset.h gis/Dataset.cpp
+    gis/DatasetReader.h gis/DatasetReader.cpp
+    gis/gdal.h gis/gdal.cpp
+    gis/srs.h gis/srs.cpp
+    gis/srs/detail.h gis/srs/detail.cpp
+    gis/vector_mask.h gis/vector_mask.cpp
+    gis/webmercator.h gis/webmercator.cpp
+
+    io/byte.h io/byte.cpp
     io/compression.h io/compression.cpp
     io/conversion.h
-    io/envelope.h
-    io/envelope_file.h
+    io/image.h io/image.cpp
+    io/envelope.h io/envelope.cpp
+    io/glm_serialization.h
+    io/hash.h io/hash.cpp
     io/utils.h io/utils.cpp
 
     mesh/EncodedMesh.h
@@ -136,6 +157,7 @@ add_library(terrainlib
     octree/StoreTraits.h
     octree/storage/IndexFile.h
     octree/storage/open_runtime.h
+    octree/storage/snapshot.h
     octree/store_layout/Flat.h
     octree/store_layout/LevelAndCoordinateDirectories.h
     octree/store_layout/Mappings.h
@@ -156,7 +178,31 @@ add_library(terrainlib
     range/RangeTo.h
     range/RangeToInclusive.h
 
+    raster/algorithm.h
+    raster/View.h
+    raster/ClampedView.h
+    raster/algorithm/detail.h
+    raster/algorithm/conversion.h
+    raster/algorithm/reduce.h
+    raster/algorithm/reducers.h
+    raster/algorithm/scale.h
+    raster/algorithm/scaling_detail.h
+    raster/algorithm/copy.h
+    raster/algorithm/fold.h
+    raster/algorithm/transform.h
+    raster/algorithm/window_transform.h
+    raster/algorithm/zip_transform.h
+
     raster_store/StoreTraits.h
+    raster_store/TilePool.h
+    raster_store/Tile.h
+    raster_store/attribution.h raster_store/attribution.cpp
+    raster_store/io/TileCodec.h
+    raster_store/io/manifest.h raster_store/io/manifest.cpp
+    raster_store/path_layout.h
+    raster_store/pixel.h
+    raster_store/scaler.h
+    raster_store/storage.h
 
     sf/finalize_storage.h
     sf/validate_index.h
@@ -175,6 +221,7 @@ add_library(terrainlib
     store/Index.h
     store/IndexFormat.h
     store/IndexedStorage.h
+    store/inputs.h store/inputs.cpp
     store/NodeStatus.h
     store/NodeStatusOrMissing.h
     store/path_layout.h
@@ -186,6 +233,7 @@ add_library(terrainlib
     store/cache/Interface.h
     store/cache/Lru.h
     store/open.h
+    store/snapshot.h store/snapshot.cpp
     store/traverse.h
 
     texture/Mask.h
@@ -235,6 +283,9 @@ target_link_libraries(terrainlib PUBLIC
     xatlas
 )
 
-if(ALP_ENABLE_OVERVIEW_READING)
-    target_compile_definitions(terrainlib PUBLIC ALP_ENABLE_OVERVIEW_READING)
-endif()
+# Error captures stack traces; libassert already links cpptrace publicly.
+target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
+# Only io/hash.cpp includes xxHash.
+target_link_libraries(terrainlib PRIVATE xxhash)
+# Only io/image.cpp includes libjxl.
+target_link_libraries(terrainlib PRIVATE JpegXL::jxl)

@@ -1,15 +1,35 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <cstdlib>
 #include <filesystem>
 
 #include "cli.h"
 #include "codec.h"
 #include "dag_node.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
 #include "mesh/storage.h"
-#include "ProgressIndicator.h"
+#include "cli_support/ProgressIndicator.h"
 #include "storage.h"
+#include "store/snapshot.h"
 #include "utils.h"
 
 namespace {
@@ -30,6 +50,10 @@ void export_node(const cli::Args &args) {
 
     const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
 
+    if (const auto absent = store::snapshot::require_absent(args.output_path); !absent) {
+        LOG_ERROR("Output must be new: {}", absent.error().to_string());
+        return;
+    }
     const auto save_result = mesh::io::save_to_path(mesh, args.output_path);
     if (!save_result) {
         LOG_ERROR("Failed to save mesh to {}: {}", args.output_path, save_result.error().to_string());
@@ -47,6 +71,10 @@ void export_storage(const cli::Args &args) {
     }
     const dag::storage::IndexedStorage input_storage = std::move(input_result.value());
 
+    if (const auto absent = store::snapshot::require_absent(args.output_path); !absent) {
+        LOG_ERROR("Output must be new: {}", absent.error().to_string());
+        return;
+    }
     mesh::storage::OpenOptions options;
     options.preferred_extension = ".glb";
     auto output_result = mesh::storage::open_folder(
@@ -60,11 +88,10 @@ void export_storage(const cli::Args &args) {
         return;
     }
     mesh::storage::Storage output_storage = std::move(output_result.value());
-    output_storage.settings().allow_overwrite = true;
 
     size_t exported_count = 0;
 
-    ProgressIndicator progress(input_storage.index().size());
+    cli_support::ProgressIndicator progress(input_storage.index().size());
     auto progress_thread = progress.start_monitoring();
 
     for (const auto &[id, status] : input_storage.index()) {
@@ -116,7 +143,7 @@ void export_storage(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    Log::init(args.log_level);
+    cli_support::Log::init(args.log_level);
 
     if (std::filesystem::is_directory(args.input_path)) {
         export_storage(args);

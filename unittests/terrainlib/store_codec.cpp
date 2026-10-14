@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <atomic>
 #include <filesystem>
 #include <future>
@@ -7,7 +25,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "../temporary_directory.h"
-#include "io/bytes.h"
+#include "io/byte.h"
+#include "io/envelope.h"
 #include "mesh/codec/Gltf.h"
 #include "mesh/codec/SfMesh.h"
 #include "store/Codec.h"
@@ -27,10 +46,10 @@ public:
 class WriteOnlyCodec final : public store::Codec<int> {
 public:
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".out") }; }
-    Expected<void> write(const std::filesystem::path&, const int&) const override
+    Expected<store::NodeDataHash> write(const std::filesystem::path&, const int&) const override
     {
         ++writes;
-        return {};
+        return store::NodeDataHash {};
     }
 
     mutable std::atomic_uint32_t writes = 0;
@@ -63,6 +82,20 @@ void check_mesh_codec_reentrancy(const Codec& codec, const std::filesystem::path
     for (auto& read : reads) {
         REQUIRE(read.get());
     }
+}
+
+template <typename Codec>
+void check_mesh_codec_creates_exclusively(const Codec& codec, const std::filesystem::path& node_path)
+{
+    REQUIRE(codec.write(node_path, triangle_mesh(0.0)).has_value());
+    const auto path = codec.paths(node_path).front();
+    const auto original = io::byte::read(path);
+    REQUIRE(original.has_value());
+
+    const auto rejected = codec.write(node_path, triangle_mesh(5.0));
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
+    CHECK(io::byte::read(path).value() == original.value());
 }
 
 } // namespace
@@ -105,14 +138,43 @@ TEST_CASE("runtime mesh codecs are reentrant", "[store][codec]")
     SECTION("JSON glTF") { check_mesh_codec_reentrancy(mesh::codec::Gltf(mesh::codec::GltfContainer::Json), directory.path() / "gltf"); }
 }
 
+TEST_CASE("runtime mesh codecs never replace existing files", "[store][codec]")
+{
+    TemporaryDirectory directory("mesh-exclusive");
+
+    SECTION("SF mesh") { check_mesh_codec_creates_exclusively(mesh::codec::SfMesh {}, directory.path() / "node"); }
+    SECTION("binary glTF") { check_mesh_codec_creates_exclusively(mesh::codec::Gltf(mesh::codec::GltfContainer::Binary), directory.path() / "node"); }
+    SECTION("JSON glTF") { check_mesh_codec_creates_exclusively(mesh::codec::Gltf(mesh::codec::GltfContainer::Json), directory.path() / "node"); }
+}
+
 TEST_CASE("runtime glTF codec reports writer IO errors", "[store][codec]")
 {
     TemporaryDirectory directory("gltf-error");
     mesh::codec::Gltf codec(mesh::codec::GltfContainer::Binary);
-    const std::filesystem::path node_path(directory.path() / "blocked");
-    REQUIRE(std::filesystem::create_directory(codec.paths(node_path).front()));
+    const std::filesystem::path blocker(directory.path() / "blocker");
+    REQUIRE(io::byte::write(io::byte::span {}, blocker, io::byte::WriteMode::Overwrite).has_value());
 
-    const auto result = codec.write(node_path, triangle_mesh(0.0));
+    const auto result = codec.write(blocker / "node", triangle_mesh(0.0));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code() == Error::Code::Io);
+}
+
+TEST_CASE("SF mesh codec returns and verifies its payload hash", "[store][codec][hash]")
+{
+    TemporaryDirectory directory("sfmesh-hash");
+    const mesh::codec::SfMesh codec;
+    CHECK(codec.supports_hashing());
+    const std::filesystem::path node_path = directory.path() / "node";
+    const auto hash = codec.write(node_path, triangle_mesh(0.0));
+    REQUIRE(hash.has_value());
+    CHECK(*hash == io::envelope::read_header(codec.paths(node_path).front())->hash);
+    CHECK(codec.read(node_path, *hash).has_value());
+
+    REQUIRE(std::filesystem::remove(codec.paths(node_path).front()));
+    const auto other_hash = codec.write(node_path, triangle_mesh(1.0));
+    REQUIRE(other_hash.has_value());
+    CHECK(*other_hash != *hash);
+    const auto mismatched = codec.read(node_path, *hash);
+    REQUIRE_FALSE(mismatched.has_value());
+    CHECK(mismatched.error().code() == Error::Code::CorruptData);
 }

@@ -1,46 +1,48 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <string_view>
-#include <system_error>
+#include <span>
 #include <vector>
 
 #include <expected>
 
 #include "Error.h"
+#include "io/byte.h"
 
 namespace io::envelope {
 
-using Bytes = std::vector<std::byte>;
-
 inline constexpr std::size_t default_max_decompressed_size = std::size_t { 1 } << 30;
-
-enum class ChecksumAlgorithm : std::uint8_t {
-    None,
-    HandledByCompressionLib,
-    Crc32c,
-};
 
 enum class CompressionAlgorithm : std::uint8_t {
     None,
-    ZstdBestCompressionWithChecksum,
-    ZstdDefaultCompressionWithChecksum,
+    ZstdBestCompression,
+    ZstdDefaultCompression,
 };
 
-struct CompressedData {
-    Bytes compressed_data;
-    std::string checksum;
-};
+// The algorithm must be an enumerator. Zstandard frames are written without their frame checksum.
+Expected<byte::vector> compress(byte::span uncompressed_data, CompressionAlgorithm compression_algorithm);
 
-Expected<CompressedData> compress_with_checksum(
-    const Bytes& uncompressed_data, CompressionAlgorithm compression_algorithm, ChecksumAlgorithm checksum_algorithm);
-
-Expected<Bytes> checked_decompress(const Bytes& compressed_data,
-    CompressionAlgorithm compression_algorithm,
-    ChecksumAlgorithm checksum_algorithm,
-    std::string_view checksum,
-    std::size_t max_decompressed_size = default_max_decompressed_size);
+// The algorithm must be an enumerator. Zstandard frames are accepted with or without their frame checksum.
+Expected<byte::vector> decompress(
+    byte::span compressed_data, CompressionAlgorithm compression_algorithm, std::size_t max_decompressed_size = default_max_decompressed_size);
 
 } // namespace io::envelope
