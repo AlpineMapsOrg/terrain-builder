@@ -29,6 +29,7 @@ inline std::string_view format_as(const PixelTransformError error) {
 }
 
 // The affine transform from pixel coordinates into a dataset's srs, and its inverse; GDAL calls it the geotransform.
+// TODO: Only the affine geotransform is considered, not GCPs, RPCs or geolocation arrays; GDALCreateGenImgProjTransformer2 handles those as well.
 class PixelTransform {
 public:
     // Creates the transform from GDAL's six coefficients, failing if they cannot be inverted.
