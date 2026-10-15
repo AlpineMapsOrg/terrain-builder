@@ -66,6 +66,7 @@ class Id_ {
 public:
     using Level = LevelT;
     using Index = IndexT;
+    using GlobalIndex = uint_for_bits_t<Dimensions * MaxLevel + 1>;
     using Coord = CoordT;
     using Coords = glm::vec<Dimensions, Coord>;
     using SignedCoord = int_for_bits_t<MaxLevel + 1>;
@@ -132,6 +133,10 @@ public:
     }
     [[nodiscard]] constexpr Index index_on_level() const {
         return this->_index;
+    }
+    [[nodiscard]] constexpr GlobalIndex global_index() const {
+        const GlobalIndex nodes_on_higher_levels = (ipow2<GlobalIndex>(Dimensions * static_cast<size_t>(this->level())) - 1) / (child_count - 1);
+        return nodes_on_higher_levels + this->index_on_level();
     }
     [[nodiscard]] constexpr Coords coords() const {
         return deinterleave(this->index_on_level());

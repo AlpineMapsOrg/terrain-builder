@@ -141,11 +141,17 @@ alp::Result<bool, io::Error> traverse_groups(const octree::IndexedDagMetaStorage
     NodeMetadataCache cache(dag, max_resident_bytes);
 
     const octree::IndexMap &index = dag.index();
+    std::vector<octree::Id> node_ids;
+    node_ids.reserve(index.size());
     for (const auto &[node_id, status] : index) {
-        if (!index.has_data(node_id)) {
-            continue;
+        if (index.has_data(node_id)) {
+            node_ids.push_back(node_id);
         }
+    }
+    // Sorting by global index keeps groups that are close in space close in the walk.
+    std::ranges::sort(node_ids, {}, &octree::Id::global_index);
 
+    for (const octree::Id &node_id : node_ids) {
         ALP_TRY(const NodeMetadata &metadata, cache.read_metadata(node_id));
         const std::vector<GroupMetadata> groups = metadata.groups;
         const SegmentedBuffer<ClusterInfo, uint32_t> parent_clusters = detail::collect_parent_clusters(node_id, metadata);
