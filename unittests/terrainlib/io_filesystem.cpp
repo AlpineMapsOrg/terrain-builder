@@ -121,6 +121,26 @@ TEST_CASE("Visiting files below a missing path fails, naming the path", "[io][fi
     CHECK(error.holds(io::make_file_not_found(missing)));
 }
 
+TEST_CASE("create_directory creates a directory and reports that it was created", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_create_directory");
+    const std::filesystem::path created = directory.path() / "created";
+
+    CHECK(REQUIRE_VALUE(io::filesystem::create_directory(created)));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_directory(created)));
+}
+
+TEST_CASE("create_directory reports that an existing directory was not created", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_create_directory_existing");
+
+    CHECK(!REQUIRE_VALUE(io::filesystem::create_directory(directory.path())));
+}
+
+TEST_CASE("create_directory fails below a missing parent", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_create_directory_missing_parent");
+
+    REQUIRE_ERROR(io::filesystem::create_directory(directory.path() / "missing" / "created"));
+}
+
 TEST_CASE("remove deletes the file at a path and reports that there was one", "[io][filesystem]") {
     const TempDirectory directory("io_filesystem_remove");
     const std::filesystem::path file = directory.path() / "file";
@@ -145,6 +165,22 @@ TEST_CASE("remove fails on a non-empty directory", "[io][filesystem]") {
     REQUIRE_ERROR(io::filesystem::remove(non_empty));
 }
 
+TEST_CASE("remove_all deletes a directory with everything in it and reports how many entries it removed", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_remove_all");
+    const std::filesystem::path non_empty = directory.path() / "non_empty";
+    write_file(non_empty / "file");
+
+    CHECK(REQUIRE_VALUE(io::filesystem::remove_all(non_empty)) == 2);
+    CHECK(!std::filesystem::exists(non_empty));
+}
+
+TEST_CASE("remove_all reports that there was nothing to remove at a missing path", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_remove_all_missing");
+    const std::filesystem::path missing = directory.path() / "missing";
+
+    CHECK(REQUIRE_VALUE(io::filesystem::remove_all(missing)) == 0);
+}
+
 TEST_CASE("create_hard_link makes the target another name for the source's file", "[io][filesystem]") {
     const TempDirectory directory("io_filesystem_hard_link");
     const std::filesystem::path source = directory.path() / "source";
@@ -153,7 +189,7 @@ TEST_CASE("create_hard_link makes the target another name for the source's file"
 
     REQUIRE_VALUE(io::filesystem::create_hard_link(source, target));
 
-    CHECK(std::filesystem::equivalent(source, target));
+    CHECK(REQUIRE_VALUE(io::filesystem::equivalent(source, target)));
 }
 
 TEST_CASE("create_hard_link fails for a missing source", "[io][filesystem]") {
@@ -170,4 +206,22 @@ TEST_CASE("create_hard_link fails onto an existing target", "[io][filesystem]") 
     write_file(target);
 
     REQUIRE_ERROR(io::filesystem::create_hard_link(source, target));
+}
+
+TEST_CASE("equivalent reports two separate files as different files", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_equivalent_separate");
+    const std::filesystem::path first = directory.path() / "first";
+    const std::filesystem::path second = directory.path() / "second";
+    write_file(first);
+    write_file(second);
+
+    CHECK(!REQUIRE_VALUE(io::filesystem::equivalent(first, second)));
+}
+
+TEST_CASE("equivalent fails for a missing path", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_equivalent_missing");
+    const std::filesystem::path file = directory.path() / "file";
+    write_file(file);
+
+    REQUIRE_ERROR(io::filesystem::equivalent(file, directory.path() / "missing"));
 }

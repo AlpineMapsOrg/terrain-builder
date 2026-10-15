@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstdint>
 #include <filesystem>
 #include <system_error>
 
@@ -91,23 +92,34 @@ alp::Result<void, FileError> visit_files_recursively(const std::filesystem::path
     return {};
 }
 
-// Creates the directory at `path` and its missing parents.
+// Creates the directory at `path`, whose parent must exist; true if it was created.
 [[nodiscard]]
-inline alp::Result<void, FileError> create_directories(const std::filesystem::path &path) {
+inline alp::Result<bool, FileError> create_directory(const std::filesystem::path &path) {
     std::error_code code;
-    std::filesystem::create_directories(path, code);
+    const bool created = std::filesystem::create_directory(path, code);
+    if (code) {
+        return alp::make_unexpected(FileError(code, path), alp::make_context("creating a directory at {}", path));
+    }
+    return created;
+}
+
+// Creates the directory at `path` and its missing parents; true if any directory was created.
+[[nodiscard]]
+inline alp::Result<bool, FileError> create_directories(const std::filesystem::path &path) {
+    std::error_code code;
+    const bool created = std::filesystem::create_directories(path, code);
     if (code) {
         return alp::make_unexpected(FileError(code, path), alp::make_context("creating directories at {}", path));
     }
-    return {};
+    return created;
 }
 
-// Creates the missing parent directories of `path`.
+// Creates the missing parent directories of `path`; true if any directory was created.
 [[nodiscard]]
-inline alp::Result<void, FileError> create_parent_directories(const std::filesystem::path &path) {
+inline alp::Result<bool, FileError> create_parent_directories(const std::filesystem::path &path) {
     const std::filesystem::path parent_path = path.parent_path();
     if (parent_path.empty()) {
-        return {};
+        return false;
     }
     return filesystem::create_directories(parent_path);
 }
@@ -124,6 +136,17 @@ inline alp::Result<bool, FileError> remove(const std::filesystem::path &path) {
     return removed;
 }
 
+// Removes whatever is at `path` with everything below it; the number of files and directories removed.
+[[nodiscard]]
+inline alp::Result<uint64_t, FileError> remove_all(const std::filesystem::path &path) {
+    std::error_code code;
+    const uint64_t removed_count = std::filesystem::remove_all(path, code);
+    if (code) {
+        return alp::make_unexpected(FileError(code, path), alp::make_context("removing everything at {}", path));
+    }
+    return removed_count;
+}
+
 // Creates a hard link at `target` to the file at `source`.
 [[nodiscard]]
 inline alp::Result<void, FileError> create_hard_link(const std::filesystem::path &source, const std::filesystem::path &target) {
@@ -133,6 +156,17 @@ inline alp::Result<void, FileError> create_hard_link(const std::filesystem::path
         return alp::make_unexpected(FileError(code, target), alp::make_context("linking {} to {}", target, source));
     }
     return {};
+}
+
+// Whether `first` and `second` name the same file, following symlinks; fails if either does not exist.
+[[nodiscard]]
+inline alp::Result<bool, FileError> equivalent(const std::filesystem::path &first, const std::filesystem::path &second) {
+    std::error_code code;
+    const bool is_equivalent = std::filesystem::equivalent(first, second, code);
+    if (code) {
+        return alp::make_unexpected(FileError(code, first), alp::make_context("comparing {} with {}", first, second));
+    }
+    return is_equivalent;
 }
 
 // The canonical form of `path`, or `path` as given if it cannot be made canonical.
