@@ -12,6 +12,7 @@
 #include "merge/visitor/Masked.h"
 #include "merge/visitor/Simple.h"
 #include "merge/visitor/Visitor.h"
+#include "numeric/number_types.h"
 #include "octree/Id.h"
 #include "octree/NodeStatusOrMissing.h"
 #include "octree/storage/cache/Dummy.h"
@@ -19,13 +20,6 @@
 inline std::string get_dataset_name(const octree::Storage &storage) {
     return storage.layout().base_path().filename().string();
 }
-
-template <auto N>
-using smallest_uint_t =
-    std::conditional_t<(N <= UINT8_MAX), uint8_t,
-    std::conditional_t<(N <= UINT16_MAX), uint16_t,
-    std::conditional_t<(N <= UINT32_MAX), uint32_t,
-    uint64_t>>>;
 
 template <merge::Visitor Visitor>
 class Merger {
@@ -104,7 +98,7 @@ private:
     static constexpr auto STATUSES = magic_enum::enum_values<Status::Value>();
     static constexpr auto _STATUS_COUNT = STATUSES.size();
     static constexpr auto _MAX_INDEX = _STATUS_COUNT * _STATUS_COUNT;
-    using Index = smallest_uint_t<_MAX_INDEX>;
+    using Index = uint_for_max_t<_MAX_INDEX>;
     static constexpr Index STATUS_COUNT = static_cast<Index>(_STATUS_COUNT);
     static constexpr Index MAX_INDEX = static_cast<Index>(_MAX_INDEX);
 

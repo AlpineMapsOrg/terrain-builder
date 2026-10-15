@@ -58,7 +58,7 @@ inline constexpr void for_each_nd_index(const IndexT extent, Function &&function
 template <
     size_t Dimensions,
     size_t MaxLevel,
-    typename LevelT = uint_for_bits_t<std::bit_width(MaxLevel)>,
+    typename LevelT = uint_for_max_t<MaxLevel>,
     typename IndexT = uint_for_bits_t<Dimensions * MaxLevel>,
     typename CoordT = uint_for_bits_t<MaxLevel>>
 class Id_ {
