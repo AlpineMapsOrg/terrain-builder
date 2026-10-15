@@ -6,33 +6,28 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../result_helpers.h"
+#include "../temp_directory.h"
+#include "io/filesystem.h"
+
 namespace {
 
 class TemporaryPyramid {
 public:
     explicit TemporaryPyramid(std::string_view name)
-        : _path(std::filesystem::temp_directory_path() / name) {
-        std::error_code error;
-        std::filesystem::remove_all(_path, error);
-        std::filesystem::create_directories(_path);
-    }
-
-    ~TemporaryPyramid() {
-        std::error_code error;
-        std::filesystem::remove_all(_path, error);
-    }
+        : _directory(name) {}
 
     [[nodiscard]] const std::filesystem::path &path() const {
-        return _path;
+        return this->_directory.path();
     }
 
     [[nodiscard]] std::filesystem::path tile_path(const radix::tile::Id &tile) const {
-        return make_google_tile_path(_path, tile, ".jpeg");
+        return make_google_tile_path(this->path(), tile, ".jpeg");
     }
 
     void create_pending(const radix::tile::Id &tile) const {
         const auto path = tile_path(tile);
-        std::filesystem::create_directories(path.parent_path());
+        REQUIRE_VALUE(io::filesystem::create_parent_directories(path));
         write_file_children_pending(path, std::vector<char>{'t', 'i', 'l', 'e'});
     }
 
@@ -42,7 +37,7 @@ public:
     }
 
 private:
-    std::filesystem::path _path;
+    TempDirectory _directory;
 };
 
 const TileUrlBuilder missing_file_url({
@@ -65,18 +60,18 @@ TEST_CASE("tile downloader promotes parents after completed children") {
     TileDownloader downloader(missing_file_url, pyramid.path(), 1u, root.zoom_level);
     REQUIRE(downloader.download_recursive(root));
 
-    REQUIRE(std::filesystem::exists(pyramid.tile_path(root)));
-    CHECK_FALSE(std::filesystem::exists(children_pending_tile_path(pyramid.tile_path(root))));
+    REQUIRE(REQUIRE_VALUE(io::filesystem::exists(pyramid.tile_path(root))));
+    CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(children_pending_tile_path(pyramid.tile_path(root)))));
 
     for (const auto &child : children) {
-        CHECK(std::filesystem::exists(pyramid.tile_path(child)));
-        CHECK_FALSE(std::filesystem::exists(children_pending_tile_path(pyramid.tile_path(child))));
+        CHECK(REQUIRE_VALUE(io::filesystem::exists(pyramid.tile_path(child))));
+        CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(children_pending_tile_path(pyramid.tile_path(child)))));
     }
 
-    REQUIRE(std::filesystem::remove(pyramid.tile_path(children.front())));
+    REQUIRE(REQUIRE_VALUE(io::filesystem::remove(pyramid.tile_path(children.front()))));
     TileDownloader resumed_downloader(missing_file_url, pyramid.path(), 1u, root.zoom_level);
     CHECK(resumed_downloader.download_recursive(root));
-    CHECK_FALSE(std::filesystem::exists(pyramid.tile_path(children.front())));
+    CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(pyramid.tile_path(children.front()))));
 }
 
 TEST_CASE("tile downloader leaves ancestors pending after a child failure") {
@@ -92,9 +87,9 @@ TEST_CASE("tile downloader leaves ancestors pending after a child failure") {
     TileDownloader downloader(missing_file_url, pyramid.path(), 1u, root.zoom_level);
     CHECK_FALSE(downloader.download_recursive(root));
 
-    CHECK_FALSE(std::filesystem::exists(pyramid.tile_path(root)));
-    CHECK(std::filesystem::exists(children_pending_tile_path(pyramid.tile_path(root))));
+    CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(pyramid.tile_path(root))));
+    CHECK(REQUIRE_VALUE(io::filesystem::exists(children_pending_tile_path(pyramid.tile_path(root)))));
     for (size_t i = 1; i < children.size(); ++i) {
-        CHECK(std::filesystem::exists(pyramid.tile_path(children[i])));
+        CHECK(REQUIRE_VALUE(io::filesystem::exists(pyramid.tile_path(children[i]))));
     }
 }

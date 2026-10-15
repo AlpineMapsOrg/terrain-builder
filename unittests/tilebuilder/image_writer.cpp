@@ -31,8 +31,8 @@
 
 TEST_CASE("tile builder writes radix rasters as PNG images")
 {
-    const auto output_path = std::filesystem::temp_directory_path() / "alpine_terrain_builder_image_writer_test.png";
-    std::filesystem::remove(output_path);
+    const TempFile output("image_writer.png");
+    const auto output_path = output.path();
 
     radix::Raster<glm::u8vec3> raster({ 2, 2 });
     raster.pixel({ 0, 0 }) = { 255, 0, 0 };
@@ -49,8 +49,6 @@ TEST_CASE("tile builder writes radix rasters as PNG images")
     CHECK(decoded.at<cv::Vec3b>(0, 1) == cv::Vec3b(255, 255, 255));
     CHECK(decoded.at<cv::Vec3b>(1, 0) == cv::Vec3b(0, 0, 255));
     CHECK(decoded.at<cv::Vec3b>(1, 1) == cv::Vec3b(0, 255, 0));
-
-    std::filesystem::remove(output_path);
 }
 
 TEST_CASE("tile builder handles image writer edge cases")
@@ -62,8 +60,8 @@ TEST_CASE("tile builder handles image writer edge cases")
 
     SECTION("constant debug raster is written as black")
     {
-        const auto output_path = std::filesystem::temp_directory_path() / "alpine_terrain_builder_constant_raster_test.png";
-        std::filesystem::remove(output_path);
+        const TempFile output("image_writer_constant_raster.png");
+        const auto output_path = output.path();
 
         radix::Raster<float> raster({ 2, 2 });
         std::ranges::fill(raster, 42.F);
@@ -73,8 +71,6 @@ TEST_CASE("tile builder handles image writer edge cases")
         REQUIRE(decoded.rows == 2);
         REQUIRE(decoded.cols == 2);
         CHECK(cv::countNonZero(decoded.reshape(1)) == 0);
-
-        std::filesystem::remove(output_path);
     }
 
     SECTION("PNG write failure is reported")

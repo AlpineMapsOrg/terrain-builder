@@ -6,6 +6,7 @@ function(atb_configure_test target)
     target_compile_definitions(${target} PRIVATE
         CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS
         ALP_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
+        ALP_TEST_OUTPUT_DIR="${CMAKE_BINARY_DIR}/unittests/output/"
         ALP_UNITTESTS_AUSTRIA_HIGHRES="${ALP_UNITTESTS_AUSTRIA_HIGHRES}"
         ALP_UNITTESTS_EXTENDED=$<BOOL:${ALP_UNITTESTS_EXTENDED}>
         ALP_UNITTESTS_DEBUG_IMAGES=$<BOOL:${ALP_UNITTESTS_DEBUG_IMAGES}>

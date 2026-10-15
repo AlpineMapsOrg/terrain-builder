@@ -1,35 +1,20 @@
 #include "HttpClient.h"
 
 #include <filesystem>
-#include <fstream>
 #include <stdexcept>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../temp_directory.h"
+#include "io/filesystem.h"
+
 namespace {
 
-class TemporaryFile {
-public:
-    TemporaryFile()
-        : _path(std::filesystem::temp_directory_path() / "atb-http-client-test.txt") {
-        std::ofstream output(_path, std::ios::binary);
-        output << "response body";
-        REQUIRE(output);
-    }
-
-    ~TemporaryFile() {
-        std::error_code error;
-        std::filesystem::remove(_path, error);
-    }
-
-    [[nodiscard]] std::string url() const {
-        return "file://" + _path.string();
-    }
-
-private:
-    std::filesystem::path _path;
-};
+// Returns the file URL of `path`.
+std::string make_file_url(const std::filesystem::path &path) {
+    return "file://" + io::filesystem::canonicalize(path).string();
+}
 
 class CallbackError : public std::runtime_error {
 public:
@@ -40,20 +25,20 @@ public:
 }
 
 TEST_CASE("http client propagates response writer exceptions") {
-    const TemporaryFile source;
+    const TempFile source("atb-http-client.txt", "response body");
     HttpClient client([](std::vector<char> &, const char *, size_t) {
         throw CallbackError();
     });
 
-    CHECK_THROWS_AS(client.get(source.url()), CallbackError);
+    CHECK_THROWS_AS(client.get(make_file_url(source.path())), CallbackError);
 }
 
 TEST_CASE("http client propagates progress callback exceptions") {
-    const TemporaryFile source;
+    const TempFile source("atb-http-client.txt", "response body");
     HttpClient client;
 
     CHECK_THROWS_AS(
-        client.get(source.url(), [](double) {
+        client.get(make_file_url(source.path()), [](double) {
             throw CallbackError();
         }),
         CallbackError);
