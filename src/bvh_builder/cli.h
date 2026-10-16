@@ -43,7 +43,12 @@ struct EvaluateArgs : public BaseArgs {
     bool write_cut = false;
 };
 
-using Args = std::variant<BuildArgs, EvaluateArgs>;
+// What the check command takes.
+struct CheckArgs : public BaseArgs {
+    std::filesystem::path input_path;
+};
+
+using Args = std::variant<BuildArgs, EvaluateArgs, CheckArgs>;
 
 Args parse(int argc, const char *const *argv);
 

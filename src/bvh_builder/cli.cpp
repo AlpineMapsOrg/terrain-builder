@@ -98,6 +98,18 @@ CLI::App &add_evaluate_command(CLI::App &app, EvaluateArgs &args) {
     return command;
 }
 
+// Adds the check command to `app`.
+CLI::App &add_check_command(CLI::App &app, CheckArgs &args) {
+    auto &command = *app.add_subcommand("check", "Check a bvh for violations");
+
+    command.add_option("--input", args.input_path, "Path to the bvh run to check")
+        ->required()
+        ->check(CLI::ExistingDirectory);
+
+    add_base_options(command, args);
+    return command;
+}
+
 // Derives the default scratch path of a build writing to `output_path`.
 std::filesystem::path derive_scratch_path(const std::filesystem::path &output_path) {
     // Kept beside the output, which is the one disk the caller has already chosen for this run.
@@ -125,6 +137,9 @@ Args cli::parse(int argc, const char *const *argv) {
     EvaluateArgs evaluate_args;
     const CLI::App &evaluate = add_evaluate_command(app, evaluate_args);
 
+    CheckArgs check_args;
+    const CLI::App &check = add_check_command(app, check_args);
+
     app.require_subcommand(1);
 
     try {
@@ -143,6 +158,10 @@ Args cli::parse(int argc, const char *const *argv) {
 
     if (evaluate) {
         return evaluate_args;
+    }
+
+    if (check) {
+        return check_args;
     }
 
     UNREACHABLE("parsed without a command");
