@@ -11,10 +11,12 @@
 
 namespace view {
 
-// Decides which errors are small enough to show.
+// Which clusters show.
 struct CutRule {
     // The largest error that may show, as a fraction of the screen height.
     double threshold;
+    // Whether to leave out clusters out of view.
+    bool cull = true;
 
     bool operator==(const CutRule &) const = default;
 };
@@ -49,9 +51,8 @@ inline bool is_small_enough_to_draw(const double error, const bvh::Bounds &bound
 // Checks whether the cut can cross the leaf from anywhere within its LOD bounds.
 [[nodiscard]]
 inline bool should_visit_leaf(const bvh::NodeHeader &header, const Camera &camera, const CutRule &rule) {
-    const double nearest = geometry::compute_nearest_distance_to_bounds(header.lod_bounds, camera.eye());
-    const double farthest = geometry::compute_farthest_distance_to_bounds(header.lod_bounds, camera.eye());
-    return crosses_cut(header, RangeInclusive<double>(nearest, farthest), camera, rule);
+    const RangeInclusive<double> distances = geometry::compute_distance_range_to_bounds(header.lod_bounds, camera.eye());
+    return crosses_cut(header, distances, camera, rule);
 }
 
 }

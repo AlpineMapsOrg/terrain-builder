@@ -6,6 +6,8 @@
 #include <glm/gtx/component_wise.hpp>
 #include <radix/geometry.h>
 
+#include "range/RangeInclusive.h"
+
 namespace geometry {
 
 // Grow bounds by the same distance on every side.
@@ -83,6 +85,14 @@ T compute_nearest_distance_to_bounds(const radix::geometry::Aabb<n_dims, T> &bou
 template <glm::length_t n_dims, typename T>
 T compute_farthest_distance_to_bounds(const radix::geometry::Aabb<n_dims, T> &bounds, const glm::vec<n_dims, T> &point) {
     return glm::distance(point, find_farthest_point_in_bounds(bounds, point));
+}
+
+// Computes the distances from `point` to the nearest and the farthest point of `bounds`.
+template <glm::length_t n_dims, typename T>
+RangeInclusive<T> compute_distance_range_to_bounds(const radix::geometry::Aabb<n_dims, T> &bounds, const glm::vec<n_dims, T> &point) {
+    return RangeInclusive<T>(
+        compute_nearest_distance_to_bounds(bounds, point), compute_farthest_distance_to_bounds(bounds, point)
+    );
 }
 
 // How bounds lie relative to a plane.

@@ -37,10 +37,10 @@ std::array<bvh::Reference, 2> make_unreadable_children(bvh::Storage &nodes) {
 }
 
 // Selects the cut for `CAMERA` from the tree at `root` in `nodes`.
-view::Selection select_camera_cut(bvh::Storage &nodes, const bvh::Reference &root) {
+view::Selection select_camera_cut(bvh::Storage &nodes, const bvh::Reference &root, const view::CutRule &rule = view::CutRule{.threshold = 0.5}) {
     const view::Camera camera = REQUIRE_VALUE(view::Camera::create(CAMERA));
     bvh::NodeCache cache(nodes, 1);
-    return REQUIRE_VALUE(view::select_cut(cache, root, camera, view::CutRule{.threshold = 0.5}));
+    return REQUIRE_VALUE(view::select_cut(cache, root, camera, rule));
 }
 
 }
@@ -142,6 +142,38 @@ TEST_CASE("select_cut leaves out a cluster whose tight bounds are out of view", 
     REQUIRE_VALUE(nodes.save_index());
 
     CHECK(select_camera_cut(nodes, root).clusters == std::vector<dag::Id>{{node, 0}});
+}
+
+TEST_CASE("select_cut keeps a cluster out of view without culling", "[view][select_cut]") {
+    const octree::Id node = octree::Id::root();
+
+    const TempDirectory directory("select_cut");
+    bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
+    bvh::BatchWriter writer(nodes);
+    const std::array clusters{
+        dag::ClusterInfo{.id = {node, 0}, .error = 0.001, .lod_bounds = IN_VIEW, .tight_bounds = IN_VIEW},
+        dag::ClusterInfo{.id = {node, 1}, .error = 0.001, .lod_bounds = IN_VIEW, .tight_bounds = BEHIND},
+    };
+    const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::LeafInput{make_node_header({0.001, 2000.0}, IN_VIEW), clusters}));
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
+
+    CHECK(select_camera_cut(nodes, root, view::CutRule{.threshold = 0.5, .cull = false}).clusters == std::vector<dag::Id>{{node, 0}, {node, 1}});
+}
+
+TEST_CASE("select_cut descends into a subtree out of view without culling", "[view][select_cut]") {
+    const octree::Id node = octree::Id::root();
+
+    const TempDirectory directory("select_cut");
+    bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
+    bvh::BatchWriter writer(nodes);
+    const std::array clusters{dag::ClusterInfo{.id = {node, 0}, .error = 0.001, .lod_bounds = BEHIND, .tight_bounds = BEHIND}};
+    const bvh::Reference leaf = REQUIRE_VALUE(writer.write_node(bvh::LeafInput{make_node_header({0.001, 2000.0}, BEHIND), clusters}));
+    const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{make_node_header({0.001, 2000.0}, BEHIND), std::array{leaf}}));
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
+
+    CHECK(select_camera_cut(nodes, root, view::CutRule{.threshold = 0.5, .cull = false}) == view::Selection{.clusters = {{node, 0}}, .inner_nodes_tested = 1, .leaves_tested = 1});
 }
 
 TEST_CASE("select_cut measures each cluster's error from its own LOD bounds", "[view][select_cut]") {
