@@ -17,8 +17,7 @@
 
 namespace {
 
-template <size_t K>
-void close_all(std::array<spsc::Sender<int>, K> &senders) {
+void close_all(std::vector<spsc::Sender<int>> &senders) {
     for (spsc::Sender<int> &sender : senders) {
         std::move(sender).close();
     }
@@ -36,7 +35,7 @@ std::vector<int> drain(auto &merging) {
 } // namespace
 
 TEST_CASE("a lone source streams straight through", "[build][MergingReceiver]") {
-    auto [senders, merging] = make_merging_channels<int, 1>(16);
+    auto [senders, merging] = make_merging_channels<int>(1, 16);
 
     REQUIRE(senders[0].push_batch(std::array<int, 3>{1, 2, 3}));
     close_all(senders);
@@ -45,7 +44,7 @@ TEST_CASE("a lone source streams straight through", "[build][MergingReceiver]") 
 }
 
 TEST_CASE("two sources interleave in sorted order", "[build][MergingReceiver]") {
-    auto [senders, merging] = make_merging_channels<int, 2>(16);
+    auto [senders, merging] = make_merging_channels<int>(2, 16);
 
     REQUIRE(senders[0].push_batch(std::array<int, 3>{1, 3, 5}));
     REQUIRE(senders[1].push_batch(std::array<int, 3>{2, 4, 6}));
@@ -55,7 +54,7 @@ TEST_CASE("two sources interleave in sorted order", "[build][MergingReceiver]") 
 }
 
 TEST_CASE("the comparator decides the merge order", "[build][MergingReceiver]") {
-    auto [senders, merging] = make_merging_channels<int, 2>(16, std::greater<>{});
+    auto [senders, merging] = make_merging_channels<int>(2, 16, std::greater<>{});
 
     REQUIRE(senders[0].push_batch(std::array<int, 3>{5, 3, 1}));
     REQUIRE(senders[1].push_batch(std::array<int, 3>{6, 4, 2}));
@@ -65,7 +64,7 @@ TEST_CASE("the comparator decides the merge order", "[build][MergingReceiver]") 
 }
 
 TEST_CASE("a source that ends without a value holds nothing back", "[build][MergingReceiver]") {
-    auto [senders, merging] = make_merging_channels<int, 3>(16);
+    auto [senders, merging] = make_merging_channels<int>(3, 16);
 
     REQUIRE(senders[1].push_batch(std::array<int, 2>{7, 8}));
     close_all(senders);
@@ -74,7 +73,7 @@ TEST_CASE("a source that ends without a value holds nothing back", "[build][Merg
 }
 
 TEST_CASE("sources that all end without a value merge to nothing", "[build][MergingReceiver]") {
-    auto [senders, merging] = make_merging_channels<int, 3>(16);
+    auto [senders, merging] = make_merging_channels<int>(3, 16);
 
     close_all(senders);
 
@@ -84,7 +83,7 @@ TEST_CASE("sources that all end without a value merge to nothing", "[build][Merg
 TEST_CASE("a source longer than the prefetch is drained in order", "[build][MergingReceiver]") {
     constexpr size_t count = 500;
 
-    auto [senders, merging] = make_merging_channels<int, 1>(1024);
+    auto [senders, merging] = make_merging_channels<int>(1, 1024);
 
     std::vector<int> stream(count);
     std::iota(stream.begin(), stream.end(), 0);
@@ -113,7 +112,7 @@ TEST_CASE("end to end, four sorted streams merge into one", "[build][MergingRece
     std::ranges::sort(expected);
 
     // A ring far smaller than a stream, so the producers spend the run under backpressure.
-    auto [senders, merging] = make_merging_channels<int, source_count>(8);
+    auto [senders, merging] = make_merging_channels<int>(source_count, 8);
 
     std::vector<std::thread> producers;
     for (size_t source = 0; source < source_count; source++) {
