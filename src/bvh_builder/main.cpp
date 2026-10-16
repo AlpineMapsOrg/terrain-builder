@@ -18,7 +18,8 @@ int main(int argc, char **argv) {
 
     try {
         const alp::Result<void> result = match(args,
-            [](const cli::BuildArgs &a) { return build_bvh(a); });
+            [](const cli::BuildArgs &a) { return build_bvh(a); },
+            [](const cli::EvaluateArgs &a) { return evaluate_bvh(a); });
         if (!result.has_value()) {
             LOG_UNEXPECTED(result.error());
             return EXIT_FAILURE;

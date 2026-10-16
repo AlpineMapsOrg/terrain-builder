@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <variant>
 
 #include <spdlog/spdlog.h>
@@ -32,7 +33,17 @@ struct BuildArgs : public BaseArgs {
     size_t max_batch_bytes;
 };
 
-using Args = std::variant<BuildArgs>;
+// What the evaluate command takes.
+struct EvaluateArgs : public BaseArgs {
+    std::filesystem::path input_path;
+    std::optional<std::filesystem::path> output_path;
+    std::filesystem::path cameras_path;
+    double threshold;
+    bool no_cull = false;
+    bool write_cut = false;
+};
+
+using Args = std::variant<BuildArgs, EvaluateArgs>;
 
 Args parse(int argc, const char *const *argv);
 

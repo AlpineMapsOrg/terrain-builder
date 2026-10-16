@@ -5,6 +5,7 @@ target_link_libraries(bvhbuilderlib INTERFACE dagbuilderlib glaze)
 add_executable(bvh-builder
     build.cpp
     cli.cpp
+    evaluate.cpp
     main.cpp
 )
 target_link_libraries(bvh-builder PRIVATE bvhbuilderlib CLI11::CLI11)

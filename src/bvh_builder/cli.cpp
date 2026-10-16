@@ -72,6 +72,32 @@ CLI::App &add_build_command(CLI::App &app, BuildArgs &args) {
     return command;
 }
 
+// Adds the evaluate command to `app`.
+CLI::App &add_evaluate_command(CLI::App &app, EvaluateArgs &args) {
+    auto &command = *app.add_subcommand("evaluate", "Evaluate the cut a bvh selects for each camera");
+
+    command.add_option("--input", args.input_path, "Path to the bvh run to evaluate")
+        ->required()
+        ->check(CLI::ExistingDirectory);
+
+    command.add_option("--output", args.output_path, "Path to write the JSON result to instead of stdout");
+
+    command.add_option("--cameras", args.cameras_path, "Path to a JSON file holding a camera set")
+        ->required()
+        ->check(CLI::ExistingFile);
+
+    command.add_option("--threshold", args.threshold, "Largest error that may show, as a fraction of the screen height")
+        ->default_val(2e-3)
+        ->check(CLI::PositiveNumber);
+
+    command.add_flag("--no-cull", args.no_cull, "Select clusters out of view too");
+
+    command.add_flag("--write-cut", args.write_cut, "Write the selected clusters, not only their count");
+
+    add_base_options(command, args);
+    return command;
+}
+
 // Derives the default scratch path of a build writing to `output_path`.
 std::filesystem::path derive_scratch_path(const std::filesystem::path &output_path) {
     // Kept beside the output, which is the one disk the caller has already chosen for this run.
@@ -96,6 +122,9 @@ Args cli::parse(int argc, const char *const *argv) {
     BuildArgs build_args;
     const CLI::App &build = add_build_command(app, build_args);
 
+    EvaluateArgs evaluate_args;
+    const CLI::App &evaluate = add_evaluate_command(app, evaluate_args);
+
     app.require_subcommand(1);
 
     try {
@@ -110,6 +139,10 @@ Args cli::parse(int argc, const char *const *argv) {
         }
 
         return build_args;
+    }
+
+    if (evaluate) {
+        return evaluate_args;
     }
 
     UNREACHABLE("parsed without a command");

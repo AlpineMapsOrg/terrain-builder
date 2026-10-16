@@ -161,6 +161,7 @@ if(TARGET bvhbuilderlib)
         bvh_builder/flatten_dag.cpp
         bvh_builder/frustum.cpp
         bvh_builder/json_glm.cpp
+        bvh_builder/json_octree.cpp
         bvh_builder/json_serialize.cpp
         bvh_builder/pseudo_lbvh_build.cpp
         bvh_builder/merging_receiver.cpp
