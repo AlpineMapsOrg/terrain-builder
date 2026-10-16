@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <variant>
 
 #include <spdlog/spdlog.h>
 
@@ -16,16 +17,22 @@ enum class Mode : uint8_t {
     Hploc,
 };
 
-struct Args {
+// What every command takes.
+struct BaseArgs {
     spdlog::level::level_enum log_level;
+    size_t max_resident_bytes;
+};
 
-    Mode mode;
+// What the build command takes.
+struct BuildArgs : public BaseArgs {
     std::filesystem::path input_path;
     std::filesystem::path output_path;
     std::filesystem::path scratch_path;
+    Mode mode;
     size_t max_batch_bytes;
-    size_t max_resident_bytes;
 };
+
+using Args = std::variant<BuildArgs>;
 
 Args parse(int argc, const char *const *argv);
 
