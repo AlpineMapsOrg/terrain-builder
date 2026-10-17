@@ -124,7 +124,7 @@ TEST_CASE("RF worker errors and exceptions stop queued work and join active work
     REQUIRE(first);
     REQUIRE_FALSE(first->result);
     CHECK(first->result.error().code() == (error_exception ? Error::Code::Io : Error::Code::Internal));
-    CHECK(first->result.error().to_string().find("prepare RF tile " + to_string(first->key)) != std::string::npos);
+    CHECK(first->result.error().to_string().find("prepare tile " + to_string(first->key)) != std::string::npos);
     CHECK_FALSE(pool.submit({ 3, { 4, 0 } }));
     auto second = pool.take(3s);
     REQUIRE(second);

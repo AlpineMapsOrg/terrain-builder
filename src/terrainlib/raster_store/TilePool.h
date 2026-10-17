@@ -35,8 +35,8 @@
 
 namespace raster_store {
 
-// RF tile scheduling shared by the RF builder and merger. The coordinator alone
-// submits/takes results.
+// Tile scheduling shared by the RF builder, the RF merger and the TB builder. The
+// coordinator alone submits/takes results.
 // Fixed slots bound queued + active + completed tiles, not merely the job queue.
 // prepare may throw Error::Exception; the pool returns its error as the result.
 // Any failure stops the pool, and failed results are returned in any order.
@@ -163,11 +163,11 @@ private:
                 try {
                     return m_prepare(worker, key);
                 } catch (const Error::Exception& exception) {
-                    return Error::propagate(Error(exception.error()), "prepare RF tile " + to_string(key));
+                    return Error::propagate(Error(exception.error()), "prepare tile " + to_string(key));
                 } catch (const std::exception& error) {
-                    return Error::fail(Error::Code::Internal, "prepare RF tile " + to_string(key) + ": " + error.what());
+                    return Error::fail(Error::Code::Internal, "prepare tile " + to_string(key) + ": " + error.what());
                 } catch (...) {
-                    return Error::fail(Error::Code::Internal, "unknown exception preparing RF tile " + to_string(key));
+                    return Error::fail(Error::Code::Internal, "unknown exception preparing tile " + to_string(key));
                 }
             }();
             lock.lock();
