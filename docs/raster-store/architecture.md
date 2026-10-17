@@ -132,7 +132,7 @@ channel; derived channels such as shadings are produced by separate tools. Every
 and selects an adequate source. It must support at least minimum, maximum, and average
 aggregation. A TB may choose different tile dimensions from its RF input.
 
-Planned location: `src/tb-builder`.
+Implemented as `tb-builder` in tile-foundry; see its [design](https://github.com/AlpineMapsOrg/tile-foundry/blob/main/docs/raster-store/tb-builder-design.md).
 
 ### tile_server
 

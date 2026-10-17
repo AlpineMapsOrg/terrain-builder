@@ -20,18 +20,22 @@ snapshot-root/
       └── <zoom>/<x>/<y>.amort
 ```
 
-The RF builder appends runtime messages to `<snapshot-path>.log` beside the
-snapshot so startup failures and aborted runs are also recorded.
+The RF builder, RF merger and TB builder append runtime messages to
+`<snapshot-path>.log` beside the snapshot so startup failures and aborted runs
+are also recorded.
 
-A TB snapshot has a local attribution table:
+A TB snapshot has a local attribution table and `tb_builder.metadata`, the
+[TB builder's](https://github.com/AlpineMapsOrg/tile-foundry/blob/main/docs/raster-store/tb-builder-design.md) record of its settings and of every tile's sources
+for reuse by later builds:
 
 ```text
 tile-base-root/
+ ├── store-snapshot-id.log
  └── store-snapshot-id/
       ├── source_attribution_table.json
       ├── raster_store.metadata
       ├── raster_store.index
-      ├── build_log.txt
+      ├── tb_builder.metadata
       └── <zoom>/<x>/<y>.amort
 ```
 
