@@ -32,7 +32,7 @@ public:
     }
 
 private:
-    alp::ResultFn<E, F> _visitor;
+    alp::ResultFn<F, E> _visitor;
 };
 
 } // namespace visitor

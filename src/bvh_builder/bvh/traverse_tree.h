@@ -59,7 +59,7 @@ inline constexpr Control Control::Break{Action::Break};
 template <typename E = io::Error, typename F>
 [[nodiscard]]
 alp::Result<bool, E> traverse_tree(NodeCache &nodes, const Reference &root, F &&v) {
-    alp::ResultFn<E, F &> visit(v);
+    auto visit = alp::make_result_fn<E>(v);
 
     std::vector<Reference> stack{root};
 
