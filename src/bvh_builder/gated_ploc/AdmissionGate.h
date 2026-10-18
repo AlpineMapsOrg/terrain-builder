@@ -68,6 +68,11 @@ public:
         return {};
     }
 
+    [[nodiscard]]
+    alp::Result<void, io::Error> push(const frontier::Entry entry) {
+        return this->push(std::span<const frontier::Entry>(&entry, 1));
+    }
+
     // Splits the region left at the end of the run, then ends both streams.
     [[nodiscard]]
     alp::Result<void, io::Error> finish() && {

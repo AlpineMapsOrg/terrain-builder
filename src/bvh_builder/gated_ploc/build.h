@@ -37,6 +37,8 @@ inline alp::Result<bvh::Reference, io::Error, io::DirectoryNotEmpty> build(
     const auto context = alp::make_context("building a tree from {} to {}", std::filesystem::path(input.directory()), output.directory());
 
     const detail::RoundLayout layout(scratch_root);
+    const size_t stage_count = compute_stage_count(options);
+    LOG_INFO("gated ploc runs {} stages per round", stage_count);
 
     frontier::Storage current = std::move(input);
     uint64_t previous = std::numeric_limits<uint64_t>::max();
@@ -44,7 +46,7 @@ inline alp::Result<bvh::Reference, io::Error, io::DirectoryNotEmpty> build(
         ALP_TRY_CONTEXT(frontier::Storage next, layout.create_merge_scratch(round), context);
         ALP_TRY_CONTEXT(
             const uint64_t remaining,
-            alp::with_context(detail::run_round(current, next, output, options), alp::make_context("merging round {}", round)),
+            alp::with_context(detail::run_round(current, next, output, options, stage_count), alp::make_context("merging round {}", round)),
             context);
         ASSERT(remaining < previous, "a gated ploc round left the frontier no smaller than it found it");
         previous = remaining;

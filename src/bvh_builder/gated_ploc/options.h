@@ -1,8 +1,11 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 
 #include "build/merge_cost.h"
+#include "frontier/layout.h"
+#include "ploc/NearestSearch.h"
 #include "storage/batch_limits.h"
 
 namespace gated_ploc {
@@ -23,6 +26,17 @@ struct Options {
 
     size_t min_chunk_size = 1 << 12;
     size_t max_batch_bytes = DEFAULT_MAX_BATCH_BYTES;
+    size_t max_resident_bytes = DEFAULT_MAX_RESIDENT_BYTES;
 };
+
+// The most stages a round runs, since each stage nests the calls of the next on the stack.
+constexpr size_t MAX_STAGE_COUNT = 20;
+
+// How many stages fit into `options.max_resident_bytes`.
+[[nodiscard]]
+inline size_t compute_stage_count(const Options &options) {
+    const size_t window_size = options.admission.region_size + options.min_chunk_size + 2 * ploc::halo(options.search_radius);
+    return std::clamp(options.max_resident_bytes / (window_size * sizeof(frontier::Entry)), size_t{1}, MAX_STAGE_COUNT);
+}
 
 } // namespace gated_ploc

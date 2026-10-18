@@ -53,7 +53,7 @@ TEST_CASE("run_round writes the next run in morton order when the gate holds ent
     const frontier::Storage input = make_storage(directory.path() / "input", {entries});
     frontier::Storage next = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "next"));
 
-    const uint64_t remaining = REQUIRE_VALUE(gated_ploc::detail::run_round(input, next, output, options));
+    const uint64_t remaining = REQUIRE_VALUE(gated_ploc::detail::run_round(input, next, output, options, 1));
     REQUIRE_VALUE(output.save_index());
     REQUIRE_VALUE(next.save_index());
 
