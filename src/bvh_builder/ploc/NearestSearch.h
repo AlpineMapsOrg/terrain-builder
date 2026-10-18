@@ -40,6 +40,11 @@ public:
         : _search_radius(search_radius),
           _error_weight(error_weight) {}
 
+    [[nodiscard]]
+    size_t search_radius() const {
+        return this->_search_radius;
+    }
+
     // Finds the cheapest partner of every one of `entries`, or none for an entry with nothing in reach.
     // Of equally cheap partners it keeps the one with the lowest index. The result is valid until the next call.
     [[nodiscard]]
@@ -85,6 +90,12 @@ inline std::optional<size_t> find_mutual_partner(const std::span<const Nearest> 
         return partner;
     }
     return std::nullopt;
+}
+
+// How many entries a run needs on each side so its mutual partners match those of the whole stream.
+[[nodiscard]]
+inline size_t halo(const size_t search_radius) {
+    return 2 * search_radius;
 }
 
 } // namespace ploc

@@ -17,7 +17,6 @@ add_executable(unittests_terrainlib
     opencv_helpers.h
 
     terrainlib/checked_cast.cpp
-    terrainlib/chunked_ring_buffer.cpp
     terrainlib/convert.cpp
     terrainlib/cow.cpp
     terrainlib/dataset.cpp
@@ -152,12 +151,14 @@ if(TARGET bvhbuilderlib)
         throwing_assertions.cpp
         temp_directory.h
         bvh_builder/frontier_helpers.h
+        bvh_builder/admission_gate.cpp
         bvh_builder/batch.cpp
         bvh_builder/batch_cache.cpp
         bvh_builder/batch_reader.cpp
         bvh_builder/batch_storage.cpp
         bvh_builder/bounded_cache.cpp
         bvh_builder/build_frontier.cpp
+        bvh_builder/chunk_merger.cpp
         bvh_builder/cut_rule.cpp
         bvh_builder/find_root.cpp
         bvh_builder/flat_traverse.cpp
@@ -167,10 +168,8 @@ if(TARGET bvhbuilderlib)
         bvh_builder/json_octree.cpp
         bvh_builder/json_serialize.cpp
         bvh_builder/pseudo_lbvh_build.cpp
-        bvh_builder/merging_receiver.cpp
         bvh_builder/merge_cost.cpp
         bvh_builder/merge_runs.cpp
-        bvh_builder/merging_writer.cpp
         bvh_builder/morton_utils.cpp
         bvh_builder/nearest_search.cpp
         bvh_builder/node_cache.cpp
@@ -178,6 +177,7 @@ if(TARGET bvhbuilderlib)
         bvh_builder/hploc_build.cpp
         bvh_builder/prefix_map.cpp
         bvh_builder/row_buffer.cpp
+        bvh_builder/run_round.cpp
         bvh_builder/segment_stack.cpp
         bvh_builder/select_cut.cpp
         bvh_builder/sort_by_morton.cpp

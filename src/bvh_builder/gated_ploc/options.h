@@ -3,8 +3,6 @@
 #include <cstddef>
 
 #include "build/merge_cost.h"
-#include "bvh/earth.h"
-#include "bvh/NodeHeader.h"
 #include "storage/batch_limits.h"
 
 namespace gated_ploc {
@@ -21,14 +19,10 @@ struct AdmissionOptions {
 struct Options {
     size_t search_radius = 16;
     double error_weight = build::DEFAULT_ERROR_WEIGHT;
-    bvh::Bounds scene_bounds = bvh::earth_bounds();
     AdmissionOptions admission = {};
 
-    size_t chunk_size = 1 << 15;
-    size_t chunk_count = 32;
-    size_t worker_count = 8;
+    size_t min_chunk_size = 1 << 12;
     size_t max_batch_bytes = DEFAULT_MAX_BATCH_BYTES;
-    size_t max_resident_bytes = DEFAULT_MAX_RESIDENT_BYTES;
 };
 
 } // namespace gated_ploc

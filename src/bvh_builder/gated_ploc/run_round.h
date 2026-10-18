@@ -1,24 +1,18 @@
 #pragma once
 
 #include <cstdint>
-#include <expected>
-#include <span>
-#include <string_view>
 #include <utility>
 
-#include <libassert/assert.hpp>
-
-#include "WorkerGroup.h"
-#include "containers/ChunkedRingBuffer.h"
-#include "containers/ChunkedRingWriter.h"
 #include "error/Result.h"
 #include "error/try.h"
-#include "error/utils.h"
 #include "io/Error.h"
+#include "sink/FnSink.h"
+#include "sink/MergingSink.h"
 
 #include "bvh/BatchWriter.h"
 #include "bvh/Storage.h"
 #include "frontier/BatchWriter.h"
+#include "frontier/BatchWriterSink.h"
 #include "frontier/Storage.h"
 #include "frontier/layout.h"
 #include "frontier/traverse.h"
@@ -30,123 +24,35 @@ namespace gated_ploc {
 
 namespace detail {
 
-using EntryRing = ChunkedRingBuffer<frontier::Entry>;
-using EntryWriter = ChunkedRingWriter<frontier::Entry>;
-
-// The round ended under this worker before it finished.
-struct Cancelled {
-    bool operator==(const Cancelled &) const = default;
-
-    friend std::string_view format_as(const Cancelled) {
-        return "cancelled";
-    }
-};
-
-// What a worker hands back: its count, its own failure, or the round ending around it.
-using WorkerResult = alp::Result<uint64_t, io::Error, Cancelled>;
-
-// Feeds the ring the entries of the run this round admits and writes the rest to `merged`.
-// Returns how many entries it read.
-[[nodiscard]]
-inline WorkerResult run_producer(
-    const frontier::Storage &input, frontier::Storage &merged, EntryRing &ring, const Options &options) {
-    frontier::BatchWriter next_run(merged, options.max_batch_bytes);
-    EntryWriter admitted(ring);
-
-    AdmissionGate gate(
-        [&admitted](const std::span<const frontier::Entry> entries) -> alp::Result<bool, io::Error> {
-            return admitted.write(entries).has_value();
-        },
-        [&next_run](const std::span<const frontier::Entry> entries) -> alp::Result<void, io::Error> {
-            for (const frontier::Entry &entry : entries) {
-                ALP_TRY(next_run.write(entry));
-            }
-            return {};
-        },
-        options.admission);
-
-    uint64_t entries = 0;
-    ALP_TRY(const bool completed, frontier::traverse_batches(input, [&](const frontier::Batch &batch) -> alp::Result<bool, io::Error> {
-        entries += batch.entries.size();
-        return gate.push(batch.entries);
-    }));
-
-    if (!completed) {
-        return alp::make_unexpected(Cancelled{});
-    }
-
-    ALP_TRY(gate.flush());
-    std::move(admitted).finish();
-
-    ALP_TRY(next_run.flush());
-    return entries;
-}
-
-// Merges the chunks of the ring as they arrive and returns how many pairs it merged.
-[[nodiscard]]
-inline WorkerResult run_consumer(
-    EntryRing &ring, frontier::Storage &merged, bvh::Storage &output, const Options &options) {
-    bvh::BatchWriter sink(output, options.max_batch_bytes);
-    frontier::BatchWriter next_run(merged, options.max_batch_bytes);
-    ChunkMerger merger(sink, next_run, options);
-
-    uint64_t merges = 0;
-    while (true) {
-        const std::expected<EntryRing::ReadLease, EntryRing::StreamEnd> lease_result = ring.rent_for_reading();
-        if (!lease_result.has_value()) {
-            if (lease_result.error() == EntryRing::StreamEnd::Aborted) {
-                return alp::make_unexpected(Cancelled{});
-            }
-            break;
-        }
-
-        alp::Result<uint64_t, io::Error> count_result = merger.merge_chunk(lease_result->view());
-        if (!count_result.has_value()) {
-            ring.abort();
-            return alp::propagate(std::move(count_result).error());
-        }
-        merges += count_result.value();
-    }
-
-    ALP_TRY(next_run.flush());
-    ALP_TRY(sink.flush());
-    return merges;
-}
-
-// Merges what the round admits, and returns how many entries the frontier is left with.
+// Merges what the round admits from `input`, writing the nodes to `output` and the next run to `next` in morton order.
+// Returns how many entries the next run holds.
 [[nodiscard]]
 inline alp::Result<uint64_t, io::Error> run_round(
-    const frontier::Storage &input, frontier::Storage &merged, bvh::Storage &output,
-    EntryRing &ring, const Options &options) {
-    ring.reset();
+    const frontier::Storage &input, frontier::Storage &next, bvh::Storage &output, const Options &options) {
+    bvh::BatchWriter sink(output, options.max_batch_bytes);
+    frontier::BatchWriter next_run(next, options.max_batch_bytes);
+    frontier::BatchWriterSink next_run_sink(next_run);
+    uint64_t remaining = 0;
+    FnSink counting_sink(
+        [&](const frontier::Entry &entry) {
+            auto result = next_run_sink.push(entry);
+            remaining++;
+            return result;
+        },
+        [&] {
+            return std::move(next_run_sink).finish();
+        });
 
-    WorkerGroup workers(options.worker_count, [&]() {
-        return run_consumer(ring, merged, output, options);
-    });
+    auto [held, admitted] = make_merging_sink<2, frontier::Entry>(std::move(counting_sink));
+    ChunkMerger merger(sink, std::move(admitted), options);
+    AdmissionGate gate(std::move(merger), std::move(held), options.admission);
 
-    const WorkerResult read_result = run_producer(input, merged, ring, options);
-
-    uint64_t merges = 0;
-    for (const WorkerResult &result : workers.join()) {
-        if (!result.has_value()) {
-            auto narrow_result = result.error().narrow<io::Error>();
-            if (narrow_result.has_value()) {
-                return alp::propagate(std::move(narrow_result).value());
-            }
-            continue;
-        }
-        merges += result.value();
-    }
-
-    if (!read_result.has_value()) {
-        io::Error io_error = *ASSERT_VAL(
-            read_result.error().narrow<io::Error>(),
-            "the round was cancelled without any worker failing");
-        return alp::propagate(std::move(io_error));
-    }
-
-    ASSERT(ring.stream_state() != EntryRing::StreamState::Aborted, "the round aborted without any worker failing");
-    return read_result.value() - merges;
+    ALP_TRY(frontier::traverse_batches(input, [&gate](const frontier::Batch &batch) {
+        return gate.push(batch.entries);
+    }));
+    ALP_TRY(std::move(gate).finish());
+    ALP_TRY(sink.flush());
+    return remaining;
 }
 
 } // namespace detail
