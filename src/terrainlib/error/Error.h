@@ -46,17 +46,20 @@ public:
     // Whether the error is erased, holding a code of any copyable type.
     static constexpr bool is_erased = sizeof...(Es) == 0;
 
-    // Whether Es includes every one of the codes Fs, of which there is at least one.
-    template <ErrorCodes... Fs>
-    static constexpr bool includes = !Error<Fs...>::is_erased && is_subset_v<Error<Fs...>, BasicError>;
+private:
+    using CodeStorage = alp::CodeStorage<Es...>;
+
+public:
+    // Whether the error has exactly one code type.
+    static constexpr bool is_single = sizeof...(Es) == 1;
 
     // Whether this error can hold a code of type E.
     template <typename E>
-    static constexpr bool can_hold = is_erased ? ErrorCode<E> && std::copy_constructible<E> : OneOf<E, Es...>;
+    static constexpr bool can_hold = CodeStorage::template can_hold<E>;
 
-    // Whether this error can narrow to the codes Fs, of which there is at least one.
+    // Whether this error can narrow to the codes Fs.
     template <ErrorCodes... Fs>
-    static constexpr bool narrows_to = is_erased ? !Error<Fs...>::is_erased : includes<Fs...>;
+    static constexpr bool narrows_to = !Error<Fs...>::is_erased && std::is_convertible_v<Error<Fs...>, BasicError>;
 
     // Creates an error with `code` that originates at `location`.
     template <OneOf<Es...> E>
@@ -77,7 +80,7 @@ public:
           _trace(location) {}
 
     // Takes over an error whose codes are all among Es, or any error with copyable codes when this error is erased, keeping its frames.
-    template <typename... Fs> requires((is_erased && (std::copy_constructible<Fs> && ...)) || includes<Fs...>)
+    template <typename... Fs> requires std::constructible_from<CodeStorage, alp::CodeStorage<Fs...>>
     BasicError(BasicError<Fs...> other)
         : _code(std::move(other._code)),
           _trace(std::move(other._trace)) {}
@@ -97,7 +100,7 @@ public:
     }
 
     [[nodiscard]]
-    const auto &code() const requires(sizeof...(Es) == 1) {
+    const auto &code() const requires(is_single) {
         return this->_code.get();
     }
 
@@ -157,7 +160,7 @@ public:
     }
 
     // This error with only the codes Fs if it holds one of them, otherwise with only its other codes; a set among Fs stands for its codes.
-    template <ErrorCodes... Fs, typename Self> requires(includes<Fs...>)
+    template <ErrorCodes... Fs, typename Self> requires(!is_erased && narrows_to<Fs...>)
     [[nodiscard]]
     std::expected<Error<Fs...>, difference_t<BasicError, Error<Fs...>>> split(this Self &&self) {
         using Others = difference_t<BasicError, Error<Fs...>>;
@@ -176,12 +179,12 @@ private:
     template <typename... Fs>
     friend class BasicError;
 
-    BasicError(CodeStorage<Es...> code, Trace trace) : _code(std::move(code)), _trace(std::move(trace)) {}
+    BasicError(CodeStorage code, Trace trace) : _code(std::move(code)), _trace(std::move(trace)) {}
 
     // Narrows `error` to the codes Es if it holds one of them, otherwise hands it back unchanged.
     template <typename Source>
     static std::expected<BasicError, std::remove_cvref_t<Source>> narrow_from(Source &&error) {
-        std::optional<CodeStorage<Es...>> code_result = std::forward<Source>(error)._code.template narrow<Es...>();
+        std::optional<CodeStorage> code_result = std::forward<Source>(error)._code.template narrow<Es...>();
         if (!code_result.has_value()) {
             return std::unexpected(std::forward<Source>(error));
         }
@@ -190,12 +193,8 @@ private:
 
     friend struct fmt::formatter<BasicError>;
 
-    CodeStorage<Es...> _code;
+    CodeStorage _code;
     Trace _trace;
 };
-
-// Whether an error of type `ErrorType` can hold a code of type `E`.
-template <typename ErrorType, typename E>
-inline constexpr bool can_hold = ErrorType::template can_hold<E>;
 
 } // namespace alp

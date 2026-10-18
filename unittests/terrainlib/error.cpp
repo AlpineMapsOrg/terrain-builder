@@ -120,9 +120,12 @@ TEST_CASE("A nested error set expands into its codes, each kept once in the orde
     STATIC_REQUIRE(std::is_same_v<alp::Error<alp::Error<FileError, ParseError>>, alp::BasicError<FileError, ParseError>>);
 }
 
-TEST_CASE("An error set includes the codes of a nested set", "[error]") {
-    STATIC_REQUIRE(alp::BasicError<FileError, ParseError, OffsetError>::includes<alp::Error<FileError, ParseError>>);
-    STATIC_REQUIRE(!alp::BasicError<FileError>::includes<alp::Error<FileError, ParseError>>);
+TEST_CASE("An error narrows only to a set of codes it can hold", "[error]") {
+    STATIC_REQUIRE(alp::Error<FileError, ParseError, OffsetError>::narrows_to<alp::Error<FileError, ParseError>>);
+    STATIC_REQUIRE(!alp::Error<FileError>::narrows_to<alp::Error<FileError, ParseError>>);
+    STATIC_REQUIRE(!alp::Error<FileError>::narrows_to<>);
+    STATIC_REQUIRE(alp::Error<>::narrows_to<FileError>);
+    STATIC_REQUIRE(!alp::Error<>::narrows_to<MoveOnlyError>);
 }
 
 TEST_CASE("An error holds its code and originates at the location it is handed", "[error]") {

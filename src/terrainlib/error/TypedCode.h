@@ -14,14 +14,18 @@
 namespace alp {
 
 // The code of a typed error: a code of one of the types Es.
-template <ErrorCode... Es> requires(sizeof...(Es) > 0)
+template <ErrorCode... Es>
 class TypedCode {
 public:
-    template <OneOf<Es...> E>
+    // Whether this code can be a code of type E.
+    template <typename E>
+    static constexpr bool can_hold = OneOf<E, Es...>;
+
+    template <typename E> requires(can_hold<E>)
     explicit TypedCode(E code) : _code(std::in_place_type<E>, std::move(code)) {}
 
     // Takes the code `other` holds, which must be one of Es.
-    template <ErrorCode... Fs> requires((OneOf<Fs, Es...> && ...))
+    template <ErrorCode... Fs> requires((can_hold<Fs> && ...))
     explicit TypedCode(TypedCode<Fs...> other)
         : _code(std::move(other).visit([]<typename F>(F &&code) {
               return std::variant<Es...>(std::in_place_type<std::remove_cvref_t<F>>, std::forward<F>(code));
@@ -34,7 +38,7 @@ public:
     }
 
     // The held code if it is an E, otherwise null.
-    template <OneOf<Es...> E>
+    template <typename E> requires(can_hold<E>)
     [[nodiscard]]
     const E *get_if() const {
         return std::get_if<E>(&this->_code);

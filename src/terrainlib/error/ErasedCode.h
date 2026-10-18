@@ -30,16 +30,20 @@ inline std::string_view format_as(const Message &message) {
 // The code of an erased error: a code of any copyable type.
 class ErasedCode {
 public:
-    template <ErrorCode E> requires std::copy_constructible<E>
+    // Whether this code can be a code of type E.
+    template <typename E>
+    static constexpr bool can_hold = ErrorCode<E> && std::copy_constructible<E>;
+
+    template <typename E> requires(can_hold<E>)
     explicit ErasedCode(E code) : _code(std::in_place_type<E>, std::move(code)), _format(&format<E>) {}
 
     // Erases the code `code` holds.
-    template <ErrorCode... Es> requires(std::copy_constructible<Es> && ...)
+    template <ErrorCode... Es> requires((can_hold<Es> && ...))
     explicit ErasedCode(TypedCode<Es...> code)
         : ErasedCode(std::move(code).visit([]<typename E>(E &&held) { return ErasedCode(std::forward<E>(held)); })) {}
 
     // The held code if it is an E, otherwise null.
-    template <ErrorCode E>
+    template <typename E> requires(can_hold<E>)
     [[nodiscard]]
     const E *get_if() const {
         return std::any_cast<E>(&this->_code);
