@@ -33,6 +33,7 @@ add_executable(unittests_terrainlib
     terrainlib/error_utils.cpp
     terrainlib/file_error.cpp
     terrainlib/fixed_vector.cpp
+    terrainlib/fn_sink.cpp
     terrainlib/gdal_error.cpp
     terrainlib/gdal_geo_transform.cpp
     terrainlib/geometry_bounds.cpp
@@ -45,12 +46,14 @@ add_executable(unittests_terrainlib
     terrainlib/hybrid_vector.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
+    terrainlib/sink.cpp
     terrainlib/stamp_set.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
     terrainlib/io.cpp
     terrainlib/io_filesystem.cpp
     terrainlib/io_scratch_directory.cpp
+    terrainlib/merging_sink.cpp
     terrainlib/mesh_boundary.cpp
     terrainlib/mesh_bounds.cpp
     terrainlib/mesh_cleanup.cpp
