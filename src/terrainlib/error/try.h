@@ -28,7 +28,7 @@ struct PendingCode {
         requires(!is_specialization_of_v<Target, BasicError> && std::is_convertible_v<const E &, Target>)
     operator Target() const {
         // Declared for every message so that std::expected sees the conversion, and rejected on use so that the reason is readable.
-        static_assert(std::same_as<M, std::nullopt_t>, "ALP_TRY_CONTEXT needs a function returning an alp::Result: a plain expected has no place for the message");
+        static_assert(std::same_as<M, std::nullopt_t>, "ALP_TRY_CONTEXT can only be called in a function returning an alp::Result, a plain std::expected has no place for the message");
         return this->code;
     }
 
@@ -44,36 +44,49 @@ struct PendingCode {
     }
 };
 
-// What ALP_TRY returns for a failed `result`: its Error with a frame at `location` holding `message` unless it is nullopt, a PendingCode carrying `message` for a plain code, any other error unchanged, or nullopt for an optional.
+// The error ALP_TRY passes on for the `error` of a failed expected:
+// - alp::BasicError: the error with a new frame, holding `message` if there is one
+// - alp::ErrorCode: a PendingCode, which becomes the caller's error
+// - any other error: the error unchanged
+template <typename E, typename M>
+auto make_residual_error(E error, M message, const std::source_location location) {
+    constexpr bool has_message = !std::same_as<M, std::nullopt_t>;
+    if constexpr (is_specialization_of_v<E, BasicError>) {
+        if constexpr (has_message) {
+            return std::move(error).context(std::move(message), location);
+        } else {
+            return std::move(error).propagate(location);
+        }
+    } else if constexpr (ErrorCode<E>) {
+        return PendingCode<E, M>{
+            .code = error, 
+            .message = std::move(message), 
+            .location = location};
+    } else {
+        static_assert(!has_message, "ALP_TRY_CONTEXT needs an expression whose error is an alp::Error or an alp::ErrorCode, any other error has no place for the message");
+        return error;
+    }
+}
+
+// What ALP_TRY returns for a failed `result`:
+// - an optional: nullopt
+// - an expected: the error to pass on, as unexpected
 template <typename R, typename M>
 auto make_residual(R &&result, M message, const std::source_location location) {
-    constexpr bool has_message = !std::same_as<M, std::nullopt_t>;
-    if constexpr (!requires { result.error(); }) {
-        static_assert(!has_message, "ALP_TRY_CONTEXT needs an expected: an optional has no place for the message");
+    if constexpr (is_specialization_of_v<std::remove_cvref_t<R>, std::optional>) {
+        static_assert(std::same_as<M, std::nullopt_t>, "ALP_TRY_CONTEXT needs an expression whose result is an std::expected, an std::optional has no place for the message");
         return std::nullopt;
+    } else if constexpr (is_specialization_of_v<std::remove_cvref_t<R>, std::expected>) {
+        return std::unexpected(make_residual_error(std::forward<R>(result).error(), std::move(message), location));
     } else {
-        using Failure = std::remove_cvref_t<decltype(std::forward<R>(result).error())>;
-        if constexpr (is_specialization_of_v<Failure, BasicError>) {
-            Failure error = std::forward<R>(result).error();
-            if constexpr (has_message) {
-                error = std::move(error).context(std::move(message), location);
-            } else {
-                error = std::move(error).propagate(location);
-            }
-            return std::unexpected(std::move(error));
-        } else if constexpr (ErrorCode<Failure>) {
-            return std::unexpected(PendingCode<Failure, M>{.code = std::forward<R>(result).error(), .message = std::move(message), .location = location});
-        } else {
-            static_assert(!has_message, "ALP_TRY_CONTEXT needs an Error or a plain code: any other error has no place for the message");
-            return std::unexpected(std::forward<R>(result).error());
-        }
+        static_assert(false, "ALP_TRY needs an expression whose result is a std::expected or a std::optional");
     }
 }
 
 // The value held by a succeeded `result`, as a reference into it.
 template <typename R>
 decltype(auto) take_value(R &&result) {
-    static_assert(!std::is_void_v<typename std::remove_cvref_t<R>::value_type>, "ALP_TRY with a target needs a result that holds a value");
+    static_assert(!std::is_void_v<decltype(*result)>, "ALP_TRY with a binding needs an expression whose result holds a value");
     return *std::forward<R>(result);
 }
 
