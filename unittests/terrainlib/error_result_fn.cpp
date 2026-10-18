@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "error/Error.h"
+#include "error/Infallible.h"
 #include "error/Result.h"
 #include "error/ResultFn.h"
 #include "error/utils.h"
@@ -36,7 +37,7 @@ TEST_CASE("ResultFn turns a callable returning nothing into a succeeded result w
     const auto add = [&](const int a, const int b) {
         sum = a + b;
     };
-    alp::ResultFn<WideError, decltype(add)> fn(add);
+    auto fn = alp::make_result_fn<WideError>(add);
 
     STATIC_REQUIRE(std::same_as<decltype(fn(3, 4)), alp::Result<void, WideError>>);
     CHECK(fn(3, 4).has_value());
@@ -47,7 +48,7 @@ TEST_CASE("ResultFn wraps a returned value in a succeeded result", "[error][Resu
     const auto add = [](const int a, const int b) {
         return a + b;
     };
-    alp::ResultFn<WideError, decltype(add)> fn(add);
+    auto fn = alp::make_result_fn<WideError>(add);
 
     STATIC_REQUIRE(std::same_as<decltype(fn(3, 4)), alp::Result<int, WideError>>);
     CHECK(fn(3, 4) == 7);
@@ -57,7 +58,7 @@ TEST_CASE("ResultFn keeps the value of a succeeded result", "[error][ResultFn]")
     const auto add = [](const int a, const int b) -> alp::Result<int, ParseError> {
         return a + b;
     };
-    alp::ResultFn<WideError, decltype(add)> fn(add);
+    auto fn = alp::make_result_fn<WideError>(add);
 
     STATIC_REQUIRE(std::same_as<decltype(fn(3, 4)), alp::Result<int, WideError>>);
     CHECK(fn(3, 4) == 7);
@@ -68,7 +69,7 @@ TEST_CASE("ResultFn converts a failed result into the wider error, keeping its c
         const auto parse = []() -> alp::Result<int, ParseError> {
             return alp::make_unexpected(ParseError::Malformed);
         };
-        alp::ResultFn<WideError, decltype(parse)> fn(parse);
+        auto fn = alp::make_result_fn<WideError>(parse);
 
         const alp::Result<int, WideError> result = fn();
         REQUIRE_FALSE(result.has_value());
@@ -79,10 +80,43 @@ TEST_CASE("ResultFn converts a failed result into the wider error, keeping its c
         const auto parse = []() -> alp::Result<void, ParseError> {
             return alp::make_unexpected(ParseError::Malformed);
         };
-        alp::ResultFn<WideError, decltype(parse)> fn(parse);
+        auto fn = alp::make_result_fn<WideError>(parse);
 
         const alp::Result<void, WideError> result = fn();
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().holds(ParseError::Malformed));
     }
+}
+
+TEST_CASE("invoke_fallible wraps a returned value in a succeeded result with the wider error", "[error][ResultFn]") {
+    const auto add = [](const int a, const int b) {
+        return a + b;
+    };
+
+    STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible<WideError>(add, 3, 4)), alp::Result<int, WideError>>);
+    CHECK(alp::invoke_fallible<WideError>(add, 3, 4) == 7);
+}
+
+TEST_CASE("invoke_fallible converts a failed result into the wider error, keeping its code", "[error][ResultFn]") {
+    const auto parse = [](const int) -> alp::Result<int, ParseError> {
+        return alp::make_unexpected(ParseError::Malformed);
+    };
+
+    const alp::Result<int, WideError> result = alp::invoke_fallible<WideError>(parse, 3);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().holds(ParseError::Malformed));
+}
+
+TEST_CASE("invoke_fallible without codes keeps the callable's error", "[error][ResultFn]") {
+    const auto ignore = [](int) {};
+    const auto add = [](const int a, const int b) {
+        return a + b;
+    };
+    const auto parse = [](const int) -> alp::Result<int, ParseError> {
+        return 7;
+    };
+
+    STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible(ignore, 3)), alp::Result<void, alp::Infallible>>);
+    STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible(add, 3, 4)), alp::Result<int, alp::Infallible>>);
+    STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible(parse, 3)), alp::Result<int, ParseError>>);
 }
