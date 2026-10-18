@@ -411,7 +411,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
             // Calculate the triangle bounds and perform an intersection check
             const glm::dvec3 triangle_min = glm::min(glm::min(source_vertices[0], source_vertices[1]), source_vertices[2]);
             const glm::dvec3 triangle_max = glm::max(glm::max(source_vertices[0], source_vertices[1]), source_vertices[2]);
-            if (!radix::geometry::intersect(bounds, radix::geometry::Aabb3d{triangle_min, triangle_max})) {
+            if (!radix::geometry::intersect_inclusive(bounds, radix::geometry::Aabb3d{triangle_min, triangle_max})) {
                 // If the triangle bounds dont intersect, the triangle can be discarded
                 continue;
             }

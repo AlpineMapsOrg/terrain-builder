@@ -284,7 +284,7 @@ Expected<void> build_all_patches(gis::Dataset& dataset,
                 continue;
             }
             for (const radix::tile::SrsBounds& dataset_part : dataset_coverage) {
-                if (radix::geometry::intersect(radix::tile::SrsBounds(node_part), dataset_part)) {
+                if (radix::geometry::intersect_inclusive(radix::tile::SrsBounds(node_part), dataset_part)) {
                     return true;
                 }
             }
@@ -305,7 +305,7 @@ Expected<void> build_all_patches(gis::Dataset& dataset,
     process_node = [&](octree::Id node) {
         // Check if node intersects with ecef bounds of dataset
         const auto node_bounds = space.get_node_bounds(node);
-        if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
+        if (!radix::geometry::intersect_inclusive(node_bounds, ecef_bounds)) {
             return;
         }
         if (within_terrain_free_radius(node_bounds)) {

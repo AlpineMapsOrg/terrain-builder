@@ -49,10 +49,6 @@ namespace detail {
 inline TextureTrim identity_trim(const cv::Mat& texture) {
     return TextureTrim{.texture = texture, .uv_remap = UvRemap::identity()};
 }
-
-bool is_empty(const radix::geometry::Aabb2i &bounds) {
-    return bounds.min.x >= bounds.max.x || bounds.min.y >= bounds.max.y;
-}
 }
 
 TextureTrim compute_texture_trim(const cv::Mat &texture, const std::span<const glm::dvec2> uvs, const uint32_t padding) {
@@ -79,12 +75,13 @@ TextureTrim compute_texture_trim(const cv::Mat &texture, const radix::geometry::
         pixel_bounds.min - glm::ivec2(padding),
         pixel_bounds.max + glm::ivec2(padding)};
     const radix::geometry::Aabb2i full_bounds(glm::ivec2(0), glm::ivec2(texture_size));
-    const radix::geometry::Aabb2i clamped_pixel_bounds(radix::geometry::intersection(padded_pixel_bounds, full_bounds));
+    const auto clamped = radix::geometry::intersection_strict(padded_pixel_bounds, full_bounds);
 
     // Return identity trim if uv bounds are empty or full texture
-    if (detail::is_empty(clamped_pixel_bounds) || clamped_pixel_bounds == full_bounds) {
+    if (!clamped || *clamped == full_bounds) {
         return detail::identity_trim(texture);
     }
+    const radix::geometry::Aabb2i clamped_pixel_bounds(*clamped);
 
     // Crop the texture to the bounding box
     const cv::Rect roi(

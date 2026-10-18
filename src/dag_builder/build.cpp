@@ -392,7 +392,7 @@ std::vector<octree::Id> find_relevant_input_nodes(
             const std::vector<octree::Id> &input_nodes = input_by_level[level];
             for (const octree::Id& input_id : input_nodes) {
                 const radix::geometry::Aabb3d input_bounds = space.get_node_bounds(input_id);
-                if (radix::geometry::intersect(target_bounds, input_bounds)) {
+                if (radix::geometry::intersect_inclusive(target_bounds, input_bounds)) {
                     result.push_back(input_id);
                 }
             }
@@ -407,8 +407,11 @@ octree::IdRect find_relevant_dag_nodes(
     const octree::OddLevelShifted &shifted_space) {
     // We cannot rely on the intersecting nodes on the next level, since some neighbours clusters may has a centroid in this node's bounds. This can happen when the groups is split at the end of the pipeline.
     const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(shifted_space.get_node_bounds(target_id), 0.5 - 1e-6);
-    const radix::geometry::Aabb3d search_bounds = radix::geometry::intersection(padded_bounds, shifted_space.bounds());
-    return shifted_space.get_intersecting_nodes_on_level(search_bounds, target_id.level() + 1);
+    const auto search_bounds = radix::geometry::intersection_inclusive(padded_bounds, shifted_space.bounds());
+    if (!search_bounds) {
+        return {};
+    }
+    return shifted_space.get_intersecting_nodes_on_level(*search_bounds, target_id.level() + 1);
 }
 
 // Nodes one level finer that may hold data belonging to the given node and are resident.
@@ -486,12 +489,12 @@ Expected<std::vector<std::vector<octree::Id>>> gather_relevant_input_leaves(
     auto traversal = store::traverse(
         index,
         [&](const octree::Id &id, const store::NodeStatus status) {
-            if (status == store::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
+            if (status == store::NodeStatus::Leaf && radix::geometry::intersect_inclusive(root_bounds, space.get_node_bounds(id))) {
                 result[id.level()].push_back(id);
             }
         },
         [&](const octree::Id &id) {
-            return radix::geometry::intersect(root_bounds, space.get_node_bounds(id));
+            return radix::geometry::intersect_inclusive(root_bounds, space.get_node_bounds(id));
         },
         start);
     if (!traversal) {

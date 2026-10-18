@@ -336,7 +336,7 @@ std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
         if (!actual_ecef_bounds) {
             return std::unexpected(log_transformation_error(actual_ecef_bounds.error()));
         }
-        if (!radix::geometry::intersect(*actual_ecef_bounds, ecef_clip_bounds)) {
+        if (!radix::geometry::intersect_inclusive(*actual_ecef_bounds, ecef_clip_bounds)) {
             return std::unexpected(BuildMeshError::EmptyRegion);
         }
     }
