@@ -14,7 +14,13 @@
 #include "macros.h"
 #include "type_utils.h"
 
-namespace alp::detail {
+namespace alp {
+
+// A result ALP_TRY can unpack: a std::optional or a std::expected.
+template <typename R>
+concept Try = is_specialization_of_v<R, std::optional> || is_specialization_of_v<R, std::expected>;
+
+namespace detail {
 
 // A plain code ALP_TRY caught from a failed result, with where it was caught and the message to add; it becomes the error the enclosing function returns.
 template <ErrorCode E, typename M>
@@ -90,7 +96,9 @@ decltype(auto) take_value(R &&result) {
     return *std::forward<R>(result);
 }
 
-} // namespace alp::detail
+} // namespace detail
+
+} // namespace alp
 
 // ALP_TRY(expr) with its result variable and message spelled out; the message is nullopt for none.
 #define ALP_TRY_IMPL_DISCARD(result, message, ...)                                                              \
