@@ -19,6 +19,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <concepts>
 #include <cstdint>
@@ -32,6 +33,19 @@
 namespace raster::algorithm {
 
 namespace detail {
+    inline const std::array<float, 256>& srgb_to_linear_table()
+    {
+        static const auto table = [] {
+            std::array<float, 256> values {};
+            for (unsigned i = 0; i < values.size(); ++i) {
+                const float value = float(i) / 255.f;
+                values[i] = value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
+            }
+            return values;
+        }();
+        return table;
+    }
+
     template <typename T>
     struct PixelTraits {
         using Scalar = T;
@@ -138,13 +152,15 @@ requires detail::srgb_pixel<T>
 auto srgb_conversion()
 {
     using W = detail::LinearPixel<T>;
-    return std::tuple { [](const T& pixel) {
+    const auto& table = detail::srgb_to_linear_table();
+    return std::tuple { [&table](const T& pixel) {
                            W result(pixel);
                            for (unsigned i = 0; i < detail::PixelTraits<T>::components; ++i) {
                                auto& value = detail::PixelTraits<W>::component(result, i);
-                               value /= 255.f;
                                if (i < 3) {
-                                   value = value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
+                                   value = table[detail::PixelTraits<T>::component(pixel, i)];
+                               } else {
+                                   value /= 255.f;
                                }
                            }
                            return result;

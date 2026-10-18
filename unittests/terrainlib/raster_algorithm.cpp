@@ -365,6 +365,26 @@ TEST_CASE("integer raster conversion rounds and clamps finite custom values", "[
         == (std::numeric_limits<std::uint64_t>::max)());
 }
 
+TEMPLATE_TEST_CASE("sRGB input lookup preserves the original conversion exactly", "[raster-algorithm]", glm::u8vec3, glm::u8vec4)
+{
+    const auto conversion = algorithm::srgb_conversion<TestType>();
+    for (unsigned value = 0; value < 256; ++value) {
+        TestType pixel {};
+        for (unsigned channel = 0; channel < algorithm::detail::PixelTraits<TestType>::components; ++channel) {
+            pixel[channel] = std::uint8_t((value + 73 * channel) % 256);
+        }
+        const auto linear = std::get<0>(conversion)(pixel);
+        for (unsigned channel = 0; channel < algorithm::detail::PixelTraits<TestType>::components; ++channel) {
+            float expected = float(pixel[channel]) / 255.f;
+            if (channel < 3) {
+                expected = expected <= 0.04045f ? expected / 12.92f : std::pow((expected + 0.055f) / 1.055f, 2.4f);
+            }
+            CHECK(std::bit_cast<std::uint32_t>(linear[channel]) == std::bit_cast<std::uint32_t>(expected));
+        }
+        CHECK(std::get<1>(conversion)(linear) == pixel);
+    }
+}
+
 TEST_CASE("sRGB raster scaling and custom reduction operate in linear light with independent alpha", "[raster-algorithm]")
 {
     const auto data = samples<glm::u8vec4>({ 2, 2 }, { { 0, 0, 0, 255 }, { 255, 255, 255, 0 }, { 0, 0, 0, 128 }, { 255, 255, 255, 127 } });
