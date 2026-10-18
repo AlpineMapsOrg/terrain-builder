@@ -14,6 +14,7 @@
 
 #include "../tracked.h"
 #include "error/Error.h"
+#include "error/Infallible.h"
 #include "error/format.h"
 #include "error/utils.h"
 #include "error_test_utils.h"
@@ -126,6 +127,15 @@ TEST_CASE("An error narrows only to a set of codes it can hold", "[error]") {
     STATIC_REQUIRE(!alp::Error<FileError>::narrows_to<>);
     STATIC_REQUIRE(alp::Error<>::narrows_to<FileError>);
     STATIC_REQUIRE(!alp::Error<>::narrows_to<MoveOnlyError>);
+}
+
+TEST_CASE("An error converts as if Infallible were not among its codes", "[error]") {
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<alp::Infallible>, alp::Error<FileError>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<alp::Infallible>, alp::Error<FileError, ParseError>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<alp::Infallible>, alp::Error<>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError, alp::Infallible>, alp::Error<FileError>>);
+    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<alp::Infallible>, alp::Error<FileError>>);
+    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, alp::Error<ParseError, alp::Infallible>>);
 }
 
 TEST_CASE("An error holds its code and originates at the location it is handed", "[error]") {

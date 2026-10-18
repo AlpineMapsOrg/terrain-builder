@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -9,6 +10,7 @@
 #include <fmt/format.h>
 
 #include "error/ErrorCode.h"
+#include "error/Infallible.h"
 #include "type_utils.h"
 
 namespace alp {
@@ -25,11 +27,8 @@ public:
     explicit TypedCode(E code) : _code(std::in_place_type<E>, std::move(code)) {}
 
     // Takes the code `other` holds, which must be one of Es.
-    template <ErrorCode... Fs> requires((can_hold<Fs> && ...))
-    explicit TypedCode(TypedCode<Fs...> other)
-        : _code(std::move(other).visit([]<typename F>(F &&code) {
-              return std::variant<Es...>(std::in_place_type<std::remove_cvref_t<F>>, std::forward<F>(code));
-          })) {}
+    template <ErrorCode... Fs> requires(((can_hold<Fs> || std::same_as<Fs, Infallible>) && ...))
+    explicit TypedCode(TypedCode<Fs...> other) : TypedCode(*std::move(other).template narrow<Es...>()) {}
 
     // The code, for a single code type.
     [[nodiscard]]
