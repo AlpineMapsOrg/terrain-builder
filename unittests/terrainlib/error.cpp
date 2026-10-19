@@ -324,6 +324,54 @@ TEST_CASE("An error with a move-only code narrows to its code", "[error]") {
     CHECK(*result->code().value == 5);
 }
 
+TEST_CASE("split returns the error with the named codes or the error with the others", "[error]") {
+    using Source = alp::Error<FileError, ParseError, OffsetError>;
+    using Result = decltype(std::declval<Source>().split<ParseError>());
+
+    STATIC_REQUIRE(std::is_same_v<Result::value_type, alp::Error<ParseError>>);
+    STATIC_REQUIRE(std::is_same_v<Result::error_type, alp::Error<FileError, OffsetError>>);
+}
+
+TEST_CASE("split gives the error with only the named code it holds", "[error]") {
+    const auto result = alp::Error<FileError, ParseError>(FileError::NotFound).split<FileError>();
+
+    REQUIRE(result.has_value());
+    CHECK(result->code() == FileError::NotFound);
+}
+
+TEST_CASE("split gives the error with only its other codes when it holds one of those", "[error]") {
+    const auto result = alp::Error<FileError, ParseError, OffsetError>(OffsetError{.offset = 7}).split<FileError>();
+
+    REQUIRE(!result.has_value());
+    CHECK(result.error().holds(OffsetError{.offset = 7}));
+}
+
+TEST_CASE("split on a const error leaves it as it was", "[error]") {
+    const alp::Error<FileError, ParseError> error(ParseError::BadDigit);
+    const auto result = error.split<FileError>();
+
+    REQUIRE(!result.has_value());
+    CHECK(error.holds(ParseError::BadDigit));
+}
+
+TEST_CASE("split off a set returns that set or the error with the others", "[error]") {
+    using Source = alp::Error<FileError, ParseError, OffsetError>;
+    using Set = alp::Error<FileError, ParseError>;
+    using Result = decltype(std::declval<Source>().split<Set>());
+
+    STATIC_REQUIRE(std::is_same_v<Result::value_type, Set>);
+    STATIC_REQUIRE(std::is_same_v<Result::error_type, alp::Error<OffsetError>>);
+}
+
+TEST_CASE("An error with a move-only code keeps it when another code is split off", "[error]") {
+    const auto result = alp::Error<MoveOnlyError, FileError>(MoveOnlyError{.value = std::make_unique<int>(5)}).split<FileError>();
+
+    REQUIRE(!result.has_value());
+    const MoveOnlyError *code = result.error().get_if<MoveOnlyError>();
+    REQUIRE(code != nullptr);
+    CHECK(*code->value == 5);
+}
+
 TEST_CASE("holds is true for the held code and false for a different value or another code type", "[error]") {
     const alp::Error<FileError, OffsetError> error(OffsetError{.offset = 7});
 

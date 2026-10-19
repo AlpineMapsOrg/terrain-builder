@@ -32,8 +32,7 @@ class CTBException;
 class ctb::CTBException : public std::runtime_error {
 public:
     CTBException(const char* message)
-        : std::runtime_error(message)
-    {
+        : std::runtime_error(message) {
         while (false) { }
     }
 };

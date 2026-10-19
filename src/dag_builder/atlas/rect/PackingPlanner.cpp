@@ -14,11 +14,11 @@ namespace atlas {
 
 Plan PackingPlanner::plan(const std::span<const glm::uvec2> texture_sizes) const {
     constexpr bool allow_flip = false;
-    using spaces_type = rectpack2D::empty_spaces<allow_flip, rectpack2D::default_empty_spaces>;
-    using rect_type = rectpack2D::output_rect_t<spaces_type>;
+    using Spaces = rectpack2D::empty_spaces<allow_flip, rectpack2D::default_empty_spaces>;
+    using Rect = rectpack2D::output_rect_t<Spaces>;
 
     struct RectAndIndex {
-        rect_type rect{};
+        Rect rect{};
         uint32_t index = 0;
 
         auto &get_rect() {
@@ -68,18 +68,18 @@ Plan PackingPlanner::plan(const std::span<const glm::uvec2> texture_sizes) const
     for (uint32_t attempt = 0; attempt < 256u; attempt++) {
         bool any_unsuccessful = false;
 
-        auto report_successful = [&](rect_type &) {
+        auto report_successful = [&](Rect &) {
             return rectpack2D::callback_result::CONTINUE_PACKING;
         };
 
-        auto report_unsuccessful = [&](rect_type &) {
+        auto report_unsuccessful = [&](Rect &) {
             any_unsuccessful = true;
             return rectpack2D::callback_result::ABORT_PACKING;
         };
 
         const int discard_step = 3; // speed vs quality tradeoff
 
-        result = rectpack2D::find_best_packing<spaces_type>(
+        result = rectpack2D::find_best_packing<Spaces>(
             rects,
             rectpack2D::make_finder_input(
                 static_cast<int>(max_side),

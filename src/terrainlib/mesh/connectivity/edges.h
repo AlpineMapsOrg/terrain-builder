@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <glm/common.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include "mesh/TriangleContainer.h"
 #include "mesh/SimpleMesh.h"

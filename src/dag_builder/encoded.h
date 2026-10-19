@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <expected>
 #include <filesystem>
 #include <span>
 #include <type_traits>
@@ -13,6 +12,7 @@
 
 #include "TextureSet.h"
 #include "cluster.h"
+#include "io/Error.h"
 #include "io/bytes.h"
 #include "io/serialize.h"
 #include "mesh/io/texture.h"
@@ -166,7 +166,7 @@ auto serialize(Archive &archive, Clustering &clustering) {
 }
 
 [[nodiscard]]
-inline std::expected<void, ::io::Error>
+inline ::io::Result<void>
 save_clustering(const Clustering &clustering,
                  const std::filesystem::path &path,
                  const bool make_dirs = true) {
@@ -174,7 +174,7 @@ save_clustering(const Clustering &clustering,
 }
 
 [[nodiscard]]
-inline std::expected<Clustering, ::io::Error>
+inline ::io::Result<Clustering>
 load_clustering(const std::filesystem::path &path) {
     return ::io::read_from_path<Clustering>(path);
 }

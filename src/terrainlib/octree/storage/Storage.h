@@ -1,6 +1,5 @@
 #pragma once
 
-#include <expected>
 #include <filesystem>
 #include <list>
 #include <memory>
@@ -10,7 +9,10 @@
 #include <unordered_map>
 #include <utility>
 
+#include <libassert/assert.hpp>
+
 #include "error/log.h"
+#include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "io/Error.h"
@@ -32,7 +34,7 @@ namespace octree {
 
 namespace detail {
 // The error for node `id`, which the index does not contain, originating at the caller.
-inline std::unexpected<alp::Error<io::FileError>> make_index_miss(const Id &id, const disk::Layout &layout, const std::source_location location = std::source_location::current()) {
+inline alp::Unexpected<io::FileError> make_index_miss(const Id &id, const disk::Layout &layout, const std::source_location location = std::source_location::current()) {
     const io::FileError error = io::make_file_not_found(layout.get_node_path(id));
     return alp::make_unexpected(error, fmt::format("looking up node {} in the index", id), location);
 }
@@ -133,10 +135,10 @@ template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
 class Storage_ {
 public:
     using value_type = T;
-    using codec_type = Codec;
-    using load_error = alp::Error<io::FileError, typename Codec::load_error>;
-    using save_error = typename Codec::save_error;
-    using copy_error = typename RawStorage_<T, Codec>::copy_error;
+    using CodecType = Codec;
+    using LoadError = alp::Error<io::FileError, typename Codec::LoadError>;
+    using SaveError = typename Codec::SaveError;
+    using CopyError = typename RawStorage_<T, Codec>::CopyError;
 
     explicit Storage_(RawStorage_<T, Codec> inner)
         : _inner(std::move(inner)) {}
@@ -158,7 +160,7 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<value_type, load_error> load(const Id &id) const {
+    alp::Result<value_type, LoadError> load(const Id &id) const {
         if (const auto value_opt = this->_cache.get(id)) {
             return value_opt.value();
         }
@@ -175,10 +177,8 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<void, save_error> save(const Id &id, const value_type &value) {
-        if (this->check_overwrite(id)) {
-            LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
-        }
+    alp::Result<void, SaveError> save(const Id &id, const value_type &value) {
+        ASSERT(!this->check_overwrite(id), "tried to overwrite value when not allowed");
 
         const auto result = this->_inner.save(id, value);
         if (result.has_value()) {
@@ -189,15 +189,12 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<void, copy_error> copy_from(const Id &id, const Storage_<T, Codec> &source) {
+    alp::Result<void, CopyError> copy_from(const Id &id, const Storage_<T, Codec> &source) {
         if (!source._index.contains(id, true)) {
             return detail::make_index_miss(id, source._inner.layout());
         }
 
-        if (this->check_overwrite(id)) {
-            // TODO: proper error
-            LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
-        }
+        ASSERT(!this->check_overwrite(id), "tried to overwrite value when not allowed");
 
         const auto result = this->_inner.copy_from(id, source._inner);
         if (result.has_value()) {
@@ -207,7 +204,7 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<void, copy_error> copy_to(const Id &id, Storage_<T, Codec> &target) const {
+    alp::Result<void, CopyError> copy_to(const Id &id, Storage_<T, Codec> &target) const {
         return target.copy_from(id, *this);
     }
 
@@ -268,7 +265,7 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<void, io::Error> save_or_create_index() {
+    io::Result<void> save_or_create_index() {
         if (this->is_indexed() && !this->_index.dirty) {
             return {};
         }

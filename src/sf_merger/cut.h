@@ -3,7 +3,6 @@
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "error/log.h"
 #include "error/unwrap.h"
 #include "geometry/bounds.h"
 #include "log.h"
@@ -38,7 +37,7 @@ inline void cut_leaf_node(
 
     const SimpleMesh mesh = alp::unwrap(ctx.input.load(id));
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles",
-        id, mask.mesh.vertex_count(), mask.mesh.face_count());
+        id, mask.vertex_count(), mask.face_count());
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
@@ -66,7 +65,7 @@ inline void cut_virtual_node(
         // TODO: split mask based on inner planes instead
         const auto child_bounds = geometry::pad_bounds_relative(ctx.space.get_node_bounds(child_id), 0.125);
         LOG_TRACE("Clipping mask for {}", child_id);
-        const auto child_mask = MeshMask(mesh::clip_on_bounds_and_cap(mask.mesh, child_bounds));
+        const MeshMask child_mask = clip_mask_on_bounds(mask, child_bounds);
         cut_node(ctx, child_id, child_mask);
     }
 }
@@ -76,7 +75,7 @@ inline void cut_node(
     const octree::Id& id,
     const MeshMask& mask
 ) {
-    if (ctx.keep_inside && mask.mesh.is_empty()) {
+    if (ctx.keep_inside && mask.is_empty()) {
         LOG_TRACE("Mesh was fully outside the mask");
         return;
     }
@@ -115,7 +114,7 @@ inline void cut_dataset(
     const bool keep_inside) {
     Context ctx(input, output, octree::Space::earth(), keep_inside);
     cut_node(ctx, octree::Id::root(), mask);
-    LOG_UNEXPECTED_OF(output.save_or_create_index());
+    alp::unwrap(output.save_or_create_index());
 }
 
 inline void cut_dataset(

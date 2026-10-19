@@ -1,8 +1,9 @@
 #include "texture/dilate_colors.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <utility>
+
+#include <libassert/assert.hpp>
 
 #include "opencv_utils.h"
 
@@ -79,9 +80,7 @@ void dilate_colors_inplace(cv::Mat &image, Mask &coverage, const uint32_t radius
     if (radius == 0) {
         return;
     }
-    if (coverage.size() != glm::uvec2(image.cols, image.rows)) {
-        throw std::invalid_argument("dilate_colors_inplace: coverage must have the size of the image");
-    }
+    ASSERT(coverage.size() == glm::uvec2(image.cols, image.rows), "dilate_colors_inplace: coverage must have the size of the image");
 
     visit_by_depth_and_channels(image.type(), [&]<int n_channels, typename Channel>() {
         dilate_rounds<n_channels, Channel>(image, coverage, radius);

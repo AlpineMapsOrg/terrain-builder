@@ -6,8 +6,9 @@
 #include <unordered_map>
 #include <memory>
 
+#include <libassert/assert.hpp>
+
 #include "octree/disk/layout/Strategy.h"
-#include "log.h"
 
 namespace octree::disk::layout {
 
@@ -59,10 +60,8 @@ private:
 
     std::string _get_id(std::type_index type_index) const {
         auto it = this->_type_to_id.find(type_index);
-        if (it != this->_type_to_id.end()) {
-            return it->second;
-        }
-        LOG_ERROR_AND_EXIT("Encountered octree layout strategy not registered");
+        ASSERT(it != this->_type_to_id.end(), "Encountered octree layout strategy not registered");
+        return it->second;
     }
 };
 

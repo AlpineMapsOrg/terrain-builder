@@ -1,25 +1,26 @@
 #include <algorithm>
 #include <numeric>
 #include <ranges>
+#include <utility>
 #include <vector>
 
-#include <gdal.h>
-#include <gdal_priv.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
+#include <radix/raster.h>
 #include <glm/gtx/norm.hpp>
 #include <libassert/assert.hpp>
 
-#include "Dataset.h"
+#include "gdal/Dataset.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "log.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
 #include "mesh_builder.h"
-#include "raster.h"
-#include "raw_dataset_reader.h"
-#include "srs.h"
+#include "range_utils.h"
+#include "RawDatasetReader.h"
+#include "srs/transform.h"
+#include "srs/transform_bounds.h"
 #include "mesh/clip.h"
 #include "mesh/validate.h"
 #include "mesh/bounds.h"
@@ -30,7 +31,7 @@ namespace terrainbuilder {
 namespace {
 using PixelBounds = radix::geometry::Aabb2i;
     
-glm::dvec3 convert_pixel_to_vertex(const float height, const raster::Coords pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
+glm::dvec3 convert_pixel_to_vertex(const float height, const glm::uvec2 pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
     const glm::dvec2 point_offset_in_raster(0.5); // Convert pixel coordinates into a point in the dataset's srs.
     const glm::dvec2 coords_raster_relative = glm::dvec2(pixel_coords) + point_offset_in_raster;
     const glm::dvec2 coords_raster_absolute = coords_raster_relative + glm::dvec2(pixel_bounds.min);
@@ -38,9 +39,9 @@ glm::dvec3 convert_pixel_to_vertex(const float height, const raster::Coords pixe
     return coords_source;
 }
 
-SimpleMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster::Mask& mask) {
+SimpleMesh meshify(const radix::Raster<glm::dvec3>& source_points, const radix::RasterMask& mask) {
     // Compact the vertex grid into a list of valid ones.
-    const size_t valid_vertex_count = std::reduce(mask.begin(), mask.end(), 0);
+    const size_t valid_vertex_count = sum(mask, size_t{0});
     // Check if we even have any valid vertices. Can happen if all of the region is padding.
     if (valid_vertex_count == 0) {
         return SimpleMesh();
@@ -49,11 +50,12 @@ SimpleMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster
     std::vector<glm::dvec3> positions;
     positions.reserve(valid_vertex_count);
 
-    const raster::Raster<size_t> vertex_index_map = raster::transform(source_points, mask, [&](const glm::dvec3 &point) -> size_t {
+    auto vertex_index_map_result = radix::raster::transform(source_points, mask, [&](const glm::dvec3& point) -> size_t {
         const size_t index = positions.size();
         positions.push_back(point);
         return index;
     });
+    const auto vertex_index_map = *ASSERT_VAL(std::move(vertex_index_map_result), "the mask has the size of the source points");
     DEBUG_ASSERT(positions.size() == valid_vertex_count);
 
     // Allocate triangle vector
@@ -61,13 +63,13 @@ SimpleMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster
     std::vector<glm::uvec3> triangles;
     triangles.reserve(max_triangle_count);
 
-    for (size_t y = 0; y < source_points.height() - 1; y++) {
-        for (size_t x = 0; x < source_points.width() - 1; x++) {
-            const std::array<raster::Coords, 4> quad {
-                raster::Coords{x, y},
-                raster::Coords{x + 1, y},
-                raster::Coords{x + 1, y + 1},
-                raster::Coords{x, y + 1}};
+    for (unsigned y = 0; y < source_points.height() - 1; y++) {
+        for (unsigned x = 0; x < source_points.width() - 1; x++) {
+            const std::array<glm::uvec2, 4> quad {
+                glm::uvec2{x, y},
+                glm::uvec2{x + 1, y},
+                glm::uvec2{x + 1, y + 1},
+                glm::uvec2{x, y + 1}};
 
             for (uint32_t i = 0; i < 4; i++) {
                 const auto& v0 = quad[i];
@@ -87,13 +89,13 @@ SimpleMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster
     return SimpleMesh(triangles, positions);
 }
 
-SimpleMesh transform_mesh(SimpleMesh&& source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs) {
-    const auto transform = srs::transformation(source_srs, target_srs);
-    srs::transform_points_inplace(transform.get(), source_mesh.positions);
+alp::Result<SimpleMesh, srs::TransformError> transform_mesh(SimpleMesh&& source_mesh, const srs::System &source_srs, const srs::System &target_srs) {
+    ALP_TRY(const srs::Transform transform, srs::get_transform(source_srs, target_srs));
+    ALP_TRY(transform.apply_inplace(source_mesh.positions));
     return source_mesh;
 }
 /*
-SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
+SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const srs::System &source_srs, const srs::System& target_srs) {
     SimpleMesh target_mesh;
     target_mesh.positions = srs::transform_points(source_srs, target_srs, source_mesh.positions);
     target_mesh.triangles = source_mesh.triangles;
@@ -103,8 +105,10 @@ SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReferen
 }
 */
 
-std::vector<glm::dvec2> generate_uv_space(const std::vector<glm::dvec3>& positions, const OGRSpatialReference &mesh_srs, const OGRSpatialReference &texture_srs, radix::tile::SrsBounds& texture_bounds) {
-    std::vector<glm::dvec2> uvs = srs::transform_points_to_2d(srs::transformation(mesh_srs, texture_srs).get(), positions);
+alp::Result<std::vector<glm::dvec2>, srs::TransformError> generate_uv_space(const std::vector<glm::dvec3>& positions, const srs::System &mesh_srs, const srs::System &texture_srs, radix::tile::SrsBounds& texture_bounds) {
+    ALP_TRY(const srs::Transform transform, srs::get_transform(mesh_srs, texture_srs));
+    std::vector<glm::dvec2> uvs(positions.size());
+    ALP_TRY(transform.apply_into(positions, uvs));
     texture_bounds = radix::tile::SrsBounds(radix::geometry::find_bounds(std::span<const glm::dvec2>(uvs)));
 
     for (glm::dvec2 &uv : uvs) {
@@ -116,42 +120,43 @@ std::vector<glm::dvec2> generate_uv_space(const std::vector<glm::dvec3>& positio
 }
 
 alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
-    Dataset &dataset,
-    const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
-    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds) {
+    gdal::Dataset &dataset,
+    const srs::System &mesh_srs,
+    const srs::System &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
+    const srs::System &texture_srs, radix::tile::SrsBounds &texture_bounds) {
     const auto context = alp::make_context("building a mesh for {} from {}", clip_bounds, dataset.name());
-    const OGRSpatialReference &source_srs = dataset.srs();
+    const srs::System &source_srs = dataset.srs();
 
     // Translate tile bounds from tile srs into the source srs, so we know what data to read.
     radix::tile::SrsBounds target_bounds_in_source_srs;
     if (std::isinf(clip_bounds.min.z) && std::isinf(clip_bounds.max.z)) {
         // Make target bounds 2d if the unbounded by height.
-        target_bounds_in_source_srs = srs::encompassing_bounds_transfer(clip_srs, source_srs, radix::tile::SrsBounds(clip_bounds));
+        ALP_TRY_CONTEXT(target_bounds_in_source_srs, srs::encompassing_bounds_transfer(clip_srs, source_srs, radix::tile::SrsBounds(clip_bounds)), context);
     } else {
-        target_bounds_in_source_srs = srs::encompassing_bounds_transfer(clip_srs, source_srs, clip_bounds);
+        ALP_TRY_CONTEXT(target_bounds_in_source_srs, srs::encompassing_bounds_transfer(clip_srs, source_srs, clip_bounds), context);
     }
 
     // Read height data according to bounds directly from dataset (no interpolation).
-    RawDatasetReader reader(dataset);
+    ALP_TRY_CONTEXT(RawDatasetReader reader, RawDatasetReader::for_dataset(dataset), context);
     radix::geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(target_bounds_in_source_srs);
     add_border_to_aabb(pixel_bounds, Border(1));
     LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
-    ALP_TRY_CONTEXT(const raster::HeightMap height_map, reader.read_data_in_pixel_bounds_clamped(pixel_bounds), context);
-    if (height_map.size() == 0) {
+    ALP_TRY_CONTEXT(const HeightMap height_map, reader.read_data_in_pixel_bounds_clamped(pixel_bounds), context);
+    if (height_map.buffer().empty()) {
         return alp::make_unexpected(OutOfBounds{.requested = target_bounds_in_source_srs, .available = dataset.bounds()}, context);
     }
 
     LOG_TRACE("Finding valid pixels");
     const float no_data_value = reader.get_no_data_value();
-    const raster::Mask valid_mask = raster::transform(height_map, [=](const float height) {
+    const radix::RasterMask valid_mask = radix::raster::transform(height_map, [=](const float height) {
         return height != no_data_value;
     });
 
     LOG_TRACE("Transforming pixels to vertices");
-    const raster::Raster<glm::dvec3> source_points = raster::transform(height_map, valid_mask, [&](const float height, const raster::Coords& coords) {
+    auto source_points_result = radix::raster::transform(height_map, valid_mask, [&](const float height, const glm::uvec2& coords) {
         return convert_pixel_to_vertex(height, coords, reader, pixel_bounds);
     });
+    const auto source_points = *ASSERT_VAL(std::move(source_points_result), "the mask is made from the height map, so they have the same size");
 
     LOG_TRACE("Generating triangles");
     SimpleMesh mesh_in_source_srs = meshify(source_points, valid_mask);
@@ -162,13 +167,13 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
 
     // Fast check if all vertices will be clipped
     const radix::geometry::Aabb3d actual_source_bounds = calculate_bounds(mesh_in_source_srs);
-    const radix::geometry::Aabb3d approx_clip_bounds = srs::encompassing_bounds_transfer(source_srs, clip_srs, actual_source_bounds);
+    ALP_TRY_CONTEXT(const radix::geometry::Aabb3d approx_clip_bounds, srs::encompassing_bounds_transfer(source_srs, clip_srs, actual_source_bounds), context);
     if (!radix::geometry::intersect(approx_clip_bounds, clip_bounds)) {
         return alp::make_unexpected(EmptyRegion{}, context);
     }
 
     LOG_TRACE("Clipping mesh based on target bounds");
-    const SimpleMesh mesh_in_clip_srs = transform_mesh(std::move(mesh_in_source_srs), source_srs, clip_srs);
+    ALP_TRY_CONTEXT(const SimpleMesh mesh_in_clip_srs, transform_mesh(std::move(mesh_in_source_srs), source_srs, clip_srs), context);
     SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh_in_clip_srs, clip_bounds);
     // Check if there are any vertices left
     if (clipped_mesh.vertex_count() == 0 || clipped_mesh.face_count() == 0) {
@@ -177,10 +182,10 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
 
     // TODO: move this to another function?
     LOG_TRACE("Generating uv space and calculating required texture bounds");
-    clipped_mesh.uvs = generate_uv_space(clipped_mesh.positions, clip_srs, texture_srs, texture_bounds);
+    ALP_TRY_CONTEXT(clipped_mesh.uvs, generate_uv_space(clipped_mesh.positions, clip_srs, texture_srs, texture_bounds), context);
 
     LOG_TRACE("Transforming mesh into output srs");
-    SimpleMesh target_mesh = transform_mesh(std::move(clipped_mesh), clip_srs, mesh_srs);
+    ALP_TRY_CONTEXT(SimpleMesh target_mesh, transform_mesh(std::move(clipped_mesh), clip_srs, mesh_srs), context);
     
     mesh::remove_isolated_vertices(target_mesh); // TODO: is this still required?
     mesh::validate(target_mesh);

@@ -62,15 +62,6 @@ Args cli::parse(int argc, char **argv) {
     single->add_option("--output", single_args.output_path, "Output path were the mesh is written to (.terrain, .gltf or .glb)")
         ->required();
 
-    std::map<std::string, radix::tile::Scheme> scheme_str_map{
-        {"slippymap", radix::tile::Scheme::SlippyMap},
-        {"google", radix::tile::Scheme::SlippyMap},
-        {"tms", radix::tile::Scheme::Tms}};
-    single->add_option("--scheme", single_args.target_tile_scheme, "Tile scheme")
-        ->default_val(radix::tile::Scheme::SlippyMap)
-        ->needs("--tile")
-        ->transform(CLI::CheckedTransformer(scheme_str_map, CLI::ignore_case));
-
     single->add_option("--srs", single_args.target_srs_input, "EPSG code of the srs of the target bounds or id");
     single->callback([&]() {
         if (single_args.target_srs_input.empty()) {

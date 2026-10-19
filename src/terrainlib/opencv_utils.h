@@ -1,8 +1,8 @@
 #pragma once
 
-#include <stdexcept>
-
 #include <glm/common.hpp>
+#include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 #include <opencv2/opencv.hpp>
 
 // Calls the visitor with the depth's channel type.
@@ -24,7 +24,7 @@ decltype(auto) visit_by_depth(const int depth, Visitor &&visitor) {
     case CV_64F:
         return visitor.template operator()<double>();
     default:
-        throw std::invalid_argument("visit_by_depth: unsupported depth");
+        PANIC("visit_by_depth: unsupported depth", depth);
     }
 }
 
@@ -41,7 +41,7 @@ decltype(auto) visit_by_channels(const int channels, Visitor &&visitor) {
     case 4:
         return visitor.template operator()<4>();
     default:
-        throw std::invalid_argument("visit_by_channels: beyond four channels is not supported");
+        PANIC("visit_by_channels: beyond four channels is not supported", channels);
     }
 }
 

@@ -29,7 +29,6 @@ struct SingleArgs : public BaseArgs {
     std::vector<uint32_t> target_tile_data;
     std::vector<uint64_t> target_node_data;
     std::string target_srs_input;
-    radix::tile::Scheme target_tile_scheme;
 };
 
 struct BatchArgs : public BaseArgs {

@@ -2,6 +2,7 @@
 
 #include <span>
 #include <functional>
+#include <numeric>
 #include "geometry/bounds.h"
 #include "mesh/SimpleMesh.h"
 #include "spatial_lookup/Grid.h"

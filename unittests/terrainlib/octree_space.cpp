@@ -48,7 +48,7 @@ TEST_CASE("find_smallest_node_encompassing_bounds throws on zero-size box", "[oc
 
     Bounds degenerate{p, p};
 
-    REQUIRE_THROWS_AS(space.find_smallest_node_encompassing_bounds(degenerate), std::invalid_argument);
+    REQUIRE_THROWS(space.find_smallest_node_encompassing_bounds(degenerate));
 }
 
 TEST_CASE("find_smallest_node_encompassing_bounds returns smallest valid node", "[octree]") {

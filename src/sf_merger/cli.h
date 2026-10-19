@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <filesystem>
+#include <variant>
 
 #include <spdlog/spdlog.h>
 

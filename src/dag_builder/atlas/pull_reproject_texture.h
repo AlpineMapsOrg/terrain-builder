@@ -52,10 +52,10 @@ inline glm::dvec2 clamp_uv(const glm::dvec2 &uv) {
 
 inline FixedPoint sample_cell_center(const glm::uvec2 sample) {
     // Fixed-point encoding of sample + 0.5; exactly representable, so no rounding happens.
-    const FixedCoord::repr_t half = FixedCoord::scale / 2;
+    const FixedCoord::Repr half = FixedCoord::scale / 2;
     return FixedPoint{{
-        FixedCoord::from_integer(FixedCoord::repr_t{sample.x}).value + half,
-        FixedCoord::from_integer(FixedCoord::repr_t{sample.y}).value + half}};
+        FixedCoord::from_integer(FixedCoord::Repr{sample.x}).value + half,
+        FixedCoord::from_integer(FixedCoord::Repr{sample.y}).value + half}};
 }
 
 inline radix::geometry::Aabb2ui clamp_bounds(
@@ -87,9 +87,9 @@ inline radix::geometry::Aabb2ui get_pixel_bounds(
 // The value is the raw cross product (edge_end - edge_start) x (sample - edge_start)
 // without rescaling, so its sign is the exact orientation of the sample.
 struct EdgeFunction {
-    FixedCoord::repr_t value = 0;
-    FixedCoord::repr_t step_x = 0;
-    FixedCoord::repr_t step_y = 0;
+    FixedCoord::Repr value = 0;
+    FixedCoord::Repr step_x = 0;
+    FixedCoord::Repr step_y = 0;
 
     EdgeFunction(const FixedPoint edge_start, const FixedPoint edge_end, const FixedPoint sample) {
         const auto edge = edge_end.raw - edge_start.raw;
@@ -114,7 +114,7 @@ inline void rasterize_triangle(
         EdgeFunction(triangle[2], triangle[0], start)};
 
     for (uint32_t sample_y = bounds.min.y; sample_y <= bounds.max.y; sample_y++) {
-        std::array<FixedCoord::repr_t, 3> row = {edges[0].value, edges[1].value, edges[2].value};
+        std::array<FixedCoord::Repr, 3> row = {edges[0].value, edges[1].value, edges[2].value};
 
         for (uint32_t sample_x = bounds.min.x; sample_x <= bounds.max.x; sample_x++) {
             if (row[0] >= 0 && row[1] >= 0 && row[2] >= 0) {

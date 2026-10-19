@@ -24,7 +24,7 @@
 
 #include <fmt/core.h>
 
-#include "Dataset.h"
+#include "gdal/Dataset.h"
 #include "error/unwrap.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
@@ -42,17 +42,17 @@ ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path,
 }
 
 ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path,
-    ctb::Grid::Srs srs, radix::tile::Scheme tiling_scheme,
+    ctb::Grid::Srs srs,
     std::unique_ptr<ParallelTileWriterInterface> tile_writer,
     const std::string& output_data_path,
     unsigned grid_resolution)
 {
-    const auto dataset = std::make_shared<Dataset>(std::filesystem::path(input_data_path));
+    const auto dataset = std::make_shared<gdal::Dataset>(std::filesystem::path(input_data_path));
     ctb::Grid grid = ctb::GlobalGeodetic(grid_resolution);
     if (srs == ctb::Grid::Srs::SphericalMercator)
         grid = ctb::GlobalMercator(grid_resolution);
     const auto border = tile_writer->formatRequiresBorder();
-    return { input_data_path, grid, ParallelTiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path };
+    return { input_data_path, grid, ParallelTiler(grid, dataset->bounds(grid.getSRS()), border), std::move(tile_writer), output_data_path };
 }
 
 const ParallelTiler& ParallelTileGenerator::tiler() const
@@ -65,7 +65,7 @@ const ctb::Grid& ParallelTileGenerator::grid() const
     return m_grid;
 }
 
-void ParallelTileGenerator::write(const radix::tile::Descriptor& tile, const HeightData& heights) const
+void ParallelTileGenerator::write(const radix::tile::Descriptor& tile, const radix::Raster<float>& heights) const
 {
     const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.id.zoom_level, tile.id.coords.x);
     const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.id.coords.y, m_tile_writer->formatFileEnding());
@@ -92,7 +92,7 @@ void ParallelTileGenerator::process(const std::pair<ctb::i_zoom, ctb::i_zoom>& z
         // and it takes only 0.5% of the time (half a percent).
         // most of the cpu time is used in 'readWithOverviews' (specificly 'RasterIO', and
         // 'VRTWarpedRasterBand::IReadBlock') and a bit in 'write' (specifically 'FreeImage_Save').
-        const auto dataset = alp::unwrap(Dataset::open_shared_raster(m_input_data_path));
+        const auto dataset = alp::unwrap(gdal::Dataset::open_shared_raster(m_input_data_path));
         DatasetReader reader(dataset, m_grid.getSRS(), 1, m_warn_on_missing_overviews);
         const auto heights = reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
         write(tile, heights);

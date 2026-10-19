@@ -16,22 +16,22 @@ struct Q {
     // Keep headroom for intermediate signed arithmetic.
     static_assert(FractionBits < std::numeric_limits<Rep>::digits - 2);
 
-    using repr_t = Rep;
+    using Repr = Rep;
 
     static constexpr int fraction_bits = FractionBits;
-    static constexpr repr_t scale = repr_t{1} << fraction_bits;
+    static constexpr Repr scale = Repr{1} << fraction_bits;
 
     // Raw fixed-point storage. One integer unit equals 1 / scale.
-    repr_t value = 0;
+    Repr value = 0;
 
     // Converts an integral coordinate into fixed-point storage.
-    static constexpr Q from_integer(repr_t x) noexcept {
+    static constexpr Q from_integer(Repr x) noexcept {
         return Q{x * scale};
     }
 
     // Converts a floating-point coordinate to the nearest fixed-point value.
     static Q from_real(double x) {
-        return Q{static_cast<repr_t>(std::llround(x * double(scale)))};
+        return Q{static_cast<Repr>(std::llround(x * double(scale)))};
     }
 
     // Converts fixed-point storage back to floating-point form.
@@ -40,7 +40,7 @@ struct Q {
     }
 
     // Signed integer division rounded to the nearest integer.
-    static constexpr repr_t round_div(repr_t numerator, repr_t denominator) noexcept {
+    static constexpr Repr round_div(Repr numerator, Repr denominator) noexcept {
         assert(denominator != 0);
 
         if (denominator < 0) {
@@ -49,10 +49,10 @@ struct Q {
         }
 
         const bool negative = numerator < 0;
-        const repr_t n = negative ? -numerator : numerator;
+        const Repr n = negative ? -numerator : numerator;
 
-        repr_t quotient = n / denominator;
-        const repr_t remainder = n % denominator;
+        Repr quotient = n / denominator;
+        const Repr remainder = n % denominator;
 
         if (remainder * 2 >= denominator) {
             ++quotient;
@@ -62,12 +62,12 @@ struct Q {
     }
 
     // Multiplies two fixed-point values and rescales the result.
-    static constexpr repr_t mul(repr_t a, repr_t b) noexcept {
+    static constexpr Repr mul(Repr a, Repr b) noexcept {
         return round_div(a * b, scale);
     }
 
     // Divides two fixed-point values while preserving fixed-point scale.
-    static constexpr repr_t div(repr_t a, repr_t b) noexcept {
+    static constexpr Repr div(Repr a, Repr b) noexcept {
         assert(b != 0);
         return round_div(a * scale, b);
     }

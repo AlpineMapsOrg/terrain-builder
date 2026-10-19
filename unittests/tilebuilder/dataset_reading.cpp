@@ -24,27 +24,25 @@
 #include <tuple>
 #include <catch2/catch_test_macros.hpp>
 #include <fmt/core.h>
-#include "Dataset.h"
+#include "gdal/Dataset.h"
 #include "DatasetReader.h"
 #include "ctb/types.hpp"
-#include "srs.h"
+#include "image_writer.h"
+#include "srs/transform.h"
+#include "srs/transform_bounds.h"
 #include "../result_helpers.h"
 
 using namespace radix;
 
 namespace {
-void require_projection_available(const Dataset& dataset, const OGRSpatialReference& target_srs)
+void require_projection_available(const gdal::Dataset& dataset, const srs::System& target_srs)
 {
     const auto dataset_srs = dataset.srs();
     const auto source_bounds = dataset.bounds();
 
-    std::shared_ptr<OGRCoordinateTransformation> transform;
-    REQUIRE_NOTHROW(transform = srs::transformation(dataset_srs, target_srs));
-    REQUIRE(transform != nullptr);
-
-    std::array xs = { (source_bounds.min.x + source_bounds.max.x) / 2.0 };
-    std::array ys = { (source_bounds.min.y + source_bounds.max.y) / 2.0 };
-    REQUIRE(transform->Transform(static_cast<int>(xs.size()), xs.data(), ys.data()));
+    const srs::Transform transform = REQUIRE_VALUE(srs::get_transform(dataset_srs, target_srs));
+    const glm::dvec2 center = source_bounds.centre();
+    REQUIRE_VALUE(transform.apply(center));
 }
 }
 
@@ -75,13 +73,11 @@ TEST_CASE("reading")
         "/austria/pizbuin_1m_epsg4326.tif",
     };
 
-    OGRSpatialReference geodetic_srs;
-    geodetic_srs.importFromEPSG(4326);
-    geodetic_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    const srs::System geodetic_srs = srs::wgs84();
 
     SECTION("check for min and max heights")
     {
-        const std::array test_srses = { 4326, 3857 };
+        const std::array<uint32_t, 2> test_srses = { 4326, 3857 };
         const std::array test_locations = {
         // CRS bounds, [lower limit, at least one value smaller, at least one value larger, upper limit]
 #if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
@@ -107,13 +103,11 @@ TEST_CASE("reading")
             const auto [test_name, test_datasets, geodetic_bounds, limits] = test;
 
             for (std::string dataset_name : test_datasets) {
-                const auto dataset = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
+                const auto dataset = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
                 for (const auto& test_srs : test_srses) {
-                    OGRSpatialReference srs;
-                    srs.importFromEPSG(test_srs);
-                    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+                    const srs::System srs = REQUIRE_VALUE(srs::from_epsg(test_srs));
 
-                    const auto srs_bounds = srs::non_exact_bounds_transform(geodetic_bounds, geodetic_srs, srs);
+                    const auto srs_bounds = REQUIRE_VALUE(srs::non_exact_bounds_transform(geodetic_bounds, geodetic_srs, srs));
 
                     require_projection_available(*dataset, srs);
                     const DatasetReader reader(dataset, srs, 1);
@@ -166,7 +160,7 @@ TEST_CASE("reading")
         for (const auto& test : test_data) {
             auto [test_name, datasets, ref_bounds, render_width, render_height, max_abs_diff, max_mse] = test;
 
-            const auto ref_dataset = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())));
+            const auto ref_dataset = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())));
             require_projection_available(*ref_dataset, geodetic_srs);
             const auto ref_reader = DatasetReader(ref_dataset, geodetic_srs, 1);
             const auto ref_heights = ref_reader.read(ref_bounds, render_width, render_height);
@@ -174,7 +168,7 @@ TEST_CASE("reading")
                 image::debugOut(ref_heights, fmt::format("./heights_ref.png"));
 
             for (std::string dataset_name : datasets) {
-                const auto dataset = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
+                const auto dataset = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
                 require_projection_available(*dataset, geodetic_srs);
                 const auto reader = DatasetReader(dataset, geodetic_srs, 1);
                 const auto heights = reader.read(ref_bounds, render_width, render_height);
@@ -185,7 +179,7 @@ TEST_CASE("reading")
                 if (ALP_UNITTESTS_DEBUG_IMAGES) {
                     image::debugOut(ref_heights, fmt::format("./heights_{}_{}.png", test_name, dataset_name.substr(s, l)));
 
-                    auto height_diffs = HeightData(render_width, render_height);
+                    auto height_diffs = radix::Raster<float>({ render_width, render_height });
                     std::transform(ref_heights.begin(), ref_heights.end(), heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
                     const auto path = fmt::format("./diffs_{}_{}.png", test_name, dataset_name.substr(s, l));
                     image::debugOut(height_diffs, path);
@@ -195,7 +189,7 @@ TEST_CASE("reading")
                     const auto t = std::abs(double(a) - double(b));
                     largest_abs_diff = std::max(t, largest_abs_diff);
                     return t * t;
-                }) / double(ref_heights.size());
+                }) / double(ref_heights.buffer_length());
                 //        fmt::print("{} | {};  mse: {}, largest_abs_diff: {}\n", test_name, dataset_name.substr(s, l), mse, largest_abs_diff);
                 CHECK(largest_abs_diff < double(max_abs_diff));
                 CHECK(mse < max_mse);
@@ -208,8 +202,8 @@ TEST_CASE("reading")
     {
         REQUIRE(std::string(ALP_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
         const auto border = 5;
-        const auto low_res_ds = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_mgi.tif"));
-        const auto high_res_ds = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES));
+        const auto low_res_ds = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_mgi.tif"));
+        const auto high_res_ds = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES));
         const auto srs = low_res_ds->srs();
 
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
@@ -226,7 +220,7 @@ TEST_CASE("reading")
 
         const auto pixel_width = low_res_ds->pixelWidthIn(srs);
         const auto pixel_height = low_res_ds->pixelHeightIn(srs);
-        auto srs_bounds = srs::non_exact_bounds_transform(low_res_ds->bounds(), low_res_ds->srs(), srs);
+        auto srs_bounds = low_res_ds->bounds();
         srs_bounds.min = { srs_bounds.min.x + border * pixel_width, srs_bounds.min.y + border * pixel_height };
         srs_bounds.max = { srs_bounds.max.x - border * pixel_width, srs_bounds.max.y - border * pixel_height };
 
@@ -249,7 +243,7 @@ TEST_CASE("reading")
             image::debugOut(low_res_heights, fmt::format("./low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./high_res_heights.png"));
 
-            auto height_diffs = HeightData(render_width, render_height);
+            auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
             image::debugOut(height_diffs, "./diff_low_res_high_res.png");
         }
@@ -258,7 +252,7 @@ TEST_CASE("reading")
             const auto t = std::abs(double(a) - double(b));
             largest_abs_diff = std::max(t, largest_abs_diff);
             return t * t;
-        }) / double(low_res_heights.size());
+        }) / double(low_res_heights.buffer_length());
         //    fmt::print("mse: {}, largest_abs_diff: {}\n", mse, largest_abs_diff);
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);
@@ -267,12 +261,12 @@ TEST_CASE("reading")
     SECTION("overview with warping")
     {
         REQUIRE(std::string(ALP_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
-        const auto low_res_ds = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif"));
-        const auto high_res_ds = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES));
+        const auto low_res_ds = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif"));
+        const auto high_res_ds = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES));
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-        const auto srs_bounds = srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs);
+        const auto srs_bounds = REQUIRE_VALUE(srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs));
 
         const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs));
         const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs));
@@ -291,7 +285,7 @@ TEST_CASE("reading")
             image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./ov_with_warping_high_res_heights.png"));
 
-            auto height_diffs = HeightData(render_width, render_height);
+            auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
             image::debugOut(height_diffs, "./ov_with_warping_diff_low_res_high_res.png");
         }
@@ -300,7 +294,7 @@ TEST_CASE("reading")
             const auto t = std::abs(double(a) - double(b));
             largest_abs_diff = std::max(t, largest_abs_diff);
             return t * t;
-        }) / double(low_res_heights.size());
+        }) / double(low_res_heights.buffer_length());
         //    fmt::print("mse: {}, largest_abs_diff: {}\n", mse, largest_abs_diff);
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);
@@ -309,12 +303,12 @@ TEST_CASE("reading")
     SECTION("lowres overview with warping")
     {
         REQUIRE(std::string(ALP_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
-        const auto low_res_ds = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif"));
-        const auto high_res_ds = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES));
+        const auto low_res_ds = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif"));
+        const auto high_res_ds = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES));
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-        const auto srs_bounds = srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs);
+        const auto srs_bounds = REQUIRE_VALUE(srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs));
 
         const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs)) / 10;
         const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs)) / 10;
@@ -333,7 +327,7 @@ TEST_CASE("reading")
             image::debugOut(low_res_heights, fmt::format("./lowres_ov_with_warping_low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./lowres_ov_with_warping_high_res_heights.png"));
 
-            auto height_diffs = HeightData(render_width, render_height);
+            auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
             image::debugOut(height_diffs, "./lowres_ov_with_warping_diff_low_res_high_res.png");
         }
@@ -342,7 +336,7 @@ TEST_CASE("reading")
             const auto t = std::abs(double(a) - double(b));
             largest_abs_diff = std::max(t, largest_abs_diff);
             return t * t;
-        }) / double(low_res_heights.size());
+        }) / double(low_res_heights.buffer_length());
         //    fmt::print("render w/h: {}/{}, mse: {}, largest_abs_diff: {}\n", render_width, render_height, mse, largest_abs_diff);
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);

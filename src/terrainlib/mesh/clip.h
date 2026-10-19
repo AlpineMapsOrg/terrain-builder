@@ -2,16 +2,20 @@
 
 #include <radix/geometry.h>
 
+#include "error/Result.h"
 #include "mesh/SimpleMesh.h"
+#include "mesh/non_manifold_result.h"
 #include "containers/Cow.h"
 
 namespace mesh {
 
 Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds);
-Cow<const SimpleMesh> clip_on_bounds_and_cap(
+[[nodiscard]]
+alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_bounds_and_cap(
     const SimpleMesh &mesh,
     const radix::geometry::Aabb3d &bounds,
     const bool remesh_planar_patches = true);
-Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh& clip_mesh, const bool keep_inside = true);
+[[nodiscard]]
+alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh& clip_mesh, const bool keep_inside = true);
 
 }

@@ -4,19 +4,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 
 #include <CGAL/Polygon_mesh_processing/clip.h>
+#include <CGAL/Polygon_mesh_processing/orientation.h>
 #include <CGAL/Polygon_mesh_processing/remesh_planar_patches.h>
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
 #include "build_config.h"
+#include "error/utils.h"
 #include "hash_utils.h"
 #include "log.h"
 #include "mesh/cgal.h"
@@ -26,6 +27,7 @@
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/normalize.h"
 #include "mesh/validate.h"
+#include "mesh/validate_cgal.h"
 #include "containers/FixedVector.h"
 #include "vector_utils.h"
 
@@ -298,9 +300,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
         return Cow(SimpleMesh());
     }
 
-    if (mesh.has_uvs() && mesh.uvs.size() != mesh.vertex_count()) {
-        LOG_ERROR_AND_EXIT("Mesh has Uvs, but the number of Uvs does not match the number of vertices.");
-    }
+    ASSERT(!mesh.has_uvs() || mesh.uvs.size() == mesh.vertex_count(), "Mesh has Uvs, but the number of Uvs does not match the number of vertices.");
 
     // Construct 6 axis-aligned clipping planes from the bounding box
     using Plane = radix::geometry::Plane<double>;
@@ -634,7 +634,7 @@ struct HasIntersectionsVisitor : public CGAL::Polygon_mesh_processing::Corefinem
 };
 } // namespace
 
-Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
+alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
     ASSERT(!mesh.has_uvs());
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
 
@@ -646,7 +646,7 @@ Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix
         .visitor(visitor);
     const bool success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_bounds, clip_params);
     if (!success) {
-        throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
+        return alp::make_unexpected(NonManifoldResult{});
     }
     if (cgal_mesh.number_of_faces() == 0) {
         return Cow(SimpleMesh());
@@ -765,7 +765,7 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
 };
 } // namespace
 
-Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh, const bool keep_inside) {
+alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh, const bool keep_inside) {
     // short circuit the empty mesh case
     // this is a common case since we clip the mask in the terrainmerger on the octree node bounds
     // which often results in empty masks
@@ -789,6 +789,9 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
 
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
     cgal::Mesh cgal_clip_mesh = convert::to_cgal_mesh(clip_mesh);
+    cgal::validate(cgal_mesh);
+    cgal::validate(cgal_clip_mesh);
+    DEBUG_ASSERT(CGAL::Polygon_mesh_processing::does_bound_a_volume(cgal_clip_mesh));
 
     bool success;
     bool has_intersections;
@@ -806,7 +809,7 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
         has_intersections = visitor.has_intersections;
     }
     if (!success) {
-        throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
+        return alp::make_unexpected(NonManifoldResult{});
     }
     if (cgal_mesh.number_of_faces() == 0) {
         return Cow(SimpleMesh());
@@ -816,6 +819,7 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
     }
     
     cgal_mesh.collect_garbage();
+    cgal::validate(cgal_mesh);
     SimpleMesh result = convert::to_simple_mesh(cgal_mesh);
     if (mesh.has_texture()) {
         result.texture = mesh.texture.value();

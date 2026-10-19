@@ -2,10 +2,10 @@
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
-#include <functional>
 #include <iomanip>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -15,38 +15,41 @@
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
-#include <ogr_spatialref.h>
 #include <opencv2/core/mat.hpp>
 #include <radix/geometry.h>
 
 #include <tbb/concurrent_vector.h>
 #include <tbb/enumerable_thread_specific.h>
-#include <tbb/parallel_for.h>
-#include <tbb/task_group.h>
 
-#include "Dataset.h"
+#include "gdal/Dataset.h"
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
-#include "srs.h"
-
-#include "ProgressIndicator.h"
-#include "error/log.h"
-#include "error/try.h"
-#include "error/utils.h"
-#include "log.h"
-#include "mesh/SimpleMesh.h"
-#include "mesh/io.h"
-#include "mesh_builder.h"
-#include "terrainbuilder.h"
-#include "texture_assembler.h"
-#include "tile_provider.h"
-#include "mesh/validate.h"
+#include "srs/System.h"
+#include "srs/SharedSystem.h"
+#include "srs/transform.h"
+#include "srs/transform_bounds.h"
 
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "octree/Storage.h"
 #include "octree/disk/layout/strategy/LevelAndCoordinateDirectories.h"
 #include "octree/utils.h"
+
+#include "ProgressIndicator.h"
+#include "error/log.h"
+#include "error/try.h"
+#include "error/utils.h"
+#include "LogScope.h"
+#include "log.h"
+#include "mem.h"
+#include "mesh/SimpleMesh.h"
+#include "mesh/io.h"
+#include "mesh_builder.h"
+#include "terrainbuilder.h"
+#include "texture_assembler.h"
+#include "TileProvider.h"
+#include "mesh/validate.h"
+#include "parallel.h"
 
 namespace terrainbuilder {
 
@@ -60,13 +63,13 @@ std::string format_secs_since(const std::chrono::high_resolution_clock::time_poi
 }
 }
 
-alp::Result<std::optional<SimpleMesh>, gdal::CplError, TileError> build_patch(
-    Dataset &dataset,
-    const OGRSpatialReference &target_bounds_srs,
+alp::Result<std::optional<SimpleMesh>, BuildPatchError> build_patch(
+    gdal::Dataset &dataset,
+    const srs::System &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
-    const OGRSpatialReference &texture_srs,
+    const srs::System &texture_srs,
     const TileProvider* tile_provider,
-    const OGRSpatialReference &mesh_srs) {
+    const srs::System &mesh_srs) {
     const ctb::Grid grid = ctb::GlobalMercator();
     radix::tile::SrsBounds texture_bounds;
 
@@ -79,11 +82,11 @@ alp::Result<std::optional<SimpleMesh>, gdal::CplError, TileError> build_patch(
         target_bounds_srs, target_bounds,
         texture_srs, texture_bounds);
     if (!mesh_result.has_value()) {
-        auto narrow_result = std::move(mesh_result).error().narrow<gdal::CplError>();
-        if (narrow_result.has_value()) {
-            return alp::propagate(std::move(narrow_result).value());
+        auto split_result = std::move(mesh_result).error().split<NoTerrain>();
+        if (!split_result.has_value()) {
+            return alp::propagate(std::move(split_result).error());
         }
-        LOG_WARN("{:#}", narrow_result.error());
+        LOG_WARN("{:#}", split_result.value());
         return std::nullopt;
     }
     SimpleMesh mesh = mesh_result.value();
@@ -114,13 +117,13 @@ alp::Result<std::optional<SimpleMesh>, gdal::CplError, TileError> build_patch(
     return mesh;
 }
 
-alp::Result<void, gdal::CplError, TileError, mesh::io::Error> build_and_save_patch(
-    Dataset &dataset,
-    const OGRSpatialReference &target_bounds_srs,
+alp::Result<void, BuildPatchError, mesh::io::Error> build_and_save_patch(
+    gdal::Dataset &dataset,
+    const srs::System &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
-    const OGRSpatialReference &texture_srs,
+    const srs::System &texture_srs,
     const TileProvider *tile_provider,
-    const OGRSpatialReference &mesh_srs,
+    const srs::System &mesh_srs,
     const std::filesystem::path &output_path) {
     ALP_TRY(
         std::optional<SimpleMesh> mesh_opt,
@@ -142,15 +145,12 @@ alp::Result<void, gdal::CplError, TileError, mesh::io::Error> build_and_save_pat
     start = std::chrono::high_resolution_clock::now();
     // TODO: use a JSON libary instead
     std::unordered_map<std::string, std::string> metadata;
-    metadata["mesh_srs"] = mesh_srs.GetAuthorityCode(nullptr);
-    metadata["bounds_srs"] = target_bounds_srs.GetAuthorityCode(nullptr);
-    metadata["texture_srs"] = texture_srs.GetAuthorityCode(nullptr);
+    metadata["mesh_srs"] = srs::friendly_name(mesh_srs);
+    metadata["bounds_srs"] = srs::friendly_name(target_bounds_srs);
+    metadata["texture_srs"] = srs::friendly_name(texture_srs);
     metadata["bounds"] = fmt::format(
         "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
         target_bounds.min.x, target_bounds.min.y, target_bounds.max.x, target_bounds.max.y);
-    // metadata["texture_bounds"] = fmt::format(
-    //     "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
-    //    texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
     ALP_TRY(mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata}));
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
     LOG_INFO("Done writing mesh to {}", output_path);
@@ -159,17 +159,17 @@ alp::Result<void, gdal::CplError, TileError, mesh::io::Error> build_and_save_pat
 
 namespace {
 // An error from building and saving a node.
-using BuildError = alp::Error<gdal::CplError, TileError, octree::Storage::save_error>;
+using BuildError = alp::Error<BuildPatchError, octree::Storage::SaveError>;
 
 // Builds the mesh for `node` and saves it to `storage`, or saves nothing if the dataset holds no terrain there.
 alp::BasicResult<void, BuildError> build_and_save_node(
-    Dataset &dataset,
+    gdal::Dataset &dataset,
     const octree::Space &space,
     const octree::Id &node,
-    const OGRSpatialReference &ecef_srs,
-    const OGRSpatialReference &texture_srs,
+    const srs::System &ecef_srs,
+    const srs::System &texture_srs,
     const TileProvider *tile_provider,
-    const OGRSpatialReference &mesh_srs,
+    const srs::System &mesh_srs,
     octree::Storage &storage) {
     ALP_TRY_CONTEXT(
         std::optional<SimpleMesh> mesh_opt,
@@ -193,11 +193,11 @@ alp::BasicResult<void, BuildError> build_and_save_node(
 }
 
 alp::Result<void> build_all_patches(
-    Dataset &dataset,
+    gdal::Dataset &dataset,
     const octree::Id::Level target_level,
-    const OGRSpatialReference &texture_srs,
+    const srs::System &texture_srs,
     const TileProvider *tile_provider,
-    const OGRSpatialReference &mesh_srs,
+    const srs::System &mesh_srs,
     const std::filesystem::path &output_base_path,
     const std::string &output_format,
     const bool overwrite_existing
@@ -211,58 +211,47 @@ alp::Result<void> build_all_patches(
     ));
     storage.settings().allow_overwrite = overwrite_existing;
 
-    const auto dataset_srs = dataset.srs();
+    const srs::SharedSystem dataset_srs(dataset.srs());
     const auto dataset_bounds = dataset.bounds3d(true);
 
-    const auto ecef_srs = srs::ecef();
-    const auto ecef_bounds = srs::encompassing_bounds_transfer(
-        dataset_srs, ecef_srs, dataset_bounds);
+    const srs::SharedSystem ecef_srs(srs::ecef());
+    const srs::SharedSystem shared_texture_srs(texture_srs);
+    const srs::SharedSystem shared_mesh_srs(mesh_srs);
+    ALP_TRY(const auto ecef_bounds, srs::encompassing_bounds_transfer(dataset_srs.get(), ecef_srs.get(), dataset_bounds));
     const auto space = octree::Space::earth();
-    ALP_TRY(
-        const octree::Id root_node,
-        alp::to_expected(
-            space.find_smallest_node_encompassing_bounds(ecef_bounds),
-            "the dataset lies outside the octree root node"));
+    ALP_TRY(const octree::Id root_node, alp::to_expected(
+        space.find_smallest_node_encompassing_bounds(ecef_bounds),
+        "the dataset lies outside the octree root node")
+    );
 
     tbb::concurrent_vector<octree::Id> concurrent_targets;
 
-    tbb::task_group tg;
-    std::function<void(octree::Id)> process_node;
-
-    tbb::enumerable_thread_specific<std::shared_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
-        auto local_ecef_srs = ecef_srs;
-        auto local_dataset_srs = dataset_srs;
-        auto transform = srs::transformation(local_ecef_srs, local_dataset_srs);
-        return transform;
-    });
-
-    process_node = [&](octree::Id node) {
+    ALP_TRY(parallel::try_for_each(std::views::single(root_node), [&](const octree::Id &node, parallel::Feeder<octree::Id> &feeder) -> alp::Result<void, srs::TransformError> {
         // Check if node intersects with ecef bounds of dataset
         const auto node_bounds = space.get_node_bounds(node);
         if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
-            return;
+            return {};
         }
 
         // Check if node bounds in dataset srs intersect with dataset
-        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
-            &*transform_ecef_dataset.local(), node_bounds, 7, 3);
+        ALP_TRY(const srs::Transform transform_ecef_dataset, srs::get_transform(ecef_srs.get(), dataset_srs.get()));
+        ALP_TRY(const auto node_bounds_dataset_srs, srs::encompassing_bounds_transfer(
+            transform_ecef_dataset, node_bounds, 7, 3));
         if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
-            return;
+            return {};
         }
 
         if (node.level() < target_level) {
             if (auto children = node.children(); children.has_value()) {
                 for (const auto &child : *children) {
-                    tg.run([&, child] { process_node(child); });
+                    feeder.add(child);
                 }
             }
         } else if (node.level() == target_level) {
             concurrent_targets.push_back(node);
         }
-    };
-
-    tg.run([&] { process_node(root_node); });
-    tg.wait(); // Wait for all tasks
+        return {};
+    }));
 
     std::vector<octree::Id> target_nodes;
     target_nodes.assign(concurrent_targets.begin(), concurrent_targets.end());
@@ -270,72 +259,43 @@ alp::Result<void> build_all_patches(
     ProgressIndicator progress(target_nodes.size());
     std::jthread progress_thread = progress.start_monitoring();
 
-    // Clone dataset and SRSs for each thread
-    tbb::enumerable_thread_specific<Dataset> local_dataset([&]() {
+    // Clone dataset for each thread
+    tbb::enumerable_thread_specific<gdal::Dataset> local_dataset([&]() {
         return dataset.clone();
-    });
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_ecef_srs([&]() {
-        return srs::clone(ecef_srs);
-    });
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_texture_srs([&]() {
-        return srs::clone(texture_srs);
-    });
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_mesh_srs([&]() {
-        return srs::clone(mesh_srs);
     });
 
     // Decrease log level to error to avoid excessive logging during mesh building
-    auto logger = Log::get_logger();
-    const auto original_level = logger->level();
-    const auto new_level = spdlog::level::err;
-    // Only set to if it's more restrictive than current level
-    if (new_level >= original_level) {
-        logger->set_level(new_level);
-    }
+    LogScope log_scope(spdlog::level::err);
 
-    tbb::task_group_context context;
-    std::optional<BuildError> first_error;
-    tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
-        const auto &node = target_nodes[i];
+    alp::BasicResult<void, BuildError> build_result = parallel::try_for_each(target_nodes, [&](const octree::Id &node) -> alp::BasicResult<void, BuildError> {
         if (!overwrite_existing && storage.has(node)) {
             progress.task_finished(); // TODO: correctly handle virtual nodes
-            return;
+            return {};
         }
 
         auto &dataset = local_dataset.local();
-        auto &ecef_srs = *local_ecef_srs.local();
-        auto &texture_srs = *local_texture_srs.local();
-        auto &mesh_srs = *local_mesh_srs.local();
 
         auto result = build_and_save_node(
             dataset,
             space,
             node,
-            ecef_srs,
-            texture_srs,
+            ecef_srs.get(),
+            shared_texture_srs.get(),
             tile_provider,
-            mesh_srs,
+            shared_mesh_srs.get(),
             storage);
-        if (!result.has_value()) {
-            if (context.cancel_group_execution()) {
-                first_error = std::move(result).error();
-            } else {
-                LOG_UNEXPECTED(result.error());
-            }
-        }
 
         progress.task_finished();
-    }, context);
+        return result;
+    });
 
     // Restore original level
-    logger->set_level(original_level);
+    drop(std::move(log_scope));
 
     progress_thread.request_stop();
     progress_thread.join();
 
-    if (first_error.has_value()) {
-        return alp::propagate(std::move(first_error).value());
-    }
+    ALP_TRY(std::move(build_result));
     ALP_TRY(storage.save_or_create_index());
     return {};
 }

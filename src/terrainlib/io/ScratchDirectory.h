@@ -30,7 +30,8 @@ public:
     [[nodiscard]]
     alp::Result<void, FileError> remove() && {
         const std::filesystem::path path = this->_path.take();
-        return filesystem::remove_all(path);
+        ALP_TRY(filesystem::remove_all(path));
+        return {};
     }
 
 private:

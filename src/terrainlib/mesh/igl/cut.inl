@@ -2,8 +2,11 @@
 #include <span>
 #include <vector>
 #include <ranges>
+#include <unordered_set>
 
 #include <glm/common.hpp>
+#include <glm/gtx/hash.hpp>
+#include <libassert/assert.hpp>
 
 #include "enumerate.h"
 #include "mesh/SimpleMesh.h"

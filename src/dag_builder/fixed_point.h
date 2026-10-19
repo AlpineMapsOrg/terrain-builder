@@ -13,10 +13,10 @@ namespace fp {
 
 template <typename Q>
 struct Scalar {
-    using repr_t = typename Q::repr_t;
-    repr_t v = 0;
+    using Repr = typename Q::Repr;
+    Repr v = 0;
 
-    static constexpr Scalar from_int(repr_t x) noexcept { return {x * Q::scale}; }
+    static constexpr Scalar from_int(Repr x) noexcept { return {x * Q::scale}; }
     static Scalar from_real(double x) { return {Q::from_real(x).value}; }
     static constexpr Scalar one() noexcept { return {Q::scale}; }
     static constexpr Scalar zero() noexcept { return {0}; }
@@ -37,9 +37,9 @@ struct Scalar {
 
 template <typename Q>
 struct Vec2 {
-    using repr_t = glm::vec<2, typename Q::repr_t>;
+    using Repr = glm::vec<2, typename Q::Repr>;
 
-    repr_t raw{};
+    Repr raw{};
 
     static Vec2 from_real(double x, double y) {
         return {{Q::from_real(x).value, Q::from_real(y).value}};

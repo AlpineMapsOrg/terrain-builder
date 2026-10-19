@@ -27,8 +27,7 @@ bool bounds_intersect(const Bounds &a, const Bounds &b) {
 std::unordered_set<Id> brute_force_intersecting_nodes_at_level(
     const OddLevelShifted &space,
     const Id &id,
-    const Id::Level target_level)
-{
+    const Id::Level target_level) {
     std::unordered_set<Id> result;
     const Bounds id_bounds = space.get_node_bounds(id);
     const Id::Index max_index = Id::max_index_on_level(target_level);

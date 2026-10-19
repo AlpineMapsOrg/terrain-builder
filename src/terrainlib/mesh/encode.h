@@ -146,10 +146,13 @@ alp::Result<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, cons
     // Decode positions
     const size_t position_size = sizeof(typename Mesh::Position);
     const size_t vertex_count = header.vertex_count;
-    mesh.positions.resize(vertex_count);
-    result = meshopt_decodeVertexBuffer(mesh.positions.data(), vertex_count, position_size, encoded.positions.data(), encoded.positions.size());
-    if (result != 0) {
-        return alp::make_unexpected(GeometryDecodeError::Positions);
+    if (vertex_count > 0) {
+        mesh.positions.resize(vertex_count);
+
+        result = meshopt_decodeVertexBuffer(mesh.positions.data(), vertex_count, position_size, encoded.positions.data(), encoded.positions.size());
+        if (result != 0) {
+            return alp::make_unexpected(GeometryDecodeError::Positions);
+        }
     }
 
     // Decode uvs
@@ -166,10 +169,13 @@ alp::Result<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, cons
     const size_t face_count = header.face_count;
     const size_t index_count = face_count * 3;
     const size_t index_size = sizeof(typename Mesh::Triangle::value_type);
-    mesh.triangles.resize(face_count);
-    result = meshopt_decodeIndexBuffer(mesh.triangles.data(), index_count, index_size, encoded.triangles.data(), encoded.triangles.size());
-    if (result != 0) {
-        return alp::make_unexpected(GeometryDecodeError::Triangles);
+    if (face_count > 0) {
+        mesh.triangles.resize(face_count);
+        
+        result = meshopt_decodeIndexBuffer(mesh.triangles.data(), index_count, index_size, encoded.triangles.data(), encoded.triangles.size());
+        if (result != 0) {
+            return alp::make_unexpected(GeometryDecodeError::Triangles);
+        }
     }
 
     // Decode texture

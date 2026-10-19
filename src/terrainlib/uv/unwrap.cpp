@@ -137,9 +137,7 @@ alp::Result<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm 
     CgalUvPropMap uv_map(uv_uhm);
 
     CGAL::Surface_mesh_parameterization::Error_code result;
-    if (border != Border::Circle && border != Border::Square) {
-        throw std::invalid_argument("illegal border specifier");
-    }
+    ASSERT(border == Border::Circle || border == Border::Square, "illegal border specifier");
 
     if (algorithm == Algorithm::TutteBarycentricMapping) {
         if (border == Border::Circle) {
@@ -174,7 +172,7 @@ alp::Result<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm 
         result = CGAL::Surface_mesh_parameterization::parameterize(mesh,
             ARAPParameterizerFreeBorder(1000.0), bhd, uv_map);
     } else {
-        throw std::invalid_argument("illegal algorithm specifier");
+        UNREACHABLE("illegal algorithm specifier");
     }
 
     if (result != CGAL::Surface_mesh_parameterization::OK) {

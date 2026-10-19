@@ -20,10 +20,10 @@
 #include "numeric/glm_math.h"
 #include "numeric/int_math.h"
 #include "optional_utils.h"
-#include "srs.h"
+#include "srs/transform_bounds.h"
 
 #include "error/try.h"
-#include "tile_provider.h"
+#include "TileProvider.h"
 #include "log.h"
 
 namespace terrainbuilder {
@@ -198,7 +198,6 @@ inline TargetImageRegion calculate_target_image_region(
     const radix::tile::Id root_tile,
     const glm::uvec2 tile_image_pixel_size,
     const uint32_t max_zoom_level) {
-    tile = tile.to(radix::tile::Scheme::SlippyMap);
     const size_t relative_zoom_level = tile.zoom_level - root_tile.zoom_level;
     const glm::uvec2 tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
     const glm::uvec2 tile_size = tile_image_pixel_size * tile_size_factor;
@@ -426,11 +425,11 @@ inline alp::Result<AssembledTexture, TileError> splatter_tiles_to_texture(
 
 /// Creates a texture for the given region.
 [[nodiscard]]
-inline alp::Result<std::optional<AssembledTexture>, TileError> assemble_texture_from_tiles(
+inline alp::Result<std::optional<AssembledTexture>, TileError, srs::TransformError> assemble_texture_from_tiles(
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
     /// Specifies the srs the target bounds are in.
-    const OGRSpatialReference &target_srs,
+    const srs::System &target_srs,
     /// The bounds for which texture data should be created.
     const radix::tile::SrsBounds &target_bounds,
     /// Provider class that maps tile ids to their textures.
@@ -449,14 +448,14 @@ inline alp::Result<std::optional<AssembledTexture>, TileError> assemble_texture_
     }
 
     // Start by transforming the input bounds into the srs the tiles are in.
-    const radix::tile::SrsBounds encompassing_bounds = srs::encompassing_bounds_transfer(target_srs, grid.getSRS(), target_bounds);
+    ALP_TRY(const radix::tile::SrsBounds encompassing_bounds, srs::encompassing_bounds_transfer(target_srs, grid.getSRS(), target_bounds));
     // Then we find the smallest tile (id) that encompasses these bounds.
     const std::optional<radix::tile::Id> encompassing_tile_opt = grid.findSmallestEncompassingTile(encompassing_bounds);
     if (!encompassing_tile_opt.has_value()) {
         LOG_WARN("Texture target bounds lie outside the tile grid");
         return std::nullopt;
     }
-    radix::tile::Id smallest_encompassing_tile = encompassing_tile_opt.value().to(radix::tile::Scheme::SlippyMap);
+    radix::tile::Id smallest_encompassing_tile = encompassing_tile_opt.value();
     LOG_TRACE("Smallest encompassing tile for texture bounds is {}", radix::tile::to_string(smallest_encompassing_tile));
 
     if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {

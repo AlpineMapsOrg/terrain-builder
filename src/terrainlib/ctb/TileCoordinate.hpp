@@ -40,28 +40,24 @@ public:
     /// Create the 0-0-0 level tile coordinate
     TileCoordinate()
         : TilePoint(0, 0)
-        , zoom(0)
-    {
+        , zoom(0) {
     }
 
     /// Instantiate a tile coordinate from the zoom, x and y
     TileCoordinate(i_zoom zoom, i_tile x, i_tile y)
         : TilePoint(x, y)
-        , zoom(zoom)
-    {
+        , zoom(zoom) {
     }
 
     /// Instantiate a tile coordinate using the zoom and a tile point
     TileCoordinate(i_zoom zoom, const TilePoint& coord)
         : TilePoint(coord)
-        , zoom(zoom)
-    {
+        , zoom(zoom) {
     }
 
     /// Set the point
     inline void
-    setPoint(const TilePoint& point)
-    {
+    setPoint(const TilePoint& point) {
         TilePoint::operator=(point);
     }
 

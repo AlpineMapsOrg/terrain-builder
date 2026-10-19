@@ -20,7 +20,7 @@
 
 #include <set>
 
-#include "Dataset.h"
+#include "gdal/Dataset.h"
 #include "DatasetReader.h"
 #include "TopDownTiler.h"
 #include "ctb/GlobalMercator.hpp"
@@ -38,8 +38,8 @@ TEST_CASE("depth_first_tile_traverser interface")
     const auto aggregate_function = [](std::vector<ReadType>) { return ReadType {}; };
 
     const auto grid = ctb::GlobalMercator();
-    const auto tiler = TopDownTiler(grid, grid.getExtent(), radix::tile::Border::No, radix::tile::Scheme::Tms);
-    const radix::tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
+    const auto tiler = TopDownTiler(grid, grid.getExtent(), radix::tile::Border::No);
+    const radix::tile::Id root_id = { 0, { 0, 0 } };
     const unsigned max_zoom_level = 3;
 
     traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, max_zoom_level);
@@ -69,15 +69,15 @@ TEST_CASE("depth_first_tile_traverser basics")
     };
 
     const auto grid = ctb::GlobalMercator();
-    const auto tiler = TopDownTiler(grid, grid.getExtent(), radix::tile::Border::No, radix::tile::Scheme::Tms);
-    const radix::tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
+    const auto tiler = TopDownTiler(grid, grid.getExtent(), radix::tile::Border::No);
+    const radix::tile::Id root_id = { 0, { 0, 0 } };
 
     SECTION("reads root tile #1")
     {
         const auto result = traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, 0);
         REQUIRE(read_tiles.size() == 1);
         CHECK(aggregate_calls.size() == 0);
-        CHECK(read_tiles.contains(radix::tile::Id{0, {0, 0}, tiler.scheme()}));
+        CHECK(read_tiles.contains(radix::tile::Id{0, {0, 0}}));
         CHECK(result.d == glm::uvec2 { 0, 0 });
     }
 
@@ -85,7 +85,7 @@ TEST_CASE("depth_first_tile_traverser basics")
     {
         const auto result = traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, { 2, { 1, 3 } }, 2);
         REQUIRE(read_tiles.size() == 1);
-        CHECK(read_tiles.contains(radix::tile::Id{2, {1, 3}, tiler.scheme()}));
+        CHECK(read_tiles.contains(radix::tile::Id{2, {1, 3}}));
         CHECK(result.d == glm::uvec2 { 1, 3 });
     }
 
@@ -93,10 +93,10 @@ TEST_CASE("depth_first_tile_traverser basics")
     {
         traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, { 0, { 0, 0 } }, 1);
         REQUIRE(read_tiles.size() == 4);
-        CHECK(read_tiles.contains(radix::tile::Id{1, {0, 0}, tiler.scheme()}));
-        CHECK(read_tiles.contains(radix::tile::Id{1, {0, 1}, tiler.scheme()}));
-        CHECK(read_tiles.contains(radix::tile::Id{1, {1, 0}, tiler.scheme()}));
-        CHECK(read_tiles.contains(radix::tile::Id{1, {1, 1}, tiler.scheme()}));
+        CHECK(read_tiles.contains(radix::tile::Id{1, {0, 0}}));
+        CHECK(read_tiles.contains(radix::tile::Id{1, {0, 1}}));
+        CHECK(read_tiles.contains(radix::tile::Id{1, {1, 0}}));
+        CHECK(read_tiles.contains(radix::tile::Id{1, {1, 1}}));
     }
 
     SECTION("aggregate is called correctly")
@@ -117,10 +117,10 @@ TEST_CASE("depth_first_tile_traverser basics")
 TEST_CASE("depth_first_tile_traverser austrian heights")
 {
     const auto grid = ctb::GlobalMercator();
-    const auto dataset = REQUIRE_VALUE(Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_mgi.tif"));
-    //    const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto dataset = REQUIRE_VALUE(gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_mgi.tif"));
+    //    const auto dataset = gdal::Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto bounds = dataset->bounds(grid.getSRS());
-    const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::No, radix::tile::Scheme::Tms);
+    const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::No);
     const auto tile_reader = DatasetReader(dataset, grid.getSRS(), 1, false);
     //    const auto dataset_reader = DatasetReader()
     std::set<radix::tile::Id> read_tiles;
@@ -143,14 +143,14 @@ TEST_CASE("depth_first_tile_traverser austrian heights")
         return aggr;
     };
 
-    const radix::tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
+    const radix::tile::Id root_id = { 0, { 0, 0 } };
 
     SECTION("reads root tile")
     {
         const auto result = traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, 0);
         REQUIRE(read_tiles.size() == 1);
         CHECK(aggregate_calls.size() == 0);
-        CHECK(read_tiles.contains(radix::tile::Id{0, {0, 0}, tiler.scheme()}));
+        CHECK(read_tiles.contains(radix::tile::Id{0, {0, 0}}));
         CHECK(result.first >= 0);
         CHECK(result.first <= 4000);
         CHECK(result.second >= 0);
@@ -162,14 +162,14 @@ TEST_CASE("depth_first_tile_traverser austrian heights")
         const auto result = traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, 6);
         CHECK(read_tiles.size() == 6);
         CHECK(aggregate_calls.size() == 9);
-        CHECK(read_tiles.contains(radix::tile::Id{6, {33, 41}, tiler.scheme()}));
-        CHECK(read_tiles.contains(radix::tile::Id{6, {33, 42}, tiler.scheme()}));
+        CHECK(read_tiles.contains(radix::tile::Id{6, {33, 22}}));
+        CHECK(read_tiles.contains(radix::tile::Id{6, {33, 21}}));
 
-        CHECK(read_tiles.contains(radix::tile::Id{6, {34, 41}, tiler.scheme()}));
-        CHECK(read_tiles.contains(radix::tile::Id{6, {34, 42}, tiler.scheme()}));
+        CHECK(read_tiles.contains(radix::tile::Id{6, {34, 22}}));
+        CHECK(read_tiles.contains(radix::tile::Id{6, {34, 21}}));
 
-        CHECK(read_tiles.contains(radix::tile::Id{6, {35, 41}, tiler.scheme()}));
-        CHECK(read_tiles.contains(radix::tile::Id{6, {35, 42}, tiler.scheme()}));
+        CHECK(read_tiles.contains(radix::tile::Id{6, {35, 22}}));
+        CHECK(read_tiles.contains(radix::tile::Id{6, {35, 21}}));
         CHECK(result.first >= 0);
         CHECK(result.first <= 500);
         CHECK(result.second >= 2000);
@@ -188,8 +188,8 @@ TEST_CASE("depth_first_tile_traverser aggregate is not called with an empty vect
         // parent tile is produced, because its border overlaps the extents
         // child tiles have smaller pixels -> their border does not overlap the extents any more.
         bounds.min.x = (bounds.width() / 256) / 4;
-        const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::Yes, radix::tile::Scheme::Tms);
-        const radix::tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
+        const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::Yes);
+        const radix::tile::Id root_id = { 0, { 0, 0 } };
 
         const auto read_function = [&](const radix::tile::Descriptor&) -> int {
             return 0;

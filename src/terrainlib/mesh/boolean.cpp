@@ -2,13 +2,14 @@
 #include <CGAL/Polygon_mesh_processing/corefinement.h>
 #include <libassert/assert.hpp>
 
+#include "error/utils.h"
 #include "mesh/boolean.h"
 #include "mesh/convert.h"
 #include "mesh/cgal.h"
 
 namespace mesh {
 
-IntersectionAndDifference intersection_and_difference(const SimpleMesh &a, const SimpleMesh &b) {
+alp::Result<IntersectionAndDifference, NonManifoldResult> intersection_and_difference(const SimpleMesh &a, const SimpleMesh &b) {
     ASSERT(!a.has_uvs());
     ASSERT(!b.has_uvs());
 
@@ -26,7 +27,7 @@ IntersectionAndDifference intersection_and_difference(const SimpleMesh &a, const
     const std::array<bool, 4> cgal_result = 
         CGAL::Polygon_mesh_processing::corefine_and_compute_boolean_operations(cgal_a, cgal_b, cgal_out);
     if (!cgal_result[intersection_index] || !cgal_result[difference_index]) {
-        throw std::runtime_error("corefine_and_compute_boolean_operations failed");
+        return alp::make_unexpected(NonManifoldResult{});
     }
 
     IntersectionAndDifference result;

@@ -39,27 +39,27 @@ inline Error<> make_error(std::string message, const std::source_location locati
 // Creates an unexpected holding a new error with `code` that originates at the caller.
 template <ErrorCode E>
 [[nodiscard]]
-std::unexpected<Error<E>> make_unexpected(E code, const std::source_location location = std::source_location::current()) {
+Unexpected<E> make_unexpected(E code, const std::source_location location = std::source_location::current()) {
     return std::unexpected(make_error(std::move(code), location));
 }
 
 // Creates an unexpected holding a new error with `code` that originates at the caller, with `context` as its first context.
 template <ErrorCode E>
 [[nodiscard]]
-std::unexpected<Error<E>> make_unexpected(E code, Context auto &&context, const std::source_location location = std::source_location::current()) {
+Unexpected<E> make_unexpected(E code, Context auto &&context, const std::source_location location = std::source_location::current()) {
     return std::unexpected(make_error(std::move(code), std::forward<decltype(context)>(context), location));
 }
 
 // Creates an unexpected holding a new erased error from `message` that originates at the caller.
 [[nodiscard]]
-inline std::unexpected<Error<>> make_unexpected(std::string message, const std::source_location location = std::source_location::current()) {
+inline Unexpected<> make_unexpected(std::string message, const std::source_location location = std::source_location::current()) {
     return std::unexpected(make_error(std::move(message), location));
 }
 
 // Adds a frame at the caller to `error` and wraps it in an unexpected.
 template <ErrorCode... Es>
 [[nodiscard]]
-std::unexpected<BasicError<Es...>> propagate(BasicError<Es...> error,const std::source_location location = std::source_location::current()) {
+BasicUnexpected<BasicError<Es...>> propagate(BasicError<Es...> error,const std::source_location location = std::source_location::current()) {
     return std::unexpected(std::move(error).propagate(location));
 }
 

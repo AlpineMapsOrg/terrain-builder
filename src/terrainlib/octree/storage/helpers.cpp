@@ -1,4 +1,3 @@
-#include <expected>
 #include <memory>
 #include <optional>
 #include <filesystem>
@@ -96,7 +95,7 @@ alp::Result<std::optional<LayoutWithoutBase>, io::FileError> guess_layout_strate
     return std::nullopt;
 }
 
-std::expected<void, io::Error> save_index_map(const IndexMap& index, const disk::Layout& layout) {
+io::Result<void> save_index_map(const IndexMap& index, const disk::Layout& layout) {
     const auto index_path = layout.base_path() / disk::v1::index_file_name();
     LOG_TRACE("Saving octree storage index to {}", index_path);
 

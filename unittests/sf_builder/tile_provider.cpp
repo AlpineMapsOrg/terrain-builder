@@ -13,10 +13,10 @@
 #include "../temp_directory.h"
 #include "io/bytes.h"
 #include "texture/io.h"
-#include "tile_provider.h"
+#include "TileProvider.h"
 
 TEST_CASE("A static provider gets the image of a tile it has", "[tile_provider]") {
-    const radix::tile::Id tile(1, {0, 1}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id tile(1, {0, 1});
     const cv::Mat image(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255));
     const StaticTileProvider provider({{tile, image}});
 
@@ -26,8 +26,8 @@ TEST_CASE("A static provider gets the image of a tile it has", "[tile_provider]"
 }
 
 TEST_CASE("A static provider fails to get a tile it does not have, naming the tile", "[tile_provider]") {
-    const radix::tile::Id tile(1, {0, 1}, radix::tile::Scheme::SlippyMap);
-    const radix::tile::Id other(1, {1, 1}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id tile(1, {0, 1});
+    const radix::tile::Id other(1, {1, 1});
     const StaticTileProvider provider({{tile, cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255))}});
 
     CHECK(!provider.has_tile(other));
@@ -36,7 +36,7 @@ TEST_CASE("A static provider fails to get a tile it does not have, naming the ti
 }
 
 TEST_CASE("An empty provider fails to get any tile, naming the tile", "[tile_provider]") {
-    const radix::tile::Id tile(1, {0, 1}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id tile(1, {0, 1});
     const EmptyTileProvider provider;
 
     CHECK(!provider.has_tile(tile));
@@ -45,8 +45,8 @@ TEST_CASE("An empty provider fails to get any tile, naming the tile", "[tile_pro
 }
 
 TEST_CASE("A zoom range provider has only the tiles of its inner provider that are in range", "[tile_provider]") {
-    const radix::tile::Id below(0, {0, 0}, radix::tile::Scheme::SlippyMap);
-    const radix::tile::Id inside(1, {0, 1}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id below(0, {0, 0});
+    const radix::tile::Id inside(1, {0, 1});
     const cv::Mat image(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255));
     const ZoomRangeTileProvider<StaticTileProvider> provider(StaticTileProvider({{below, image}, {inside, image}}), 1, std::nullopt);
 
@@ -61,8 +61,8 @@ TEST_CASE("A zoom range provider has only the tiles of its inner provider that a
 
 TEST_CASE("A path provider gets the image in a tile's file", "[tile_provider]") {
     const TempDirectory directory("tile_provider_file");
-    const BasemapSchemeTilePathProvider provider(directory.path());
-    const radix::tile::Id tile(1, {0, 1}, radix::tile::Scheme::SlippyMap);
+    const GoogleMapboxTilePathProvider provider(directory.path());
+    const radix::tile::Id tile(1, {0, 1});
     const std::filesystem::path path = provider.get_tile_path(tile).value();
     REQUIRE_VALUE(texture::io::write_to_path(cv::Mat(3, 4, CV_8UC3, cv::Scalar(10, 20, 30)), path));
 
@@ -73,8 +73,8 @@ TEST_CASE("A path provider gets the image in a tile's file", "[tile_provider]") 
 
 TEST_CASE("A path provider fails to get a tile whose file is missing, naming the tile", "[tile_provider]") {
     const TempDirectory directory("tile_provider_missing");
-    const BasemapSchemeTilePathProvider provider(directory.path());
-    const radix::tile::Id tile(1, {0, 1}, radix::tile::Scheme::SlippyMap);
+    const GoogleMapboxTilePathProvider provider(directory.path());
+    const radix::tile::Id tile(1, {0, 1});
 
     CHECK(!provider.has_tile(tile));
     const TileError error = REQUIRE_ERROR(provider.get_tile(tile));
@@ -83,8 +83,8 @@ TEST_CASE("A path provider fails to get a tile whose file is missing, naming the
 
 TEST_CASE("A path provider fails to get a tile whose file is not an image with a decode error", "[tile_provider]") {
     const TempDirectory directory("tile_provider_not_an_image");
-    const BasemapSchemeTilePathProvider provider(directory.path());
-    const radix::tile::Id tile(1, {0, 1}, radix::tile::Scheme::SlippyMap);
+    const GoogleMapboxTilePathProvider provider(directory.path());
+    const radix::tile::Id tile(1, {0, 1});
     const std::filesystem::path path = provider.get_tile_path(tile).value();
     REQUIRE_VALUE(io::write_bytes_to_path(std::vector<uint8_t>{1, 2, 3, 4}, path));
 

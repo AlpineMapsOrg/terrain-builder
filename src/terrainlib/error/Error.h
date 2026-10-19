@@ -11,6 +11,7 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <libassert/assert.hpp>
 
 #include "error/CodeStorage.h"
 #include "error/Context.h"
@@ -156,6 +157,22 @@ public:
     [[nodiscard]]
     std::expected<Error<Fs...>, BasicError> narrow(this Self &&self) {
         return Error<Fs...>::narrow_from(std::forward<Self>(self));
+    }
+
+    // This error with only the codes Fs if it holds one of them, otherwise with only its other codes; a set among Fs stands for its codes.
+    template <ErrorCodes... Fs, typename Self> requires(!is_erased && narrows_to<Fs...>)
+    [[nodiscard]]
+    std::expected<Error<Fs...>, difference_t<BasicError, Error<Fs...>>> split(this Self &&self) {
+        using Others = difference_t<BasicError, Error<Fs...>>;
+
+        std::expected<Error<Fs...>, BasicError> named_result = Error<Fs...>::narrow_from(std::forward<Self>(self));
+        if (named_result.has_value()) {
+            return *std::move(named_result);
+        }
+
+        std::expected<Others, BasicError> others_result = Others::narrow_from(std::move(named_result).error());
+        ASSERT(others_result.has_value(), "the held code belongs to neither side of the split");
+        return std::unexpected(*std::move(others_result));
     }
 
 private:

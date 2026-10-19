@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include "mesh/SimpleMesh.h"
 

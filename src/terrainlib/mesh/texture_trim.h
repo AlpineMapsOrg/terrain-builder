@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 #include <libassert/assert.hpp>
+#include <radix/geometry.h>
 
 #include "build_config.h"
 #include "mesh/SimpleMesh.h"

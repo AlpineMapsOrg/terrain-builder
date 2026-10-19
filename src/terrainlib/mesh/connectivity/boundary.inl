@@ -2,6 +2,7 @@
 #include <unordered_set>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/connectivity/edges.h"

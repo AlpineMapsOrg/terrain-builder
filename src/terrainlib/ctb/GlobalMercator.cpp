@@ -22,6 +22,7 @@
 #define _USE_MATH_DEFINES // for M_PI
 
 #include "GlobalMercator.hpp"
+#include "srs/System.h"
 
 using namespace ctb;
 
@@ -30,12 +31,4 @@ const unsigned int GlobalMercator::cSemiMajorAxis = 6378137;
 const double GlobalMercator::cEarthCircumference = 2 * M_PI * GlobalMercator::cSemiMajorAxis;
 const double GlobalMercator::cOriginShift = GlobalMercator::cEarthCircumference / 2.0;
 
-// Set the spatial reference
-static OGRSpatialReference setSRS_Mercator() {
-    OGRSpatialReference srs;
-    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    srs.importFromEPSG(3857);
-    return srs;
-}
-
-const OGRSpatialReference GlobalMercator::cSRS = setSRS_Mercator();
+const srs::SharedSystem GlobalMercator::cSRS(srs::webmercator());

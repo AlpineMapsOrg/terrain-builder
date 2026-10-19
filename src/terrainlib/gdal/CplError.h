@@ -1,7 +1,10 @@
 #pragma once
 
+#include <concepts>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #include <cpl_error.h>
@@ -16,16 +19,24 @@ public:
         DEBUG_ASSERT(code != CPLE_None);
     }
 
-    // The error GDAL last recorded on this thread, or an application-defined one if it recorded none.
-    static CplError from_last_error() {
+    // The error GDAL last recorded on this thread, if it recorded one.
+    static std::optional<CplError> try_get_last_error() {
         const CPLErrorNum code = CPLGetLastErrorNo();
         if (code == CPLE_None) {
-            return CplError(CPLE_AppDefined, "GDAL recorded no error");
+            return std::nullopt;
         }
         return CplError(code, CPLGetLastErrorMsg());
     }
 
-    bool operator==(const CplError &) const = default;
+    // The error GDAL last recorded on this thread, or an application-defined one if it recorded none.
+    static CplError get_last_error() {
+        return try_get_last_error().value_or(CplError(CPLE_AppDefined, "GDAL recorded no error"));
+    }
+
+    // Whether both errors have the same category.
+    bool operator==(const CplError &other) const {
+        return this->_code == other._code;
+    }
 
     // The category GDAL assigned.
     CPLErrorNum code() const {
@@ -44,6 +55,14 @@ private:
 
 inline std::string_view format_as(const CplError &error) {
     return error.message();
+}
+
+// Runs `call` with a cleared GDAL error state and returns its result with the error GDAL recorded during it, if it recorded one.
+template <std::invocable Call>
+std::pair<std::invoke_result_t<Call>, std::optional<CplError>> capture_error(Call call) {
+    CPLErrorReset();
+    auto value = call();
+    return {std::move(value), CplError::try_get_last_error()};
 }
 
 } // namespace gdal

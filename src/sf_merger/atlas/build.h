@@ -4,6 +4,7 @@
 #include <functional>
 
 #include <opencv2/opencv.hpp>
+#include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
 #include "atlas/LayoutPlanner.h"

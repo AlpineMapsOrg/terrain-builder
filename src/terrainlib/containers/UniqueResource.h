@@ -92,9 +92,18 @@ public:
         return *this;
     }
 
+    // Before GCC 17, destroying a std::optional that was reset by hand gives a false -Wmaybe-uninitialized: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=127005
+    // Valgrind memcheck reports no uninitialized reads.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     ~UniqueResource() {
         this->reset();
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
     UniqueResource(const UniqueResource &) = delete;
     UniqueResource &operator=(const UniqueResource &) = delete;

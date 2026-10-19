@@ -5,6 +5,7 @@ endif()
 function(atb_configure_test target)
     target_compile_definitions(${target} PRIVATE
         ALP_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
+        ALP_TEST_OUTPUT_DIR="${CMAKE_BINARY_DIR}/unittests/output/"
         ALP_UNITTESTS_AUSTRIA_HIGHRES="${ALP_UNITTESTS_AUSTRIA_HIGHRES}"
         ALP_UNITTESTS_EXTENDED=$<BOOL:${ALP_UNITTESTS_EXTENDED}>
         ALP_UNITTESTS_DEBUG_IMAGES=$<BOOL:${ALP_UNITTESTS_DEBUG_IMAGES}>
@@ -19,10 +20,10 @@ add_executable(unittests_terrainlib
     terrainlib/checked_cast.cpp
     terrainlib/convert.cpp
     terrainlib/cow.cpp
-    terrainlib/dataset.cpp
     terrainlib/enumerate.cpp
     terrainlib/error.cpp
     terrainlib/error_error_code.cpp
+    terrainlib/error_fallible_fn.cpp
     terrainlib/error_format.cpp
     terrainlib/error_result.cpp
     terrainlib/error_result_fn.cpp
@@ -33,8 +34,9 @@ add_executable(unittests_terrainlib
     terrainlib/file_error.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/fn_sink.cpp
+    terrainlib/gdal_dataset.cpp
     terrainlib/gdal_error.cpp
-    terrainlib/gdal_geo_transform.cpp
+    terrainlib/gdal_pixel_transform.cpp
     terrainlib/geometry_bounds.cpp
     terrainlib/geometry_compare.cpp
     terrainlib/geometry_frames.cpp
@@ -50,8 +52,12 @@ add_executable(unittests_terrainlib
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
     terrainlib/io.cpp
+    terrainlib/io_compression.cpp
+    terrainlib/io_envelope.cpp
     terrainlib/io_filesystem.cpp
     terrainlib/io_scratch_directory.cpp
+    terrainlib/io_text.cpp
+    terrainlib/mem.cpp
     terrainlib/merging_sink.cpp
     terrainlib/mesh_boundary.cpp
     terrainlib/mesh_bounds.cpp
@@ -75,6 +81,7 @@ add_executable(unittests_terrainlib
     terrainlib/octree_odd_level_shifted.cpp
     terrainlib/octree_storage.cpp
     terrainlib/once_cell.cpp
+    terrainlib/parallel.cpp
     terrainlib/polygon_clip.cpp
     terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
@@ -83,7 +90,10 @@ add_executable(unittests_terrainlib
     terrainlib/range_utils.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/spsc_channel.cpp
-    terrainlib/srs.cpp
+    terrainlib/srs_shared_system.cpp
+    terrainlib/srs_system.cpp
+    terrainlib/srs_transform.cpp
+    terrainlib/srs_transform_bounds.cpp
     terrainlib/string_utils.cpp
     terrainlib/texture_dilate_colors.cpp
     terrainlib/texture_io.cpp
@@ -104,7 +114,7 @@ if(TARGET tilebuilderlib)
         tilebuilder/alpine_raster_format.cpp
         tilebuilder/dataset_reading.cpp
         tilebuilder/depth_first_tile_traverser.cpp
-        tilebuilder/image.cpp
+        tilebuilder/image_writer.cpp
         tilebuilder/parallel_tile_generator.cpp
         tilebuilder/parallel_tiler.cpp
         tilebuilder/tile_heights_generator.cpp
@@ -126,6 +136,21 @@ if(TARGET sfbuilderlib)
     atb_configure_test(unittests_sfbuilder)
 endif()
 
+if(TARGET tile-downloader)
+    find_package(CURL REQUIRED)
+    add_executable(unittests_tile_downloader
+        throwing_assertions.cpp
+        tile_downloader/downloader.cpp
+        tile_downloader/http_client.cpp
+        tile_downloader/logger.cpp
+        tile_downloader/url_builder.cpp
+        tile_downloader/write_file.cpp
+    )
+    target_include_directories(unittests_tile_downloader PRIVATE ${CMAKE_SOURCE_DIR}/src/tile_downloader)
+    target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain CURL::libcurl)
+    atb_configure_test(unittests_tile_downloader)
+endif()
+
 if(TARGET dagbuilderlib)
     add_executable(unittests_dagbuilder
         catch2_helpers.h
@@ -134,6 +159,7 @@ if(TARGET dagbuilderlib)
         dag_builder/correspondence.cpp
         dag_builder/reprojection.cpp
         dag_builder/merge_clusterings.cpp
+        dag_builder/multi_component.cpp
         dag_builder/weld.cpp
         dag_builder/slice.cpp
         dag_builder/pull_reproject_texture.cpp
@@ -200,6 +226,7 @@ if(TARGET sfmergerlib)
         throwing_assertions.cpp
         sf_merger/mask.cpp
         sf_merger/sphere_projector.cpp
+        sf_merger/utils.cpp
     )
     target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)
     if(TARGET sf-builder AND TARGET sf-merger)

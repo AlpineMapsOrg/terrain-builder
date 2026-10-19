@@ -1,10 +1,10 @@
 #pragma once
 
-#include <expected>
 #include <filesystem>
 #include <shared_mutex>
 #include <type_traits>
 
+#include "error/Result.h"
 #include "octree/Id.h"
 
 namespace dag {
@@ -17,8 +17,8 @@ class ThreadSafeStorage {
 
 public:
     using value_type = typename Storage::value_type;
-    using load_error = typename Storage::load_error;
-    using save_error = typename Storage::save_error;
+    using LoadError = typename Storage::LoadError;
+    using SaveError = typename Storage::SaveError;
 
     explicit ThreadSafeStorage(Storage &&storage)
         : _storage(std::move(storage)) {}
@@ -33,7 +33,7 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<value_type, load_error> load(const octree::Id &id) const {
+    alp::Result<value_type, LoadError> load(const octree::Id &id) const {
         std::shared_lock lock(this->_mutex);
         return this->_storage.load(id);
     }
@@ -48,7 +48,7 @@ public:
     }
 
     [[nodiscard]]
-    std::expected<void, save_error> save(const octree::Id &id, const value_type &value) const {
+    alp::Result<void, SaveError> save(const octree::Id &id, const value_type &value) const {
         std::unique_lock lock(this->_mutex);
         return this->_storage.save(id, value);
     }

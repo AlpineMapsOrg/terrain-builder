@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include "numeric/int_math.h"
 
 template <glm::length_t N, std::integral T>

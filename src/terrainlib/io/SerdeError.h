@@ -22,11 +22,11 @@ private:
     std::errc _code;
 };
 
-// What the code means for serialization, as zpp_bits documents it.
+// What the code means for serializing or deserializing, as zpp_bits documents it.
 inline std::string_view format_as(const SerdeError error) {
     switch (error._code) {
     case std::errc::result_out_of_range:
-        return "the data ended early";
+        return "the buffer is too short";
     case std::errc::no_buffer_space:
         return "the buffer would grow beyond the allocation limits";
     case std::errc::message_size:
@@ -38,7 +38,7 @@ inline std::string_view format_as(const SerdeError error) {
     case std::errc::invalid_argument:
         return "a null pointer or a value-less variant cannot be serialized";
     default:
-        return "an unknown serialization failure";
+        return "an unknown (de)serialization failure";
     }
 }
 

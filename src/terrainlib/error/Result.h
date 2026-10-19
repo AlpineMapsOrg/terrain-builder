@@ -15,4 +15,12 @@ using BasicResult = std::expected<T, E>;
 template <typename T, typename... Es>
 using Result = BasicResult<T, Error<Es...>>;
 
+// The underlying unexpected type; an error of type E, to return from a function that returns a BasicResult.
+template <typename E>
+using BasicUnexpected = std::unexpected<E>;
+
+// An error with codes of type Es, to return from a function that returns a Result.
+template <typename... Es>
+using Unexpected = BasicUnexpected<Error<Es...>>;
+
 } // namespace alp

@@ -6,9 +6,12 @@ add_library(terrainlib
     ctb/TileCoordinate.hpp
     ctb/types.hpp
 
-    gdal/GeoTransform.cpp
+    gdal/Dataset.cpp
+    gdal/init.cpp
+    gdal/PixelTransform.cpp
 
     io/bytes.cpp
+    io/compression.cpp
 
     mesh/connectivity/adjacency.cpp
     mesh/connectivity/boundary.cpp
@@ -49,10 +52,9 @@ add_library(terrainlib
     uv/unwrap.cpp
     uv/atlas.cpp
 
-    Dataset.cpp
-    init.cpp
     log.cpp
     ProgressIndicator.cpp
+    tile_path.h
 )
 
 target_compile_features(terrainlib PUBLIC cxx_std_23)
@@ -74,12 +76,14 @@ target_link_libraries(terrainlib PUBLIC
     spdlog
     fmt
     zpp_bits
+    zstd::libzstd_static
     cgltf
     TBB::tbb
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
     libassert::assert
+    cpptrace::cpptrace
     magic_enum::magic_enum
     meshoptimizer
     WideInteger

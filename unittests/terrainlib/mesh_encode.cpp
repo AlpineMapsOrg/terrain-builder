@@ -41,6 +41,18 @@ TEST_CASE("transcode roundtrip", "[mesh][encode]") {
     CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
 }
 
+TEST_CASE("decode reads back an encoded empty mesh", "[mesh][encode]") {
+    const mesh::Simple mesh;
+
+    const mesh::Encoded encoded = REQUIRE_VALUE(mesh::encode(mesh));
+
+    const mesh::Simple roundtrip_mesh = REQUIRE_VALUE(mesh::decode(encoded));
+    CHECK(roundtrip_mesh.positions == std::vector<glm::dvec3>{});
+    CHECK(roundtrip_mesh.uvs == std::vector<glm::dvec2>{});
+    CHECK(roundtrip_mesh.triangles == std::vector<glm::uvec3>{});
+    CHECK(!roundtrip_mesh.texture.has_value());
+}
+
 TEST_CASE("A failed decode originates in decode", "[mesh][encode]") {
     mesh::Encoded encoded;
     encoded.header.version = 2;

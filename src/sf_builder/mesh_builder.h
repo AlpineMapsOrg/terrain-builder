@@ -5,13 +5,15 @@
 
 #include <fmt/format.h>
 
-#include "Dataset.h"
-#include "srs.h"
+#include "gdal/Dataset.h"
+#include "srs/System.h"
+#include "srs/error.h"
 
 #include "error/Error.h"
 #include "error/Result.h"
 #include "fmt_impls.h"
 #include "gdal/CplError.h"
+#include "gdal/PixelTransform.h"
 #include "mesh/SimpleMesh.h"
 #include "border.h"
 
@@ -38,14 +40,17 @@ inline std::string_view format_as(const EmptyRegion) {
     return "the requested region holds no terrain";
 }
 
+// A requested region the dataset holds no terrain for.
+using NoTerrain = alp::Error<OutOfBounds, EmptyRegion>;
+
 // An error from building a mesh from a height dataset.
-using BuildMeshError = alp::Error<OutOfBounds, EmptyRegion, gdal::CplError>;
+using BuildMeshError = alp::Error<NoTerrain, gdal::CplError, gdal::PixelTransformError, srs::TransformError>;
 
 /// Builds a mesh from the given height dataset.
 [[nodiscard]]
 alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
-    Dataset &dataset,
-    const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
-    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds);
+    gdal::Dataset &dataset,
+    const srs::System &mesh_srs,
+    const srs::System &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
+    const srs::System &texture_srs, radix::tile::SrsBounds &texture_bounds);
 }

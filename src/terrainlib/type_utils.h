@@ -146,3 +146,19 @@ inline constexpr bool is_subset_v = false;
 
 template <template <typename...> class TTmpl, typename... Ts, template <typename...> class UTmpl, typename... Us>
 inline constexpr bool is_subset_v<TTmpl<Ts...>, UTmpl<Us...>> = (OneOf<Ts, Us...> && ...);
+
+namespace detail {
+
+template <typename T, typename U>
+struct difference;
+
+template <template <typename...> class TTmpl, typename... Ts, template <typename...> class UTmpl, typename... Us>
+struct difference<TTmpl<Ts...>, UTmpl<Us...>> {
+    using type = flatten_t<TTmpl<std::conditional_t<OneOf<Ts, Us...>, TTmpl<>, TTmpl<Ts>>...>>;
+};
+
+} // namespace detail
+
+// T, a specialization of a template, without the arguments that are among the arguments of the specialization U.
+template <typename T, typename U>
+using difference_t = typename detail::difference<T, U>::type;

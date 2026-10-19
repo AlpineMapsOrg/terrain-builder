@@ -1,0 +1,115 @@
+#include "../catch2_helpers.h"
+#include "../result_helpers.h"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <filesystem>
+
+#include <CGAL/Polygon_mesh_processing/orientation.h>
+#include <CGAL/Polygon_mesh_processing/self_intersections.h>
+
+#include "utils.h"
+#include "earth.h"
+#include "geometry/bounds.h"
+#include "geometry/geometry.h"
+#include "mask.h"
+#include "mesh/cgal.h"
+#include "mesh/connectivity/manifold.h"
+#include "mesh/convert.h"
+#include "mesh/geometry.h"
+#include "octree/Id.h"
+#include "octree/Space.h"
+
+namespace {
+
+void check_closed_volume(const SimpleMesh &mesh) {
+    const cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
+    CHECK(mesh::is_manifold(mesh));
+    CHECK(CGAL::is_closed(cgal_mesh));
+    CHECK(CGAL::is_valid_polygon_mesh(cgal_mesh));
+    CHECK_FALSE(CGAL::Polygon_mesh_processing::does_self_intersect(cgal_mesh));
+    CHECK(CGAL::Polygon_mesh_processing::does_bound_a_volume(cgal_mesh));
+}
+
+SimpleMesh make_box(const glm::dvec3 min, const glm::dvec3 max) {
+    return SimpleMesh(
+        {
+            {0, 2, 1}, {0, 3, 2},
+            {4, 5, 6}, {4, 6, 7},
+            {0, 1, 5}, {0, 5, 4},
+            {1, 2, 6}, {1, 6, 5},
+            {2, 3, 7}, {2, 7, 6},
+            {3, 0, 4}, {3, 4, 7},
+        },
+        {
+            {min.x, min.y, min.z},
+            {max.x, min.y, min.z},
+            {max.x, max.y, min.z},
+            {min.x, max.y, min.z},
+            {min.x, min.y, max.z},
+            {max.x, min.y, max.z},
+            {max.x, max.y, max.z},
+            {min.x, max.y, max.z},
+        });
+}
+
+SimpleMesh make_plane(const glm::dvec2 min, const glm::dvec2 max) {
+    return SimpleMesh(
+        {{0, 1, 2}, {0, 2, 3}},
+        {
+            {min.x, min.y, 0.0},
+            {max.x, min.y, 0.0},
+            {max.x, max.y, 0.0},
+            {min.x, max.y, 0.0},
+        });
+}
+
+} // namespace
+
+TEST_CASE("clip_on_mask uses union semantics", "[sf_merger][utils]") {
+    const SimpleMesh source = make_plane(glm::dvec2(-3.0, -1.0), glm::dvec2(3.0, 1.0));
+    const MeshMask mask{
+        .components = {
+            make_box(glm::dvec3(-2.0, -2.0, -1.0), glm::dvec3(-1.0, 2.0, 1.0)),
+            make_box(glm::dvec3(1.0, -2.0, -1.0), glm::dvec3(2.0, 2.0, 1.0)),
+        }};
+
+    const Cow<const SimpleMesh> inside = clip_on_mask(source, mask, true);
+    CHECK_THAT(mesh::compute_surface_area(inside.get()), WithinEpsilon(4.0));
+
+    const Cow<const SimpleMesh> outside = clip_on_mask(source, mask, false);
+    CHECK_THAT(mesh::compute_surface_area(outside.get()), WithinEpsilon(8.0));
+}
+
+TEST_CASE("clip_on_mask without components uses empty-union semantics", "[sf_merger][utils]") {
+    const SimpleMesh source = make_plane(glm::dvec2(-3.0, -1.0), glm::dvec2(3.0, 1.0));
+    const MeshMask mask;
+
+    const Cow<const SimpleMesh> inside = clip_on_mask(source, mask, true);
+    CHECK_FALSE(inside.is_ref());
+    CHECK(inside->is_empty());
+
+    const Cow<const SimpleMesh> outside = clip_on_mask(source, mask, false);
+    CHECK(outside.is_ref());
+    CHECK_FALSE(outside->is_empty());
+}
+
+TEST_CASE("clip_mask_on_bounds keeps the Tirol mask components valid", "[sf_merger][utils]") {
+    const std::filesystem::path path = std::filesystem::path(ALP_TEST_DATA_DIR) / "sf_builder_merge_border/mask/tirol.shp";
+    const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2.0);
+    const MeshMask loaded = REQUIRE_VALUE(mask::load_from_path(path, radius_range));
+    REQUIRE(loaded.components.size() == 3);
+    for (const SimpleMesh &component : loaded.components) {
+        check_closed_volume(component);
+    }
+
+    const octree::Id regression_node(15, 26290, 18610, 27235);
+    const radix::geometry::Aabb3d bounds = geometry::pad_bounds_relative(octree::Space::earth().get_node_bounds(regression_node), 0.05);
+
+    const MeshMask clipped = clip_mask_on_bounds(loaded, bounds);
+
+    REQUIRE_FALSE(clipped.is_empty());
+    for (const SimpleMesh &component : clipped.components) {
+        check_closed_volume(component);
+    }
+}

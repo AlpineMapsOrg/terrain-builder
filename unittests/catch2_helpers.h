@@ -22,6 +22,8 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -54,4 +56,26 @@ struct StringMaker<T> {
 // Matches a value equal to `target` up to `geometry::epsilon<double>()`, scaled by its magnitude above 1.
 inline Catch::Matchers::WithinAbsMatcher WithinEpsilon(const double target) {
     return Catch::Matchers::WithinAbs(target, geometry::epsilon<double>() * std::max(1.0, std::abs(target)));
+}
+
+namespace detail {
+inline bool is_within_epsilon(const double actual, const double expected) {
+    return WithinEpsilon(expected).match(actual);
+}
+
+template <glm::length_t N>
+bool is_within_epsilon(const glm::vec<N, double> &actual, const glm::vec<N, double> &expected) {
+    for (glm::length_t i = 0; i < N; i++) {
+        if (!is_within_epsilon(actual[i], expected[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace detail
+
+// Matches a range holding the elements of `expected` in any order, each equal to its counterpart up to WithinEpsilon in every coordinate.
+template <typename T>
+auto UnorderedWithinEpsilon(std::vector<T> expected) {
+    return Catch::Matchers::UnorderedRangeEquals(std::move(expected), [](const T &a, const T &b) { return detail::is_within_epsilon(a, b); });
 }

@@ -1,5 +1,7 @@
 #include "octree/Space.h"
 
+#include <libassert/assert.hpp>
+
 namespace octree {
 
 namespace detail {
@@ -32,9 +34,7 @@ std::optional<Id> Space::find_smallest_node_encompassing_bounds(
     const Id root) const {
     const glm::dvec3 target_size = target_bounds.size();
 
-    if (target_size.x == 0 || target_size.y == 0 || target_size.z == 0) {
-        throw std::invalid_argument("target bounds cannot be empty");
-    }
+    ASSERT(target_size.x != 0 && target_size.y != 0 && target_size.z != 0, "target bounds cannot be empty");
 
     const Bounds root_bounds = get_node_bounds(root);
     if (!detail::contains_inclusive(root_bounds, target_bounds)) {

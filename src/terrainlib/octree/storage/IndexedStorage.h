@@ -5,6 +5,7 @@
 #include <libassert/assert.hpp>
 
 #include "error/unwrap.h"
+#include "io/Error.h"
 #include "log.h"
 #include "octree/Id.h"
 #include "octree/IndexMap.h"
@@ -49,7 +50,7 @@ public:
         alp::unwrap(Storage_<T, Codec>::update_index());
     }
     [[nodiscard]]
-    std::expected<void, io::Error> save_index() const {
+    io::Result<void> save_index() const {
         if (!this->is_index_dirty()) {
             return {};
         }

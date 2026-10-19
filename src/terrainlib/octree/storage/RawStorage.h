@@ -1,6 +1,5 @@
 #pragma once
 
-#include <expected>
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -8,6 +7,7 @@
 #include <fmt/format.h>
 
 #include "error/Error.h"
+#include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "io/FileError.h"
@@ -23,10 +23,10 @@ template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
 class RawStorage_ {
 public:
     using value_type = T;
-    using codec_type = Codec;
-    using load_error = typename Codec::load_error;
-    using save_error = typename Codec::save_error;
-    using copy_error = alp::Error<io::FileError, load_error, save_error>;
+    using CodecType = Codec;
+    using LoadError = typename Codec::LoadError;
+    using SaveError = typename Codec::SaveError;
+    using CopyError = alp::Error<io::FileError, LoadError, SaveError>;
 
     explicit RawStorage_(disk::Layout layout) noexcept : _layout(std::move(layout)) {}
 
@@ -37,26 +37,26 @@ public:
     RawStorage_ &operator=(RawStorage_ &&) = default;
 
     [[nodiscard]]
-    std::expected<T, load_error> load(const Id &id) const {
+    alp::Result<T, LoadError> load(const Id &id) const {
         const auto path = this->path_for(id);
         ALP_TRY_CONTEXT(T node, Codec::load_from_path(path), fmt::format("loading node {}", id));
         return node;
     }
 
     [[nodiscard]]
-    std::expected<void, save_error> save(const Id &id, const T &node) const {
+    alp::Result<void, SaveError> save(const Id &id, const T &node) const {
         const auto path = this->path_for(id);
         ALP_TRY_CONTEXT(Codec::save_to_path(node, path), fmt::format("saving node {}", id));
         return {};
     }
 
     [[nodiscard]]
-    std::expected<void, copy_error> copy_to(const Id &id, RawStorage_ &target) const {
+    alp::Result<void, CopyError> copy_to(const Id &id, RawStorage_ &target) const {
         return target.copy_from(id, *this);
     }
 
     [[nodiscard]]
-    std::expected<void, copy_error> copy_from(const Id &id, const RawStorage_ &source) {
+    alp::Result<void, CopyError> copy_from(const Id &id, const RawStorage_ &source) {
         const auto context = alp::make_context("copying node {}", id);
         const auto source_path = source.path_for(id);
         const auto target_path = this->path_for(id);
@@ -72,23 +72,9 @@ public:
             return {};
         }
 
-        // The return value only says whether there was a file to remove, so a failure shows in the code alone.
-        std::error_code code;
-        std::filesystem::remove(target_path, code);
-        if (code) {
-            return std::unexpected(
-                alp::make_error(io::FileError(code, target_path), fmt::format("removing a node file at {}", target_path))
-                    .context(context));
-        }
-
+        ALP_TRY_CONTEXT(io::filesystem::remove(target_path), context);
         ALP_TRY_CONTEXT(io::filesystem::create_parent_directories(target_path), context);
-
-        std::filesystem::create_hard_link(source_path, target_path, code);
-        if (code) {
-            return std::unexpected(
-                alp::make_error(io::FileError(code, target_path), fmt::format("linking a node file from {} to {}", source_path, target_path))
-                    .context(context));
-        }
+        ALP_TRY_CONTEXT(io::filesystem::create_hard_link(source_path, target_path), context);
 
         return {};
     }

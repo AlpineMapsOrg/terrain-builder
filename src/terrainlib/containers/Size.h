@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 
 inline constexpr size_t RUNTIME_TAG = SIZE_MAX;
 
