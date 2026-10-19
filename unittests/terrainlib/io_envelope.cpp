@@ -156,19 +156,19 @@ TEST_CASE("deserialize rejects incompatible metadata", "[io][envelope]") {
     SECTION("magic") {
         envelope.magic++;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(EnvelopeError::InvalidMagic));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::InvalidMagic));
     }
 
     SECTION("class name") {
         envelope.class_name = "other.Payload";
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(EnvelopeError::WrongClassName));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::WrongClassName));
     }
 
     SECTION("class version") {
         envelope.class_version = 99;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(EnvelopeError::UnsupportedClassVersion));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UnsupportedClassVersion));
     }
 }
 
@@ -179,28 +179,28 @@ TEST_CASE("deserialize passes the envelope's algorithms and checksum to decompre
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload)));
         envelope.checksum_algorithm = static_cast<ChecksumAlgorithm>(99);
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(CompressionError::UnsupportedChecksumAlgorithm));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::UnsupportedChecksumAlgorithm));
     }
 
     SECTION("compression algorithm") {
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload)));
         envelope.compression_algorithm = static_cast<CompressionAlgorithm>(99);
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(CompressionError::UnsupportedCompressionAlgorithm));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::UnsupportedCompressionAlgorithm));
     }
 
     SECTION("checksum") {
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload)));
         envelope.checksum = "e3069283";
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(CompressionError::InvalidAlgorithmCombination));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::InvalidAlgorithmCombination));
     }
 
     SECTION("data") {
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c)));
         envelope.compressed_data.front() ^= std::byte{0x01};
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(CompressionError::ChecksumMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::ChecksumMismatch));
     }
 }
 
@@ -215,19 +215,19 @@ TEST_CASE("deserialize rejects a declared size that does not match the payload",
     SECTION("smaller") {
         envelope.uncompressed_size--;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(EnvelopeError::UncompressedSizeMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UncompressedSizeMismatch));
     }
 
     SECTION("larger") {
         envelope.uncompressed_size++;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(EnvelopeError::UncompressedSizeMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UncompressedSizeMismatch));
     }
 
     SECTION("zero") {
         envelope.uncompressed_size = 0;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(EnvelopeError::UncompressedSizeMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UncompressedSizeMismatch));
     }
 }
 
@@ -240,12 +240,12 @@ TEST_CASE("deserialize enforces its size limits", "[io][envelope]") {
         io::envelope::Envelope envelope = decode_envelope(bytes);
         envelope.uncompressed_size = io::envelope::default_max_decompressed_size + 1;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(EnvelopeError::SizeLimitExceeded));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::SizeLimitExceeded));
     }
 
     SECTION("caller limit") {
         CHECK(REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes, payload_size)) == payload);
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes, payload_size - 1)).holds(EnvelopeError::SizeLimitExceeded));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes, payload_size - 1)).holds_code(EnvelopeError::SizeLimitExceeded));
     }
 }
 
@@ -253,7 +253,7 @@ TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
     SECTION("envelope ends early") {
         const Bytes bytes{std::byte{0x01}, std::byte{0x02}};
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds(io::SerdeError(std::errc::result_out_of_range)));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds_code(io::SerdeError(std::errc::result_out_of_range)));
     }
 
     SECTION("payload ends early") {
@@ -268,7 +268,7 @@ TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
             .compressed_data = {std::byte{0x01}},
         };
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds(io::SerdeError(std::errc::result_out_of_range)));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::SerdeError(std::errc::result_out_of_range)));
     }
 
     SECTION("trailing data") {
@@ -276,6 +276,6 @@ TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
         Bytes bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload));
         bytes.push_back(std::byte{0x00});
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds(EnvelopeError::TrailingData));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds_code(EnvelopeError::TrailingData));
     }
 }

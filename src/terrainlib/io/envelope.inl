@@ -124,7 +124,7 @@ alp::Result<typename Schema::Latest, EnvelopeError, CompressionError, SerdeError
         envelope.checksum,
         static_cast<std::size_t>(envelope.uncompressed_size));
     // The limit is the declared size, so a payload beyond it is larger than declared.
-    if (!payload_bytes_result && payload_bytes_result.error().holds(CompressionError::SizeLimitExceeded)) {
+    if (!payload_bytes_result && payload_bytes_result.error().holds_code(CompressionError::SizeLimitExceeded)) {
         return alp::make_unexpected(EnvelopeError::UncompressedSizeMismatch, context);
     }
     ALP_TRY_CONTEXT(const Bytes payload_bytes, std::move(payload_bytes_result), context);

@@ -22,14 +22,14 @@ TEST_CASE("from_gdal fails for an srs that is not geodetic", "[srs][System]") {
         REQUIRE(input.SetFromUserInput(R"(LOCAL_CS["test local",LOCAL_DATUM["test datum",32767],UNIT["metre",1],AXIS["x",EAST],AXIS["y",NORTH]])") == OGRERR_NONE);
     }
 
-    CHECK(REQUIRE_ERROR(srs::from_gdal(input)).holds(srs::UnsupportedSystem::NotGeodetic));
+    CHECK(REQUIRE_ERROR(srs::from_gdal(input)).holds_code(srs::UnsupportedSystem::NotGeodetic));
 }
 
 TEST_CASE("from_gdal fails for an srs whose data axes are latitude first", "[srs][System]") {
     OGRSpatialReference geographic;
     REQUIRE(geographic.importFromEPSG(4326) == OGRERR_NONE);
 
-    CHECK(REQUIRE_ERROR(srs::from_gdal(geographic)).holds(srs::UnsupportedSystem::AxisOrder));
+    CHECK(REQUIRE_ERROR(srs::from_gdal(geographic)).holds_code(srs::UnsupportedSystem::AxisOrder));
 }
 
 TEST_CASE("from_gdal accepts every geodetic kind with its data axes in traditional order", "[srs][System]") {
@@ -63,7 +63,7 @@ TEST_CASE("from_epsg gives a system with its data axes in traditional order", "[
 }
 
 TEST_CASE("from_epsg fails for a system that is not geodetic", "[srs][System]") {
-    CHECK(REQUIRE_ERROR(srs::from_epsg(5778)).holds(srs::UnsupportedSystem::NotGeodetic));
+    CHECK(REQUIRE_ERROR(srs::from_epsg(5778)).holds_code(srs::UnsupportedSystem::NotGeodetic));
 }
 
 TEST_CASE("from_user_input fails for invalid input", "[srs][System]") {
@@ -77,7 +77,7 @@ TEST_CASE("from_user_input gives a system with its data axes in traditional orde
 }
 
 TEST_CASE("from_user_input fails for a system that is not geodetic", "[srs][System]") {
-    CHECK(REQUIRE_ERROR(srs::from_user_input("EPSG:5778")).holds(srs::UnsupportedSystem::NotGeodetic));
+    CHECK(REQUIRE_ERROR(srs::from_user_input("EPSG:5778")).holds_code(srs::UnsupportedSystem::NotGeodetic));
 }
 
 TEST_CASE("kind gives the kind of the coordinates, which for a compound system is that of its horizontal part", "[srs][System]") {

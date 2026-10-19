@@ -134,7 +134,7 @@ public:
     // Whether this error holds `code`.
     template <typename E> requires(can_hold<E> && std::equality_comparable<E>)
     [[nodiscard]]
-    bool holds(const E &code) const {
+    bool holds_code(const E &code) const {
         const E *held = this->get_if<E>();
         return held != nullptr && *held == code;
     }

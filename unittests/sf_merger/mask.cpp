@@ -137,5 +137,5 @@ TEST_CASE("load_referenced_from_path fails for a mask without polygons", "[sf_me
 
     const mask::LoadError error = REQUIRE_ERROR(mask::load_referenced_from_path(path));
 
-    CHECK(error.holds(mask::MaskError::NoPolygons));
+    CHECK(error.holds_code(mask::MaskError::NoPolygons));
 }

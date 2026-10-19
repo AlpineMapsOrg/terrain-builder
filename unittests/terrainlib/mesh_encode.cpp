@@ -59,7 +59,7 @@ TEST_CASE("A failed decode originates in decode", "[mesh][encode]") {
 
     const mesh::DecodeError error = REQUIRE_ERROR(mesh::decode(encoded));
 
-    CHECK(error.holds(mesh::GeometryDecodeError::IncompatibleData));
+    CHECK(error.holds_code(mesh::GeometryDecodeError::IncompatibleData));
     CHECK(std::string_view(error.origin().file_name()).ends_with("mesh/encode.h"));
 }
 
@@ -72,7 +72,7 @@ TEST_CASE("Encoding a mesh with a texture format that names no image format fail
 
     const mesh::EncodeError error = REQUIRE_ERROR(mesh::encode(mesh, mesh::EncodeOptions{.texture_format = ".not_an_image"}));
 
-    CHECK(error.holds(io::UnsupportedFormat{".not_an_image"}));
+    CHECK(error.holds_code(io::UnsupportedFormat{".not_an_image"}));
 }
 
 TEST_CASE("Decoding a mesh whose texture is not an image fails with a texture decode error", "[mesh][encode]") {

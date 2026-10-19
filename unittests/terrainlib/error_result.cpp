@@ -49,7 +49,7 @@ TEST_CASE("A typed result converts to an erased result", "[error][Result]") {
     const alp::Result<int, FileError> failed = alp::make_unexpected(FileError::NotFound, "opening app.cfg");
     const alp::Result<int> erased_failure = failed;
     REQUIRE(!erased_failure.has_value());
-    CHECK(erased_failure.error().holds(FileError::NotFound));
+    CHECK(erased_failure.error().holds_code(FileError::NotFound));
     REQUIRE(erased_failure.error().frames().size() == 1);
     CHECK(erased_failure.error().frames()[0].message == "opening app.cfg");
 }
@@ -57,11 +57,11 @@ TEST_CASE("A typed result converts to an erased result", "[error][Result]") {
 TEST_CASE("An unexpected error converts into a result whose error includes its codes", "[error][Result]") {
     const alp::Result<int, FileError, ParseError> set_result = alp::make_unexpected(ParseError::BadDigit);
     REQUIRE(!set_result.has_value());
-    CHECK(set_result.error().holds(ParseError::BadDigit));
+    CHECK(set_result.error().holds_code(ParseError::BadDigit));
 
     const alp::Result<int> erased_result = alp::make_unexpected(FileError::NotFound);
     REQUIRE(!erased_result.has_value());
-    CHECK(erased_result.error().holds(FileError::NotFound));
+    CHECK(erased_result.error().holds_code(FileError::NotFound));
 }
 
 TEST_CASE("A result without a value carries an error", "[error][Result]") {

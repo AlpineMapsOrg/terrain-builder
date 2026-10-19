@@ -112,14 +112,14 @@ mesh::Simple make_triangle() {
 TEST_CASE("Loading a mesh with an unsupported extension fails, naming the extension", "[mesh][io]") {
     const mesh::io::Error error = REQUIRE_ERROR(mesh::io::load_from_path("mesh.xyz"));
 
-    CHECK(error.holds(io::UnsupportedFormat{".xyz"}));
+    CHECK(error.holds_code(io::UnsupportedFormat{".xyz"}));
 }
 
 TEST_CASE("Saving a mesh with an unsupported extension fails, naming the extension", "[mesh][io]") {
     const TempDirectory directory("mesh_io_unsupported_save");
     const mesh::io::Error error = REQUIRE_ERROR(mesh::io::save_to_path(make_triangle(), directory.path() / "mesh.xyz"));
 
-    CHECK(error.holds(io::UnsupportedFormat{".xyz"}));
+    CHECK(error.holds_code(io::UnsupportedFormat{".xyz"}));
 }
 
 TEST_CASE("load_from_path of a missing file reports that it does not exist", "[mesh][io]") {
@@ -128,7 +128,7 @@ TEST_CASE("load_from_path of a missing file reports that it does not exist", "[m
     const std::filesystem::path path = directory.path() / fmt::format("missing{}", extension);
 
     const mesh::io::Error error = REQUIRE_ERROR(mesh::io::load_from_path(path));
-    CHECK(error.holds(io::make_file_not_found(path)));
+    CHECK(error.holds_code(io::make_file_not_found(path)));
 }
 
 TEST_CASE("Loading a terrain file with truncated data fails with a serde error", "[mesh][io]") {

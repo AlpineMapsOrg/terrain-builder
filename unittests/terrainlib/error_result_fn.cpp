@@ -73,7 +73,7 @@ TEST_CASE("ResultFn converts a failed result into the wider error, keeping its c
 
         const alp::Result<int, WideError> result = fn();
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().holds(ParseError::Malformed));
+        CHECK(result.error().holds_code(ParseError::Malformed));
     }
 
     SECTION("without a value") {
@@ -84,7 +84,7 @@ TEST_CASE("ResultFn converts a failed result into the wider error, keeping its c
 
         const alp::Result<void, WideError> result = fn();
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().holds(ParseError::Malformed));
+        CHECK(result.error().holds_code(ParseError::Malformed));
     }
 }
 
@@ -104,7 +104,7 @@ TEST_CASE("invoke_fallible converts a failed result into the wider error, keepin
 
     const alp::Result<int, WideError> result = alp::invoke_fallible<WideError>(parse, 3);
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().holds(ParseError::Malformed));
+    CHECK(result.error().holds_code(ParseError::Malformed));
 }
 
 TEST_CASE("invoke_fallible without codes keeps the callable's error", "[error][ResultFn]") {

@@ -204,7 +204,7 @@ TEST_CASE("Context adds its frames in the order it is called", "[error]") {
 TEST_CASE("An error widens into a set, keeping its frames", "[error]") {
     const alp::Error<FileError, ParseError> widened = alp::make_error(FileError::NotFound).context("opening app.cfg");
 
-    CHECK(widened.holds(FileError::NotFound));
+    CHECK(widened.holds_code(FileError::NotFound));
     REQUIRE(widened.frames().size() == 2);
     CHECK(widened.frames()[1].message == "opening app.cfg");
 }
@@ -213,7 +213,7 @@ TEST_CASE("A const error widens into a set and stays as it was", "[error]") {
     const auto error = alp::make_error(FileError::NotFound).context("opening app.cfg");
     const alp::Error<FileError, ParseError> widened = error;
 
-    CHECK(widened.holds(FileError::NotFound));
+    CHECK(widened.holds_code(FileError::NotFound));
     CHECK(widened.frames().size() == 2);
     CHECK(error.code() == FileError::NotFound);
     CHECK(error.frames().size() == 2);
@@ -222,7 +222,7 @@ TEST_CASE("A const error widens into a set and stays as it was", "[error]") {
 TEST_CASE("Erasure keeps the code the error holds and its frames", "[error]") {
     const alp::Error<> erased = alp::Error<FileError, ParseError>(ParseError::BadDigit).context("parsing the header");
 
-    CHECK(erased.holds(ParseError::BadDigit));
+    CHECK(erased.holds_code(ParseError::BadDigit));
     REQUIRE(erased.frames().size() == 2);
     CHECK(erased.frames()[1].message == "parsing the header");
 }
@@ -266,7 +266,7 @@ TEST_CASE("narrow hands the error back when it holds another code", "[error]") {
     const auto result = alp::Error<FileError, ParseError>(ParseError::BadDigit).context("parsing the header").narrow<FileError>();
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(ParseError::BadDigit));
+    CHECK(result.error().holds_code(ParseError::BadDigit));
     CHECK(result.error().frames().size() == 2);
 }
 
@@ -276,18 +276,18 @@ TEST_CASE("narrow on a const error leaves it as it was", "[error]") {
 
     REQUIRE(result.has_value());
     CHECK(result->frames().size() == 2);
-    CHECK(error.holds(FileError::NotFound));
+    CHECK(error.holds_code(FileError::NotFound));
     CHECK(error.frames().size() == 2);
 }
 
 TEST_CASE("narrow to several codes keeps those it names", "[error]") {
     const auto matched = alp::Error<FileError, ParseError, OffsetError>(ParseError::BadDigit).narrow<FileError, ParseError>();
     REQUIRE(matched.has_value());
-    CHECK(matched->holds(ParseError::BadDigit));
+    CHECK(matched->holds_code(ParseError::BadDigit));
 
     const auto missed = alp::Error<FileError, ParseError, OffsetError>(OffsetError{.offset = 7}).narrow<FileError, ParseError>();
     REQUIRE(!missed.has_value());
-    CHECK(missed.error().holds(OffsetError{.offset = 7}));
+    CHECK(missed.error().holds_code(OffsetError{.offset = 7}));
 }
 
 TEST_CASE("narrow to a set gives the error with only that set's codes, keeping its frames", "[error]") {
@@ -296,7 +296,7 @@ TEST_CASE("narrow to a set gives the error with only that set's codes, keeping i
                             .narrow<alp::Error<FileError, ParseError>>();
 
     REQUIRE(result.has_value());
-    CHECK(result->holds(ParseError::BadDigit));
+    CHECK(result->holds_code(ParseError::BadDigit));
     CHECK(result->frames().size() == 2);
 }
 
@@ -306,7 +306,7 @@ TEST_CASE("narrow to a set hands the error back when it holds a code outside the
                             .narrow<alp::Error<FileError, ParseError>>();
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(OffsetError{.offset = 7}));
+    CHECK(result.error().holds_code(OffsetError{.offset = 7}));
     CHECK(result.error().frames().size() == 2);
 }
 
@@ -323,7 +323,7 @@ TEST_CASE("narrow on an erased error hands it back when it holds another code", 
     const auto result = alp::Error<>(alp::make_error(ParseError::BadDigit).context("parsing the header")).narrow<FileError>();
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(ParseError::BadDigit));
+    CHECK(result.error().holds_code(ParseError::BadDigit));
     CHECK(result.error().frames().size() == 2);
 }
 
@@ -353,7 +353,7 @@ TEST_CASE("split gives the error with only its other codes when it holds one of 
     const auto result = alp::Error<FileError, ParseError, OffsetError>(OffsetError{.offset = 7}).split<FileError>();
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(OffsetError{.offset = 7}));
+    CHECK(result.error().holds_code(OffsetError{.offset = 7}));
 }
 
 TEST_CASE("split on a const error leaves it as it was", "[error]") {
@@ -361,7 +361,7 @@ TEST_CASE("split on a const error leaves it as it was", "[error]") {
     const auto result = error.split<FileError>();
 
     REQUIRE(!result.has_value());
-    CHECK(error.holds(ParseError::BadDigit));
+    CHECK(error.holds_code(ParseError::BadDigit));
 }
 
 TEST_CASE("split off a set returns that set or the error with the others", "[error]") {
@@ -382,20 +382,20 @@ TEST_CASE("An error with a move-only code keeps it when another code is split of
     CHECK(*code->value == 5);
 }
 
-TEST_CASE("holds is true for the held code and false for a different value or another code type", "[error]") {
+TEST_CASE("holds_code is true for the held code and false for a different value or another code type", "[error]") {
     const alp::Error<FileError, OffsetError> error(OffsetError{.offset = 7});
 
-    CHECK(error.holds(OffsetError{.offset = 7}));
-    CHECK(!error.holds(OffsetError{.offset = 8}));
-    CHECK(!error.holds(FileError::NotFound));
+    CHECK(error.holds_code(OffsetError{.offset = 7}));
+    CHECK(!error.holds_code(OffsetError{.offset = 8}));
+    CHECK(!error.holds_code(FileError::NotFound));
 }
 
-TEST_CASE("holds works in a set with an incomparable code", "[error]") {
+TEST_CASE("holds_code works in a set with an incomparable code", "[error]") {
     const alp::Error<FileError, Incomparable> file_error(FileError::NotFound);
     const alp::Error<FileError, Incomparable> incomparable_error(Incomparable{});
 
-    CHECK(file_error.holds(FileError::NotFound));
-    CHECK(!incomparable_error.holds(FileError::NotFound));
+    CHECK(file_error.holds_code(FileError::NotFound));
+    CHECK(!incomparable_error.holds_code(FileError::NotFound));
 }
 
 TEST_CASE("holds<Fs...> is true for a code of a type among Fs", "[error]") {
