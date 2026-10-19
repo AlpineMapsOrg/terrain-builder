@@ -78,6 +78,10 @@ std::string_view format_as(const TrackedError &) {
 template <typename E>
 concept accepts_context_on_lvalue = requires(E &error) { error.context(std::string(), std::source_location()); };
 
+// Whether the codes Fs can be split off an E.
+template <typename E, typename... Fs>
+concept can_split_off = requires(E error) { std::move(error).template split<Fs...>(); };
+
 } // namespace
 
 TEST_CASE("An error without codes is erased", "[error]") {
@@ -127,6 +131,12 @@ TEST_CASE("An error narrows only to a set of codes it can hold", "[error]") {
     STATIC_REQUIRE(!alp::Error<FileError>::narrows_to<>);
     STATIC_REQUIRE(alp::Error<>::narrows_to<FileError>);
     STATIC_REQUIRE(!alp::Error<>::narrows_to<MoveOnlyError>);
+}
+
+TEST_CASE("An error splits only into codes it holds and at least one other", "[error]") {
+    STATIC_REQUIRE(can_split_off<alp::Error<FileError, ParseError>, FileError>);
+    STATIC_REQUIRE(!can_split_off<alp::Error<FileError, ParseError>, FileError, ParseError>);
+    STATIC_REQUIRE(!can_split_off<alp::Error<FileError, ParseError>, OffsetError>);
 }
 
 TEST_CASE("An error converts as if Infallible were not among its codes", "[error]") {
@@ -388,33 +398,59 @@ TEST_CASE("holds works in a set with an incomparable code", "[error]") {
     CHECK(!incomparable_error.holds(FileError::NotFound));
 }
 
-TEST_CASE("holds<E> is true for a code of type E and false for another code type", "[error]") {
+TEST_CASE("holds<Fs...> is true for a code of a type among Fs", "[error]") {
+    SECTION("one type") {
+        const alp::Error<FileError, OffsetError> error(OffsetError{.offset = 7});
+
+        CHECK(error.holds<OffsetError>());
+        CHECK(!error.holds<FileError>());
+    }
+    SECTION("several types") {
+        const alp::Error<FileError, OffsetError, Incomparable> error(OffsetError{.offset = 7});
+
+        CHECK(error.holds<FileError, OffsetError>());
+        CHECK(!error.holds<FileError, Incomparable>());
+    }
+    SECTION("a set") {
+        const alp::Error<FileError, OffsetError, Incomparable> error(OffsetError{.offset = 7});
+
+        CHECK(error.holds<alp::Error<FileError, OffsetError>>());
+        CHECK(!error.holds<alp::Error<FileError, Incomparable>>());
+    }
+    SECTION("a code without equality") {
+        const alp::Error<FileError, Incomparable> error(Incomparable{});
+
+        CHECK(error.holds<Incomparable>());
+        CHECK(!error.holds<FileError>());
+    }
+    SECTION("an erased error") {
+        const alp::Error<> erased = alp::make_error(OffsetError{.offset = 7});
+
+        CHECK(erased.holds<OffsetError>());
+        CHECK(!erased.holds<FileError>());
+        CHECK(erased.holds<alp::Error<FileError, OffsetError>>());
+        CHECK(!erased.holds<alp::Error<FileError, Incomparable>>());
+    }
+}
+
+TEST_CASE("holds_and<Fs...> is true only for a code of a type among Fs that satisfies the predicate", "[error]") {
     const alp::Error<FileError, OffsetError> error(OffsetError{.offset = 7});
 
-    CHECK(error.holds<OffsetError>());
-    CHECK(!error.holds<FileError>());
-}
+    SECTION("one type") {
+        CHECK(error.holds_and<OffsetError>([](const OffsetError &c) { return c.offset == 7; }));
+        CHECK(!error.holds_and<OffsetError>([](const OffsetError &c) { return c.offset == 8; }));
+        CHECK(!error.holds_and<FileError>([](const FileError) { return true; }));
+    }
+    SECTION("several types or a set") {
+        const auto is_offset_7 = overloaded{
+            [](const FileError) { return false; },
+            [](const OffsetError &c) { return c.offset == 7; },
+        };
 
-TEST_CASE("holds<E> works for a code without equality", "[error]") {
-    const alp::Error<FileError, Incomparable> error(Incomparable{});
-
-    CHECK(error.holds<Incomparable>());
-    CHECK(!error.holds<FileError>());
-}
-
-TEST_CASE("holds_and<E> is true only for a code of type E that satisfies the predicate", "[error]") {
-    const alp::Error<FileError, OffsetError> error(OffsetError{.offset = 7});
-
-    CHECK(error.holds_and<OffsetError>([](const OffsetError &c) { return c.offset == 7; }));
-    CHECK(!error.holds_and<OffsetError>([](const OffsetError &c) { return c.offset == 8; }));
-    CHECK(!error.holds_and<FileError>([](const FileError) { return true; }));
-}
-
-TEST_CASE("holds<E> on an erased error checks the type of the code it was erased from", "[error]") {
-    const alp::Error<> erased = alp::make_error(OffsetError{.offset = 7});
-
-    CHECK(erased.holds<OffsetError>());
-    CHECK(!erased.holds<FileError>());
+        CHECK(error.holds_and<FileError, OffsetError>(is_offset_7));
+        CHECK(error.holds_and<alp::Error<FileError, OffsetError>>(is_offset_7));
+        CHECK(!error.holds_and<FileError, OffsetError>([](const auto &) { return false; }));
+    }
 }
 
 TEST_CASE("get_if points at the held code if it has that type, and is null otherwise", "[error]") {
@@ -443,4 +479,38 @@ TEST_CASE("visit calls the branch for the held code and returns what it returns"
         [](const OffsetError &code) -> uint32_t { return code.offset; },
     });
     CHECK(offset == 7);
+}
+
+TEST_CASE("visit_if<Fs...> returns what f returns for a code of a type among Fs, and nothing otherwise", "[error]") {
+    const auto offset_or_zero = overloaded{
+        [](const FileError) -> uint32_t { return 0; },
+        [](const OffsetError &code) -> uint32_t { return code.offset; },
+    };
+    const auto zero = [](const auto &) -> uint32_t { return 0; };
+
+    SECTION("one type") {
+        const alp::Error<FileError, OffsetError> error(OffsetError{.offset = 7});
+
+        CHECK(error.visit_if<OffsetError>(offset_or_zero) == 7u);
+        CHECK(error.visit_if<FileError>(zero) == std::nullopt);
+    }
+    SECTION("several types") {
+        const alp::Error<FileError, OffsetError, Incomparable> error(OffsetError{.offset = 7});
+
+        CHECK(error.visit_if<FileError, OffsetError>(offset_or_zero) == 7u);
+        CHECK(error.visit_if<FileError, Incomparable>(zero) == std::nullopt);
+    }
+    SECTION("a set") {
+        const alp::Error<FileError, OffsetError, Incomparable> error(OffsetError{.offset = 7});
+
+        CHECK(error.visit_if<alp::Error<FileError, OffsetError>>(offset_or_zero) == 7u);
+        CHECK(error.visit_if<alp::Error<FileError, Incomparable>>(zero) == std::nullopt);
+    }
+    SECTION("an erased error") {
+        const alp::Error<> erased = alp::make_error(OffsetError{.offset = 7});
+
+        CHECK(erased.visit_if<OffsetError>(offset_or_zero) == 7u);
+        CHECK(erased.visit_if<alp::Error<FileError, OffsetError>>(offset_or_zero) == 7u);
+        CHECK(erased.visit_if<FileError>(zero) == std::nullopt);
+    }
 }

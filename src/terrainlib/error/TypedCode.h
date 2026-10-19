@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -54,17 +55,25 @@ public:
         return std::visit(std::forward<F>(f), std::forward<Self>(self)._code);
     }
 
-    // This code with only the types Fs if it holds one of them, otherwise nothing.
-    template <ErrorCode... Fs, typename Self>
+    // Calls `visitor` with the held code if it is in Fs, or returns nothing otherwise.
+    template <ErrorCode... Fs, typename Self, typename Visitor>
     [[nodiscard]]
-    std::optional<TypedCode<Fs...>> narrow(this Self &&self) {
-        return std::forward<Self>(self).visit([]<typename E>(E &&code) -> std::optional<TypedCode<Fs...>> {
+    auto visit_if(this Self &&self, Visitor &&visitor) {
+        using Result = std::common_type_t<decltype(std::invoke(visitor, std::forward_like<Self>(std::declval<Fs &>())))...>;
+        return std::forward<Self>(self).visit([&]<typename E>(E &&code) -> std::optional<Result> {
             if constexpr (OneOf<std::remove_cvref_t<E>, Fs...>) {
-                return TypedCode<Fs...>(std::forward<E>(code));
+                return std::invoke(visitor, std::forward<E>(code));
             } else {
                 return std::nullopt;
             }
         });
+    }
+
+    // This code with only the types Fs if it holds one of them, otherwise nothing.
+    template <ErrorCode... Fs, typename Self>
+    [[nodiscard]]
+    std::optional<TypedCode<Fs...>> narrow(this Self &&self) {
+        return std::forward<Self>(self).template visit_if<Fs...>([]<typename F>(F &&code) { return TypedCode<Fs...>(std::forward<F>(code)); });
     }
 
 private:

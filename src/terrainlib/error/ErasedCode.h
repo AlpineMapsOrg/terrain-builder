@@ -2,6 +2,7 @@
 
 #include <any>
 #include <concepts>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -54,30 +55,32 @@ public:
         return this->_format(this->_code);
     }
 
+    // Calls `visitor` with the held code if it is in Fs, or returns nothing otherwise.
+    template <ErrorCode... Fs, typename Self, typename Visitor>
+    [[nodiscard]]
+    auto visit_if(this Self &&self, Visitor &&visitor) {
+        using Result = std::common_type_t<decltype(std::invoke(visitor, std::forward_like<Self>(std::declval<Fs &>())))...>;
+        std::optional<Result> result;
+        const auto visit_if_held = [&]<typename F>() {
+            if (auto *code = std::any_cast<F>(&self._code); code != nullptr) {
+                result.emplace(std::invoke(visitor, std::forward_like<Self>(*code)));
+            }
+        };
+        (visit_if_held.template operator()<Fs>(), ...);
+        return result;
+    }
+
     // The held code as a code of the types Fs if it is one of them, otherwise nothing.
     template <ErrorCode... Fs, typename Self>
     [[nodiscard]]
     std::optional<TypedCode<Fs...>> narrow(this Self &&self) {
-        return narrow_to<TypedCode<Fs...>, Self, Fs...>(std::forward<Self>(self));
+        return std::forward<Self>(self).template visit_if<Fs...>([]<typename F>(F &&code) { return TypedCode<Fs...>(std::forward<F>(code)); });
     }
 
 private:
     template <ErrorCode E>
     static std::string format(const std::any &code) {
         return fmt::to_string(std::any_cast<const E &>(code));
-    }
-
-    // The held code as a `Narrowed` if it is one of G, Gs, otherwise nothing.
-    template <typename Narrowed, typename Self, ErrorCode G, ErrorCode... Gs>
-    static std::optional<Narrowed> narrow_to(Self &&self) {
-        if (auto *code = std::any_cast<G>(&self._code); code != nullptr) {
-            return Narrowed(std::forward_like<Self>(*code));
-        }
-        if constexpr (sizeof...(Gs) == 0) {
-            return std::nullopt;
-        } else {
-            return narrow_to<Narrowed, Self, Gs...>(std::forward<Self>(self));
-        }
     }
 
     std::any _code;
