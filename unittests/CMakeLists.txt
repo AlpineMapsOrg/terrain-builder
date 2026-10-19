@@ -157,7 +157,7 @@ if(TARGET bvhbuilderlib)
         bvh_builder/batch_reader.cpp
         bvh_builder/batch_storage.cpp
         bvh_builder/bounded_cache.cpp
-        bvh_builder/build_frontier.cpp
+        bvh_builder/frontier_build.cpp
         bvh_builder/chunk_merger.cpp
         bvh_builder/cut_rule.cpp
         bvh_builder/find_root.cpp
@@ -173,7 +173,7 @@ if(TARGET bvhbuilderlib)
         bvh_builder/morton_utils.cpp
         bvh_builder/nearest_search.cpp
         bvh_builder/node_cache.cpp
-        bvh_builder/gated_ploc.cpp
+        bvh_builder/gated_ploc_build.cpp
         bvh_builder/hploc_build.cpp
         bvh_builder/prefix_map.cpp
         bvh_builder/row_buffer.cpp

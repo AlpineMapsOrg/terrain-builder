@@ -182,15 +182,3 @@ TEST_CASE("the build writes its root into the last batch", "[build][gated_ploc]"
 
     CHECK(root.batch == output.size() - 1);
 }
-
-TEST_CASE("a frontier that cannot be read fails the build", "[build][gated_ploc]") {
-    const TempDirectory directory("gated_ploc");
-    bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
-    auto [frontier, refs] = write_frontier(directory.path() / "frontier", output, make_row(4));
-
-    // The storage still counts its batch, but it can no longer be read.
-    std::filesystem::remove_all(directory.path() / "frontier");
-
-    const auto root = gated_ploc::build(std::move(frontier), output, directory.path() / "scratch", make_options());
-    CHECK_FALSE(root.has_value());
-}

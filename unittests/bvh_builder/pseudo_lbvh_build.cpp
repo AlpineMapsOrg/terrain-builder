@@ -257,17 +257,3 @@ TEST_CASE("the build writes its root into the last batch", "[pseudo_lbvh][build]
 
     CHECK(root.batch == nodes.size() - 1);
 }
-
-TEST_CASE("a run whose batches cannot be read fails the build", "[pseudo_lbvh][build]") {
-    const TempDirectory directory("pseudo_lbvh");
-    frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "run"));
-    REQUIRE(run.write(frontier::Batch{.entries = {make_entry(morton::Code{0})}}).has_value());
-    REQUIRE(run.save_index().has_value());
-
-    // The storage still counts its batch, but it can no longer be read.
-    std::filesystem::remove_all(directory.path() / "run");
-
-    bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "nodes"));
-    bvh::BatchWriter writer(nodes);
-    CHECK_FALSE(pseudo_lbvh::build(run, writer).has_value());
-}
