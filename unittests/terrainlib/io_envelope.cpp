@@ -80,10 +80,7 @@ static_assert(std::same_as<Schema::Latest, v3::Payload>);
 static_assert(std::same_as<Schema::Payload<1>, v1::Payload>);
 
 using io::envelope::Bytes;
-using io::envelope::ChecksumAlgorithm;
-using io::envelope::CompressionAlgorithm;
-using io::envelope::CompressionError;
-using io::envelope::EnvelopeError;
+using io::compression::ChecksumAlgorithm;
 
 template <typename Value>
 Bytes encode_value(const Value &value) {
@@ -112,16 +109,16 @@ TEST_CASE("serialize writes the envelope metadata", "[io][envelope]") {
     CHECK(envelope.class_version == 3);
     CHECK(envelope.checksum_algorithm == ChecksumAlgorithm::HandledByCompressionLib);
     CHECK(envelope.checksum == "");
-    CHECK(envelope.compression_algorithm == CompressionAlgorithm::ZstdBestCompressionWithChecksum);
+    CHECK(envelope.compression_algorithm == io::compression::Algorithm::ZstdBestCompressionWithChecksum);
     CHECK(envelope.uncompressed_size == encode_value(payload).size());
 }
 
 TEST_CASE("deserialize restores payloads written with each algorithm pair", "[io][envelope]") {
-    const auto [compression_algorithm, checksum_algorithm] = GENERATE(table<CompressionAlgorithm, ChecksumAlgorithm>({
-        {CompressionAlgorithm::None, ChecksumAlgorithm::None},
-        {CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c},
-        {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib},
-        {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c},
+    const auto [compression_algorithm, checksum_algorithm] = GENERATE(table<io::compression::Algorithm, ChecksumAlgorithm>({
+        {io::compression::Algorithm::None, ChecksumAlgorithm::None},
+        {io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c},
+        {io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib},
+        {io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c},
     }));
     const v3::Payload payload{.id = 42, .label = "latest", .enabled = false, .samples = {1, 2, 3}};
 
@@ -156,19 +153,19 @@ TEST_CASE("deserialize rejects incompatible metadata", "[io][envelope]") {
     SECTION("magic") {
         envelope.magic++;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::InvalidMagic));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::envelope::Error::InvalidMagic));
     }
 
     SECTION("class name") {
         envelope.class_name = "other.Payload";
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::WrongClassName));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::envelope::Error::WrongClassName));
     }
 
     SECTION("class version") {
         envelope.class_version = 99;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UnsupportedClassVersion));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::envelope::Error::UnsupportedClassVersion));
     }
 }
 
@@ -179,35 +176,35 @@ TEST_CASE("deserialize passes the envelope's algorithms and checksum to decompre
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload)));
         envelope.checksum_algorithm = static_cast<ChecksumAlgorithm>(99);
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::UnsupportedChecksumAlgorithm));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::compression::Error::UnsupportedChecksumAlgorithm));
     }
 
     SECTION("compression algorithm") {
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload)));
-        envelope.compression_algorithm = static_cast<CompressionAlgorithm>(99);
+        envelope.compression_algorithm = static_cast<io::compression::Algorithm>(99);
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::UnsupportedCompressionAlgorithm));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::compression::Error::UnsupportedAlgorithm));
     }
 
     SECTION("checksum") {
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload)));
         envelope.checksum = "e3069283";
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::InvalidAlgorithmCombination));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::compression::Error::InvalidAlgorithmCombination));
     }
 
     SECTION("data") {
-        io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c)));
+        io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c)));
         envelope.compressed_data.front() ^= std::uint8_t{0x01};
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::ChecksumMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::compression::Error::ChecksumMismatch));
     }
 }
 
 TEST_CASE("deserialize rejects a declared size that does not match the payload", "[io][envelope]") {
-    const auto [compression_algorithm, checksum_algorithm] = GENERATE(table<CompressionAlgorithm, ChecksumAlgorithm>({
-        {CompressionAlgorithm::None, ChecksumAlgorithm::None},
-        {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib},
+    const auto [compression_algorithm, checksum_algorithm] = GENERATE(table<io::compression::Algorithm, ChecksumAlgorithm>({
+        {io::compression::Algorithm::None, ChecksumAlgorithm::None},
+        {io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib},
     }));
     const v3::Payload payload{.id = 42, .label = "latest", .enabled = false, .samples = {1, 2, 3}};
     io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, compression_algorithm, checksum_algorithm)));
@@ -215,19 +212,19 @@ TEST_CASE("deserialize rejects a declared size that does not match the payload",
     SECTION("smaller") {
         envelope.uncompressed_size--;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UncompressedSizeMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::envelope::Error::UncompressedSizeMismatch));
     }
 
     SECTION("larger") {
         envelope.uncompressed_size++;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UncompressedSizeMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::envelope::Error::UncompressedSizeMismatch));
     }
 
     SECTION("zero") {
         envelope.uncompressed_size = 0;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::UncompressedSizeMismatch));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::envelope::Error::UncompressedSizeMismatch));
     }
 }
 
@@ -238,14 +235,14 @@ TEST_CASE("deserialize enforces its size limits", "[io][envelope]") {
 
     SECTION("hard limit") {
         io::envelope::Envelope envelope = decode_envelope(bytes);
-        envelope.uncompressed_size = io::envelope::default_max_decompressed_size + 1;
+        envelope.uncompressed_size = io::compression::default_max_decompressed_size + 1;
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(EnvelopeError::SizeLimitExceeded));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::envelope::Error::SizeLimitExceeded));
     }
 
     SECTION("caller limit") {
         CHECK(REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes, payload_size)) == payload);
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes, payload_size - 1)).holds_code(EnvelopeError::SizeLimitExceeded));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes, payload_size - 1)).holds_code(io::envelope::Error::SizeLimitExceeded));
     }
 }
 
@@ -263,7 +260,7 @@ TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
             .class_version = 3,
             .checksum_algorithm = ChecksumAlgorithm::None,
             .checksum = "",
-            .compression_algorithm = CompressionAlgorithm::None,
+            .compression_algorithm = io::compression::Algorithm::None,
             .uncompressed_size = 1,
             .compressed_data = {std::uint8_t{0x01}},
         };
@@ -276,6 +273,6 @@ TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
         Bytes bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload));
         bytes.push_back(std::uint8_t{0x00});
 
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds_code(EnvelopeError::TrailingData));
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds_code(io::envelope::Error::TrailingData));
     }
 }

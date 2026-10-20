@@ -8,7 +8,7 @@
 
 #include "error/Result.h"
 
-namespace io::envelope {
+namespace io::compression {
 
 using Bytes = std::vector<std::uint8_t>;
 
@@ -20,15 +20,15 @@ enum class ChecksumAlgorithm : std::uint8_t {
     Crc32c,
 };
 
-enum class CompressionAlgorithm : std::uint8_t {
+enum class Algorithm : std::uint8_t {
     None,
     ZstdBestCompressionWithChecksum,
 };
 
 // A failure to compress or decompress data.
-enum class CompressionError : std::uint8_t {
+enum class Error : std::uint8_t {
     UnsupportedChecksumAlgorithm,
-    UnsupportedCompressionAlgorithm,
+    UnsupportedAlgorithm,
     InvalidAlgorithmCombination,
     ChecksumMismatch,
     CompressionFailed,
@@ -36,21 +36,21 @@ enum class CompressionError : std::uint8_t {
     SizeLimitExceeded,
 };
 
-inline std::string_view format_as(const CompressionError error) {
+inline std::string_view format_as(const Error error) {
     switch (error) {
-    case CompressionError::UnsupportedChecksumAlgorithm:
+    case Error::UnsupportedChecksumAlgorithm:
         return "the checksum algorithm is not supported";
-    case CompressionError::UnsupportedCompressionAlgorithm:
+    case Error::UnsupportedAlgorithm:
         return "the compression algorithm is not supported";
-    case CompressionError::InvalidAlgorithmCombination:
+    case Error::InvalidAlgorithmCombination:
         return "the checksum algorithm does not fit the compression algorithm";
-    case CompressionError::ChecksumMismatch:
+    case Error::ChecksumMismatch:
         return "the checksum does not match the data";
-    case CompressionError::CompressionFailed:
+    case Error::CompressionFailed:
         return "compressing the data failed";
-    case CompressionError::DecompressionFailed:
+    case Error::DecompressionFailed:
         return "decompressing the data failed";
-    case CompressionError::SizeLimitExceeded:
+    case Error::SizeLimitExceeded:
         return "the data is larger than the size limit";
     default:
         return "an unknown compression failure";
@@ -63,17 +63,17 @@ struct CompressedData {
 };
 
 [[nodiscard]]
-alp::Result<CompressedData, CompressionError> compress_with_checksum(
+alp::Result<CompressedData, Error> compress_with_checksum(
     const Bytes &uncompressed_data,
-    CompressionAlgorithm compression_algorithm,
+    Algorithm compression_algorithm,
     ChecksumAlgorithm checksum_algorithm);
 
 [[nodiscard]]
-alp::Result<Bytes, CompressionError> checked_decompress(
+alp::Result<Bytes, Error> checked_decompress(
     const Bytes &compressed_data,
-    CompressionAlgorithm compression_algorithm,
+    Algorithm compression_algorithm,
     ChecksumAlgorithm checksum_algorithm,
     std::string_view checksum,
     std::size_t max_decompressed_size = default_max_decompressed_size);
 
-} // namespace io::envelope
+} // namespace io::compression

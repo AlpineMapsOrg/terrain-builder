@@ -13,10 +13,8 @@
 
 namespace {
 
-using io::envelope::Bytes;
-using io::envelope::ChecksumAlgorithm;
-using io::envelope::CompressionAlgorithm;
-using io::envelope::CompressionError;
+using io::compression::Bytes;
+using io::compression::ChecksumAlgorithm;
 
 Bytes bytes_from_string(const std::string_view text) {
     Bytes bytes;
@@ -55,86 +53,86 @@ Bytes compress_without_checksum(const Bytes &data) {
 
 TEST_CASE("compress_with_checksum computes CRC-32C as eight lowercase hexadecimal digits", "[io][compression]") {
     SECTION("check value") {
-        const io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(bytes_from_string("123456789"), CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c));
+        const io::compression::CompressedData compressed = REQUIRE_VALUE(io::compression::compress_with_checksum(bytes_from_string("123456789"), io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c));
         CHECK(compressed.checksum == "e3069283");
     }
 
     SECTION("empty input") {
-        const io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum({}, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c));
+        const io::compression::CompressedData compressed = REQUIRE_VALUE(io::compression::compress_with_checksum({}, io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c));
         CHECK(compressed.checksum == "00000000");
     }
 }
 
 TEST_CASE("checked_decompress restores what compress_with_checksum compressed", "[io][compression]") {
-    const auto [compression_algorithm, checksum_algorithm] = GENERATE(table<CompressionAlgorithm, ChecksumAlgorithm>({
-        {CompressionAlgorithm::None, ChecksumAlgorithm::None},
-        {CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c},
-        {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib},
-        {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c},
+    const auto [compression_algorithm, checksum_algorithm] = GENERATE(table<io::compression::Algorithm, ChecksumAlgorithm>({
+        {io::compression::Algorithm::None, ChecksumAlgorithm::None},
+        {io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c},
+        {io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib},
+        {io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c},
     }));
     const Bytes data = GENERATE(Bytes(4096, std::uint8_t{0x2a}), Bytes{});
 
-    const io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, compression_algorithm, checksum_algorithm));
-    const Bytes decompressed = REQUIRE_VALUE(io::envelope::checked_decompress(compressed.compressed_data, compression_algorithm, checksum_algorithm, compressed.checksum));
+    const io::compression::CompressedData compressed = REQUIRE_VALUE(io::compression::compress_with_checksum(data, compression_algorithm, checksum_algorithm));
+    const Bytes decompressed = REQUIRE_VALUE(io::compression::checked_decompress(compressed.compressed_data, compression_algorithm, checksum_algorithm, compressed.checksum));
 
     CHECK(decompressed == data);
 }
 
 TEST_CASE("compress_with_checksum rejects unsupported algorithms and combinations", "[io][compression]") {
-    const auto [compression_algorithm, checksum_algorithm, expected] = GENERATE(table<CompressionAlgorithm, ChecksumAlgorithm, CompressionError>({
-        {CompressionAlgorithm::None, static_cast<ChecksumAlgorithm>(99), CompressionError::UnsupportedChecksumAlgorithm},
-        {static_cast<CompressionAlgorithm>(99), ChecksumAlgorithm::None, CompressionError::UnsupportedCompressionAlgorithm},
-        {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::None, CompressionError::InvalidAlgorithmCombination},
-        {CompressionAlgorithm::None, ChecksumAlgorithm::HandledByCompressionLib, CompressionError::InvalidAlgorithmCombination},
+    const auto [compression_algorithm, checksum_algorithm, expected] = GENERATE(table<io::compression::Algorithm, ChecksumAlgorithm, io::compression::Error>({
+        {io::compression::Algorithm::None, static_cast<ChecksumAlgorithm>(99), io::compression::Error::UnsupportedChecksumAlgorithm},
+        {static_cast<io::compression::Algorithm>(99), ChecksumAlgorithm::None, io::compression::Error::UnsupportedAlgorithm},
+        {io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::None, io::compression::Error::InvalidAlgorithmCombination},
+        {io::compression::Algorithm::None, ChecksumAlgorithm::HandledByCompressionLib, io::compression::Error::InvalidAlgorithmCombination},
     }));
 
-    CHECK(REQUIRE_ERROR(io::envelope::compress_with_checksum(bytes_from_string("123456789"), compression_algorithm, checksum_algorithm)).holds_code(expected));
+    CHECK(REQUIRE_ERROR(io::compression::compress_with_checksum(bytes_from_string("123456789"), compression_algorithm, checksum_algorithm)).holds_code(expected));
 }
 
 TEST_CASE("checked_decompress rejects unsupported algorithms and combinations", "[io][compression]") {
-    const auto [compression_algorithm, checksum_algorithm, expected] = GENERATE(table<CompressionAlgorithm, ChecksumAlgorithm, CompressionError>({
-        {CompressionAlgorithm::None, static_cast<ChecksumAlgorithm>(99), CompressionError::UnsupportedChecksumAlgorithm},
-        {static_cast<CompressionAlgorithm>(99), ChecksumAlgorithm::None, CompressionError::UnsupportedCompressionAlgorithm},
-        {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::None, CompressionError::InvalidAlgorithmCombination},
-        {CompressionAlgorithm::None, ChecksumAlgorithm::HandledByCompressionLib, CompressionError::InvalidAlgorithmCombination},
+    const auto [compression_algorithm, checksum_algorithm, expected] = GENERATE(table<io::compression::Algorithm, ChecksumAlgorithm, io::compression::Error>({
+        {io::compression::Algorithm::None, static_cast<ChecksumAlgorithm>(99), io::compression::Error::UnsupportedChecksumAlgorithm},
+        {static_cast<io::compression::Algorithm>(99), ChecksumAlgorithm::None, io::compression::Error::UnsupportedAlgorithm},
+        {io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::None, io::compression::Error::InvalidAlgorithmCombination},
+        {io::compression::Algorithm::None, ChecksumAlgorithm::HandledByCompressionLib, io::compression::Error::InvalidAlgorithmCombination},
     }));
 
-    CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(bytes_from_string("123456789"), compression_algorithm, checksum_algorithm, {})).holds_code(expected));
+    CHECK(REQUIRE_ERROR(io::compression::checked_decompress(bytes_from_string("123456789"), compression_algorithm, checksum_algorithm, {})).holds_code(expected));
 }
 
 TEST_CASE("checked_decompress detects corruption", "[io][compression]") {
     const Bytes data(4096, std::uint8_t{0x2a});
 
     SECTION("changed data without compression") {
-        io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c));
+        io::compression::CompressedData compressed = REQUIRE_VALUE(io::compression::compress_with_checksum(data, io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c));
         compressed.compressed_data.front() ^= std::uint8_t{0x01};
 
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed.compressed_data, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c, compressed.checksum)).holds_code(CompressionError::ChecksumMismatch));
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(compressed.compressed_data, io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c, compressed.checksum)).holds_code(io::compression::Error::ChecksumMismatch));
     }
 
     SECTION("changed data with zstd") {
-        io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib));
+        io::compression::CompressedData compressed = REQUIRE_VALUE(io::compression::compress_with_checksum(data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib));
         compressed.compressed_data.back() ^= std::uint8_t{0x01};
 
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed.compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {})).holds_code(CompressionError::ChecksumMismatch));
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(compressed.compressed_data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {})).holds_code(io::compression::Error::ChecksumMismatch));
     }
 
     SECTION("wrong CRC-32C with zstd") {
-        const io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c));
+        const io::compression::CompressedData compressed = REQUIRE_VALUE(io::compression::compress_with_checksum(data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c));
 
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed.compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c, "00000000")).holds_code(CompressionError::ChecksumMismatch));
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(compressed.compressed_data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c, "00000000")).holds_code(io::compression::Error::ChecksumMismatch));
     }
 
     SECTION("malformed CRC-32C") {
         const std::string_view checksum = GENERATE(std::string_view("E3069283"), std::string_view(""));
 
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(bytes_from_string("123456789"), CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c, checksum)).holds_code(CompressionError::ChecksumMismatch));
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(bytes_from_string("123456789"), io::compression::Algorithm::None, ChecksumAlgorithm::Crc32c, checksum)).holds_code(io::compression::Error::ChecksumMismatch));
     }
 
     SECTION("zstd frame without a checksum") {
         const Bytes compressed_data = compress_without_checksum(data);
 
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {})).holds_code(CompressionError::ChecksumMismatch));
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(compressed_data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {})).holds_code(io::compression::Error::ChecksumMismatch));
     }
 }
 
@@ -142,21 +140,21 @@ TEST_CASE("checked_decompress enforces its maximum size", "[io][compression]") {
     const Bytes data(4096, std::uint8_t{0x2a});
 
     SECTION("zstd frame with its content size") {
-        const Bytes compressed_data = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib)).compressed_data;
+        const Bytes compressed_data = REQUIRE_VALUE(io::compression::compress_with_checksum(data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib)).compressed_data;
 
-        CHECK(REQUIRE_VALUE(io::envelope::checked_decompress(compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4096)) == data);
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4095)).holds_code(CompressionError::SizeLimitExceeded));
+        CHECK(REQUIRE_VALUE(io::compression::checked_decompress(compressed_data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4096)) == data);
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(compressed_data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4095)).holds_code(io::compression::Error::SizeLimitExceeded));
     }
 
     SECTION("zstd frame without its content size") {
         const Bytes compressed_data = compress_without_content_size(data);
 
-        CHECK(REQUIRE_VALUE(io::envelope::checked_decompress(compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4096)) == data);
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4095)).holds_code(CompressionError::SizeLimitExceeded));
+        CHECK(REQUIRE_VALUE(io::compression::checked_decompress(compressed_data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4096)) == data);
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(compressed_data, io::compression::Algorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {}, 4095)).holds_code(io::compression::Error::SizeLimitExceeded));
     }
 
     SECTION("no compression") {
-        CHECK(REQUIRE_VALUE(io::envelope::checked_decompress(data, CompressionAlgorithm::None, ChecksumAlgorithm::None, {}, 4096)) == data);
-        CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(data, CompressionAlgorithm::None, ChecksumAlgorithm::None, {}, 4095)).holds_code(CompressionError::SizeLimitExceeded));
+        CHECK(REQUIRE_VALUE(io::compression::checked_decompress(data, io::compression::Algorithm::None, ChecksumAlgorithm::None, {}, 4096)) == data);
+        CHECK(REQUIRE_ERROR(io::compression::checked_decompress(data, io::compression::Algorithm::None, ChecksumAlgorithm::None, {}, 4095)).holds_code(io::compression::Error::SizeLimitExceeded));
     }
 }
