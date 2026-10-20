@@ -39,6 +39,8 @@ add_executable(unittests_terrainlib
     terrainlib/cow.cpp
     terrainlib/enumerate.cpp
     terrainlib/envelope.cpp
+    terrainlib/float_predictor.cpp
+    terrainlib/float_codec_benchmark.cpp
     terrainlib/error.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/geometry_frames.cpp

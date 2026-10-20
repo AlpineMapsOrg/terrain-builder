@@ -19,6 +19,7 @@
 #pragma once
 
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -29,6 +30,7 @@
 #include "io/envelope.h"
 #include "io/image.h"
 #include "raster_store/Tile.h"
+#include "raster_store/io/float_predictor.h"
 #include "raster_store/pixel.h"
 #include "store/Codec.h"
 
@@ -41,7 +43,7 @@ namespace tile_codec {
         struct RasterTile {
             std::uint32_t width;
             std::uint32_t height;
-            // Native element bytes for AMORT, a JPEG XL codestream for AMOIT.
+            // Native bytes for AMORT, JPEG XL for AMOIT, Predictor 3 bytes for AMOFT.
             ::io::byte::vector data;
             ::io::byte::vector source_attribution;
         };
@@ -51,10 +53,13 @@ namespace tile_codec {
     using TileSchema = ::io::envelope::PayloadSchema<"raster_store.Tile", ::io::envelope::Version<1, detail::v1::RasterTile>>;
     using ImageTileSchema = ::io::envelope::PayloadSchema<"raster_store.ImageTile", ::io::envelope::Version<1, detail::v1::RasterTile>>;
 
+    using FloatTileSchema = ::io::envelope::PayloadSchema<"raster_store.FloatTile", ::io::envelope::Version<1, detail::v1::RasterTile>>;
+
     // Storage of the data raster; attribution is always stored losslessly.
     enum class DataEncoding {
         Native, // AMORT: lossless native element bytes of any pixel type.
         JpegXl, // AMOIT: lossy JPEG XL image of RGB8 pixels.
+        FloatPredictor, // AMOFT: lossless TIFF Predictor 3 bytes of Float32 pixels.
     };
 
 } // namespace tile_codec
@@ -64,8 +69,11 @@ class TileCodec final : public store::Codec<Tile<PixelType>> {
     static_assert(sizeof(pixel::detail::Format<PixelType>) > 0);
     static constexpr bool is_image = Encoding == tile_codec::DataEncoding::JpegXl;
     static_assert(!is_image || std::is_same_v<PixelType, glm::u8vec3>, "AMOIT stores only RGB8 tiles");
-    using Schema = std::conditional_t<is_image, tile_codec::ImageTileSchema, tile_codec::TileSchema>;
-    static constexpr std::string_view name = is_image ? "AMOIT" : "AMORT";
+    static constexpr bool is_float = Encoding == tile_codec::DataEncoding::FloatPredictor;
+    static_assert(!is_float || (std::is_same_v<PixelType, float> && sizeof(float) == 4 && std::numeric_limits<float>::is_iec559),
+        "AMOFT stores only IEEE 754 Float32 tiles");
+    using Schema = std::conditional_t<is_image, tile_codec::ImageTileSchema, std::conditional_t<is_float, tile_codec::FloatTileSchema, tile_codec::TileSchema>>;
+    static constexpr std::string_view name = is_image ? "AMOIT" : is_float ? "AMOFT" : "AMORT";
 
 public:
     explicit TileCodec(const glm::uvec2 dimensions = glm::uvec2(default_tile_side),
@@ -77,7 +85,7 @@ public:
 
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        return { this->add_extension(node_path, is_image ? ".amoit" : ".amort") };
+        return { this->add_extension(node_path, is_image ? ".amoit" : is_float ? ".amoft" : ".amort") };
     }
 
     Expected<Tile<PixelType>> read(
@@ -107,6 +115,9 @@ public:
             }
             tile.data = std::move(*data);
         } else {
+            if constexpr (is_float) {
+                float_predictor::decode(encoded->data, m_dimensions.x);
+            }
             std::memcpy(tile.data.bytes().data(), encoded->data.data(), encoded->data.size());
         }
         std::memcpy(tile.attribution.bytes().data(), encoded->source_attribution.data(), encoded->source_attribution.size());
@@ -132,6 +143,9 @@ public:
         } else {
             const auto data = tile.data.bytes();
             encoded.data.assign(data.begin(), data.end());
+            if constexpr (is_float) {
+                float_predictor::encode(encoded.data, m_dimensions.x);
+            }
         }
         return ::io::envelope::write<Schema>(encoded, paths(node_path).front(), ::io::byte::WriteMode::CreateNew, true, m_compression_algorithm);
     }
@@ -158,6 +172,13 @@ namespace tile_codec {
                 return std::make_unique<TileCodec<PixelType, DataEncoding::JpegXl>>(dimensions, compression_algorithm);
             } else {
                 return Error::fail(Error::Code::Unsupported, "the amoit raster codec requires " + pixel::identifier<glm::u8vec3>() + " pixels");
+            }
+        }
+        if (name == "amoft") {
+            if constexpr (std::is_same_v<PixelType, float>) {
+                return std::make_unique<TileCodec<PixelType, DataEncoding::FloatPredictor>>(dimensions, compression_algorithm);
+            } else {
+                return Error::fail(Error::Code::Unsupported, "the amoft raster codec requires " + pixel::identifier<float>() + " pixels");
             }
         }
         return Error::fail(Error::Code::Unsupported, "unsupported raster codec selector: " + std::string(name));

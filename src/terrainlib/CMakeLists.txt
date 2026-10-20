@@ -198,6 +198,7 @@ add_library(terrainlib
     raster_store/Tile.h
     raster_store/attribution.h raster_store/attribution.cpp
     raster_store/io/TileCodec.h
+    raster_store/io/float_predictor.h raster_store/io/float_predictor.cpp
     raster_store/io/manifest.h raster_store/io/manifest.cpp
     raster_store/path_layout.h
     raster_store/pixel.h
