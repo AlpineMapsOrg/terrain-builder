@@ -13,6 +13,7 @@
 #include "error/Error.h"
 #include "error/ErrorCode.h"
 #include "error/Result.h"
+#include "optional_utils.h"
 
 namespace alp {
 
@@ -86,35 +87,26 @@ std::invoke_result_t<F> run_with_context(Context auto &&context, F &&body, const
 // Turns `value` into a result that fails with `code` when it is empty.
 template <typename T, ErrorCode E>
 [[nodiscard]]
-Result<T, E> to_expected(std::optional<T> value, E code, const std::source_location location = std::source_location::current()) {
-    if (value.has_value()) {
-        return std::move(*value);
-    }
-    return alp::make_unexpected(std::move(code), location);
+Result<T, E> to_result(std::optional<T> value, E code, const std::source_location location = std::source_location::current()) {
+    return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(code), location); });
 }
 
 // Turns `value` into a result that fails with `code` when it is empty, with `context` as the error's first context.
 template <typename T, ErrorCode E>
 [[nodiscard]]
-Result<T, E> to_expected(
+Result<T, E> to_result(
     std::optional<T> value,
     E code,
     Context auto &&context,
     const std::source_location location = std::source_location::current()) {
-    if (value.has_value()) {
-        return std::move(*value);
-    }
-    return alp::make_unexpected(std::move(code), std::forward<decltype(context)>(context), location);
+    return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(code), std::forward<decltype(context)>(context), location); });
 }
 
 // Turns `value` into a result that fails with an erased error from `message` when it is empty.
 template <typename T>
 [[nodiscard]]
-Result<T> to_expected(std::optional<T> value, std::string message, const std::source_location location = std::source_location::current()) {
-    if (value.has_value()) {
-        return std::move(*value);
-    }
-    return alp::make_unexpected(std::move(message), location);
+Result<T> to_result(std::optional<T> value, std::string message, const std::source_location location = std::source_location::current()) {
+    return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(message), location); });
 }
 
 } // namespace alp

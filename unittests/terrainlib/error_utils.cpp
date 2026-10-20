@@ -119,48 +119,48 @@ TEST_CASE("propagate passes a const error on and leaves it unchanged", "[error][
     CHECK(error.frames().size() == 1);
 }
 
-TEST_CASE("to_expected passes a value through", "[error][utils]") {
-    const alp::Result<int, FileError> result = alp::to_expected(std::optional<int>(3), FileError::NotFound);
+TEST_CASE("to_result passes a value through", "[error][utils]") {
+    const alp::Result<int, FileError> result = alp::to_result(std::optional<int>(3), FileError::NotFound);
 
     CHECK(result.value() == 3);
 }
 
-TEST_CASE("to_expected turns an empty optional into an error that originates at the location it is handed", "[error][utils]") {
+TEST_CASE("to_result turns an empty optional into an error that originates at the location it is handed", "[error][utils]") {
     const std::source_location location = std::source_location::current();
-    const alp::Result<int, FileError> result = alp::to_expected(std::optional<int>(), FileError::NotFound, location);
+    const alp::Result<int, FileError> result = alp::to_result(std::optional<int>(), FileError::NotFound, location);
 
     REQUIRE(!result.has_value());
     CHECK(result.error().code() == FileError::NotFound);
     CHECK(is_same_location(result.error().origin(), location));
 }
 
-TEST_CASE("to_expected adds a message as the first context", "[error][utils]") {
-    const alp::Result<int, FileError> result = alp::to_expected(std::optional<int>(), FileError::NotFound, "looking up the mesh");
+TEST_CASE("to_result adds a message as the first context", "[error][utils]") {
+    const alp::Result<int, FileError> result = alp::to_result(std::optional<int>(), FileError::NotFound, "looking up the mesh");
 
     REQUIRE(!result.has_value());
     REQUIRE(result.error().frames().size() == 1);
     CHECK(result.error().frames()[0].message == "looking up the mesh");
 }
 
-TEST_CASE("to_expected turns an empty optional into an erased error from text", "[error][utils]") {
-    const alp::Result<int> result = alp::to_expected(std::optional<int>(), "the mesh is missing");
+TEST_CASE("to_result turns an empty optional into an erased error from text", "[error][utils]") {
+    const alp::Result<int> result = alp::to_result(std::optional<int>(), "the mesh is missing");
 
     REQUIRE(!result.has_value());
     CHECK(fmt::to_string(result.error()).contains("the mesh is missing"));
 }
 
-TEST_CASE("to_expected builds its message only for an empty optional", "[error][utils]") {
+TEST_CASE("to_result builds its message only for an empty optional", "[error][utils]") {
     uint32_t calls = 0;
     const auto make_message = [&calls]() {
         calls++;
         return std::string("looking up the mesh");
     };
 
-    const alp::Result<int, FileError> present = alp::to_expected(std::optional<int>(3), FileError::NotFound, make_message);
+    const alp::Result<int, FileError> present = alp::to_result(std::optional<int>(3), FileError::NotFound, make_message);
     CHECK(present.value() == 3);
     CHECK(calls == 0);
 
-    const alp::Result<int, FileError> empty = alp::to_expected(std::optional<int>(), FileError::NotFound, make_message);
+    const alp::Result<int, FileError> empty = alp::to_result(std::optional<int>(), FileError::NotFound, make_message);
     CHECK(calls == 1);
     REQUIRE(!empty.has_value());
     REQUIRE(empty.error().frames().size() == 1);

@@ -6,8 +6,10 @@
 #include <type_traits>
 #include <utility>
 
+namespace alp {
+
 template <typename T>
-std::optional<std::reference_wrapper<const T>> as_ref(const std::optional<T> &option) {
+std::optional<std::reference_wrapper<const T>> ref(const std::optional<T> &option) {
     if (option.has_value()) {
         return option.value();
     } else {
@@ -15,27 +17,16 @@ std::optional<std::reference_wrapper<const T>> as_ref(const std::optional<T> &op
     }
 }
 template <typename T>
-std::optional<std::reference_wrapper<T>> as_ref(std::optional<T> &option) {
+std::optional<std::reference_wrapper<T>> ref(std::optional<T> &option) {
     if (option.has_value()) {
         return option.value();
-    } else {
-        return std::nullopt;
-    }
-}
-
-template <typename T, typename Func>
-auto map(const std::optional<T> &option, Func &&f) -> std::optional<std::remove_cvref_t<std::invoke_result_t<Func, const T &>>> {
-    using U = std::remove_cvref_t<std::invoke_result_t<Func, const T &>>;
-
-    if (option.has_value()) {
-        return std::optional<U>{std::invoke(std::forward<Func>(f), option.value())};
     } else {
         return std::nullopt;
     }
 }
 
 template <typename T, typename DefaultFunc, typename Func>
-auto map_or_else(const std::optional<T> &option, DefaultFunc &&default_f, Func &&f) -> std::remove_cvref_t<std::invoke_result_t<Func, const T &>> {
+auto transform_or_else(const std::optional<T> &option, DefaultFunc &&default_f, Func &&f) -> std::remove_cvref_t<std::invoke_result_t<Func, const T &>> {
     if (option.has_value()) {
         return std::invoke(std::forward<Func>(f), option.value());
     } else {
@@ -44,12 +35,12 @@ auto map_or_else(const std::optional<T> &option, DefaultFunc &&default_f, Func &
 }
 
 template <typename T, typename Func>
-auto map_or(const std::optional<T> &option, std::type_identity_t<std::remove_cvref_t<std::invoke_result_t<Func, const T &>>> default_value, Func &&f) -> std::remove_cvref_t<std::invoke_result_t<Func, const T &>> {
-    return map_or_else(option, [&] { return std::move(default_value); }, std::forward<Func>(f));
+auto transform_or(const std::optional<T> &option, std::type_identity_t<std::remove_cvref_t<std::invoke_result_t<Func, const T &>>> default_value, Func &&f) -> std::remove_cvref_t<std::invoke_result_t<Func, const T &>> {
+    return transform_or_else(option, [&] { return std::move(default_value); }, std::forward<Func>(f));
 }
 
 template <typename T, typename Func>
-T& get_or_insert_with(std::optional<T> &option, Func &&f) {
+T& value_or_emplace_else(std::optional<T> &option, Func &&f) {
     if (!option.has_value()) {
         T value = std::invoke(std::forward<Func>(f));
         option = value;
@@ -58,25 +49,20 @@ T& get_or_insert_with(std::optional<T> &option, Func &&f) {
 }
 
 template <typename T>
-T& get_or_insert(std::optional<T> &option, std::type_identity_t<T> value) {
-    return get_or_insert_with(option, [&] { return std::move(value); });
+T& value_or_emplace(std::optional<T> &option, std::type_identity_t<T> value) {
+    return value_or_emplace_else(option, [&] { return std::move(value); });
 }
 
 template <typename T, typename Func>
-T unwrap_or_else(const std::optional<T> &option, Func &&f) {
+T value_or_else(const std::optional<T> &option, Func &&f) {
     if (option.has_value()) {
         return option.value();
     }
     return std::invoke(std::forward<Func>(f));
 }
 
-template <typename T>
-T unwrap_or(const std::optional<T> &option, std::type_identity_t<T> value) {
-    return unwrap_or_else(option, [&] { return std::move(value); });
-}
-
 template <typename T, typename Func>
-auto ok_or_else(std::optional<T> option, Func &&f) -> std::expected<T, std::invoke_result_t<Func>> {
+auto to_expected_or_else(std::optional<T> option, Func &&f) -> std::expected<T, std::invoke_result_t<Func>> {
     if (option.has_value()) {
         return std::move(option).value();
     } else {
@@ -85,8 +71,8 @@ auto ok_or_else(std::optional<T> option, Func &&f) -> std::expected<T, std::invo
 }
 
 template <typename T, typename E>
-std::expected<T, E> ok_or(std::optional<T> option, E error) {
-    return ok_or_else(std::move(option), [=]() { return std::move(error); });
+std::expected<T, E> to_expected_or(std::optional<T> option, E error) {
+    return to_expected_or_else(std::move(option), [=]() { return std::move(error); });
 }
 
 template <typename T>
@@ -97,3 +83,5 @@ std::optional<T> flatten(const std::optional<std::optional<T>> option) {
         return std::nullopt;
     }
 }
+
+} // namespace alp

@@ -90,7 +90,7 @@ helpers::LayoutWithoutBase make_default_layout(OpenOptions options) {
         : disk::layout::strategy::make_default();
 
     const std::vector<std::string_view> supported_extensions = Codec::supported_extensions();
-    std::string extension_with_dot = unwrap_or(options.preferred_extension_with_dot, std::string(supported_extensions[0]));
+    std::string extension_with_dot = options.preferred_extension_with_dot.value_or(std::string(supported_extensions[0]));
     ASSERT(contains(supported_extensions, extension_with_dot));
 
     return helpers::LayoutWithoutBase(std::move(strategy), std::move(extension_with_dot));

@@ -94,7 +94,7 @@ LodResult build_lod(
     const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, lock_filter);
 
     // Convert relative target error (a fraction of the node bounds) to absolute
-    const std::optional<float> absolute_target_error = map(options.relative_target_error, [&](const float relative_error) {
+    const std::optional<float> absolute_target_error = options.relative_target_error.transform([&](const float relative_error) {
         return relative_error * glm::compMax(node_bounds.size());
     });
     const SimplifyOptions simplify_options{

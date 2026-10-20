@@ -220,7 +220,7 @@ alp::Result<void> build_all_patches(
     const srs::SharedSystem shared_mesh_srs(mesh_srs);
     ALP_TRY(const auto ecef_bounds, srs::encompassing_bounds_transfer(dataset_srs.get(), ecef_srs.get(), dataset_bounds));
     const auto space = octree::Space::earth();
-    ALP_TRY(const octree::Id root_node, alp::to_expected(
+    ALP_TRY(const octree::Id root_node, alp::to_result(
         space.find_smallest_node_encompassing_bounds(ecef_bounds),
         "the dataset lies outside the octree root node")
     );
