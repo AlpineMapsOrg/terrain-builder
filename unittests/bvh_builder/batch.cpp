@@ -19,8 +19,8 @@ TEST_CASE("Batch::add_node stores an inner node's children and a leaf's clusters
     const bvh::NodeHeader inner_header = make_node_header({1.0, 2.0}, {glm::dvec3{0.0}, glm::dvec3{1.0}});
     const bvh::NodeHeader leaf_header = make_node_header({3.0, 4.0}, {glm::dvec3{2.0}, glm::dvec3{3.0}});
     const std::vector<bvh::Reference> children{{.batch = 1, .node = 2}, {.batch = 3, .node = 4}, {.batch = 5, .node = 6}};
-    const std::vector<dag::ClusterInfo> first_clusters{{.id = {octree::Id::root(), 7}}, {.id = {octree::Id::root(), 8}}};
-    const std::vector<dag::ClusterInfo> second_clusters{{.id = {octree::Id::root(), 9}}};
+    const std::vector<dag::ClusterInfo> first_clusters{make_empty_cluster({octree::Id::root(), 7}), make_empty_cluster({octree::Id::root(), 8})};
+    const std::vector<dag::ClusterInfo> second_clusters{make_empty_cluster({octree::Id::root(), 9})};
 
     // A leaf on either side of the inner node, so the second leaf's clusters start after the first's and every count differs.
     bvh::Batch batch(0);

@@ -72,8 +72,8 @@ TEST_CASE("the walk visits every node once, each parent before its children and 
 TEST_CASE("a leaf root is visited alone, with its header and clusters","[bvh][traverse_tree]") {
     const bvh::NodeHeader leaf_header = make_node_header({3.0, 4.0}, {glm::dvec3{5.0}, glm::dvec3{6.0}});
     const std::vector<dag::ClusterInfo> leaf_clusters{
-        {.id = {octree::Id::root(), 5}, .error = 3.0},
-        {.id = {octree::Id::root(), 6}, .error = 4.0},
+        {.id = {octree::Id::root(), 5}, .error = 3.0, .lod_bounds = {glm::dvec3{0.0}, glm::dvec3{2.0}}, .tight_bounds = {glm::dvec3{0.0}, glm::dvec3{1.0}}},
+        {.id = {octree::Id::root(), 6}, .error = 4.0, .lod_bounds = {glm::dvec3{3.0}, glm::dvec3{5.0}}, .tight_bounds = {glm::dvec3{3.0}, glm::dvec3{4.0}}},
     };
 
     const TempDirectory directory("traverse_tree");

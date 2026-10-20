@@ -13,6 +13,12 @@ inline auto make_leaf_input(const bvh::NodeHeader &header = {}) {
     return bvh::LeafInput{header, std::array{dag::ClusterInfo{}}};
 }
 
+inline dag::ClusterInfo make_empty_cluster(const dag::Id &id) {
+    dag::ClusterInfo cluster{};
+    cluster.id = id;
+    return cluster;
+}
+
 // A node header with the error interval `errors`.
 inline bvh::NodeHeader make_node_header(const RangeInclusive<double> &errors, const bvh::Bounds &lod_bounds, const bvh::Bounds &tight_bounds) {
     return bvh::NodeHeader{

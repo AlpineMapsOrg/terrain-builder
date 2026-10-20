@@ -12,7 +12,7 @@ namespace dag {
 // A cluster of the dag.
 struct ClusterInfo {
     Id id;
-    double error; // the error of its group, 0 for a leaf cluster
+    double error = 0.0; // the error of its group, 0 for a leaf cluster
     radix::geometry::Aabb3d lod_bounds; // the box its error is measured from: its group's, or its own for a leaf cluster
     radix::geometry::Aabb3d tight_bounds; // a tight box around it, for culling
 

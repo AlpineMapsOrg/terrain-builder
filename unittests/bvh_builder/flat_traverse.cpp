@@ -20,7 +20,6 @@ std::vector<StoredNode> write_nodes(bvh::Storage &nodes, const std::vector<uint3
     for (const uint32_t count : nodes_per_batch) {
         bvh::Batch batch = nodes.create_batch();
         for (uint32_t i = 0; i < count; i++) {
-            const auto group_index = static_cast<uint32_t>(written.size());
             const bvh::NodeIndex node = batch.add_node(make_leaf_input());
             written.emplace_back(bvh::Reference{.batch = batch.index(), .node = node}, batch.node(node));
         }
