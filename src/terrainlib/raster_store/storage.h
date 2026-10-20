@@ -48,7 +48,7 @@ struct CreateOptions {
     std::optional<pixel::Mapping> value_mapping = std::nullopt;
     std::string codec_selector = "amort";
     ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression;
-    std::optional<std::filesystem::path> copy_attribution_from_index;
+    std::optional<std::filesystem::path> copy_attribution_from_index = std::nullopt;
 };
 
 namespace detail {
