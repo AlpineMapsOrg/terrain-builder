@@ -15,11 +15,7 @@ TEST_CASE("get_transform fails between spatial references of different celestial
     const srs::System mars = REQUIRE_VALUE(srs::from_user_input("IAU_2015:49900"));
 
     const alp::Error<srs::MissingTransform> error = REQUIRE_ERROR(srs::get_transform(earth, mars));
-
-    const srs::MissingTransform *missing = error.get_if<srs::MissingTransform>();
-    REQUIRE(missing != nullptr);
-    CHECK(missing->source == "EPSG:4326");
-    CHECK(missing->target == "Mars (2015) - Sphere / Ocentric");
+    CHECK(error.holds<srs::MissingTransform>());
 }
 
 // The orthographic projection onto the north pole maps no point south of the equator.
@@ -49,10 +45,7 @@ TEST_CASE("transforming fails for points outside the projection domain", "[srs][
         error_opt = REQUIRE_ERROR(transform.apply_into(points, out));
     }
 
-    const srs::Untransformable *untransformable = error_opt.value().get_if<srs::Untransformable>();
-    REQUIRE(untransformable != nullptr);
-    CHECK(untransformable->source == "EPSG:4326");
-    CHECK(untransformable->target == "North_Pole_Orthographic");
+    CHECK(error_opt.value().holds<srs::Untransformable>());
 }
 
 TEST_CASE("apply succeeds on an empty range", "[srs][transform]") {

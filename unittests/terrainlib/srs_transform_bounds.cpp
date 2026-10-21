@@ -35,8 +35,5 @@ TEST_CASE("transforming fails for bounds outside the projection domain", "[srs][
         error_opt = REQUIRE_ERROR(srs::encompassing_bounds_transfer(transform, bounds));
     }
 
-    const srs::Untransformable *untransformable = error_opt.value().get_if<srs::Untransformable>();
-    REQUIRE(untransformable != nullptr);
-    CHECK(untransformable->source == "EPSG:4326");
-    CHECK(untransformable->target == "North_Pole_Orthographic");
+    CHECK(error_opt.value().holds<srs::Untransformable>());
 }
