@@ -48,8 +48,19 @@ AxisDirection to_axis_direction(const OGRAxisOrientation orientation) {
 
 }
 
+Kind System::kind() const {
+    if (this->_srs.IsGeocentric()) {
+        return Kind::Geocentric;
+    }
+    // A compound system is projected if its horizontal part is, and otherwise geographic.
+    if (this->_srs.IsProjected()) {
+        return Kind::Projected;
+    }
+    return Kind::Geographic;
+}
+
 std::vector<Axis> System::axes() const {
-    const bool is_geographic = this->_srs.IsGeographic();
+    const bool is_geographic = this->kind() == Kind::Geographic;
 
     std::vector<Axis> axes;
     for (const int srs_axis : this->_srs.GetDataAxisToSRSAxisMapping()) {
@@ -135,7 +146,7 @@ std::optional<std::string> format_epsg_code(const System &srs) {
 
     if (gdal_srs.IsCompound()) {
         // The search for a node goes depth first, so GEOGCS would find the base of a projected horizontal part. // TODO: use ALP_TRY
-        const char *horizontal_node = gdal_srs.IsProjected() ? "PROJCS" : "GEOGCS";
+        const char *horizontal_node = srs.kind() == Kind::Projected ? "PROJCS" : "GEOGCS";
         const std::optional<uint32_t> horizontal_opt = get_epsg_code(gdal_srs, horizontal_node);
         const std::optional<uint32_t> vertical_opt = get_epsg_code(gdal_srs, "VERT_CS");
         if (horizontal_opt && vertical_opt) {

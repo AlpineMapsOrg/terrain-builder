@@ -80,6 +80,34 @@ TEST_CASE("from_user_input fails for a system that is not geodetic", "[srs][Syst
     CHECK(REQUIRE_ERROR(srs::from_user_input("EPSG:5778")).holds(srs::UnsupportedSystem::NotGeodetic));
 }
 
+TEST_CASE("kind gives the kind of the coordinates, which for a compound system is that of its horizontal part", "[srs][System]") {
+    std::string input;
+    srs::Kind expected;
+    SECTION("geographic") {
+        input = "EPSG:4326";
+        expected = srs::Kind::Geographic;
+    }
+    SECTION("projected") {
+        input = "EPSG:3857";
+        expected = srs::Kind::Projected;
+    }
+    SECTION("geocentric") {
+        input = "EPSG:4978";
+        expected = srs::Kind::Geocentric;
+    }
+    SECTION("compound with a geographic horizontal part") {
+        input = "EPSG:4326+3855";
+        expected = srs::Kind::Geographic;
+    }
+    SECTION("compound with a projected horizontal part") {
+        input = "EPSG:31287+5778";
+        expected = srs::Kind::Projected;
+    }
+    const srs::System system = REQUIRE_VALUE(srs::from_user_input(input));
+
+    CHECK(system.kind() == expected);
+}
+
 TEST_CASE("axes gives the axes in data order", "[srs][System]") {
     SECTION("geographic, whose authority order is latitude first") {
         const srs::System system = REQUIRE_VALUE(srs::from_epsg(4326));
