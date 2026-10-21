@@ -46,6 +46,8 @@ add_library(terrainlib
     polygon/utils.cpp
     polygon/clip.cpp
 
+    srs/System.cpp
+
     texture/dilate_colors.cpp
     texture/io.cpp
 

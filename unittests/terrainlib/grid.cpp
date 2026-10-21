@@ -38,7 +38,7 @@ TEST_CASE("grid") {
         const auto webmercator = ctb::GlobalMercator(256);
         CHECK(webmercator.getEpsgCode() == 3857);
 
-        CHECK(!geodetic.getSRS().IsSame(&webmercator.getSRS()));
+        CHECK(!geodetic.getSRS().is_same(webmercator.getSRS()));
     }
 
     SECTION("bounds") {

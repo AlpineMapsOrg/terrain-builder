@@ -125,7 +125,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     const srs::System &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
     const srs::System &texture_srs, radix::tile::SrsBounds &texture_bounds) {
     const auto context = alp::make_context("building a mesh for {} from {}", clip_bounds, dataset.name());
-    const srs::System &source_srs = dataset.srs();
+    const srs::System source_srs = dataset.srs();
 
     // Translate tile bounds from tile srs into the source srs, so we know what data to read.
     radix::tile::SrsBounds target_bounds_in_source_srs;

@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include <fmt/format.h>
 
@@ -46,5 +47,23 @@ inline std::string format_as(const Untransformable &error) {
 
 // An error from transforming between two spatial references.
 using TransformError = alp::Error<MissingTransform, Untransformable>;
+
+// Why a spatial reference system cannot be a System.
+enum class UnsupportedSystem {
+    // It is not geodetic, such as a vertical or engineering system.
+    NotGeodetic,
+    // Its data axes are not in traditional GIS order.
+    AxisOrder,
+};
+
+inline std::string_view format_as(const UnsupportedSystem error) {
+    switch (error) {
+    case UnsupportedSystem::NotGeodetic:
+        return "the spatial reference system is not geodetic";
+    case UnsupportedSystem::AxisOrder:
+        return "the data axes of the spatial reference system are not in traditional GIS order";
+    }
+    return "the spatial reference system is not supported";
+}
 
 }

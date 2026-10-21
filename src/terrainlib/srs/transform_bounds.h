@@ -63,7 +63,7 @@ inline alp::Result<radix::tile::SrsBounds, Untransformable> encompassing_bounds_
 }
 [[nodiscard]]
 inline alp::Result<radix::tile::SrsBounds, TransformError> encompassing_bounds_transfer(const System &source_srs, const System &target_srs, const radix::tile::SrsBounds &source_bounds, const uint32_t intermediate_points_edges = 21) {
-    if (source_srs.IsSame(&target_srs)) {
+    if (source_srs.is_same(target_srs)) {
         return source_bounds;
     }
 
@@ -134,7 +134,7 @@ inline alp::Result<radix::geometry::Aabb3d, TransformError> encompassing_bounds_
     const radix::geometry::Aabb3d &source_bounds,
     const uint32_t intermediate_points_edges = 21,
     const uint32_t intermediate_points_faces = 5) {
-    if (source_srs.IsSame(&target_srs)) {
+    if (source_srs.is_same(target_srs)) {
         return source_bounds;
     }
 

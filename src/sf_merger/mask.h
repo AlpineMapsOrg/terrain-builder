@@ -25,6 +25,7 @@
 #include "srs/System.h"
 #include "srs/transform.h"
 #include "srs/transform_bounds.h"
+#include "srs/well_known.h"
 #include "SphereProjector.h"
 
 #include <CGAL/Boolean_set_operations_2.h>
@@ -123,7 +124,8 @@ using LoadError = alp::Error<gdal::CplError, MaskError>;
 namespace {
 constexpr double simplification_tolerance_metres = 0.1;
 
-std::optional<double> simplification_tolerance(const srs::System &srs) {
+std::optional<double> simplification_tolerance(const srs::System &system) {
+    const OGRSpatialReference &srs = system.as_gdal();
     if (srs.IsProjected()) {
         const double metres_per_unit = srs.GetLinearUnits();
         if (metres_per_unit > 0) {
@@ -315,15 +317,16 @@ namespace detail {
 inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_dataset(gdal::Dataset& mask_dataset) {
     GDALDataset *dataset = mask_dataset.as_gdal();
 
-    srs::System srs;
+    std::optional<srs::System> srs_opt;
     // TODO: remove this try catch
     try {
-        srs = mask_dataset.srs();
+        srs_opt = mask_dataset.srs();
     } catch (std::runtime_error &e) {
         LOG_WARN("Mask does not reference an srs, assuming WGS84");
-        srs = srs::wgs84();
+        srs_opt = srs::wgs84();
         // srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT);
     }
+    const srs::System srs = *std::move(srs_opt);
 
     const std::optional<double> tolerance = simplification_tolerance(srs);
     if (!tolerance) {

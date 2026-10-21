@@ -30,6 +30,7 @@
 #include "image_writer.h"
 #include "srs/transform.h"
 #include "srs/transform_bounds.h"
+#include "srs/well_known.h"
 #include "../result_helpers.h"
 
 using namespace radix;

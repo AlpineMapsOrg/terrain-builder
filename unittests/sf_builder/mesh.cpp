@@ -46,6 +46,7 @@
 #include "octree/Space.h"
 #include "srs/System.h"
 #include "srs/transform.h"
+#include "srs/well_known.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 

@@ -16,6 +16,7 @@
 #include "mesh/connectivity/manifold.h"
 #include "mesh/convert.h"
 #include "srs/System.h"
+#include "srs/well_known.h"
 
 namespace {
 
@@ -49,7 +50,7 @@ TEST_CASE("simplification_tolerance is a fixed tenth of a metre", "[sf_merger][m
         const srs::System geographic = srs::wgs84();
         const std::optional<double> tolerance = mask::simplification_tolerance(geographic);
         REQUIRE(tolerance);
-        CHECK_THAT(*tolerance, WithinEpsilon(0.1 / geographic.GetSemiMajor() / geographic.GetAngularUnits()));
+        CHECK_THAT(*tolerance, WithinEpsilon(0.1 / geographic.as_gdal().GetSemiMajor() / geographic.as_gdal().GetAngularUnits()));
     }
 }
 

@@ -23,6 +23,7 @@
 #include "log.h"
 #include "srs/System.h"
 #include "srs/transform_bounds.h"
+#include "srs/well_known.h"
 #include "terrainbuilder.h"
 #include "octree/Space.h"
 #include "TileProvider.h"
@@ -39,7 +40,7 @@ radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
 }
 
 alp::Result<radix::geometry::Aabb3d> parse_bounds_from_values(const std::vector<double> &data, const srs::System &srs) {
-    const int32_t dim = srs.GetAxesCount();
+    const int32_t dim = srs.as_gdal().GetAxesCount();
     const size_t expected = (dim == 3) ? 6 : 4;
 
     if (data.size() != expected) {
@@ -67,9 +68,9 @@ alp::Result<radix::geometry::Aabb3d> parse_bounds_from_tile(
     std::optional<ctb::Grid> grid;
     const srs::System &webmercator_srs = srs::webmercator();
     const srs::System &wgs84_srs = srs::wgs84();
-    if (srs.IsSame(&webmercator_srs)) {
+    if (srs.is_same(webmercator_srs)) {
         grid = ctb::GlobalMercator();
-    } else if (srs.IsSame(&wgs84_srs)) {
+    } else if (srs.is_same(wgs84_srs)) {
         grid = ctb::GlobalGeodetic();
     } else {
         return alp::make_unexpected("Only WebMercator (EPSG:3857) or WGS84 (EPSG:4326) supported for --tile.");
@@ -85,7 +86,7 @@ alp::Result<radix::geometry::Aabb3d> parse_bounds_from_tile(
 alp::Result<radix::geometry::Aabb3d> parse_bounds_from_node(const std::vector<uint64_t> &data, const srs::System &srs) {
     // Validate node SRS (only ECEF)
     const srs::System &ecef_srs = srs::ecef();
-    if (!srs.IsSame(&ecef_srs)) {
+    if (!srs.is_same(ecef_srs)) {
         return alp::make_unexpected("Only ECEF (EPSG:4978) supported for --node.");
     }
 
@@ -150,7 +151,7 @@ alp::Result<void, srs::TransformError> log_dataset_overview(const gdal::Dataset 
     LOG_INFO("  name        : {}", name);
     LOG_INFO("  size        : {} x {} px | bands={}", widthPx, heightPx, bands);
     LOG_INFO("  pixel size  : {:.3f} x {:.3f}", pixelSize.x, pixelSize.y);
-    LOG_INFO("  srs         : {}", srs::friendly_name(datasetSrs));
+    LOG_INFO("  srs         : {}", datasetSrs);
     LOG_INFO("  bounds      : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
              bounds.min.x, bounds.min.y, bounds.min.z,
              bounds.max.x, bounds.max.y, bounds.max.z);
