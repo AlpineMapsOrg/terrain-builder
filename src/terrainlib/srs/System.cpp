@@ -48,6 +48,16 @@ AxisDirection to_axis_direction(const OGRAxisOrientation orientation) {
 
 }
 
+std::optional<uint32_t> System::epsg_code() const {
+    if (const std::optional<uint32_t> code_opt = get_epsg_code(this->_srs, nullptr)) {
+        return code_opt;
+    }
+
+    OGRSpatialReference identified = this->_srs;
+    identified.AutoIdentifyEPSG();
+    return get_epsg_code(identified, nullptr);
+}
+
 Kind System::kind() const {
     if (this->_srs.IsGeocentric()) {
         return Kind::Geocentric;
@@ -133,17 +143,11 @@ alp::Result<System, gdal::OgrError, UnsupportedSystem> from_user_input(const std
 }
 
 std::optional<std::string> format_epsg_code(const System &srs) {
+    if (const std::optional<uint32_t> code_opt = srs.epsg_code()) {
+        return fmt::format("EPSG:{}", *code_opt);
+    }
+
     const OGRSpatialReference &gdal_srs = srs.as_gdal();
-    if (const std::optional<uint32_t> code_opt = get_epsg_code(gdal_srs, nullptr)) {
-        return fmt::format("EPSG:{}", *code_opt);
-    }
-
-    OGRSpatialReference identified = gdal_srs;
-    identified.AutoIdentifyEPSG();
-    if (const std::optional<uint32_t> code_opt = get_epsg_code(identified, nullptr)) {
-        return fmt::format("EPSG:{}", *code_opt);
-    }
-
     if (gdal_srs.IsCompound()) {
         // The search for a node goes depth first, so GEOGCS would find the base of a projected horizontal part. // TODO: use ALP_TRY
         const char *horizontal_node = srs.kind() == Kind::Projected ? "PROJCS" : "GEOGCS";

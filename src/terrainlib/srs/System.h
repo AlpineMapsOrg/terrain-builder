@@ -32,6 +32,10 @@ public:
         return this->_srs.IsSame(&other._srs);
     }
 
+    // The EPSG code of this system, if it has one or matches one.
+    [[nodiscard]]
+    std::optional<uint32_t> epsg_code() const;
+
     // The kind of this system's coordinates.
     [[nodiscard]]
     Kind kind() const;
