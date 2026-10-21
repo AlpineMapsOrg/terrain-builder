@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -8,6 +9,7 @@
 #include "../result_helpers.h"
 #include "error/format.h"
 #include "gdal/OgrError.h"
+#include "srs/Axis.h"
 #include "srs/System.h"
 #include "srs/error.h"
 
@@ -76,5 +78,36 @@ TEST_CASE("from_user_input gives a system with its data axes in traditional orde
 
 TEST_CASE("from_user_input fails for a system that is not geodetic", "[srs][System]") {
     CHECK(REQUIRE_ERROR(srs::from_user_input("EPSG:5778")).holds(srs::UnsupportedSystem::NotGeodetic));
+}
+
+TEST_CASE("axes gives the axes in data order", "[srs][System]") {
+    SECTION("geographic, whose authority order is latitude first") {
+        const srs::System system = REQUIRE_VALUE(srs::from_epsg(4326));
+        const auto directions = system.axes() | std::views::transform(&srs::Axis::direction) | std::ranges::to<std::vector>();
+        CHECK(directions == std::vector{srs::AxisDirection::East, srs::AxisDirection::North});
+    }
+    SECTION("projected, whose authority order is northing first") {
+        const srs::System system = REQUIRE_VALUE(srs::from_epsg(31287));
+        const auto directions = system.axes() | std::views::transform(&srs::Axis::direction) | std::ranges::to<std::vector>();
+        CHECK(directions == std::vector{srs::AxisDirection::East, srs::AxisDirection::North});
+    }
+    SECTION("compound") {
+        const srs::System system = REQUIRE_VALUE(srs::from_user_input("EPSG:31287+5778"));
+        const auto directions = system.axes() | std::views::transform(&srs::Axis::direction) | std::ranges::to<std::vector>();
+        CHECK(directions == std::vector{srs::AxisDirection::East, srs::AxisDirection::North, srs::AxisDirection::Up});
+    }
+}
+
+TEST_CASE("axes gives angles for geographic horizontal axes and lengths for the others", "[srs][System]") {
+    SECTION("geographic with a height") {
+        const srs::System system = REQUIRE_VALUE(srs::from_epsg(4979));
+        const auto quantities = system.axes() | std::views::transform(&srs::Axis::unit) | std::views::transform(&srs::Unit::quantity) | std::ranges::to<std::vector>();
+        CHECK(quantities == std::vector{srs::Quantity::Angle, srs::Quantity::Angle, srs::Quantity::Length});
+    }
+    SECTION("compound") {
+        const srs::System system = REQUIRE_VALUE(srs::from_user_input("EPSG:31287+5778"));
+        const auto quantities = system.axes() | std::views::transform(&srs::Axis::unit) | std::views::transform(&srs::Unit::quantity) | std::ranges::to<std::vector>();
+        CHECK(quantities == std::vector{srs::Quantity::Length, srs::Quantity::Length, srs::Quantity::Length});
+    }
 }
 

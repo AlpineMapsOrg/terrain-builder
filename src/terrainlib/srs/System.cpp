@@ -26,6 +26,50 @@ std::optional<uint32_t> get_epsg_code(const OGRSpatialReference &srs, const char
     return to_string_view(srs.GetAuthorityCode(wkt1_path)).and_then([](const std::string_view text) { return from_chars<uint32_t>(text); });
 }
 
+AxisDirection to_axis_direction(const OGRAxisOrientation orientation) {
+    switch (orientation) {
+    case OAO_East:
+        return AxisDirection::East;
+    case OAO_West:
+        return AxisDirection::West;
+    case OAO_North:
+        return AxisDirection::North;
+    case OAO_South:
+        return AxisDirection::South;
+    case OAO_Up:
+        return AxisDirection::Up;
+    case OAO_Down:
+        return AxisDirection::Down;
+    case OAO_Other:
+        return AxisDirection::Other;
+    }
+    return AxisDirection::Other;
+}
+
+}
+
+std::vector<Axis> System::axes() const {
+    const bool is_geographic = this->_srs.IsGeographic();
+
+    std::vector<Axis> axes;
+    for (const int srs_axis : this->_srs.GetDataAxisToSRSAxisMapping()) {
+        // The mapping counts from 1, and only an inverted axis is negative, which traditional GIS order does not produce.
+        DEBUG_ASSERT(srs_axis > 0);
+        const int index = srs_axis - 1;
+
+        OGRAxisOrientation orientation = OAO_Other;
+        double si_size = 0;
+        const char *name = this->_srs.GetAxis(nullptr, index, &orientation, &si_size);
+        DEBUG_ASSERT(name != nullptr);
+
+        // A geographic system's third axis, and the vertical axis of a compound one, is a height.
+        const Quantity quantity = is_geographic && index < 2 ? Quantity::Angle : Quantity::Length;
+        axes.push_back(Axis{
+            .name = std::string(name),
+            .direction = to_axis_direction(orientation),
+            .unit = Unit{quantity, si_size}});
+    }
+    return axes;
 }
 
 alp::Result<std::string, gdal::OgrError> System::to_wkt() const {

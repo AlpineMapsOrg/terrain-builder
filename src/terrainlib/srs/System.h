@@ -10,6 +10,7 @@
 
 #include "error/Result.h"
 #include "gdal/OgrError.h"
+#include "srs/Axis.h"
 #include "srs/error.h"
 
 namespace srs {
@@ -29,6 +30,10 @@ public:
     bool is_same(const System &other) const {
         return this->_srs.IsSame(&other._srs);
     }
+
+    // The axes of this system's data coordinates, in data order.
+    [[nodiscard]]
+    std::vector<Axis> axes() const;
 
     // Writes this system as WKT2, which from_user_input reads back.
     [[nodiscard]]
