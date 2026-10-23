@@ -27,6 +27,7 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_precision.hpp>
 
@@ -222,8 +223,9 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     CHECK(amort.read(path).error().code() == Error::Code::CorruptData);
 }
 
-TEST_CASE("AMOIT stores RGB8 data lossily and attribution exactly", "[raster-store][codec]")
+TEST_CASE("Image tile codecs store RGB8 data lossily and attribution exactly", "[raster-store][codec]")
 {
+    const std::string codec_name = GENERATE("amoit", "amojt");
     TemporaryDirectory directory;
     raster_store::Tile<glm::u8vec3> tile(32);
     for (unsigned y = 0; y < 32; ++y) {
@@ -234,12 +236,14 @@ TEST_CASE("AMOIT stores RGB8 data lossily and attribution exactly", "[raster-sto
     }
     tile.attribution.pixel({ 31, 31 }) = 65534;
     const auto path = directory.path() / "tile";
-    TileCodec<glm::u8vec3, tile_codec::DataEncoding::JpegXl> amoit({ 32, 32 });
-    CHECK(amoit.paths(path) == std::vector { std::filesystem::path(path.string() + ".amoit") });
-    const auto hash = amoit.write(path, tile);
+    auto selected = tile_codec::from_name<glm::u8vec3>(codec_name, glm::uvec2(32));
+    REQUIRE(selected);
+    const auto& codec = **selected;
+    CHECK(codec.paths(path) == std::vector { std::filesystem::path(path.string() + "." + codec_name) });
+    const auto hash = codec.write(path, tile);
     REQUIRE(hash);
     CHECK(hash->size() >= store::min_hash_size);
-    auto read = amoit.read(path, *hash);
+    auto read = codec.read(path, *hash);
     REQUIRE(read);
     check_bytes(read->attribution, tile.attribution);
     REQUIRE(read->data.size() == tile.data.size());
@@ -249,42 +253,60 @@ TEST_CASE("AMOIT stores RGB8 data lossily and attribution exactly", "[raster-sto
         max_error = std::max({ max_error, difference.x, difference.y, difference.z });
     }
     CHECK(max_error > 0);
-    CHECK(max_error <= 4);
-    CHECK(amoit.write(path, tile).error().code() == Error::Code::AlreadyExists);
+    CHECK(max_error <= (codec_name == "amojt" ? 6 : 4));
+    CHECK(codec.write(path, tile).error().code() == Error::Code::AlreadyExists);
+    auto wrong_hash = *hash;
+    wrong_hash.front() ^= std::byte { 1 };
+    CHECK_FALSE(codec.read(path, wrong_hash));
+    if (codec_name == "amojt") {
+        const auto encoded = io::envelope::read<tile_codec::JpegTileSchema>(codec.paths(path).front());
+        REQUIRE(encoded);
+        const auto jpeg = io::image::encode(tile.data, io::image::Format::Jpeg, { .jpeg_quality = 95 });
+        REQUIRE(jpeg);
+        CHECK(encoded->data == *jpeg);
+    }
 }
 
-TEST_CASE("AMOIT validates images and attribution against the tile dimensions", "[raster-store][codec]")
+TEST_CASE("Image tile codecs validate images and attribution against the tile dimensions", "[raster-store][codec]")
 {
+    const std::string codec_name = GENERATE("amoit", "amojt");
+    const auto format = codec_name == "amojt" ? io::image::Format::Jpeg : io::image::Format::JpegXl;
     TemporaryDirectory directory;
     const auto path = directory.path() / "tile";
-    TileCodec<glm::u8vec3, tile_codec::DataEncoding::JpegXl> amoit({ 3, 3 });
-    tile_codec::detail::v1::RasterTile encoded { 3, 3, io::image::encode(io::image::RGB8(3), io::image::Format::JpegXl).value(), io::byte::vector(18) };
+    auto selected = tile_codec::from_name<glm::u8vec3>(codec_name, glm::uvec2(3));
+    REQUIRE(selected);
+    const auto& codec = **selected;
+    tile_codec::detail::v1::RasterTile encoded { 3, 3, io::image::encode(io::image::RGB8(3), format).value(), io::byte::vector(18) };
     bool valid = false;
     SECTION("valid") { valid = true; }
     SECTION("wrong dimensions") { encoded.width = 4; }
-    SECTION("image of other dimensions") { encoded.data = io::image::encode(io::image::RGB8(4), io::image::Format::JpegXl).value(); }
+    SECTION("image of other dimensions") { encoded.data = io::image::encode(io::image::RGB8(4), format).value(); }
     SECTION("truncated image") { encoded.data.resize(encoded.data.size() / 2); }
     SECTION("long attribution") { encoded.source_attribution.push_back(std::byte { 0 }); }
-    REQUIRE(io::envelope::write<tile_codec::ImageTileSchema>(encoded, path.string() + ".amoit", io::byte::WriteMode::Overwrite));
-    const auto read = amoit.read(path);
+    const auto filename = codec.paths(path).front();
+    const auto written = codec_name == "amojt" ? io::envelope::write<tile_codec::JpegTileSchema>(encoded, filename, io::byte::WriteMode::Overwrite)
+                                               : io::envelope::write<tile_codec::ImageTileSchema>(encoded, filename, io::byte::WriteMode::Overwrite);
+    REQUIRE(written);
+    const auto read = codec.read(path);
     REQUIRE(read.has_value() == valid);
     if (!valid) {
         CHECK(read.error().code() == Error::Code::CorruptData);
     }
     // AMORT payloads use another envelope class.
-    REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, path.string() + ".amoit", io::byte::WriteMode::Overwrite));
-    CHECK(amoit.read(path).error().code() == Error::Code::CorruptData);
+    REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, filename, io::byte::WriteMode::Overwrite));
+    CHECK(codec.read(path).error().code() == Error::Code::CorruptData);
 }
 
-TEST_CASE("AMOIT snapshots are available only for RGB8 payloads", "[raster-store][storage][codec]")
+TEST_CASE("Image tile snapshots are available only for RGB8 payloads", "[raster-store][storage][codec]")
 {
-    CHECK(tile_codec::from_name<float>("amoit", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
-    CHECK(tile_codec::from_name<glm::u8vec4>("amoit", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
+    const std::string codec_name = GENERATE("amoit", "amojt");
+    CHECK(tile_codec::from_name<float>(codec_name, glm::uvec2(4)).error().code() == Error::Code::Unsupported);
+    CHECK(tile_codec::from_name<glm::u8vec4>(codec_name, glm::uvec2(4)).error().code() == Error::Code::Unsupported);
 
     TemporaryDirectory directory;
     write_table(directory.path());
     auto options = small_options();
-    options.codec_selector = "amoit";
+    options.codec_selector = codec_name;
     CHECK(storage::create<float>(directory.path() / "scalar", options).error().code() == Error::Code::Unsupported);
     const auto final = directory.path() / "colour";
     auto created_result = storage::create<glm::u8vec3>(final, options);
@@ -295,11 +317,11 @@ TEST_CASE("AMOIT snapshots are available only for RGB8 payloads", "[raster-store
     tile.attribution.fill(1);
     REQUIRE(created->save({ 0, { 0, 0 } }, tile));
     REQUIRE(storage::publish(std::move(created)));
-    CHECK(std::filesystem::exists(final / "0/0/0.amoit"));
+    CHECK(std::filesystem::exists(final / ("0/0/0." + codec_name)));
     auto opened = storage::open<glm::u8vec3>(final);
     REQUIRE(opened);
     auto [reader, metadata] = std::move(*opened);
-    CHECK(metadata->codec_selector == "amoit");
+    CHECK(metadata->codec_selector == codec_name);
     const auto loaded = reader->load({ 0, { 0, 0 } });
     REQUIRE(loaded);
     check_bytes(loaded->attribution, tile.attribution);
