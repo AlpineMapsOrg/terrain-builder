@@ -4,6 +4,7 @@
 #include "node_header_helpers.h"
 
 #include <cstdint>
+#include <optional>
 #include <ranges>
 #include <utility>
 #include <vector>
@@ -60,17 +61,15 @@ std::vector<Leaf> flatten(std::vector<std::pair<octree::Id, dag::NodeMetadata>> 
 
 }
 
-TEST_CASE("flatten_dag writes a leaf per group and a root leaf per coarsest group", "[bvh][flatten_dag]") {
+TEST_CASE("flatten_dag writes a leaf per group, including root groups", "[bvh][flatten_dag]") {
     const octree::Id coarse = octree::Id::root();
     const octree::Id fine = coarse.child(0).value();
     const bvh::Bounds box{glm::dvec3{0.0}, glm::dvec3{1.0}};
 
-    // The fine groups list nothing and lie below the coarsest level, so they make no leaf.
     const std::vector<Leaf> leaves = flatten({
         {coarse, {.clusters = {{.group_index = 0, .bounds = box}},
                   .groups = {{.children = {{fine, 0}, {fine, 1}}, .error = 3.0, .bounds = box}}}},
-        {fine, {.clusters = {{.group_index = 0, .bounds = box}, {.group_index = 1, .bounds = box}},
-                .groups = {{.error = 0.0, .bounds = box}, {.error = 0.0, .bounds = box}}}},
+        {fine, {.clusters = {{.group_index = std::nullopt, .bounds = box}, {.group_index = std::nullopt, .bounds = box}}, .groups = {}}},
     });
 
     CHECK_THAT(leaves, Catch::Matchers::UnorderedEquals(std::vector<Leaf>{
