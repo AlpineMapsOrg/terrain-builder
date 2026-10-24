@@ -40,7 +40,7 @@ radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
 }
 
 alp::Result<radix::geometry::Aabb3d> parse_bounds_from_values(const std::vector<double> &data, const srs::System &srs) {
-    const int32_t dim = srs.as_gdal().GetAxesCount();
+    const size_t dim = srs.axes().size();
     const size_t expected = (dim == 3) ? 6 : 4;
 
     if (data.size() != expected) {

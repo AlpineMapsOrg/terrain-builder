@@ -125,24 +125,17 @@ namespace {
 constexpr double simplification_tolerance_metres = 0.1;
 
 std::optional<double> simplification_tolerance(const srs::System &system) {
-    const OGRSpatialReference &srs = system.as_gdal();
-    if (srs.IsProjected()) {
-        const double metres_per_unit = srs.GetLinearUnits();
-        if (metres_per_unit > 0) {
-            return simplification_tolerance_metres / metres_per_unit;
-        }
+    // Both horizontal axes have the unit of the first one.
+    const srs::Unit unit = system.axes().front().unit;
+    switch (system.kind()) {
+    case srs::Kind::Projected:
+        return simplification_tolerance_metres / unit.si_size;
+    case srs::Kind::Geographic:
+        return simplification_tolerance_metres / system.ellipsoid().semi_major_metres / unit.si_size;
+    case srs::Kind::Geocentric:
+        return std::nullopt;
     }
-
-    if (srs.IsGeographic()) {
-        OGRErr error = OGRERR_NONE;
-        const double semi_major_axis_metres = srs.GetSemiMajor(&error);
-        const double radians_per_unit = srs.GetAngularUnits();
-        if (error == OGRERR_NONE && semi_major_axis_metres > 0 && radians_per_unit > 0) {
-            return simplification_tolerance_metres / semi_major_axis_metres / radians_per_unit;
-        }
-    }
-
-    return std::nullopt;
+    UNREACHABLE();
 }
 
 uint64_t point_count(const OGRGeometry &geometry) {

@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
+#include <numbers>
 
 #include <CGAL/Polygon_mesh_processing/orientation.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
@@ -50,7 +51,8 @@ TEST_CASE("simplification_tolerance is a fixed tenth of a metre", "[sf_merger][m
         const srs::System geographic = srs::wgs84();
         const std::optional<double> tolerance = mask::simplification_tolerance(geographic);
         REQUIRE(tolerance);
-        CHECK_THAT(*tolerance, WithinEpsilon(0.1 / geographic.as_gdal().GetSemiMajor() / geographic.as_gdal().GetAngularUnits()));
+        // WGS 84 has a semi-major axis of 6378137 m, and its unit is the degree.
+        CHECK_THAT(*tolerance, WithinEpsilon(0.1 / 6378137.0 / (std::numbers::pi / 180)));
     }
 }
 
