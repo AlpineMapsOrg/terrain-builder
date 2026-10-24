@@ -10,7 +10,7 @@
 
 namespace io::envelope {
 
-using Bytes = std::vector<std::byte>;
+using Bytes = std::vector<std::uint8_t>;
 
 inline constexpr std::size_t default_max_decompressed_size = std::size_t{1} << 30;
 

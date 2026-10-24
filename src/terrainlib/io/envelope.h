@@ -163,7 +163,7 @@ alp::Result<Bytes, CompressionError, SerdeError> serialize(
 template <typename Schema>
 [[nodiscard]]
 alp::Result<typename Schema::Latest, EnvelopeError, CompressionError, SerdeError> deserialize(
-    std::span<const std::byte> bytes,
+    std::span<const std::uint8_t> bytes,
     std::size_t max_decompressed_size = default_max_decompressed_size);
 
 } // namespace io::envelope

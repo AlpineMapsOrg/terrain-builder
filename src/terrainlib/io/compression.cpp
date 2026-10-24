@@ -35,7 +35,7 @@ std::string crc32c_checksum(const Bytes &data) {
 
     std::uint32_t crc = 0xffffffffu;
     for (const auto value : data) {
-        const auto index = (crc ^ std::to_integer<std::uint8_t>(value)) & 0xffu;
+        const auto index = (crc ^ value) & 0xffu;
         crc = table[index] ^ (crc >> 8u);
     }
     crc = ~crc;

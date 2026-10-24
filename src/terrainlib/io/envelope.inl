@@ -28,7 +28,7 @@ alp::Result<Bytes, SerdeError> serialize_to_bytes(const Value &value) {
 }
 
 template <typename Value>
-alp::Result<Value, EnvelopeError, SerdeError> deserialize_from_bytes(const std::span<const std::byte> bytes) {
+alp::Result<Value, EnvelopeError, SerdeError> deserialize_from_bytes(const std::span<const std::uint8_t> bytes) {
     Value value{};
     zpp::bits::in input(bytes, ArchiveByteOrder{}, ArchiveAllocationLimit{});
     const zpp::bits::errc result = input(value);
@@ -54,7 +54,7 @@ typename Schema::Latest convert_to_latest(Current current) {
 template <typename Schema, std::size_t Index = 0>
 alp::Result<typename Schema::Latest, EnvelopeError, SerdeError> deserialize_version(
     const std::uint32_t class_version,
-    const std::span<const std::byte> payload_bytes) {
+    const std::span<const std::uint8_t> payload_bytes) {
     using CurrentVersion = typename Schema::template VersionAt<Index>;
     if (class_version == CurrentVersion::number) {
         ALP_TRY(auto payload, deserialize_from_bytes<typename CurrentVersion::Payload>(payload_bytes));
@@ -98,7 +98,7 @@ alp::Result<Bytes, CompressionError, SerdeError> serialize(
 
 template <typename Schema>
 alp::Result<typename Schema::Latest, EnvelopeError, CompressionError, SerdeError> deserialize(
-    const std::span<const std::byte> bytes,
+    const std::span<const std::uint8_t> bytes,
     const std::size_t max_decompressed_size) {
     const auto context = alp::make_context("deserializing {}", Schema::class_name);
 

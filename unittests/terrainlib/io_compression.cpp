@@ -21,7 +21,7 @@ using io::envelope::CompressionError;
 Bytes bytes_from_string(const std::string_view text) {
     Bytes bytes;
     for (const char character : text) {
-        bytes.push_back(static_cast<std::byte>(character));
+        bytes.push_back(static_cast<std::uint8_t>(character));
     }
     return bytes;
 }
@@ -72,7 +72,7 @@ TEST_CASE("checked_decompress restores what compress_with_checksum compressed", 
         {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib},
         {CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::Crc32c},
     }));
-    const Bytes data = GENERATE(Bytes(4096, std::byte{0x2a}), Bytes{});
+    const Bytes data = GENERATE(Bytes(4096, std::uint8_t{0x2a}), Bytes{});
 
     const io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, compression_algorithm, checksum_algorithm));
     const Bytes decompressed = REQUIRE_VALUE(io::envelope::checked_decompress(compressed.compressed_data, compression_algorithm, checksum_algorithm, compressed.checksum));
@@ -103,18 +103,18 @@ TEST_CASE("checked_decompress rejects unsupported algorithms and combinations", 
 }
 
 TEST_CASE("checked_decompress detects corruption", "[io][compression]") {
-    const Bytes data(4096, std::byte{0x2a});
+    const Bytes data(4096, std::uint8_t{0x2a});
 
     SECTION("changed data without compression") {
         io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c));
-        compressed.compressed_data.front() ^= std::byte{0x01};
+        compressed.compressed_data.front() ^= std::uint8_t{0x01};
 
         CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed.compressed_data, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c, compressed.checksum)).holds_code(CompressionError::ChecksumMismatch));
     }
 
     SECTION("changed data with zstd") {
         io::envelope::CompressedData compressed = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib));
-        compressed.compressed_data.back() ^= std::byte{0x01};
+        compressed.compressed_data.back() ^= std::uint8_t{0x01};
 
         CHECK(REQUIRE_ERROR(io::envelope::checked_decompress(compressed.compressed_data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib, {})).holds_code(CompressionError::ChecksumMismatch));
     }
@@ -139,7 +139,7 @@ TEST_CASE("checked_decompress detects corruption", "[io][compression]") {
 }
 
 TEST_CASE("checked_decompress enforces its maximum size", "[io][compression]") {
-    const Bytes data(4096, std::byte{0x2a});
+    const Bytes data(4096, std::uint8_t{0x2a});
 
     SECTION("zstd frame with its content size") {
         const Bytes compressed_data = REQUIRE_VALUE(io::envelope::compress_with_checksum(data, CompressionAlgorithm::ZstdBestCompressionWithChecksum, ChecksumAlgorithm::HandledByCompressionLib)).compressed_data;

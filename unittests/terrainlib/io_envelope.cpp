@@ -198,7 +198,7 @@ TEST_CASE("deserialize passes the envelope's algorithms and checksum to decompre
 
     SECTION("data") {
         io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, CompressionAlgorithm::None, ChecksumAlgorithm::Crc32c)));
-        envelope.compressed_data.front() ^= std::byte{0x01};
+        envelope.compressed_data.front() ^= std::uint8_t{0x01};
 
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(CompressionError::ChecksumMismatch));
     }
@@ -251,7 +251,7 @@ TEST_CASE("deserialize enforces its size limits", "[io][envelope]") {
 
 TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
     SECTION("envelope ends early") {
-        const Bytes bytes{std::byte{0x01}, std::byte{0x02}};
+        const Bytes bytes{std::uint8_t{0x01}, std::uint8_t{0x02}};
 
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds_code(io::SerdeError(std::errc::result_out_of_range)));
     }
@@ -265,7 +265,7 @@ TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
             .checksum = "",
             .compression_algorithm = CompressionAlgorithm::None,
             .uncompressed_size = 1,
-            .compressed_data = {std::byte{0x01}},
+            .compressed_data = {std::uint8_t{0x01}},
         };
 
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_value(envelope))).holds_code(io::SerdeError(std::errc::result_out_of_range)));
@@ -274,7 +274,7 @@ TEST_CASE("deserialize rejects malformed data", "[io][envelope]") {
     SECTION("trailing data") {
         const v3::Payload payload{.id = 42, .label = "latest", .enabled = false, .samples = {1, 2, 3}};
         Bytes bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload));
-        bytes.push_back(std::byte{0x00});
+        bytes.push_back(std::uint8_t{0x00});
 
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(bytes)).holds_code(EnvelopeError::TrailingData));
     }
