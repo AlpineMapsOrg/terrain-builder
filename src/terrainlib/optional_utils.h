@@ -1,8 +1,10 @@
 #pragma once
 
 #include <optional>
+#include <expected>
 #include <functional>
 #include <type_traits>
+#include <utility>
 
 template <typename T>
 std::optional<std::reference_wrapper<const T>> as_ref(const std::optional<T> &option) {
@@ -71,6 +73,20 @@ T unwrap_or_else(const std::optional<T> &option, Func &&f) {
 template <typename T>
 T unwrap_or(const std::optional<T> &option, std::type_identity_t<T> value) {
     return unwrap_or_else(option, [&] { return std::move(value); });
+}
+
+template <typename T, typename Func>
+auto ok_or_else(std::optional<T> option, Func &&f) -> std::expected<T, std::invoke_result_t<Func>> {
+    if (option.has_value()) {
+        return std::move(option).value();
+    } else {
+        return std::unexpected(std::forward<Func>(f)());
+    }
+}
+
+template <typename T, typename E>
+std::expected<T, E> ok_or(std::optional<T> option, E error) {
+    return ok_or_else(std::move(option), [=]() { return std::move(error); });
 }
 
 template <typename T>
