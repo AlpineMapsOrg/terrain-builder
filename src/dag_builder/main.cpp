@@ -19,8 +19,8 @@ int main(int argc, char **argv) {
     Log::init(args.log_level);
 
     try {
-        const octree::IndexedMeshStorage input_storage = alp::throwing_unwrap(octree::open_folder_indexed(args.input_path));
-        octree::IndexedDagStorage output_storage = alp::throwing_unwrap(octree::open_folder_indexed<dag::ClusterBatch>(args.output_path));
+        const octree::IndexedMeshStorage input_storage = alp::unwrap(octree::open_folder_indexed(args.input_path));
+        octree::IndexedDagStorage output_storage = alp::unwrap(octree::open_folder_indexed<dag::ClusterBatch>(args.output_path));
         output_storage.settings().allow_overwrite = args.continuation_mode == ContinuationMode::Overwrite;
 
         dag::BuildOptions options{

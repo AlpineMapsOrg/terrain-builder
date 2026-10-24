@@ -171,5 +171,5 @@ inline void merge_datasets(
         merger.merge_root();
     }
 
-    alp::throwing_unwrap(output_dataset.save_or_create_index());
+    alp::unwrap(output_dataset.save_or_create_index());
 }

@@ -248,18 +248,18 @@ void process_geometry(const OGRGeometry &geometry, MultipolygonWithHoles2 &out) 
 }
 
 void convert_to_ecef_and_project_onto_sphere(MultipolygonWithHoles2 &polygons, const SphereProjector &projector, const srs::System &srs) {
-    const srs::Transform srs_transform = alp::throwing_unwrap(srs::get_transform(srs, srs::ecef()));
+    const srs::Transform srs_transform = alp::unwrap(srs::get_transform(srs, srs::ecef()));
     for (auto &polygon : polygons.polygons_with_holes()) {
         for (auto &cgal_point : polygon.outer_boundary()) {
             const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-            const glm::dvec3 ecef_point = alp::throwing_unwrap(srs_transform.apply(glm::dvec3(source_point, 0)));
+            const glm::dvec3 ecef_point = alp::unwrap(srs_transform.apply(glm::dvec3(source_point, 0)));
             const glm::dvec2 projected_point = projector.project_point(ecef_point);
             cgal_point = convert::to_cgal_point<Kernel>(projected_point);
         }
         for (auto &hole : polygon.holes()) {
             for (auto &cgal_point : hole) {
                 const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-                const glm::dvec3 ecef_point = alp::throwing_unwrap(srs_transform.apply(glm::dvec3(source_point, 0)));
+                const glm::dvec3 ecef_point = alp::unwrap(srs_transform.apply(glm::dvec3(source_point, 0)));
                 const glm::dvec2 projected_point = projector.project_point(ecef_point);
                 cgal_point = convert::to_cgal_point<Kernel>(projected_point);
             }
@@ -369,7 +369,7 @@ inline SpherePolygonMask project_onto_sphere(ReferencedPolygonMask ref_mask, con
     const radix::geometry::Aabb3d source_bounds(
         glm::dvec3(source_bounds_cgal.xmin(), source_bounds_cgal.ymin(), 0),
         glm::dvec3(source_bounds_cgal.xmax(), source_bounds_cgal.ymax(), 0));
-    const radix::geometry::Aabb3d ecef_bounds = alp::throwing_unwrap(srs::non_exact_bounds_transform(source_bounds, srs, srs::ecef()));
+    const radix::geometry::Aabb3d ecef_bounds = alp::unwrap(srs::non_exact_bounds_transform(source_bounds, srs, srs::ecef()));
     const glm::dvec3 bounds_center = ecef_bounds.centre();
     const glm::dvec3 tangent_point = scale_to_length(bounds_center, radius);
     const SphereProjector projector(tangent_point);

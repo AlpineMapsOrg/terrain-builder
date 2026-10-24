@@ -19,7 +19,7 @@ inline MeshMask clip_mask_on_bounds(const MeshMask &mask, const radix::geometry:
     result.components.reserve(mask.components.size());
 
     for (const SimpleMesh &component : mask.components) {
-        const Cow<const SimpleMesh> clipped = alp::throwing_unwrap(mesh::clip_on_bounds_and_cap(component, bounds));
+        const Cow<const SimpleMesh> clipped = alp::unwrap(mesh::clip_on_bounds_and_cap(component, bounds));
         if (!clipped->is_empty()) {
             result.components.push_back(clipped.get());
         }
@@ -34,7 +34,7 @@ inline Cow<const SimpleMesh> clip_on_mask(const SimpleMesh &mesh, const MeshMask
         clipped_components.reserve(mask.components.size());
 
         for (const SimpleMesh &component : mask.components) {
-            const Cow<const SimpleMesh> clipped = alp::throwing_unwrap(mesh::clip_on_mesh(mesh, component, true));
+            const Cow<const SimpleMesh> clipped = alp::unwrap(mesh::clip_on_mesh(mesh, component, true));
             if (clipped.is_ref()) {
                 return Cow<const SimpleMesh>::from_ref(mesh);
             }
@@ -58,7 +58,7 @@ inline Cow<const SimpleMesh> clip_on_mask(const SimpleMesh &mesh, const MeshMask
     std::optional<SimpleMesh> result;
     const SimpleMesh *current = &mesh;
     for (const SimpleMesh &component : mask.components) {
-        const Cow<const SimpleMesh> clipped = alp::throwing_unwrap(mesh::clip_on_mesh(*current, component, false));
+        const Cow<const SimpleMesh> clipped = alp::unwrap(mesh::clip_on_mesh(*current, component, false));
         if (!clipped.is_ref()) {
             result = clipped.get();
             current = &result.value();

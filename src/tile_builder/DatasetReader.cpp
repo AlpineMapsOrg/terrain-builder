@@ -167,8 +167,8 @@ std::shared_ptr<gdal::Dataset> getOverviewDataset(const std::shared_ptr<gdal::Da
 
 DatasetReader::DatasetReader(const std::shared_ptr<gdal::Dataset>& dataset, const srs::System& targetSRS, unsigned band, bool warn_on_missing_overviews)
     : m_dataset(dataset)
-    , m_dataset_srs_wkt(alp::throwing_unwrap(dataset->srs().to_wkt()))
-    , m_target_srs_wkt(alp::throwing_unwrap(targetSRS.to_wkt()))
+    , m_dataset_srs_wkt(alp::unwrap(dataset->srs().to_wkt()))
+    , m_target_srs_wkt(alp::unwrap(targetSRS.to_wkt()))
     , m_requires_reprojection(!dataset->srs().is_same(targetSRS))
     , m_warn_on_missing_overviews(warn_on_missing_overviews)
     , m_band(band)
