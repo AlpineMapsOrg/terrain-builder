@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <libassert/assert.hpp>
@@ -17,16 +18,23 @@
 
 namespace dag {
 
+struct LodMetrics {
+    radix::geometry::Aabb3d bounds;
+    double error;
+
+    bool operator==(const LodMetrics &) const = default;
+};
+
 struct GroupMetadata {
-    std::vector<Id> children; // higher-detail clusters sharing this group's boundary
+    std::vector<Id> children = {}; // its child clusters, the higher-detail clusters it replaces
     double error; // absolute error compared to the original mesh
-    radix::geometry::Aabb3d bounds; // union of the children's bounds
+    radix::geometry::Aabb3d bounds; // union of its child clusters' lod bounds
 
     bool operator==(const GroupMetadata &) const = default;
 };
 
 struct ClusterMetadata {
-    uint32_t group_index; // the group of this cluster
+    std::optional<uint32_t> group_index; // the group this is a parent cluster of, none for a leaf cluster
     radix::geometry::Aabb3d bounds; // the cluster's own bounds
 
     bool operator==(const ClusterMetadata &) const = default;
@@ -44,14 +52,13 @@ struct NodeMetadata {
 inline NodeMetadata build_leaf_metadata(const Clustering &clustering) {
     NodeMetadata metadata;
     metadata.clusters.reserve(clustering.cluster_count());
-    metadata.groups.reserve(clustering.cluster_count());
-    for (uint32_t i = 0; i < clustering.cluster_count(); i++) {
-        DEBUG_ASSERT(clustering.clusters[i].absolute_error == 0.0);
-        const radix::geometry::Aabb3d bounds = compute_cluster_bounds(clustering.clusters[i], clustering.positions);
-        metadata.clusters.push_back(ClusterMetadata{.group_index = i, .bounds = bounds});
-        GroupMetadata &group = metadata.groups.emplace_back();
-        group.error = 0.0;
-        group.bounds = bounds;
+    for (const Cluster &cluster : clustering.clusters) {
+        DEBUG_ASSERT(cluster.absolute_error == 0.0);
+        const radix::geometry::Aabb3d bounds = compute_cluster_bounds(cluster, clustering.positions);
+        metadata.clusters.push_back(ClusterMetadata{
+            .group_index = std::nullopt, 
+            .bounds = bounds
+        });
     }
     return metadata;
 }
@@ -68,11 +75,12 @@ inline dag::NodeMetadata concat_metadata(std::vector<dag::NodeMetadata> parts) {
     for (dag::NodeMetadata &part : parts) {
         const uint32_t group_offset = result.group_count();
         for (const ClusterMetadata &cluster : part.clusters) {
-            result.clusters.push_back(ClusterMetadata{.
-                group_index = group_offset + cluster.group_index, 
+            result.clusters.push_back(ClusterMetadata{
+                .group_index = cluster.group_index.transform([&](const uint32_t index) { return group_offset + index; }),
                 .bounds = cluster.bounds
             });
         }
+
         for (dag::GroupMetadata &group : part.groups) {
             result.groups.push_back(std::move(group));
         }
@@ -80,9 +88,21 @@ inline dag::NodeMetadata concat_metadata(std::vector<dag::NodeMetadata> parts) {
     return result;
 }
 
-// Get the group bounds based on a cluster index.
-inline const radix::geometry::Aabb3d &get_group_bounds(const NodeMetadata &metadata, const uint32_t cluster_index) {
-    return metadata.groups[metadata.clusters[cluster_index].group_index].bounds;
+// The lod metrics of the cluster at `cluster_index`: the error and bounds of the group it is a parent cluster of, or its own bounds with error 0 for a leaf cluster.
+[[nodiscard]] inline LodMetrics get_lod_metrics_for_cluster(const NodeMetadata &metadata, const uint32_t cluster_index) {
+    const ClusterMetadata &cluster = metadata.clusters[cluster_index];
+    if (!cluster.group_index.has_value()) {
+        return LodMetrics{
+            .bounds = cluster.bounds,
+            .error = 0.0
+        };
+    }
+
+    const GroupMetadata &group = metadata.groups[cluster.group_index.value()];
+    return LodMetrics{
+        .bounds = group.bounds, 
+        .error = group.error
+    };
 }
 
 } // namespace dag

@@ -184,13 +184,15 @@ dag::NodeMetadata build_node_metadata(
     // compute group bounds
     for (dag::GroupMetadata &group : metadata.groups) {
         for (const dag::Id &child : group.children) {
-            group.bounds.expand_by(dag::get_group_bounds(cluster_metadata.at(child.source_batch), child.cluster_index));
+            const dag::NodeMetadata &child_metadata = cluster_metadata.at(child.source_batch);
+            const dag::LodMetrics child_metrics = dag::get_lod_metrics_for_cluster(child_metadata, child.cluster_index);
+            group.bounds.expand_by(child_metrics.bounds);
         }
     }
 
     // compute group error
-    for (const auto &[final_index, cluster] : enumerate(metadata.clusters)) {
-        double &error = metadata.groups[cluster.group_index].error;
+    for (const auto &[final_index, group_index] : enumerate(group_assignment)) {
+        double &error = metadata.groups[group_index].error;
         error = std::max(error, simplified.clusters[final_index].absolute_error);
     }
 
