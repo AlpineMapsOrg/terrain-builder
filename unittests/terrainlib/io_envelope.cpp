@@ -88,14 +88,14 @@ using io::envelope::EnvelopeError;
 template <typename Value>
 Bytes encode_value(const Value &value) {
     Bytes bytes;
-    zpp::bits::out output(bytes);
+    zpp::bits::out output(bytes, io::envelope::detail::ArchiveByteOrder{}, io::envelope::detail::ArchiveAllocationLimit{});
     output(value).or_throw();
     return bytes;
 }
 
 io::envelope::Envelope decode_envelope(const Bytes &bytes) {
     io::envelope::Envelope envelope{};
-    zpp::bits::in input(bytes);
+    zpp::bits::in input(bytes, io::envelope::detail::ArchiveByteOrder{}, io::envelope::detail::ArchiveAllocationLimit{});
     input(envelope).or_throw();
     return envelope;
 }

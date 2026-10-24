@@ -13,10 +13,13 @@
 namespace io::envelope {
 namespace detail {
 
+using ArchiveByteOrder = zpp::bits::endian::little;
+using ArchiveAllocationLimit = zpp::bits::alloc_limit<default_max_decompressed_size>;
+
 template <typename Value>
 alp::Result<Bytes, SerdeError> serialize_to_bytes(const Value &value) {
     Bytes bytes;
-    zpp::bits::out output(bytes, zpp::bits::alloc_limit<default_max_decompressed_size>());
+    zpp::bits::out output(bytes, ArchiveByteOrder{}, ArchiveAllocationLimit{});
     const zpp::bits::errc result = output(value);
     if (zpp::bits::failure(result)) {
         return alp::make_unexpected(SerdeError(result.code), fmt::format("encoding {}", type_name<Value>()));
@@ -27,7 +30,7 @@ alp::Result<Bytes, SerdeError> serialize_to_bytes(const Value &value) {
 template <typename Value>
 alp::Result<Value, EnvelopeError, SerdeError> deserialize_from_bytes(const std::span<const std::byte> bytes) {
     Value value{};
-    zpp::bits::in input(bytes, zpp::bits::alloc_limit<default_max_decompressed_size>());
+    zpp::bits::in input(bytes, ArchiveByteOrder{}, ArchiveAllocationLimit{});
     const zpp::bits::errc result = input(value);
     if (zpp::bits::failure(result)) {
         return alp::make_unexpected(SerdeError(result.code), fmt::format("decoding {}", type_name<Value>()));
