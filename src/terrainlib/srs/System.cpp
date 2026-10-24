@@ -69,6 +69,22 @@ Kind System::kind() const {
     return Kind::Geographic;
 }
 
+Ellipsoid System::ellipsoid() const {
+    // Every geodetic system has an ellipsoid.
+    OGRErr semi_major_error = OGRERR_NONE;
+    OGRErr semi_minor_error = OGRERR_NONE;
+    const Ellipsoid ellipsoid{
+        .semi_major_metres = this->_srs.GetSemiMajor(&semi_major_error),
+        .semi_minor_metres = this->_srs.GetSemiMinor(&semi_minor_error)};
+    DEBUG_ASSERT(semi_major_error == OGRERR_NONE);
+    DEBUG_ASSERT(semi_minor_error == OGRERR_NONE);
+    return ellipsoid;
+}
+
+double System::prime_meridian_degrees() const {
+    return this->_srs.GetPrimeMeridian();
+}
+
 std::vector<Axis> System::axes() const {
     const bool is_geographic = this->kind() == Kind::Geographic;
 

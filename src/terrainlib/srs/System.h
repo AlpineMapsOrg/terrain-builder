@@ -11,6 +11,7 @@
 #include "error/Result.h"
 #include "gdal/OgrError.h"
 #include "srs/Axis.h"
+#include "srs/Ellipsoid.h"
 #include "srs/Kind.h"
 #include "srs/error.h"
 
@@ -39,6 +40,14 @@ public:
     // The kind of this system's coordinates.
     [[nodiscard]]
     Kind kind() const;
+
+    // The ellipsoid of this system's datum.
+    [[nodiscard]]
+    Ellipsoid ellipsoid() const;
+
+    // The prime meridian of this system's datum, in degrees east of Greenwich.
+    [[nodiscard]]
+    double prime_meridian_degrees() const;
 
     // The axes of this system's data coordinates, in data order.
     [[nodiscard]]
