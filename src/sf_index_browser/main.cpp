@@ -224,7 +224,7 @@ ftxui::Element render_line(const DisplayEntry &entry, size_t base_level, bool is
 }
 
 int run(const cli::Args &args) {
-    const octree::IndexedStorage storage = alp::unwrap(open_path_indexed(args.dataset_path));
+    const octree::IndexedStorage storage = alp::throwing_unwrap(open_path_indexed(args.dataset_path));
     const octree::IndexMap &index = storage.index();
     const octree::Id root_id = args.full_view ? octree::Id::root() : find_deepest_root(index);
 

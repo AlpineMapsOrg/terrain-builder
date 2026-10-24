@@ -524,7 +524,7 @@ std::unordered_set<octree::Id> build_level(
     // Initialize debug storage if requested (contains .glb meshes)
     std::optional<octree::MeshStorage> debug_storage;
     if (ctx.options.write_debug_meshes) {
-        debug_storage = alp::unwrap(octree::open_folder(
+        debug_storage = alp::throwing_unwrap(octree::open_folder(
             ctx.output_storage.base_path().string() + "-debug",
             false,
             octree::OpenOptions{.preferred_extension_with_dot = ".glb"}));

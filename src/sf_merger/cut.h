@@ -34,19 +34,19 @@ inline void cut_leaf_node(
 ) {
     DEBUG_ASSERT(ctx.input.index().is(octree::NodeStatus::Leaf, id));
 
-    const SimpleMesh mesh = alp::unwrap(ctx.input.load(id));
+    const SimpleMesh mesh = alp::throwing_unwrap(ctx.input.load(id));
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles",
         id, mask.vertex_count(), mask.face_count());
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        alp::unwrap(ctx.output.copy_from(id, ctx.input));
+        alp::throwing_unwrap(ctx.output.copy_from(id, ctx.input));
     } else {
         const SimpleMesh &clipped_mesh = clipped;
         if (!clipped_mesh.is_empty()) {
             LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles",
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
-            alp::unwrap(ctx.output.save(id, clipped_mesh));
+            alp::throwing_unwrap(ctx.output.save(id, clipped_mesh));
         } else {
             LOG_TRACE("Mesh was fully outside the mask");
         }
@@ -113,7 +113,7 @@ inline void cut_dataset(
     const bool keep_inside) {
     Context ctx(input, output, octree::Space::earth(), keep_inside);
     cut_node(ctx, octree::Id::root(), mask);
-    alp::unwrap(output.save_or_create_index());
+    alp::throwing_unwrap(output.save_or_create_index());
 }
 
 inline void cut_dataset(
@@ -124,7 +124,7 @@ inline void cut_dataset(
     LOG_TRACE("Creating output dataset at {}", output_path);
     std::filesystem::create_directories(output_path);
 
-    octree::IndexedStorage output_dataset = alp::unwrap(octree::open_folder_indexed(output_path, octree::OpenOptions(octree::disk::layout::strategy::make_default(), ".glb")));
+    octree::IndexedStorage output_dataset = alp::throwing_unwrap(octree::open_folder_indexed(output_path, octree::OpenOptions(octree::disk::layout::strategy::make_default(), ".glb")));
     if (!output_dataset.index().empty()) {
         LOG_ERROR_AND_EXIT("Output dataset has to be empty.");
     }

@@ -24,7 +24,7 @@ public:
 
 // The value of `result`; throws a Panic if it holds an error.
 template <typename T, ErrorCode... Es>
-T unwrap(BasicResult<T, BasicError<Es...>> result, const std::source_location location = std::source_location::current()) {
+T throwing_unwrap(BasicResult<T, BasicError<Es...>> result, const std::source_location location = std::source_location::current()) {
     if (!result.has_value()) {
         throw Panic(std::move(result).error().propagate(location));
     }
@@ -33,7 +33,7 @@ T unwrap(BasicResult<T, BasicError<Es...>> result, const std::source_location lo
 
 // The value of `result`; throws a Panic with `context` as the error's outermost frame if it holds an error.
 template <typename T, ErrorCode... Es>
-T expect(BasicResult<T, BasicError<Es...>> result, Context auto &&context, const std::source_location location = std::source_location::current()) {
+T throwing_expect(BasicResult<T, BasicError<Es...>> result, Context auto &&context, const std::source_location location = std::source_location::current()) {
     if (!result.has_value()) {
         throw Panic(std::move(result).error().context(std::forward<decltype(context)>(context), location));
     }

@@ -24,11 +24,11 @@ public:
 
     void write_node(const octree::Id &id, const SimpleMesh &mesh) {
         mesh::validate(mesh);
-        alp::unwrap(this->_storage.save(id, mesh));
+        alp::throwing_unwrap(this->_storage.save(id, mesh));
         auto p = this->_storage.path_for(id);
         // change extension to .png
         p.replace_extension(".png");
-        alp::unwrap(texture::io::write_to_path(mesh.texture.value(), p));
+        alp::throwing_unwrap(texture::io::write_to_path(mesh.texture.value(), p));
     }
 
     void copy_subtree_to_output(
@@ -42,7 +42,7 @@ public:
                 }
                 DEBUG_ASSERT(status == octree::NodeStatus::Leaf);
 
-                alp::unwrap(this->_storage.copy_from(child_id, loader.storage()));
+                alp::throwing_unwrap(this->_storage.copy_from(child_id, loader.storage()));
             },
             octree::always_refine,
             id);

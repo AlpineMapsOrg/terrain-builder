@@ -57,8 +57,8 @@ inline MissingTransform make_missing_transform(const System &source_srs, const S
 
 // Creates the code for a point that `transform` cannot map.
 inline Untransformable make_untransformable(const OGRCoordinateTransformation *transform, std::optional<gdal::CplError> gdal_error) {
-    const System source_srs = alp::unwrap(from_gdal(*ASSERT_VAL(transform->GetSourceCS())));
-    const System target_srs = alp::unwrap(from_gdal(*ASSERT_VAL(transform->GetTargetCS())));
+    const System source_srs = alp::throwing_unwrap(from_gdal(*ASSERT_VAL(transform->GetSourceCS())));
+    const System target_srs = alp::throwing_unwrap(from_gdal(*ASSERT_VAL(transform->GetTargetCS())));
     return Untransformable{
         .source = fmt::to_string(source_srs),
         .target = fmt::to_string(target_srs),

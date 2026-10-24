@@ -131,7 +131,7 @@ std::string Dataset::name() const {
 }
 
 radix::tile::SrsBounds Dataset::bounds() const {
-    const PixelTransform transform = alp::unwrap(this->pixel_transform());
+    const PixelTransform transform = alp::throwing_unwrap(this->pixel_transform());
 
     // https://gdal.org/user/raster_data_model.html
     // gdal has a row/column raster format, where row 0 is the top most row.
@@ -174,7 +174,7 @@ radix::tile::SrsBounds Dataset::bounds(const srs::System &targetSrs) const {
     if (l_bounds.height() <= 0.0)
         throw std::runtime_error("south coordinate > north coordinate. This is not supported.");
 
-    return alp::unwrap(srs::encompassing_bounds_transfer(srs(), targetSrs, l_bounds, 2000));
+    return alp::throwing_unwrap(srs::encompassing_bounds_transfer(srs(), targetSrs, l_bounds, 2000));
 }
 
 srs::System Dataset::srs() const {
@@ -187,7 +187,7 @@ srs::System Dataset::srs() const {
     if (source_srs == nullptr) {
         throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
     }
-    return alp::unwrap(srs::from_gdal(*source_srs));
+    return alp::throwing_unwrap(srs::from_gdal(*source_srs));
 }
 
 unsigned Dataset::widthInPixels() const {
@@ -225,12 +225,12 @@ double Dataset::gridResolution(const srs::System &target_srs) const {
 
 double Dataset::pixelWidthIn(const srs::System &target_srs) const {
     const auto b0 = bounds();
-    const auto b1 = alp::unwrap(srs::non_exact_bounds_transform(b0, srs(), target_srs));
+    const auto b1 = alp::throwing_unwrap(srs::non_exact_bounds_transform(b0, srs(), target_srs));
     return b1.width() / widthInPixels();
 }
 
 double Dataset::pixelHeightIn(const srs::System &target_srs) const {
-    const auto b = alp::unwrap(srs::non_exact_bounds_transform(bounds(), srs(), target_srs));
+    const auto b = alp::throwing_unwrap(srs::non_exact_bounds_transform(bounds(), srs(), target_srs));
     return b.height() / heightInPixels();
 }
 
