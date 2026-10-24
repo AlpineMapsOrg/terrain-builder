@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <libassert/assert.hpp>
 
 #include "error/Context.h"
 #include "error/Error.h"
@@ -36,6 +37,24 @@ template <typename T, ErrorCode... Es>
 T throwing_expect(BasicResult<T, BasicError<Es...>> result, Context auto &&context, const std::source_location location = std::source_location::current()) {
     if (!result.has_value()) {
         throw Panic(std::move(result).error().context(std::forward<decltype(context)>(context), location));
+    }
+    return std::move(result).value();
+}
+
+// The value of `result`; fails an assertion with the error's report if it holds an error.
+template <typename T, ErrorCode... Es>
+T unwrap(BasicResult<T, BasicError<Es...>> result, const std::source_location location = std::source_location::current()) {
+    if (!result.has_value()) {
+        PANIC(fmt::format("{:?}", std::move(result).error().propagate(location)));
+    }
+    return std::move(result).value();
+}
+
+// The value of `result`; fails an assertion with the error's report, with `context` as its outermost frame, if it holds an error.
+template <typename T, ErrorCode... Es>
+T expect(BasicResult<T, BasicError<Es...>> result, Context auto &&context, const std::source_location location = std::source_location::current()) {
+    if (!result.has_value()) {
+        PANIC(fmt::format("{:?}", std::move(result).error().context(std::forward<decltype(context)>(context), location)));
     }
     return std::move(result).value();
 }

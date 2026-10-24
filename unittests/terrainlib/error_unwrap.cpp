@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <stdexcept>
 #include <string_view>
 
 #include "error/Error.h"
@@ -19,32 +20,58 @@ std::string_view format_as(const FileError) {
 
 } // namespace
 
-TEST_CASE("throwing_unwrap yields the value of a result that holds one", "[error][unwrap]") {
+TEST_CASE("unwrap yields the value of a result that holds one", "[error][unwrap]") {
     const alp::Result<int, FileError> result = 7;
 
-    CHECK(alp::throwing_unwrap(result) == 7);
+    SECTION("asserting") {
+        CHECK(alp::unwrap(result) == 7);
+    }
+    SECTION("throwing") {
+        CHECK(alp::throwing_unwrap(result) == 7);
+    }
 }
 
-TEST_CASE("throwing_unwrap returns for a void result that succeeded", "[error][unwrap]") {
+TEST_CASE("unwrap returns for a void result that succeeded", "[error][unwrap]") {
     const alp::Result<void, FileError> result;
 
-    CHECK_NOTHROW(alp::throwing_unwrap(result));
+    SECTION("asserting") {
+        CHECK_NOTHROW(alp::unwrap(result));
+    }
+    SECTION("throwing") {
+        CHECK_NOTHROW(alp::throwing_unwrap(result));
+    }
 }
 
-TEST_CASE("throwing_unwrap throws a panic for a result that holds an error", "[error][unwrap]") {
+TEST_CASE("unwrap fails for a result that holds an error", "[error][unwrap]") {
     const alp::Result<int, FileError> result = std::unexpected(alp::make_error(FileError::NotFound));
 
-    CHECK_THROWS_AS(alp::throwing_unwrap(result), alp::Panic);
+    SECTION("asserting") {
+        // In tests a failed assertion throws a std::logic_error instead of aborting; see unittests/throwing_assertions.cpp.
+        CHECK_THROWS_AS(alp::unwrap(result), std::logic_error);
+    }
+    SECTION("throwing") {
+        CHECK_THROWS_AS(alp::throwing_unwrap(result), alp::Panic);
+    }
 }
 
-TEST_CASE("throwing_expect yields the value of a result that holds one", "[error][unwrap]") {
+TEST_CASE("expect yields the value of a result that holds one", "[error][unwrap]") {
     const alp::Result<int, FileError> result = 7;
 
-    CHECK(alp::throwing_expect(result, "reading the answer") == 7);
+    SECTION("asserting") {
+        CHECK(alp::expect(result, "reading the answer") == 7);
+    }
+    SECTION("throwing") {
+        CHECK(alp::throwing_expect(result, "reading the answer") == 7);
+    }
 }
 
-TEST_CASE("throwing_expect throws a panic for a result that holds an error", "[error][unwrap]") {
+TEST_CASE("expect fails for a result that holds an error", "[error][unwrap]") {
     const alp::Result<int, FileError> result = std::unexpected(alp::make_error(FileError::NotFound));
 
-    CHECK_THROWS_AS(alp::throwing_expect(result, "reading the answer"), alp::Panic);
+    SECTION("asserting") {
+        CHECK_THROWS_AS(alp::expect(result, "reading the answer"), std::logic_error);
+    }
+    SECTION("throwing") {
+        CHECK_THROWS_AS(alp::throwing_expect(result, "reading the answer"), alp::Panic);
+    }
 }
