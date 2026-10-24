@@ -136,7 +136,8 @@ inline alp::Result<SegmentedBuffer<ClusterInfo, uint32_t>, io::Error> read_child
     };
     for (const auto run : group_children | std::views::chunk_by(share_node)) {
         const octree::Id node_id = run.front().cluster.source_batch;
-        ALP_TRY(const NodeMetadata &metadata, cache.read_metadata(node_id));
+        ALP_TRY(const std::shared_ptr<const NodeMetadata> shared_metadata, cache.read_metadata(node_id));
+        const NodeMetadata &metadata = *shared_metadata;
         for (const GroupChild &child : run) {
             result(child.group_index, child.index) = make_cluster_info(child.cluster, metadata);
         }
@@ -202,7 +203,8 @@ alp::Result<bool, io::Error> traverse_groups(const octree::IndexedDagMetaStorage
     const octree::Id::Level min_level = std::ranges::min(node_ids | std::views::transform(&octree::Id::level));
 
     for (const octree::Id &node_id : node_ids) {
-        ALP_TRY(const NodeMetadata &metadata, cache.read_metadata(node_id));
+        ALP_TRY(const std::shared_ptr<const NodeMetadata> shared_metadata, cache.read_metadata(node_id));
+        const NodeMetadata &metadata = *shared_metadata;
         const bool is_coarsest = node_id.level() == min_level;
         const SegmentedBuffer<ClusterInfo, uint32_t> parent_clusters = detail::collect_parent_clusters(node_id, metadata);
         const std::vector<ClusterInfo> leaf_clusters = is_coarsest ? detail::collect_leaf_clusters(node_id, metadata) : std::vector<ClusterInfo>{};

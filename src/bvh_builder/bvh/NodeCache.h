@@ -25,7 +25,8 @@ public:
     // The node `reference` points at.
     [[nodiscard]]
     alp::Result<Node, io::Error> read_node(const Reference &reference) {
-        ALP_TRY(const Batch &batch, this->read_batch(reference.batch));
+        ALP_TRY(const std::shared_ptr<const Batch> shared_batch, this->read_batch(reference.batch));
+        const Batch &batch = *shared_batch;
         ASSERT(reference.node < batch.nodes().size());
         return batch.nodes()[reference.node];
     }

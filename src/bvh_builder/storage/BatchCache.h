@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <functional>
+#include <memory>
 #include <utility>
 
 #include <libassert/assert.hpp>
@@ -24,13 +24,15 @@ public:
         ASSERT(max_resident_bytes > 0, "a cache that holds nothing cannot hand out a batch");
     }
 
-    // The batch at `index`, read if it is not resident, valid until the next read.
+    // The batch at `index`, read if it is not resident.
     [[nodiscard]]
-    alp::Result<std::reference_wrapper<const Batch>, io::Error> read_batch(const uint32_t index) {
+    alp::Result<std::shared_ptr<const Batch>, io::Error> read_batch(const uint32_t index) {
         return this->_cache.get_or_try_insert_with(index, [&]() -> alp::Result<typename Cache::Entry, io::Error> {
             ALP_TRY(Batch batch, this->_input.read(index));
             const size_t cost = size_bytes(batch);
-            return typename Cache::Entry{.value = std::move(batch), .cost = cost};
+            std::shared_ptr<const Batch> shared_batch = std::make_shared<const Batch>(std::move(batch));
+
+            return typename Cache::Entry{.value = std::move(shared_batch), .cost = cost};
         });
     }
 
@@ -45,7 +47,7 @@ public:
     }
 
 private:
-    using Cache = BoundedCache<uint32_t, Batch>;
+    using Cache = BoundedCache<uint32_t, std::shared_ptr<const Batch>>;
 
     const Storage &_input;
     Cache _cache;

@@ -55,7 +55,6 @@ inline constexpr Control Control::Break{Action::Break};
 // Visits the tree from `root` in pre-order, passing each node with the reference naming it and skipping the children of every node `v` prunes.
 // False if `v` broke off the walk before its end.
 // Fails with `E` if a batch cannot be read or `v` fails.
-// `v` must not read through `nodes`.
 template <typename E = io::Error, typename F>
 [[nodiscard]]
 alp::Result<bool, E> traverse_tree(NodeCache &nodes, const Reference &root, F &&v) {
@@ -67,10 +66,10 @@ alp::Result<bool, E> traverse_tree(NodeCache &nodes, const Reference &root, F &&
         const Reference reference = stack.back();
         stack.pop_back();
 
-        ALP_TRY(const Batch &batch, nodes.read_batch(reference.batch));
+        ALP_TRY(const std::shared_ptr<const Batch> shared_batch, nodes.read_batch(reference.batch));
+        const Batch &batch = *shared_batch;
         const NodeView view = batch.resolve(batch.node(reference.node));
 
-        const uint32_t misses_before_visit = nodes.count_misses();
         // A visitor that returns nothing always continues.
         Control control = Control::Continue;
         if constexpr (std::is_void_v<typename decltype(visit(reference, view))::value_type>) {
@@ -78,7 +77,6 @@ alp::Result<bool, E> traverse_tree(NodeCache &nodes, const Reference &root, F &&
         } else {
             ALP_TRY(control, visit(reference, view));
         }
-        DEBUG_ASSERT(nodes.count_misses() == misses_before_visit, "the visitor may have invalidated the cache");
 
         if (control == Control::Break) {
             return false;

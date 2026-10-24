@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -13,7 +12,6 @@
 #include <fmt/format.h>
 #include <libassert/assert.hpp>
 
-#include "array_utils.h"
 #include "io/Error.h"
 #include "mem.h"
 #include "error/Result.h"
@@ -215,7 +213,8 @@ inline void tabulate_inner_node(
 inline alp::Result<void, io::Error> tabulate_subtree(
     bvh::NodeCache &input, const bvh::Reference &reference, const Options &options,
     BatchWriter &writer, Scratch &scratch) {
-    ALP_TRY(const bvh::Batch &batch, input.read_batch(reference.batch));
+    ALP_TRY(const std::shared_ptr<const bvh::Batch> shared_batch, input.read_batch(reference.batch));
+    const bvh::Batch &batch = *shared_batch;
     ASSERT(reference.node < batch.nodes().size());
     const bvh::Node node = batch.nodes()[reference.node];
 
@@ -227,11 +226,10 @@ inline alp::Result<void, io::Error> tabulate_subtree(
             return {};
         },
         [&](const std::span<const bvh::Reference> children) -> alp::Result<void, io::Error> {
-            // The batch stays resident only until the next read, and the children are about to make several.
-            const std::array<bvh::Reference, 2> child_references = to_array<2>(children);
+            ASSERT(children.size() == 2);
 
             // The rows are read back to front, so walking the right child first leaves the left one first there.
-            for (const bvh::Reference &child : std::views::reverse(child_references)) {
+            for (const bvh::Reference &child : std::views::reverse(children)) {
                 ALP_TRY(tabulate_subtree(input, child, options, writer, scratch));
             }
 

@@ -56,7 +56,8 @@ alp::Result<uint64_t, io::Error> check_tree(bvh::NodeCache &cache, const bvh::Re
             violation_count++;
             continue;
         }
-        ALP_TRY(const bvh::Batch &batch, cache.read_batch(reference.batch));
+        ALP_TRY(const std::shared_ptr<const bvh::Batch> shared_batch, cache.read_batch(reference.batch));
+        const bvh::Batch &batch = *shared_batch;
         std::vector<bool> &batch_reached = reached[reference.batch];
         if (batch_reached.empty()) {
             batch_reached.resize(batch.nodes().size());

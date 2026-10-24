@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <memory>
 #include <utility>
 
 #include "error/Result.h"
@@ -23,13 +23,14 @@ public:
         : _dag(dag), _cache(max_resident_bytes) {}
 
     // Reads the metadata of `node`.
-    // Valid until the next read.
     [[nodiscard]]
-    alp::Result<std::reference_wrapper<const NodeMetadata>, io::Error> read_metadata(const octree::Id &node) {
+    alp::Result<std::shared_ptr<const NodeMetadata>, io::Error> read_metadata(const octree::Id &node) {
         return this->_cache.get_or_try_insert_with(node, [&]() -> alp::Result<Cache::Entry, io::Error> {
             ALP_TRY(NodeMetadata metadata, this->_dag.load(node));
             const size_t cost = estimate_bytes(metadata);
-            return Cache::Entry{.value = std::move(metadata), .cost = cost};
+            std::shared_ptr<const NodeMetadata> shared_metadata = std::make_shared<const NodeMetadata>(std::move(metadata));
+
+            return Cache::Entry{.value = std::move(shared_metadata), .cost = cost};
         });
     }
 
@@ -39,7 +40,7 @@ public:
     }
 
 private:
-    using Cache = BoundedCache<octree::Id, NodeMetadata>;
+    using Cache = BoundedCache<octree::Id, std::shared_ptr<const NodeMetadata>>;
 
     // Estimates how many bytes `metadata` holds.
     static size_t estimate_bytes(const NodeMetadata &metadata) {

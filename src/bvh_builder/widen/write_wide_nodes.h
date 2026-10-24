@@ -65,7 +65,8 @@ inline alp::Result<void, io::Error> write_subtree(
     std::vector<bvh::Reference> &children) {
     DEBUG_ASSERT(slots >= 1);
 
-    ALP_TRY(const bvh::Batch &batch, input.read_batch(reference.batch));
+    ALP_TRY(const std::shared_ptr<const bvh::Batch> shared_batch, input.read_batch(reference.batch));
+    const bvh::Batch &batch = *shared_batch;
     const bvh::Node node = batch.node(reference.node);
 
     return batch.visit(
@@ -77,7 +78,6 @@ inline alp::Result<void, io::Error> write_subtree(
             return {};
         },
         [&](const std::span<const bvh::Reference> node_children) -> alp::Result<void, io::Error> {
-            // The batch stays resident only until the next read, and the children are about to make several.
             const auto [left, right] = to_array<2>(node_children);
 
             ALP_TRY(const std::span<const Split> row, rows.pop_row());

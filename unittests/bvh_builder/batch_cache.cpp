@@ -38,7 +38,7 @@ TEST_CASE("a batch read back is the one that was written", "[storage][BatchCache
 
     const auto result = cache.read_batch(2);
     REQUIRE(result.has_value());
-    CHECK(result->get() == written[2]);
+    CHECK(*result->get() == written[2]);
 }
 
 TEST_CASE("a batch takes up the budget by its size, so a larger one displaces several smaller ones", "[storage][BatchCache]") {

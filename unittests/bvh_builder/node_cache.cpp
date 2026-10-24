@@ -87,5 +87,5 @@ TEST_CASE("the batch behind a node is reachable through the cache", "[bvh][NodeC
 
     const auto result = cache.read_batch(1);
     REQUIRE(result.has_value());
-    CHECK(result->get() == written[1]);
+    CHECK(*result->get() == written[1]);
 }
