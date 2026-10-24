@@ -50,7 +50,7 @@ TEST_CASE("unwrap fails for a result that holds an error", "[error][unwrap]") {
         CHECK_THROWS_AS(alp::unwrap(result), std::logic_error);
     }
     SECTION("throwing") {
-        CHECK_THROWS_AS(alp::throwing_unwrap(result), alp::Panic);
+        CHECK_THROWS_AS(alp::throwing_unwrap(result), alp::UnwrapError);
     }
 }
 
@@ -72,6 +72,6 @@ TEST_CASE("expect fails for a result that holds an error", "[error][unwrap]") {
         CHECK_THROWS_AS(alp::expect(result, "reading the answer"), std::logic_error);
     }
     SECTION("throwing") {
-        CHECK_THROWS_AS(alp::throwing_expect(result, "reading the answer"), alp::Panic);
+        CHECK_THROWS_AS(alp::throwing_expect(result, "reading the answer"), alp::UnwrapError);
     }
 }
