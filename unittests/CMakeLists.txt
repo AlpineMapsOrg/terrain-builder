@@ -211,7 +211,7 @@ if(TARGET bvhbuilderlib)
         bvh_builder/split_into_sorted_runs.cpp
         bvh_builder/tabulate_splits.cpp
         bvh_builder/traverse.cpp
-        bvh_builder/traverse_dag.cpp
+        bvh_builder/visit_dag.cpp
         bvh_builder/traverse_tree.cpp
         bvh_builder/widen_build.cpp
         bvh_builder/write_wide_nodes.cpp

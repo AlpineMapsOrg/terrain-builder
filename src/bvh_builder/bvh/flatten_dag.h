@@ -2,17 +2,16 @@
 
 #include <cstddef>
 #include <expected>
-#include <span>
+#include <utility>
+#include <vector>
 
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "error/utils.h"
 #include "io/Error.h"
 #include "range_utils.h"
-#include "variant_utils.h"
 
 #include "../../dag_builder/storage.h"
 
@@ -20,7 +19,12 @@
 #include "bvh/NodeInput.h"
 #include "bvh/Storage.h"
 #include "bvh/BatchWriter.h"
-#include "dag/traverse_dag.h"
+#include "dag/Cluster.h"
+#include "dag/ClusterInfo.h"
+#include "dag/Group.h"
+#include "dag/NodeMetadataCache.h"
+#include "dag/read.h"
+#include "dag/visit_dag.h"
 
 namespace bvh {
 
@@ -31,26 +35,43 @@ struct FlattenOptions {
 
 namespace detail {
 
+// Copies `cluster` into the record a leaf holds.
+inline dag::ClusterInfo make_cluster_info(const dag::Cluster &cluster) {
+    return dag::ClusterInfo{.id = cluster.id(), .error = cluster.error(), .lod_bounds = cluster.lod_bounds(), .tight_bounds = cluster.tight_bounds()};
+}
+
 // Makes the leaf holding the child clusters of `group`.
-inline LeafInput<std::span<const dag::ClusterInfo>> make_leaf(const dag::GroupView &group) {
-    DEBUG_ASSERT(!group.child_clusters.empty());
+[[nodiscard]]
+inline alp::Result<LeafInput<std::vector<dag::ClusterInfo>>, io::Error> make_group_leaf(const dag::Group &group, dag::NodeMetadataCache &cache) {
+    ALP_TRY(const std::vector<dag::Cluster> clusters, dag::read_clusters(group, cache));
+    DEBUG_ASSERT(!clusters.empty());
 
     radix::geometry::Aabb3d tight_bounds;
-    for (const dag::ClusterInfo &cluster : group.child_clusters) {
-        tight_bounds.expand_by(cluster.tight_bounds);
+    for (const dag::Cluster &cluster : clusters) {
+        tight_bounds.expand_by(cluster.tight_bounds());
     }
 
-    const double max_parent_error = match(
-        group.id,
-        [&](const dag::GroupId &) { return group.error; },
-        [](const dag::ClusterId &) { return ROOT_PARENT_ERROR; });
+    const double min_child_error = min(clusters, &dag::Cluster::error);
     const NodeHeader header{
-        .min_child_error = min(group.child_clusters, &dag::ClusterInfo::error),
-        .max_parent_error = max_parent_error,
-        .lod_bounds = group.bounds,
+        .min_child_error = min_child_error,
+        .max_parent_error = group.error(),
+        .lod_bounds = group.lod_bounds(),
         .tight_bounds = tight_bounds,
     };
-    return LeafInput{header, group.child_clusters};
+    std::vector<dag::ClusterInfo> cluster_infos = transform_vector(clusters, make_cluster_info);
+    return LeafInput<std::vector<dag::ClusterInfo>>{header, std::move(cluster_infos)};
+}
+
+// Makes the leaf holding `cluster`, which no group lists.
+inline LeafInput<std::vector<dag::ClusterInfo>> make_cluster_leaf(const dag::Cluster &cluster) {
+    const NodeHeader header{
+        .min_child_error = cluster.error(),
+        .max_parent_error = ROOT_PARENT_ERROR,
+        .lod_bounds = cluster.lod_bounds(),
+        .tight_bounds = cluster.tight_bounds(),
+    };
+    std::vector<dag::ClusterInfo> cluster_infos{make_cluster_info(cluster)};
+    return LeafInput<std::vector<dag::ClusterInfo>>{header, std::move(cluster_infos)};
 }
 
 } // namespace detail
@@ -58,19 +79,21 @@ inline LeafInput<std::span<const dag::ClusterInfo>> make_leaf(const dag::GroupVi
 // Writes the leaves of a bvh over `dag` into `output`.
 [[nodiscard]]
 inline alp::Result<void, io::Error> flatten_dag(const octree::IndexedDagMetaStorage &dag, Storage &output, const FlattenOptions &options = {}) {
-    return alp::run_with_context(
-        alp::make_context("flattening a dag from {} to {}", dag.base_path(), output.directory()),
-        [&] -> alp::Result<void, io::Error> {
-            BatchWriter writer(output, options.max_batch_bytes);
-            ALP_TRY(dag::traverse_groups(dag, options.max_resident_bytes, [&](const dag::GroupView &group) -> alp::Result<void, io::Error> {
-                // The clusters a group lists form one leaf.
-                if (!group.child_clusters.empty()) {
-                    ALP_TRY(writer.write_node(detail::make_leaf(group)));
-                }
-                return {};
-            }));
-            return writer.flush();
-        });
+    BatchWriter writer(output, options.max_batch_bytes);
+    dag::NodeMetadataCache cache(dag, options.max_resident_bytes);
+
+    ALP_TRY(dag::visit_groups([&](const dag::Group &group) -> alp::Result<void, io::Error> {
+        ALP_TRY(const LeafInput<std::vector<dag::ClusterInfo>> leaf, detail::make_group_leaf(group, cache));
+        ALP_TRY(writer.write_node(leaf));
+        return {};
+    }, cache));
+
+    ALP_TRY(dag::visit_root_clusters([&](const dag::Cluster &cluster) -> alp::Result<void, io::Error> {
+        ALP_TRY(writer.write_node(detail::make_cluster_leaf(cluster)));
+        return {};
+    }, cache));
+
+    return writer.flush();
 }
 
 }

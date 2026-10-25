@@ -81,6 +81,7 @@ TEST_CASE("flatten_dag writes a leaf per group, including root groups", "[bvh][f
 TEST_CASE("flatten_dag measures a leaf from its group's box and bounds its clusters tightly", "[bvh][flatten_dag]") {
     const octree::Id coarse = octree::Id::root();
     const octree::Id fine = coarse.child(0).value();
+    const octree::Id fine_child = fine.child(0).value();
     // The group's box is larger than its clusters', so the LOD and tight bounds differ.
     const bvh::Bounds group_box{glm::dvec3{0.0}, glm::dvec3{8.0}};
     const bvh::Bounds coarse_box{glm::dvec3{2.0}, glm::dvec3{6.0}};
@@ -93,11 +94,14 @@ TEST_CASE("flatten_dag measures a leaf from its group's box and bounds its clust
         {coarse, {.clusters = {{.group_index = 0, .bounds = coarse_box}},
                   .groups = {{.children = {{fine, 0}, {fine, 1}}, .error = 3.0, .bounds = group_box}}}},
         {fine, {.clusters = {{.group_index = 0, .bounds = first_box}, {.group_index = 1, .bounds = second_box}},
-                .groups = {{.error = 2.0, .bounds = first_box}, {.error = 1.0, .bounds = second_box}}}},
+                .groups = {{.children = {{fine_child, 0}}, .error = 2.0, .bounds = first_box}, {.children = {{fine_child, 1}}, .error = 1.0, .bounds = second_box}}}},
+        {fine_child, {.clusters = {{.group_index = std::nullopt, .bounds = first_box}, {.group_index = std::nullopt, .bounds = second_box}}, .groups = {}}},
     });
 
     CHECK_THAT(to_vector(leaves | std::views::transform(&Leaf::header)), Catch::Matchers::UnorderedEquals(std::vector{
         make_node_header({1.0, 3.0}, group_box, both_boxes),
         make_node_header({3.0, bvh::ROOT_PARENT_ERROR}, group_box, coarse_box),
+        make_node_header({0.0, 2.0}, first_box, first_box),
+        make_node_header({0.0, 1.0}, second_box, second_box),
     }));
 }
