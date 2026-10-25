@@ -20,13 +20,17 @@ namespace dag {
 class NodeMetadataCache {
 public:
     NodeMetadataCache(const octree::IndexedDagMetaStorage &dag, const size_t max_resident_bytes)
-        : _dag(dag), _cache(max_resident_bytes) {}
+        : _storage(dag), _cache(max_resident_bytes) {}
+
+    const octree::IndexedDagMetaStorage &storage() const {
+        return this->_storage;
+    }
 
     // Reads the metadata of `batch`.
     [[nodiscard]]
     alp::Result<std::shared_ptr<const NodeMetadata>, io::Error> read_metadata(const BatchId &batch) {
         return this->_cache.get_or_try_insert_with(batch, [&]() -> alp::Result<Cache::Entry, io::Error> {
-            ALP_TRY(NodeMetadata metadata, this->_dag.load(batch));
+            ALP_TRY(NodeMetadata metadata, this->_storage.load(batch));
             const size_t cost = estimate_bytes(metadata);
             std::shared_ptr<const NodeMetadata> shared_metadata = std::make_shared<const NodeMetadata>(std::move(metadata));
 
@@ -51,7 +55,7 @@ private:
         return bytes;
     }
 
-    const octree::IndexedDagMetaStorage &_dag;
+    const octree::IndexedDagMetaStorage &_storage;
     Cache _cache;
 };
 
