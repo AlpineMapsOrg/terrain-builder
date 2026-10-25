@@ -17,7 +17,7 @@
 #include "bvh/NodeInput.h"
 #include "bvh/NodeView.h"
 #include "bvh/Reference.h"
-#include "dag/ClusterInfo.h"
+#include "dag/SourceId.h"
 
 namespace bvh {
 
@@ -36,7 +36,7 @@ public:
 
     // How many bytes this batch occupies.
     friend size_t size_bytes(const Batch &batch) {
-        return sizeof_val(batch.index(), batch.nodes(), batch.clusters(), batch.children());
+        return sizeof_val(batch.index(), batch.nodes(), batch.sources(), batch.children());
     }
 
     BatchIndex index() const {
@@ -59,17 +59,17 @@ public:
         return std::span<const Reference>{this->_children}.subspan(start, count);
     }
 
-    std::span<const dag::ClusterInfo> clusters() const {
-        return this->_clusters;
+    std::span<const dag::SourceId> sources() const {
+        return this->_sources;
     }
-    std::span<const dag::ClusterInfo> clusters(const NodeIndex start, const NodeIndex count) const {
-        DEBUG_ASSERT(start + count <= this->_clusters.size());
-        return std::span<const dag::ClusterInfo>{this->_clusters}.subspan(start, count);
+    const dag::SourceId &source(const NodeIndex index) const {
+        DEBUG_ASSERT(index < this->_sources.size());
+        return this->_sources[index];
     }
 
     NodeView resolve(const Node &node) const {
         if (node.is_leaf()) {
-            return NodeView{node.header(), this->clusters(node.start(), node.count())};
+            return NodeView{node.header(), this->source(node.start())};
         } else {
             return NodeView{node.header(), this->children(node.start(), node.count())};
         }
@@ -87,15 +87,13 @@ public:
         const Range<NodeIndex> children = append_all(this->_children, node.children);
 
         ASSERT(!children.is_empty());
-        return this->push_node(Node(node.header, children.start, children.size(), false));
+        return this->push_node(Node(node.header, children.start, children.size()));
     }
 
-    template <std::ranges::input_range R>
-    NodeIndex add_node(const LeafInput<R> &node) {
-        const Range<NodeIndex> clusters = append_all(this->_clusters, node.clusters);
-
-        DEBUG_ASSERT(!clusters.is_empty());
-        return this->push_node(Node(node.header, clusters.start, clusters.size(), true));
+    NodeIndex add_node(const LeafInput &node) {
+        const auto start = static_cast<NodeIndex>(this->_sources.size());
+        this->_sources.push_back(node.source);
+        return this->push_node(Node(node.header, start, 0));
     }
 
     NodeIndex add_node(const NodeView &node) {
@@ -103,8 +101,8 @@ public:
             [&](const NodeView::Children children) {
                 return this->add_node(InnerInput{node.header(), children});
             },
-            [&](const NodeView::Clusters clusters) {
-                return this->add_node(LeafInput{node.header(), clusters});
+            [&](const dag::SourceId &source) {
+                return this->add_node(LeafInput{node.header(), source});
             });
     }
 
@@ -131,7 +129,7 @@ private:
     BatchIndex _index;
     std::vector<Node> _nodes;
     std::vector<Reference> _children;
-    std::vector<dag::ClusterInfo> _clusters;
+    std::vector<dag::SourceId> _sources;
 };
 
 }

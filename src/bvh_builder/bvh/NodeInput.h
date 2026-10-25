@@ -4,12 +4,13 @@
 #include <ranges>
 
 #include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <fmt/std.h>
 
 #include "type_utils.h"
 
 #include "bvh/NodeHeader.h"
 #include "bvh/NodeView.h"
+#include "dag/SourceId.h"
 
 namespace bvh {
 
@@ -25,30 +26,26 @@ struct InnerInput {
 template <typename R>
 InnerInput(NodeHeader, R &&) -> InnerInput<std::views::all_t<R>>;
 
-// A leaf's header and cluster records, before a batch stores them.
-template <std::ranges::input_range R>
+// A leaf's header and source, before a batch stores them.
 struct LeafInput {
     NodeHeader header;
-    R clusters;
+    dag::SourceId source;
 
     bool operator==(const LeafInput &) const = default;
 };
 
-template <typename R>
-LeafInput(NodeHeader, R &&) -> LeafInput<std::views::all_t<R>>;
-
 // A node a batch can store.
 template <typename N>
-concept NodeInput = is_specialization_of_v<N, InnerInput> || is_specialization_of_v<N, LeafInput> || std::same_as<N, NodeView>;
+concept NodeInput = is_specialization_of_v<N, InnerInput> || std::same_as<N, LeafInput> || std::same_as<N, NodeView>;
 
 }
 
-template <typename R>
-struct fmt::formatter<bvh::LeafInput<R>> {
+template <>
+struct fmt::formatter<bvh::LeafInput> {
     constexpr auto parse(fmt::format_parse_context &ctx) {
         return ctx.begin();
     }
-    auto format(const bvh::LeafInput<R> &leaf, fmt::format_context &ctx) const {
-        return fmt::format_to(ctx.out(), "LeafInput(header={}, clusters={})", leaf.header, leaf.clusters);
+    auto format(const bvh::LeafInput &leaf, fmt::format_context &ctx) const {
+        return fmt::format_to(ctx.out(), "LeafInput(header={}, source={})", leaf.header, leaf.source);
     }
 };

@@ -22,7 +22,7 @@
 #include "bvh/Node.h"
 #include "bvh/NodeInput.h"
 #include "bvh/Reference.h"
-#include "dag/ClusterInfo.h"
+#include "dag/SourceId.h"
 #include "widen/options.h"
 #include "widen/tabulate_splits.h"
 
@@ -72,8 +72,8 @@ inline alp::Result<void, io::Error> write_subtree(
     return batch.visit(
         node,
         // A leaf is carried over as it is, filling the one slot it was offered.
-        [&](const std::span<const dag::ClusterInfo> clusters) -> alp::Result<void, io::Error> {
-            ALP_TRY(const bvh::Reference leaf, writer.write_node(bvh::LeafInput{node.header(), clusters}));
+        [&](const dag::SourceId &source) -> alp::Result<void, io::Error> {
+            ALP_TRY(const bvh::Reference leaf, writer.write_node(bvh::LeafInput{node.header(), source}));
             children.push_back(leaf);
             return {};
         },

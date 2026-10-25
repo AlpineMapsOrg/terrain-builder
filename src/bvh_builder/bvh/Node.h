@@ -2,8 +2,6 @@
 
 #include <utility>
 
-#include <libassert/assert.hpp>
-
 #include "zpp_bits_utils.h"
 
 #include "bvh/NodeHeader.h"
@@ -28,7 +26,7 @@ public:
     }
 
     bool is_leaf() const noexcept {
-        return (this->_packed_count & LEAF_BIT) != 0;
+        return this->_count == 0;
     }
     bool is_inner() const noexcept {
         return !this->is_leaf();
@@ -39,25 +37,20 @@ private:
     friend zpp::bits::access;
     using serialize = zpp::bits::members<3>;
 
-    // Marks a leaf in the packed count, since both kinds share the start and the count.
-    static constexpr NodeIndex LEAF_BIT = NodeIndex{1} << 31;
-
-    Node(NodeHeader header, const NodeIndex start, const NodeIndex count, const bool is_leaf)
-        : _header(std::move(header)), _start(start), _packed_count(is_leaf ? count | LEAF_BIT : count) {
-        DEBUG_ASSERT(count < LEAF_BIT);
-    }
+    Node(NodeHeader header, const NodeIndex start, const NodeIndex count)
+        : _header(std::move(header)), _start(start), _count(count) {}
 
     NodeIndex start() const {
         return this->_start;
     }
 
     NodeIndex count() const {
-        return this->_packed_count & ~LEAF_BIT;
+        return this->_count;
     }
 
     NodeHeader _header;
-    NodeIndex _start;
-    NodeIndex _packed_count;
+    NodeIndex _start; // the first child, or the source of a leaf
+    NodeIndex _count; // how many children it has, 0 for a leaf
 };
 
 }

@@ -10,15 +10,14 @@
 
 #include "bvh/NodeHeader.h"
 #include "bvh/Reference.h"
-#include "dag/ClusterInfo.h"
+#include "dag/SourceId.h"
 
 namespace bvh {
 
 class NodeView {
 public:
     using Children = std::span<const Reference>;
-    using Clusters = std::span<const dag::ClusterInfo>;
-    using Contents = std::variant<Children, Clusters>;
+    using Contents = std::variant<Children, dag::SourceId>;
 
     NodeView(const NodeHeader &header, const Contents contents)
         : _header(header), _contents(contents) {}
@@ -28,7 +27,7 @@ public:
     }
 
     bool is_leaf() const {
-        return std::holds_alternative<Clusters>(this->_contents);
+        return std::holds_alternative<dag::SourceId>(this->_contents);
     }
 
     bool is_inner() const {
@@ -40,9 +39,10 @@ public:
         return std::get<Children>(this->_contents);
     }
 
-    Clusters clusters() const {
+    // The group or cluster the leaf stands for.
+    const dag::SourceId &source() const {
         DEBUG_ASSERT(this->is_leaf());
-        return std::get<Clusters>(this->_contents);
+        return std::get<dag::SourceId>(this->_contents);
     }
 
     // Calls whichever of `visitors` matches what the node holds.

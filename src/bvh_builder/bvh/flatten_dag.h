@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <expected>
-#include <utility>
 #include <vector>
 
 #include <libassert/assert.hpp>
@@ -20,7 +19,6 @@
 #include "bvh/Storage.h"
 #include "bvh/BatchWriter.h"
 #include "dag/Cluster.h"
-#include "dag/ClusterInfo.h"
 #include "dag/Group.h"
 #include "dag/NodeMetadataCache.h"
 #include "dag/read.h"
@@ -35,14 +33,9 @@ struct FlattenOptions {
 
 namespace detail {
 
-// Copies `cluster` into the record a leaf holds.
-inline dag::ClusterInfo make_cluster_info(const dag::Cluster &cluster) {
-    return dag::ClusterInfo{.id = cluster.id(), .error = cluster.error(), .lod_bounds = cluster.lod_bounds(), .tight_bounds = cluster.tight_bounds()};
-}
-
-// Makes the leaf holding the child clusters of `group`.
+// Makes the leaf standing for `group`.
 [[nodiscard]]
-inline alp::Result<LeafInput<std::vector<dag::ClusterInfo>>, io::Error> make_group_leaf(const dag::Group &group, dag::NodeMetadataCache &cache) {
+inline alp::Result<LeafInput, io::Error> make_group_leaf(const dag::Group &group, dag::NodeMetadataCache &cache) {
     ALP_TRY(const std::vector<dag::Cluster> clusters, dag::read_clusters(group, cache));
     DEBUG_ASSERT(!clusters.empty());
 
@@ -58,20 +51,18 @@ inline alp::Result<LeafInput<std::vector<dag::ClusterInfo>>, io::Error> make_gro
         .lod_bounds = group.lod_bounds(),
         .tight_bounds = tight_bounds,
     };
-    std::vector<dag::ClusterInfo> cluster_infos = transform_vector(clusters, make_cluster_info);
-    return LeafInput<std::vector<dag::ClusterInfo>>{header, std::move(cluster_infos)};
+    return LeafInput{header, group.id()};
 }
 
-// Makes the leaf holding `cluster`, which no group lists.
-inline LeafInput<std::vector<dag::ClusterInfo>> make_cluster_leaf(const dag::Cluster &cluster) {
+// Makes the leaf standing for `cluster`, which no group lists.
+inline LeafInput make_cluster_leaf(const dag::Cluster &cluster) {
     const NodeHeader header{
         .min_child_error = cluster.error(),
         .max_parent_error = ROOT_PARENT_ERROR,
         .lod_bounds = cluster.lod_bounds(),
         .tight_bounds = cluster.tight_bounds(),
     };
-    std::vector<dag::ClusterInfo> cluster_infos{make_cluster_info(cluster)};
-    return LeafInput<std::vector<dag::ClusterInfo>>{header, std::move(cluster_infos)};
+    return LeafInput{header, cluster.id()};
 }
 
 } // namespace detail
@@ -83,7 +74,7 @@ inline alp::Result<void, io::Error> flatten_dag(const octree::IndexedDagMetaStor
     dag::NodeMetadataCache cache(dag, options.max_resident_bytes);
 
     ALP_TRY(dag::visit_groups([&](const dag::Group &group) -> alp::Result<void, io::Error> {
-        ALP_TRY(const LeafInput<std::vector<dag::ClusterInfo>> leaf, detail::make_group_leaf(group, cache));
+        ALP_TRY(const LeafInput leaf, detail::make_group_leaf(group, cache));
         ALP_TRY(writer.write_node(leaf));
         return {};
     }, cache));

@@ -25,6 +25,7 @@
 #include "bvh/NodeView.h"
 #include "bvh/Reference.h"
 #include "bvh/traverse_tree.h"
+#include "dag/SourceId.h"
 #include "storage/batch_limits.h"
 
 namespace {
@@ -69,17 +70,14 @@ TEST_CASE("the walk visits every node once, each parent before its children and 
     CHECK(visited == std::vector{root, left, leaf_0, leaf_1, right, leaf_2, leaf_3});
 }
 
-TEST_CASE("a leaf root is visited alone, with its header and clusters","[bvh][traverse_tree]") {
+TEST_CASE("a leaf root is visited alone, with its header and source","[bvh][traverse_tree]") {
     const bvh::NodeHeader leaf_header = make_node_header({3.0, 4.0}, {glm::dvec3{5.0}, glm::dvec3{6.0}});
-    const std::vector<dag::ClusterInfo> leaf_clusters{
-        {.id = {octree::Id::root(), 5}, .error = 3.0, .lod_bounds = {glm::dvec3{0.0}, glm::dvec3{2.0}}, .tight_bounds = {glm::dvec3{0.0}, glm::dvec3{1.0}}},
-        {.id = {octree::Id::root(), 6}, .error = 4.0, .lod_bounds = {glm::dvec3{3.0}, glm::dvec3{5.0}}, .tight_bounds = {glm::dvec3{3.0}, glm::dvec3{4.0}}},
-    };
+    const dag::SourceId leaf_source = dag::GroupId{octree::Id::root(), 5};
 
     const TempDirectory directory("traverse_tree");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
     bvh::BatchWriter writer(nodes);
-    const auto leaf_result = writer.write_node(bvh::LeafInput{leaf_header, leaf_clusters});
+    const auto leaf_result = writer.write_node(bvh::LeafInput{leaf_header, leaf_source});
     REQUIRE(leaf_result.has_value());
     REQUIRE(writer.flush().has_value());
     REQUIRE(nodes.save_index().has_value());
@@ -87,17 +85,17 @@ TEST_CASE("a leaf root is visited alone, with its header and clusters","[bvh][tr
     bvh::NodeCache cache(nodes, 1);
     std::vector<bvh::Reference> visited;
     bvh::NodeHeader header;
-    std::vector<dag::ClusterInfo> clusters;
+    dag::SourceId source;
     const auto result = bvh::traverse_tree(cache, *leaf_result, [&](const bvh::Reference &reference, const bvh::NodeView &view) {
         visited.push_back(reference);
         header = view.header();
-        clusters.assign_range(view.clusters());
+        source = view.source();
     });
 
     REQUIRE(result.value_or(false));
     CHECK(visited == std::vector{*leaf_result});
     CHECK(header == leaf_header);
-    CHECK(clusters == leaf_clusters);
+    CHECK(source == leaf_source);
 }
 
 TEST_CASE("an inner node's view carries its header and children", "[bvh][traverse_tree]") {

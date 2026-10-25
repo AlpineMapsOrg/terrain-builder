@@ -28,7 +28,7 @@
 #include "bvh/Node.h"
 #include "bvh/NodeHeader.h"
 #include "bvh/Reference.h"
-#include "dag/ClusterInfo.h"
+#include "dag/SourceId.h"
 #include "widen/RowBuffer.h"
 #include "widen/options.h"
 
@@ -220,7 +220,7 @@ inline alp::Result<void, io::Error> tabulate_subtree(
 
     return batch.visit(
         node,
-        [&](const std::span<const dag::ClusterInfo>) -> alp::Result<void, io::Error> {
+        [&](const dag::SourceId &) -> alp::Result<void, io::Error> {
             // A leaf fills one slot and costs nothing at any number of them, so its row is empty.
             scratch.cost_stack.push_empty_segment();
             return {};

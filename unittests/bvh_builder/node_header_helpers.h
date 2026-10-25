@@ -1,22 +1,15 @@
 #pragma once
 
-#include <array>
-
 #include "Range.h"
+#include "octree/Id.h"
 
+#include "dag_id.h"
 #include "bvh/NodeHeader.h"
 #include "bvh/NodeInput.h"
-#include "dag/ClusterInfo.h"
 
-// A leaf input with `header`, holding a cluster that nothing reads.
+// A leaf input with `header`, holding a source that nothing reads.
 inline auto make_leaf_input(const bvh::NodeHeader &header = {}) {
-    return bvh::LeafInput{header, std::array{dag::ClusterInfo{}}};
-}
-
-inline dag::ClusterInfo make_empty_cluster(const dag::ClusterId &id) {
-    dag::ClusterInfo cluster{};
-    cluster.id = id;
-    return cluster;
+    return bvh::LeafInput{header, dag::ClusterId{octree::Id::root(), 0}};
 }
 
 // A node header with the error interval `errors`.

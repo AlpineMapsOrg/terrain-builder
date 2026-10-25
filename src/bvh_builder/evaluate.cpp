@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -8,7 +9,6 @@
 
 #include "cli.h"
 #include "commands.h"
-#include "dag_id.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -18,6 +18,7 @@
 #include "bvh/Storage.h"
 #include "bvh/find_root.h"
 #include "bvh/flat_traverse.h"
+#include "dag/SourceId.h"
 #include "json/glm.h"
 #include "json/octree.h"
 #include "json/serialize.h"
@@ -29,9 +30,9 @@
 
 namespace {
 
-// The clusters a camera selected and the work selecting them took.
+// The groups a camera selected and the work selecting them took.
 struct CutStats {
-    uint64_t cluster_count;
+    uint64_t group_count;
     uint64_t inner_nodes_tested;
     uint64_t leaves_tested;
 };
@@ -44,7 +45,7 @@ struct Evaluation {
     // In the order of the set's cameras.
     std::vector<CutStats> stats = {};
     // In the order of the set's cameras.
-    std::optional<std::vector<std::vector<dag::ClusterId>>> cuts = std::nullopt;
+    std::optional<std::vector<std::vector<dag::SourceId>>> cuts = std::nullopt;
 };
 
 }
@@ -79,14 +80,15 @@ alp::Result<void> evaluate_bvh(const cli::EvaluateArgs &args) {
     }
     evaluation.stats.reserve(cameras.size());
     for (const view::Camera &camera : cameras) {
-        ALP_TRY(view::Selection selection, view::select_cut(cache, *root_opt, camera, rule));
+        ALP_TRY(view::GroupSelection selection, view::select_groups(cache, *root_opt, camera, rule));
+        std::ranges::sort(selection.groups);
         evaluation.stats.push_back(CutStats{
-            .cluster_count = selection.clusters.size(),
+            .group_count = selection.groups.size(),
             .inner_nodes_tested = selection.inner_nodes_tested,
             .leaves_tested = selection.leaves_tested,
         });
         if (evaluation.cuts.has_value()) {
-            evaluation.cuts->push_back(std::move(selection.clusters));
+            evaluation.cuts->push_back(std::move(selection.groups));
         }
     }
 

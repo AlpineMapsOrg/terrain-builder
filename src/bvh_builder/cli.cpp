@@ -90,9 +90,9 @@ CLI::App &add_evaluate_command(CLI::App &app, EvaluateArgs &args) {
         ->default_val(2e-3)
         ->check(CLI::PositiveNumber);
 
-    command.add_flag("--no-cull", args.no_cull, "Select clusters out of view too");
+    command.add_flag("--no-cull", args.no_cull, "Select groups out of view too");
 
-    command.add_flag("--write-cut", args.write_cut, "Write the selected clusters, not only their count");
+    command.add_flag("--write-cut", args.write_cut, "Write the selected groups, not only their count");
 
     add_base_options(command, args);
     return command;
