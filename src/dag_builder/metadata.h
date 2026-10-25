@@ -26,7 +26,7 @@ struct LodMetrics {
 };
 
 struct GroupMetadata {
-    std::vector<Id> children = {}; // its child clusters, the higher-detail clusters it replaces
+    std::vector<ClusterId> children = {}; // its child clusters, the higher-detail clusters it replaces
     double error; // absolute error compared to the original mesh
     radix::geometry::Aabb3d bounds; // union of its child clusters' lod bounds
 

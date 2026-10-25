@@ -164,7 +164,7 @@ dag::NodeMetadata build_node_metadata(
     const PartitionToClusters &group_children,
     const Clustering &merged,
     const Clustering &simplified,
-    const std::vector<dag::Id> &cluster_sources,
+    const std::vector<dag::ClusterId> &cluster_sources,
     const std::unordered_map<octree::Id, dag::NodeMetadata> &cluster_metadata) {
     dag::NodeMetadata metadata;
     metadata.clusters.reserve(group_assignment.size());
@@ -183,8 +183,8 @@ dag::NodeMetadata build_node_metadata(
 
     // compute group bounds
     for (dag::GroupMetadata &group : metadata.groups) {
-        for (const dag::Id &child : group.children) {
-            const dag::NodeMetadata &child_metadata = cluster_metadata.at(child.source_batch);
+        for (const dag::ClusterId &child : group.children) {
+            const dag::NodeMetadata &child_metadata = cluster_metadata.at(child.batch);
             const dag::LodMetrics child_metrics = dag::get_lod_metrics_for_cluster(child_metadata, child.cluster_index);
             group.bounds.expand_by(child_metrics.bounds);
         }
@@ -206,7 +206,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     const double epsilon,
     const radix::geometry::Aabb3d &node_bounds,
     const BuildContext &ctx) {
-    std::vector<dag::Id> cluster_sources;
+    std::vector<dag::ClusterId> cluster_sources;
     std::vector<Clustering> filtered;
     std::unordered_map<octree::Id, dag::NodeMetadata> cluster_metadata;
 
