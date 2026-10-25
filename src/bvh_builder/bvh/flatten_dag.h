@@ -12,6 +12,7 @@
 #include "error/utils.h"
 #include "io/Error.h"
 #include "range_utils.h"
+#include "variant_utils.h"
 
 #include "../../dag_builder/storage.h"
 
@@ -39,7 +40,10 @@ inline LeafInput<std::span<const dag::ClusterInfo>> make_leaf(const dag::GroupVi
         tight_bounds.expand_by(cluster.tight_bounds);
     }
 
-    const double max_parent_error = group.id.has_value() ? group.error : ROOT_PARENT_ERROR;
+    const double max_parent_error = match(
+        group.id,
+        [&](const dag::GroupId &) { return group.error; },
+        [](const dag::ClusterId &) { return ROOT_PARENT_ERROR; });
     const NodeHeader header{
         .min_child_error = min(group.child_clusters, &dag::ClusterInfo::error),
         .max_parent_error = max_parent_error,

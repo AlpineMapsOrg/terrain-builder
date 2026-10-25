@@ -105,9 +105,10 @@ TEST_CASE("traverse_groups visits every group once, including root groups", "[da
         {.id = dag::GroupId{root, 0}, .error = root_node.groups[0].error, .bounds = root_node.groups[0].bounds, .child_clusters = {first_child_0, second_child_0}, .parent_clusters = {root_1}},
         {.id = dag::GroupId{root, 1}, .error = root_node.groups[1].error, .bounds = root_node.groups[1].bounds, .child_clusters = {second_child_1}, .parent_clusters = {root_0, root_2}},
         {.id = dag::GroupId{first_child, 0}, .error = first_child_node.groups[0].error, .bounds = first_child_node.groups[0].bounds, .child_clusters = {grandchild_0}, .parent_clusters = {first_child_0}},
-        {.id = std::nullopt, .error = std::numeric_limits<double>::infinity(), .bounds = root_node.groups[0].bounds, .child_clusters = {root_1}, .parent_clusters = {}},
-        {.id = std::nullopt, .error = std::numeric_limits<double>::infinity(), .bounds = root_node.groups[1].bounds, .child_clusters = {root_0, root_2}, .parent_clusters = {}},
-        {.id = std::nullopt, .error = std::numeric_limits<double>::infinity(), .bounds = root_node.clusters[3].bounds, .child_clusters = {root_3}, .parent_clusters = {}},
+        {.id = dag::ClusterId{root, 0}, .error = std::numeric_limits<double>::infinity(), .bounds = root_node.groups[1].bounds, .child_clusters = {root_0}, .parent_clusters = {}},
+        {.id = dag::ClusterId{root, 1}, .error = std::numeric_limits<double>::infinity(), .bounds = root_node.groups[0].bounds, .child_clusters = {root_1}, .parent_clusters = {}},
+        {.id = dag::ClusterId{root, 2}, .error = std::numeric_limits<double>::infinity(), .bounds = root_node.groups[1].bounds, .child_clusters = {root_2}, .parent_clusters = {}},
+        {.id = dag::ClusterId{root, 3}, .error = std::numeric_limits<double>::infinity(), .bounds = root_node.clusters[3].bounds, .child_clusters = {root_3}, .parent_clusters = {}},
     }));
 }
 
