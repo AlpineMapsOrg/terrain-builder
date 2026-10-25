@@ -44,7 +44,7 @@ struct Evaluation {
     // In the order of the set's cameras.
     std::vector<CutStats> stats = {};
     // In the order of the set's cameras.
-    std::optional<std::vector<std::vector<dag::Id>>> cuts = std::nullopt;
+    std::optional<std::vector<std::vector<dag::ClusterId>>> cuts = std::nullopt;
 };
 
 }

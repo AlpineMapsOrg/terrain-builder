@@ -24,7 +24,7 @@ namespace view {
 // The cut selected for a camera, with the work it took to find.
 struct Selection {
     // Every cluster selected, sorted.
-    std::vector<dag::Id> clusters;
+    std::vector<dag::ClusterId> clusters;
     // How many inner nodes were checked.
     uint64_t inner_nodes_tested;
     // How many leaves were checked.
@@ -61,7 +61,7 @@ inline bool could_contain_cut(const bvh::NodeHeader &header, const CutView &view
 }
 
 // Adds the leaf's clusters that are on the cut to `selected`.
-inline void select_clusters(const bvh::NodeHeader &header, const std::span<const dag::ClusterInfo> clusters, const CutView &view, std::vector<dag::Id> &selected) {
+inline void select_clusters(const bvh::NodeHeader &header, const std::span<const dag::ClusterInfo> clusters, const CutView &view, std::vector<dag::ClusterId> &selected) {
     if (!is_in_view(header.tight_bounds, view) || !should_visit_leaf(header, view.camera, view.rule)) {
         return;
     }

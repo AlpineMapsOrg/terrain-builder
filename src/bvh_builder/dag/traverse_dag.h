@@ -23,10 +23,10 @@
 #include "octree/Id.h"
 #include "range_utils.h"
 
+#include "dag_id.h"
 #include "metadata.h"
 #include "../../dag_builder/storage.h"
 #include "dag/ClusterInfo.h"
-#include "dag/GroupId.h"
 #include "dag/NodeMetadataCache.h"
 #include "visitor.h"
 
@@ -66,7 +66,7 @@ struct GroupView {
 namespace detail {
 
 // Describes the cluster `id` from `metadata`, which must be the metadata of its node.
-inline ClusterInfo make_cluster_info(const Id &id, const NodeMetadata &metadata) {
+inline ClusterInfo make_cluster_info(const ClusterId &id, const NodeMetadata &metadata) {
     const ClusterMetadata &cluster = metadata.clusters[id.cluster_index];
     const LodMetrics metrics = get_lod_metrics_for_cluster(metadata, id.cluster_index);
     return ClusterInfo{
@@ -88,8 +88,8 @@ inline std::vector<uint32_t> count_parent_clusters(const NodeMetadata &metadata)
     return result;
 }
 
-// Collects the clusters of `node_id` by the group that produced them.
-inline SegmentedBuffer<ClusterInfo, uint32_t> collect_parent_clusters(const octree::Id &node_id, const NodeMetadata &metadata) {
+// Collects the clusters of `batch_id` by the group that produced them.
+inline SegmentedBuffer<ClusterInfo, uint32_t> collect_parent_clusters(const BatchId &batch_id, const NodeMetadata &metadata) {
     SegmentedBuffer<ClusterInfo, uint32_t> result;
     result.init(count_parent_clusters(metadata));
 
@@ -100,7 +100,7 @@ inline SegmentedBuffer<ClusterInfo, uint32_t> collect_parent_clusters(const octr
         }
         const uint32_t group_index = cluster.group_index.value();
         const uint32_t position = filled[group_index]++;
-        const Id id{.source_batch = node_id, .cluster_index = cluster_index};
+        const ClusterId id{.batch = batch_id, .cluster_index = cluster_index};
         result(group_index, position) = make_cluster_info(id, metadata);
     }
     return result;
@@ -110,7 +110,7 @@ inline SegmentedBuffer<ClusterInfo, uint32_t> collect_parent_clusters(const octr
 struct GroupChild {
     uint32_t group_index; // the group listing it
     uint32_t index; // its position among the clusters the group lists
-    Id cluster;
+    ClusterId cluster;
 };
 
 // Reads the clusters each of `groups` lists, by group.
@@ -131,12 +131,12 @@ inline alp::Result<SegmentedBuffer<ClusterInfo, uint32_t>, io::Error> read_child
     SegmentedBuffer<ClusterInfo, uint32_t> result;
     result.init(counts);
 
-    const auto share_node = [](const GroupChild &a, const GroupChild &b) {
-        return a.cluster.source_batch == b.cluster.source_batch;
+    const auto share_batch = [](const GroupChild &a, const GroupChild &b) {
+        return a.cluster.batch == b.cluster.batch;
     };
-    for (const auto run : group_children | std::views::chunk_by(share_node)) {
-        const octree::Id node_id = run.front().cluster.source_batch;
-        ALP_TRY(const std::shared_ptr<const NodeMetadata> shared_metadata, cache.read_metadata(node_id));
+    for (const auto run : group_children | std::views::chunk_by(share_batch)) {
+        const BatchId batch_id = run.front().cluster.batch;
+        ALP_TRY(const std::shared_ptr<const NodeMetadata> shared_metadata, cache.read_metadata(batch_id));
         const NodeMetadata &metadata = *shared_metadata;
         for (const GroupChild &child : run) {
             result(child.group_index, child.index) = make_cluster_info(child.cluster, metadata);
@@ -145,12 +145,12 @@ inline alp::Result<SegmentedBuffer<ClusterInfo, uint32_t>, io::Error> read_child
     return result;
 }
 
-// Collects the leaf clusters of `node_id`.
-inline std::vector<ClusterInfo> collect_leaf_clusters(const octree::Id &node_id, const NodeMetadata &metadata) {
+// Collects the leaf clusters of `batch_id`.
+inline std::vector<ClusterInfo> collect_leaf_clusters(const BatchId &batch_id, const NodeMetadata &metadata) {
     std::vector<ClusterInfo> result;
     for (const auto &[cluster_index, cluster] : enumerate<uint32_t>(metadata.clusters)) {
         if (!cluster.group_index.has_value()) {
-            const Id id{.source_batch = node_id, .cluster_index = cluster_index};
+            const ClusterId id{.batch = batch_id, .cluster_index = cluster_index};
             result.push_back(make_cluster_info(id, metadata));
         }
     }
@@ -176,9 +176,9 @@ inline GroupView make_root_group_view(const std::span<const ClusterInfo> cluster
 inline std::vector<octree::Id> collect_nodes_with_data(const octree::IndexMap &index) {
     std::vector<octree::Id> result;
     result.reserve(index.size());
-    for (const auto &[node_id, status] : index) {
-        if (index.has_data(node_id)) {
-            result.push_back(node_id);
+    for (const auto &[batch_id, status] : index) {
+        if (index.has_data(batch_id)) {
+            result.push_back(batch_id);
         }
     }
     // Sorting by global index keeps groups that are close in space close in the walk.
@@ -196,25 +196,25 @@ alp::Result<bool, io::Error> traverse_groups(const octree::IndexedDagMetaStorage
     visitor::FallibleVisitor<io::Error, F &> visitor(v);
     NodeMetadataCache cache(dag, max_resident_bytes);
 
-    const std::vector<octree::Id> node_ids = detail::collect_nodes_with_data(dag.index());
-    if (node_ids.empty()) {
+    const std::vector<BatchId> batch_ids = detail::collect_nodes_with_data(dag.index());
+    if (batch_ids.empty()) {
         return true;
     }
-    const octree::Id::Level min_level = std::ranges::min(node_ids | std::views::transform(&octree::Id::level));
+    const octree::Id::Level min_level = std::ranges::min(batch_ids | std::views::transform(&octree::Id::level));
 
-    for (const octree::Id &node_id : node_ids) {
-        ALP_TRY(const std::shared_ptr<const NodeMetadata> shared_metadata, cache.read_metadata(node_id));
+    for (const BatchId &batch_id : batch_ids) {
+        ALP_TRY(const std::shared_ptr<const NodeMetadata> shared_metadata, cache.read_metadata(batch_id));
         const NodeMetadata &metadata = *shared_metadata;
-        const bool is_coarsest = node_id.level() == min_level;
-        const SegmentedBuffer<ClusterInfo, uint32_t> parent_clusters = detail::collect_parent_clusters(node_id, metadata);
-        const std::vector<ClusterInfo> leaf_clusters = is_coarsest ? detail::collect_leaf_clusters(node_id, metadata) : std::vector<ClusterInfo>{};
+        const bool is_coarsest = batch_id.level() == min_level;
+        const SegmentedBuffer<ClusterInfo, uint32_t> parent_clusters = detail::collect_parent_clusters(batch_id, metadata);
+        const std::vector<ClusterInfo> leaf_clusters = is_coarsest ? detail::collect_leaf_clusters(batch_id, metadata) : std::vector<ClusterInfo>{};
         const std::vector<GroupMetadata> groups = metadata.groups; // intended copy
         ALP_TRY(const auto child_clusters, detail::read_child_clusters(groups, cache));
 
         std::vector<GroupView> group_views;
         for (const auto &[group_index, group] : enumerate<uint32_t>(groups)) {
             const GroupView group_view{
-                .id = GroupId{.node = node_id, .group_index = group_index},
+                .id = GroupId{.batch = batch_id, .group_index = group_index},
                 .error = group.error,
                 .bounds = group.bounds,
                 .child_clusters = child_clusters.segment(group_index),

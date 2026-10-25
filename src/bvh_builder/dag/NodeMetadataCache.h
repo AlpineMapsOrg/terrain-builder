@@ -22,11 +22,11 @@ public:
     NodeMetadataCache(const octree::IndexedDagMetaStorage &dag, const size_t max_resident_bytes)
         : _dag(dag), _cache(max_resident_bytes) {}
 
-    // Reads the metadata of `node`.
+    // Reads the metadata of `batch_id`.
     [[nodiscard]]
-    alp::Result<std::shared_ptr<const NodeMetadata>, io::Error> read_metadata(const octree::Id &node) {
-        return this->_cache.get_or_try_insert_with(node, [&]() -> alp::Result<Cache::Entry, io::Error> {
-            ALP_TRY(NodeMetadata metadata, this->_dag.load(node));
+    alp::Result<std::shared_ptr<const NodeMetadata>, io::Error> read_metadata(const BatchId &batch_id) {
+        return this->_cache.get_or_try_insert_with(batch_id, [&]() -> alp::Result<Cache::Entry, io::Error> {
+            ALP_TRY(NodeMetadata metadata, this->_dag.load(batch_id));
             const size_t cost = estimate_bytes(metadata);
             std::shared_ptr<const NodeMetadata> shared_metadata = std::make_shared<const NodeMetadata>(std::move(metadata));
 
@@ -40,13 +40,13 @@ public:
     }
 
 private:
-    using Cache = BoundedCache<octree::Id, std::shared_ptr<const NodeMetadata>>;
+    using Cache = BoundedCache<BatchId, std::shared_ptr<const NodeMetadata>>;
 
     // Estimates how many bytes `metadata` holds.
     static size_t estimate_bytes(const NodeMetadata &metadata) {
         size_t bytes = sizeof(NodeMetadata) + metadata.clusters.capacity() * sizeof(ClusterMetadata) + metadata.groups.capacity() * sizeof(GroupMetadata);
         for (const GroupMetadata &group : metadata.groups) {
-            bytes += group.children.capacity() * sizeof(Id);
+            bytes += group.children.capacity() * sizeof(ClusterId);
         }
         return bytes;
     }

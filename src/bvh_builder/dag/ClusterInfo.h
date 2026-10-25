@@ -11,7 +11,7 @@ namespace dag {
 
 // A cluster of the dag.
 struct ClusterInfo {
-    Id id;
+    ClusterId id;
     double error = 0.0; // the error of its group, 0 for a leaf cluster
     radix::geometry::Aabb3d lod_bounds; // the box its error is measured from: its group's, or its own for a leaf cluster
     radix::geometry::Aabb3d tight_bounds; // a tight box around it, for culling
@@ -27,6 +27,6 @@ struct fmt::formatter<dag::ClusterInfo> {
         return ctx.begin();
     }
     auto format(const dag::ClusterInfo &cluster, fmt::format_context &ctx) const {
-        return fmt::format_to(ctx.out(), "ClusterInfo(id={}, error={}, lod_bounds={}, tight_bounds={})", cluster.id, cluster.error, cluster.lod_bounds, cluster.tight_bounds);
+        return fmt::format_to(ctx.out(), "Cluster(id={}, error={}, lod_bounds={}, tight_bounds={})", cluster.id, cluster.error, cluster.lod_bounds, cluster.tight_bounds);
     }
 };

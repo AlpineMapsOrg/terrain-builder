@@ -13,7 +13,7 @@ inline auto make_leaf_input(const bvh::NodeHeader &header = {}) {
     return bvh::LeafInput{header, std::array{dag::ClusterInfo{}}};
 }
 
-inline dag::ClusterInfo make_empty_cluster(const dag::Id &id) {
+inline dag::ClusterInfo make_empty_cluster(const dag::ClusterId &id) {
     dag::ClusterInfo cluster{};
     cluster.id = id;
     return cluster;
