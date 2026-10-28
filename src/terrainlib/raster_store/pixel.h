@@ -31,6 +31,12 @@ enum class Mapping {
     SRGBA,
 };
 
+// Area samples lie at cell centres, vertex samples on the grid vertices.
+enum class Placement {
+    Area,
+    Vertex,
+};
+
 namespace detail {
 
     template <typename PixelType>
