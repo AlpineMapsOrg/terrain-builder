@@ -1072,14 +1072,22 @@ TEST_CASE("vertex halo queries read one sample more after than before an upscale
     CHECK(algorithm::required_halo(1, Resampling::BiliinearAndBox, Placement::Vertex).error().code() == Error::Code::InvalidInput);
     CHECK_FALSE(algorithm::required_halo(1, Resampling::Lanczos3, static_cast<Placement>(7)));
 
+    // A single retained vertex reads only its source vertex.
     const auto up = algorithm::required_source_window({ 10, 10 }, 3, 1, Resampling::Lanczos3, { 0, 3 }, { 1, 1 }, Placement::Vertex);
     REQUIRE(up);
-    CHECK(up->origin == glm::uvec2(1, 2));
-    CHECK(up->size == glm::uvec2(6));
+    CHECK(up->origin == glm::uvec2(3, 2));
+    CHECK(up->size == glm::uvec2(1, 6));
+    // A window ending on a retained vertex reads up to it, here for linear interpolation.
     const auto linear = algorithm::required_source_window({ 6, 6 }, 1, 1, Resampling::Cheapest, { 0, 0 }, { 3, 3 }, Placement::Vertex);
     REQUIRE(linear);
     CHECK(linear->origin == glm::uvec2(1));
-    CHECK(linear->size == glm::uvec2(3));
+    CHECK(linear->size == glm::uvec2(2));
+    const auto ending = algorithm::required_source_window({ 10, 10 }, 0, 1, Resampling::Lanczos3, { 0, 0 }, { 5, 5 }, Placement::Vertex);
+    CHECK_FALSE(ending);
+    const auto retained = algorithm::required_source_window({ 5, 5 }, 0, 1, Resampling::Lanczos3, { 8, 8 }, { 1, 1 }, Placement::Vertex);
+    REQUIRE(retained);
+    CHECK(retained->origin == glm::uvec2(4));
+    CHECK(retained->size == glm::uvec2(1));
     const auto down = algorithm::required_source_window({ 15, 15 }, 5, -1, Resampling::Lanczos3, { 0, 0 }, { 2, 2 }, Placement::Vertex);
     REQUIRE(down);
     CHECK(down->origin == glm::uvec2(0));
@@ -1223,7 +1231,7 @@ TEST_CASE("vertex source window queries match the samples scaling reads", "[rast
         glm::uvec2 size;
     };
     for (const auto method : { Resampling::Cheapest, Resampling::Lanczos3 }) {
-        for (const auto [levels, offset, size] : { Case { 1, { 0, 0 }, { 4, 4 } }, Case { -1, { 0, 0 }, { 2, 2 } } }) {
+        for (const auto [levels, offset, size] : { Case { 1, { 0, 0 }, { 4, 4 } }, Case { 1, { 0, 0 }, { 5, 5 } }, Case { -1, { 0, 0 }, { 2, 2 } } }) {
             const unsigned halo = 5;
             auto [data, ids] = field({ 12, 12 }, halo);
             const auto window = algorithm::required_source_window(data.size(), halo, levels, method, offset, size, Placement::Vertex);
@@ -1246,4 +1254,30 @@ TEST_CASE("vertex source window queries match the samples scaling reads", "[rast
             CHECK_FALSE(raster_store::scale(short_data, short_ids, cropped_halo, levels, method, offset, size, ValueMapping::Linear, Placement::Vertex));
         }
     }
+}
+
+TEST_CASE("vertex upscaling of a closed grid needs no support beyond its retained vertices", "[raster-algorithm]")
+{
+    radix::Raster<float> data({ 5, 5 });
+    radix::Raster<std::uint16_t> ids({ 5, 5 });
+    for (unsigned y = 0; y < 5; ++y) {
+        for (unsigned x = 0; x < 5; ++x) {
+            data.pixel({ x, y }) = float(x * x + 7 * y);
+            ids.pixel({ x, y }) = std::uint16_t(x + 5 * y);
+        }
+    }
+    const auto output = raster_store::scale(data, ids, 0, 1, Resampling::Cheapest, { 0, 0 }, { 9, 9 }, ValueMapping::Linear, Placement::Vertex);
+    REQUIRE(output);
+    for (unsigned y = 0; y < 9; ++y) {
+        for (unsigned x = 0; x < 9; ++x) {
+            double expected = 0;
+            for (const auto& [row, weight_y] : vertex_taps(y / 2., 1))
+                for (const auto& [column, weight_x] : vertex_taps(x / 2., 1))
+                    if (weight_x * weight_y != 0)
+                        expected += weight_x * weight_y * data.pixel({ unsigned(column), unsigned(row) });
+            CHECK(output->first.pixel({ x, y }) == Catch::Approx(expected));
+            CHECK(output->second.pixel({ x, y }) == ids.pixel({ x / 2, y / 2 }));
+        }
+    }
+    CHECK_FALSE(raster_store::scale(data, ids, 0, 1, Resampling::Cheapest, { 0, 0 }, { 10, 9 }, ValueMapping::Linear, Placement::Vertex));
 }

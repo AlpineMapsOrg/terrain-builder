@@ -86,6 +86,12 @@ namespace detail {
         return cell - (before_centre ? 1 : 0) - int(radius) + 1;
     }
 
+    // Vertex positions with zero phase lie on a source vertex; only its tap is read.
+    inline bool on_source_vertex(std::int64_t position, unsigned factor, Placement placement)
+    {
+        return placement == Placement::Vertex && source_phase(position, factor) == 0;
+    }
+
     inline unsigned upscaling_radius(Resampling method, Placement placement = Placement::Area)
     {
         if (method == Resampling::Cheapest)
@@ -244,6 +250,13 @@ namespace detail {
                 const unsigned radius = upscaling_radius(method, placement);
                 first_source = std::int64_t(halo_width) + upscaling_origin(offset[axis], factor, radius, placement);
                 last_source = std::int64_t(halo_width) + upscaling_origin(last, factor, radius, placement) + (radius == 0 ? 0 : 2 * radius - 1);
+                // A retained vertex reads only its source vertex; its unretained neighbour in
+                // the window reads one source vertex less than the full footprint.
+                const bool single = size[axis] == 1;
+                if (single && on_source_vertex(offset[axis], factor, placement))
+                    first_source += radius - 1;
+                if (on_source_vertex(last, factor, placement))
+                    last_source -= single ? radius : 1;
             } else if (levels < 0 && placement == Placement::Vertex) {
                 first_source = std::int64_t(halo_width) + offset[axis] * factor - *required;
                 last_source = std::int64_t(halo_width) + last * factor + *required;

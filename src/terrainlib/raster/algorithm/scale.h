@@ -47,12 +47,6 @@ namespace detail {
             weights[i] /= normalization;
     }
 
-    // Vertex positions with zero phase lie on a source vertex; only its tap is read.
-    inline bool on_source_vertex(std::int64_t position, unsigned factor, Placement placement)
-    {
-        return placement == Placement::Vertex && source_phase(position, factor) == 0;
-    }
-
     template <typename S>
     std::array<S, 8> upscaling_weights(std::int64_t position, unsigned factor, unsigned radius, Placement placement = Placement::Area)
     {
@@ -110,22 +104,22 @@ namespace detail {
         for (unsigned y = 0; y < destination.height(); ++y) {
             const std::int64_t position_y = output_offset.y + y;
             const auto weights_y = upscaling_weights<S>(position_y, factor, radius, placement);
-            const auto origin_y = unsigned(halo_width + upscaling_origin(position_y, factor, radius, placement));
+            const std::int64_t origin_y = halo_width + upscaling_origin(position_y, factor, radius, placement);
             const auto rows = taps(position_y);
             for (unsigned x = 0; x < destination.width(); ++x) {
                 const std::int64_t position_x = output_offset.x + x;
-                const auto origin_x = unsigned(halo_width + upscaling_origin(position_x, factor, radius, placement));
+                const std::int64_t origin_x = halo_width + upscaling_origin(position_x, factor, radius, placement);
                 const auto& weights_x = horizontal->pixel({ x, 0 });
                 const auto columns = taps(position_x);
                 if (rows.y - rows.x == 1 && columns.y - columns.x == 1) {
-                    std::memcpy(
-                        std::addressof(destination.pixel({ x, y })), std::addressof(source.pixel({ origin_x + columns.x, origin_y + rows.x })), sizeof(T));
+                    const glm::uvec2 retained(origin_x + columns.x, origin_y + rows.x);
+                    std::memcpy(std::addressof(destination.pixel({ x, y })), std::addressof(source.pixel(retained)), sizeof(T));
                     continue;
                 }
                 W value {};
                 for (unsigned dy = rows.x; dy < rows.y; ++dy)
                     for (unsigned dx = columns.x; dx < columns.y; ++dx)
-                        value += std::invoke(std::get<0>(conversion), source.pixel({ origin_x + dx, origin_y + dy })) * (weights_x[dx] * weights_y[dy]);
+                        value += std::invoke(std::get<0>(conversion), source.pixel(glm::uvec2(origin_x + dx, origin_y + dy))) * (weights_x[dx] * weights_y[dy]);
                 destination.pixel({ x, y }) = std::invoke(std::get<1>(conversion), std::as_const(value));
             }
         }
