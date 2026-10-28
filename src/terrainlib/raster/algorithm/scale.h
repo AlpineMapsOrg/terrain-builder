@@ -47,16 +47,27 @@ namespace detail {
             weights[i] /= normalization;
     }
 
+    // Vertex positions with zero phase lie on a source vertex; only its tap is read.
+    inline bool on_source_vertex(std::int64_t position, unsigned factor, Placement placement)
+    {
+        return placement == Placement::Vertex && source_phase(position, factor) == 0;
+    }
+
     template <typename S>
-    std::array<S, 8> upscaling_weights(std::int64_t position, unsigned factor, unsigned radius)
+    std::array<S, 8> upscaling_weights(std::int64_t position, unsigned factor, unsigned radius, Placement placement = Placement::Area)
     {
         const unsigned remainder = source_phase(position, factor);
-        const S phase = (S(remainder) + S(0.5)) / S(factor) - S(0.5);
-        const S fraction = remainder < factor / 2 ? phase + S(1) : phase;
+        S fraction = S(remainder) / S(factor);
+        if (placement == Placement::Area) {
+            const S phase = (S(remainder) + S(0.5)) / S(factor) - S(0.5);
+            fraction = remainder < factor / 2 ? phase + S(1) : phase;
+        }
         std::array<S, 8> weights {};
         if (radius == 1) {
             weights[0] = S(1) - fraction;
             weights[1] = fraction;
+        } else if (on_source_vertex(position, factor, placement)) {
+            weights[radius - 1] = S(1);
         } else {
             for (unsigned i = 0; i < 2 * radius; ++i)
                 weights[i] = lanczos_weight(S(i) - S(radius - 1) - fraction, radius);
@@ -72,12 +83,13 @@ namespace detail {
         Resampling method,
         const Conversion& conversion,
         const View<T>& destination,
-        glm::i64vec2 output_offset)
+        glm::i64vec2 output_offset,
+        Placement placement)
     {
         using W = DecodedPixel<Conversion, T>;
         using S = typename PixelTraits<W>::Scalar;
         const unsigned factor = geometry.factor;
-        const unsigned radius = upscaling_radius(method);
+        const unsigned radius = upscaling_radius(method, placement);
         if (radius == 0) {
             for (unsigned y = 0; y < destination.height(); ++y)
                 for (unsigned x = 0; x < destination.width(); ++x) {
@@ -91,17 +103,28 @@ namespace detail {
         if (!horizontal)
             return Error::propagate(std::move(horizontal));
         for (unsigned x = 0; x < destination.width(); ++x)
-            horizontal->pixel({ x, 0 }) = upscaling_weights<S>(output_offset.x + x, factor, radius);
+            horizontal->pixel({ x, 0 }) = upscaling_weights<S>(output_offset.x + x, factor, radius, placement);
+        // Retained vertices are copied, and an axis on a source vertex reads only that tap.
+        const auto taps
+            = [&](std::int64_t position) { return on_source_vertex(position, factor, placement) ? glm::uvec2(radius - 1, radius) : glm::uvec2(0, 2 * radius); };
         for (unsigned y = 0; y < destination.height(); ++y) {
             const std::int64_t position_y = output_offset.y + y;
-            const auto weights_y = upscaling_weights<S>(position_y, factor, radius);
-            const auto origin_y = unsigned(halo_width + upscaling_origin(position_y, factor, radius));
+            const auto weights_y = upscaling_weights<S>(position_y, factor, radius, placement);
+            const auto origin_y = unsigned(halo_width + upscaling_origin(position_y, factor, radius, placement));
+            const auto rows = taps(position_y);
             for (unsigned x = 0; x < destination.width(); ++x) {
-                const auto origin_x = unsigned(halo_width + upscaling_origin(output_offset.x + x, factor, radius));
+                const std::int64_t position_x = output_offset.x + x;
+                const auto origin_x = unsigned(halo_width + upscaling_origin(position_x, factor, radius, placement));
                 const auto& weights_x = horizontal->pixel({ x, 0 });
+                const auto columns = taps(position_x);
+                if (rows.y - rows.x == 1 && columns.y - columns.x == 1) {
+                    std::memcpy(
+                        std::addressof(destination.pixel({ x, y })), std::addressof(source.pixel({ origin_x + columns.x, origin_y + rows.x })), sizeof(T));
+                    continue;
+                }
                 W value {};
-                for (unsigned dy = 0; dy < 2 * radius; ++dy)
-                    for (unsigned dx = 0; dx < 2 * radius; ++dx)
+                for (unsigned dy = rows.x; dy < rows.y; ++dy)
+                    for (unsigned dx = columns.x; dx < columns.y; ++dx)
                         value += std::invoke(std::get<0>(conversion), source.pixel({ origin_x + dx, origin_y + dy })) * (weights_x[dx] * weights_y[dy]);
                 destination.pixel({ x, y }) = std::invoke(std::get<1>(conversion), std::as_const(value));
             }
@@ -109,21 +132,36 @@ namespace detail {
         return {};
     }
 
+    // Copies every factor-th sample from the origin, without filtering or conversion.
+    template <typename InputView, typename T>
+    Expected<void> decimate(const InputView& source, glm::uvec2 origin, unsigned factor, const View<T>& destination)
+    {
+        for (unsigned y = 0; y < destination.height(); ++y)
+            for (unsigned x = 0; x < destination.width(); ++x)
+                std::memcpy(std::addressof(destination.pixel({ x, y })), std::addressof(source.pixel(origin + glm::uvec2(x, y) * factor)), sizeof(T));
+        return {};
+    }
+
+    // Area taps pair the two samples of each output cell. Vertex taps are centred on the
+    // retained vertex; their filter is half-band, so the other even offsets vanish.
     template <typename InputView, typename T, typename Conversion>
     Expected<void> downscale(const InputView& source,
         unsigned halo_width,
         const ScalingGeometry& geometry,
         unsigned radius,
         const Conversion& conversion,
-        const View<T>& destination)
+        const View<T>& destination,
+        Placement placement)
     {
         using W = DecodedPixel<Conversion, T>;
         using S = typename PixelTraits<W>::Scalar;
         std::array<S, 16> weights {};
-        const unsigned count = radius == 0 ? 2 : 4 * radius;
+        const unsigned count = placement == Placement::Vertex ? (radius == 0 ? 1 : 4 * radius - 1) : (radius == 0 ? 2 : 4 * radius);
         for (unsigned i = 0; i < count; ++i) {
             const S offset = S(i) - S(count - 1) / S(2);
-            weights[i] = radius == 0 ? S(1) : lanczos_weight(offset / S(2), radius);
+            const int vertex_offset = int(i) - int(count - 1) / 2;
+            const bool vanishing = placement == Placement::Vertex && vertex_offset != 0 && vertex_offset % 2 == 0;
+            weights[i] = radius == 0 ? S(1) : vanishing ? S(0) : lanczos_weight(offset / S(2), radius);
         }
         normalize_weights<S>(std::span(weights).first(count));
         const auto filter = [&](const auto& input, const auto& output) -> Expected<void> {
@@ -150,7 +188,7 @@ namespace detail {
                 },
                 output);
         };
-        return reduce_levels(source, halo_width, geometry, radius == 0 ? 0 : 2 * radius - 1, filter, destination);
+        return reduce_levels(source, halo_width, geometry, radius == 0 ? 0 : 2 * radius - 1, filter, destination, placement);
     }
 
     template <typename InputView, typename T, typename Conversion>
@@ -160,9 +198,10 @@ namespace detail {
         Resampling method,
         glm::i64vec2 offset,
         const Conversion& conversion,
-        const View<T>& destination)
+        const View<T>& destination,
+        Placement placement)
     {
-        auto geometry = window_geometry(source.size(), halo_width, levels, method, offset, destination.size());
+        auto geometry = window_geometry(source.size(), halo_width, levels, method, offset, destination.size(), placement);
         if (!geometry)
             return Error::propagate(std::move(geometry));
         if (levels == 0)
@@ -170,11 +209,13 @@ namespace detail {
         if (auto valid = validate_view_overlap(source, destination, false); !valid)
             return valid;
         if (levels > 0)
-            return upscale(source, halo_width, *geometry, method, conversion, destination, offset);
-        const unsigned support = *required_halo(levels, method);
+            return upscale(source, halo_width, *geometry, method, conversion, destination, offset, placement);
+        if (placement == Placement::Vertex && method == Resampling::Cheapest)
+            return decimate(source, geometry->source_origin, geometry->factor, destination);
+        const unsigned support = *required_halo(levels, method, placement);
         const auto region = *raster::make_view(source, geometry->source_origin, geometry->source_size);
         const ScalingGeometry reduction { region.size() - glm::uvec2(2 * support), destination.size(), geometry->factor };
-        return downscale(region, support, reduction, *filter_radius(method), conversion, destination);
+        return downscale(region, support, reduction, *filter_radius(method), conversion, destination, placement);
     }
 } // namespace detail
 
@@ -182,11 +223,17 @@ namespace detail {
 template <detail::ViewSource Source, typename Conversion, detail::WritableViewDestination Destination>
 requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingConversion<Conversion, detail::SourcePixel<Source>>
     && std::same_as<detail::SourcePixel<Source>, detail::SourcePixel<Destination>>
-[[nodiscard]] Expected<void> scale(
-    Source&& source, unsigned halo_width, int levels, Resampling method, glm::i64vec2 output_offset, const Conversion& conversion, Destination&& destination)
+[[nodiscard]] Expected<void> scale(Source&& source,
+    unsigned halo_width,
+    int levels,
+    Resampling method,
+    glm::i64vec2 output_offset,
+    const Conversion& conversion,
+    Destination&& destination,
+    Placement placement = Placement::Area)
 {
     return detail::scale_window(
-        detail::read_only_view(raster::make_view(source)), halo_width, levels, method, output_offset, conversion, raster::make_view(destination));
+        detail::read_only_view(raster::make_view(source)), halo_width, levels, method, output_offset, conversion, raster::make_view(destination), placement);
 }
 
 template <detail::ViewSource Source, typename Conversion>
@@ -203,7 +250,13 @@ requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingCon
 
 template <detail::ViewSource Source, detail::WritableViewDestination Destination>
 requires detail::NumericPixel<detail::SourcePixel<Source>> && std::same_as<detail::SourcePixel<Source>, detail::SourcePixel<Destination>>
-[[nodiscard]] Expected<void> scale(Source&& source, unsigned halo_width, int levels, Resampling method, glm::i64vec2 output_offset, Destination&& destination)
+[[nodiscard]] Expected<void> scale(Source&& source,
+    unsigned halo_width,
+    int levels,
+    Resampling method,
+    glm::i64vec2 output_offset,
+    Destination&& destination,
+    Placement placement = Placement::Area)
 {
     return scale(std::forward<Source>(source),
         halo_width,
@@ -211,7 +264,8 @@ requires detail::NumericPixel<detail::SourcePixel<Source>> && std::same_as<detai
         method,
         output_offset,
         linear_conversion<detail::SourcePixel<Source>>(),
-        std::forward<Destination>(destination));
+        std::forward<Destination>(destination),
+        placement);
 }
 
 template <detail::ViewSource Source>

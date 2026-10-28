@@ -24,6 +24,8 @@
 
 #include <glm/glm.hpp>
 
+#include "raster/algorithm/placement.h"
+
 namespace raster_store::pixel {
 
 enum class Mapping {
@@ -31,11 +33,7 @@ enum class Mapping {
     SRGBA,
 };
 
-// Area samples lie at cell centres, vertex samples on the grid vertices.
-enum class Placement {
-    Area,
-    Vertex,
-};
+using Placement = raster::algorithm::Placement;
 
 namespace detail {
 
