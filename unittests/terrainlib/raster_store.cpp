@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <limits>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <catch2/catch_approx.hpp>
@@ -929,5 +930,42 @@ TEST_CASE("vertex tiles read endpoints from same-zoom, virtual and coarser neigh
     for (unsigned i = 0; i <= 4; ++i) {
         CHECK(edge->data.pixel({ 4, i }) == value(6, 3, (std::min)(i, 3u)));
         CHECK(edge->data.pixel({ i, 4 }) == value(6, (std::min)(i, 3u), 3));
+    }
+}
+
+TEST_CASE("vertex corners without a source repeat the completed eastern column", "[raster-store][vertex]")
+{
+    TemporaryDirectory directory;
+    write_table(directory.path());
+    auto options = small_options();
+    options.placement = raster_store::pixel::Placement::Vertex;
+    const auto constant = [](float value) {
+        raster_store::Tile<float> tile(4);
+        tile.data.fill(value);
+        tile.attribution.fill(std::uint16_t(value));
+        return tile;
+    };
+    // Along the southern world edge, and inland where the southern neighbours are missing.
+    const radix::tile::Id polar { 1, { 0, 1 } };
+    const radix::tile::Id inland { 2, { 0, 0 } };
+    auto created = storage::create<float>(directory.path() / "snapshot", options);
+    REQUIRE(created);
+    REQUIRE(created->first->save(polar, constant(10)));
+    REQUIRE(created->first->save({ 1, { 1, 1 } }, constant(20)));
+    REQUIRE(created->first->save(inland, constant(30)));
+    REQUIRE(created->first->save({ 2, { 1, 0 } }, constant(40)));
+    REQUIRE(storage::publish(std::move(created->first)));
+    auto opened = storage::open<float>(directory.path() / "snapshot");
+    REQUIRE(opened);
+    for (const auto& [key, own, eastern] : { std::tuple { polar, 10.f, 20.f }, std::tuple { inland, 30.f, 40.f } }) {
+        INFO(to_string(key));
+        const auto closed = raster_store::vertex_grid::closed(*opened->first, 4, raster_store::pixel::Mapping::Linear, key, constant(own));
+        REQUIRE(closed);
+        for (unsigned i = 0; i < 4; ++i) {
+            CHECK(closed->data.pixel({ 4, i }) == eastern);
+            CHECK(closed->data.pixel({ i, 4 }) == own);
+        }
+        CHECK(closed->data.pixel({ 4, 4 }) == eastern);
+        CHECK(closed->attribution.pixel({ 4, 4 }) == std::uint16_t(eastern));
     }
 }

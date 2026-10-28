@@ -188,7 +188,9 @@ Expected<bool> supply(const storage::IndexedStorage<PixelType>& storage,
 /// The physical vertex tile `key` with its endpoint column, row and corner. The
 /// southeastern neighbour supplies the corner first; the eastern and southern ones
 /// supply the column and row, where a coarser tile repeats its own border except at
-/// that corner. Endpoints without a source repeat the tile's border.
+/// that corner. A column or row without a source repeats the tile's border, also
+/// beyond the southern world edge; a corner without a source repeats the completed
+/// column's last value.
 template <typename PixelType>
 Expected<Tile<PixelType>> closed(
     const storage::IndexedStorage<PixelType>& storage, unsigned side, pixel::Mapping mapping, const Key& key, const Tile<PixelType>& tile)
@@ -229,6 +231,10 @@ Expected<Tile<PixelType>> closed(
         return Error::propagate(std::move(supplied));
     if (auto supplied = strip({ 0, 1 }, { side, 1 }, at({ int(side), 0 })); !supplied)
         return Error::propagate(std::move(supplied));
+    if (!corner) {
+        result->data.pixel(glm::uvec2(side)) = result->data.pixel({ side, side - 1 });
+        result->attribution.pixel(glm::uvec2(side)) = result->attribution.pixel({ side, side - 1 });
+    }
     return result;
 }
 
