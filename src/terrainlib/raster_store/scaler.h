@@ -23,6 +23,19 @@
 #include "raster/algorithm/scale.h"
 
 namespace raster_store {
+
+/// Translate stored sample placement into the raster scaling coordinate convention.
+[[nodiscard]] inline Expected<raster::algorithm::SampleAlignment> sample_alignment(pixel::Placement placement)
+{
+    switch (placement) {
+    case pixel::Placement::Area:
+        return raster::algorithm::SampleAlignment::CellCenters;
+    case pixel::Placement::Vertex:
+        return raster::algorithm::SampleAlignment::GridNodes;
+    }
+    return Error::fail(Error::Code::InvalidInput, "invalid raster-store sample placement");
+}
+
 namespace scale_details {
     namespace algorithm = raster::algorithm;
     namespace raster_detail = algorithm::detail;
@@ -125,13 +138,16 @@ requires scale_details::PairedSources<Data, Attribution> && scale_details::Paire
 {
     namespace algorithm = raster::algorithm;
     using T = algorithm::detail::SourcePixel<Data>;
+    auto alignment = sample_alignment(placement);
+    if (!alignment)
+        return Error::propagate(std::move(alignment));
     if (auto valid = scale_details::validate_mapping<T>(mapping, scale_details::numerical(levels, method, placement)); !valid)
         return valid;
     const auto input = algorithm::detail::read_only_view(raster::make_view(data));
     const auto input_attribution = algorithm::detail::read_only_view(raster::make_view(attribution));
     const auto output = raster::make_view(destination);
     const auto output_attribution = raster::make_view(attribution_destination);
-    auto geometry = algorithm::detail::window_geometry(input.size(), halo_width, levels, method, output_offset, output.size(), placement);
+    auto geometry = algorithm::detail::window_geometry(input.size(), halo_width, levels, method, output_offset, output.size(), *alignment);
     if (!geometry)
         return Error::propagate(std::move(geometry));
     if (input.size() != input_attribution.size() || output.size() != output_attribution.size())
@@ -154,9 +170,9 @@ requires scale_details::PairedSources<Data, Attribution> && scale_details::Paire
     const auto scale_data = [&]() -> Expected<void> {
         if constexpr (algorithm::detail::srgb_pixel<T>) {
             if (mapping == pixel::Mapping::SRGBA)
-                return algorithm::scale(input, halo_width, levels, method, output_offset, algorithm::srgb_conversion<T>(), output, placement);
+                return algorithm::scale(input, halo_width, levels, method, output_offset, algorithm::srgb_conversion<T>(), output, *alignment);
         }
-        return algorithm::scale(input, halo_width, levels, method, output_offset, output, placement);
+        return algorithm::scale(input, halo_width, levels, method, output_offset, output, *alignment);
     };
     if (auto result = scale_data(); !result)
         return result;
@@ -168,8 +184,8 @@ requires scale_details::PairedSources<Data, Attribution> && scale_details::Paire
             return Error::propagate(std::move(region));
         return algorithm::reduce(*region, 0, static_cast<unsigned>(-std::int64_t(levels)), algorithm::Mode {}, output_attribution);
     }
-    const auto attribution_placement = levels < 0 ? placement : pixel::Placement::Area;
-    return algorithm::scale(input_attribution, halo_width, levels, algorithm::Resampling::Cheapest, output_offset, output_attribution, attribution_placement);
+    const auto attribution_alignment = levels < 0 ? *alignment : algorithm::SampleAlignment::CellCenters;
+    return algorithm::scale(input_attribution, halo_width, levels, algorithm::Resampling::Cheapest, output_offset, output_attribution, attribution_alignment);
 }
 
 template <typename Data, typename Attribution>
@@ -185,9 +201,12 @@ requires scale_details::PairedSources<Data, Attribution>
     pixel::Placement placement = pixel::Placement::Area)
 {
     using T = raster::algorithm::detail::SourcePixel<Data>;
+    auto alignment = sample_alignment(placement);
+    if (!alignment)
+        return Error::propagate(std::move(alignment));
     if (auto valid = scale_details::validate_mapping<T>(mapping, scale_details::numerical(levels, method, placement)); !valid)
         return Error::propagate(std::move(valid));
-    auto geometry = raster::algorithm::detail::window_geometry(data.size(), halo_width, levels, method, output_offset, output_size, placement);
+    auto geometry = raster::algorithm::detail::window_geometry(data.size(), halo_width, levels, method, output_offset, output_size, *alignment);
     if (!geometry)
         return Error::propagate(std::move(geometry));
     if (data.size() != attribution.size())

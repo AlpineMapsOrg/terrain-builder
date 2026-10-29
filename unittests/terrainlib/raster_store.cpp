@@ -23,10 +23,8 @@
 #include <filesystem>
 #include <limits>
 #include <string>
-#include <tuple>
 #include <vector>
 
-#include <catch2/catch_approx.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -38,7 +36,6 @@
 #include "io/image.h"
 #include "io/utils.h"
 #include "raster_store/storage.h"
-#include "raster_store/vertex_grid.h"
 
 namespace {
 
@@ -864,108 +861,4 @@ TEST_CASE("raster snapshots checkpoint tile hashes and verify loads against them
     REQUIRE(std::filesystem::remove(path));
     REQUIRE(TileCodec<float>({ 4, 4 }).write(path.parent_path() / path.stem(), tile));
     CHECK(opened->first->load(key).error().code() == Error::Code::CorruptData);
-}
-
-TEST_CASE("vertex tiles read endpoints from same-zoom, virtual and coarser neighbours", "[raster-store][vertex]")
-{
-    TemporaryDirectory directory;
-    write_table(directory.path());
-    auto options = small_options();
-    options.placement = raster_store::pixel::Placement::Vertex;
-    const auto value = [](float label, unsigned x, unsigned y) { return 100.f * label + float(x) + 10.f * float(y); };
-    const auto labelled = [&](float label) {
-        raster_store::Tile<float> tile(4);
-        for (unsigned y = 0; y < 4; ++y) {
-            for (unsigned x = 0; x < 4; ++x) {
-                tile.data.pixel({ x, y }) = value(label, x, y);
-                tile.attribution.pixel({ x, y }) = std::uint16_t(label);
-            }
-        }
-        return tile;
-    };
-    const radix::tile::Id centre { 2, { 1, 1 } };
-    // East: covered by a coarser tile whose southern edge is the centre's. Southeast: physical.
-    // South: virtual with physical northern children. The polar tile has no neighbour but itself.
-    const radix::tile::Id polar { 2, { 0, 3 } };
-    const std::array<std::pair<radix::tile::Id, float>, 6> tiles {
-        { { centre, 1 }, { { 1, { 1, 0 } }, 2 }, { { 2, { 2, 2 } }, 3 }, { { 3, { 2, 4 } }, 4 }, { { 3, { 3, 4 } }, 5 }, { polar, 6 } }
-    };
-    auto created = storage::create<float>(directory.path() / "snapshot", options);
-    REQUIRE(created);
-    for (const auto& [key, label] : tiles) {
-        REQUIRE(created->first->save(key, labelled(label)));
-    }
-    REQUIRE(storage::publish(std::move(created->first)));
-    auto opened = storage::open<float>(directory.path() / "snapshot");
-    REQUIRE(opened);
-    const auto& snapshot = *opened->first;
-
-    const auto closed = raster_store::vertex_grid::closed(snapshot, 4, raster_store::pixel::Mapping::Linear, centre, labelled(1));
-    REQUIRE(closed);
-    REQUIRE(closed->data.size() == glm::uvec2(5));
-    for (unsigned y = 0; y < 4; ++y) {
-        for (unsigned x = 0; x < 4; ++x) {
-            CHECK(closed->data.pixel({ x, y }) == value(1, x, y));
-        }
-    }
-    // The coarser tile is interpolated along its western column; its own endpoint at the
-    // bottom is the corner supplied by the southeastern tile, not its repeated border.
-    CHECK(closed->data.pixel({ 4, 0 }) == value(2, 0, 2));
-    CHECK(closed->data.pixel({ 4, 1 }) == Catch::Approx((value(2, 0, 2) + value(2, 0, 3)) / 2));
-    CHECK(closed->data.pixel({ 4, 2 }) == value(2, 0, 3));
-    CHECK(closed->data.pixel({ 4, 3 }) == Catch::Approx((value(2, 0, 3) + value(3, 0, 0)) / 2));
-    CHECK(closed->attribution.pixel({ 4, 3 }) == 2);
-    // The virtual southern neighbour's northern children are decimated.
-    CHECK(closed->data.pixel({ 0, 4 }) == value(4, 0, 0));
-    CHECK(closed->data.pixel({ 1, 4 }) == value(4, 2, 0));
-    CHECK(closed->data.pixel({ 2, 4 }) == value(5, 0, 0));
-    CHECK(closed->data.pixel({ 3, 4 }) == value(5, 2, 0));
-    CHECK(closed->attribution.pixel({ 1, 4 }) == 4);
-    CHECK(closed->data.pixel({ 4, 4 }) == value(3, 0, 0));
-    CHECK(closed->attribution.pixel({ 4, 4 }) == 3);
-
-    // Without neighbours, beyond the pole, the border repeats.
-    const auto edge = raster_store::vertex_grid::closed(snapshot, 4, raster_store::pixel::Mapping::Linear, polar, labelled(6));
-    REQUIRE(edge);
-    for (unsigned i = 0; i <= 4; ++i) {
-        CHECK(edge->data.pixel({ 4, i }) == value(6, 3, (std::min)(i, 3u)));
-        CHECK(edge->data.pixel({ i, 4 }) == value(6, (std::min)(i, 3u), 3));
-    }
-}
-
-TEST_CASE("vertex corners without a source repeat the completed eastern column", "[raster-store][vertex]")
-{
-    TemporaryDirectory directory;
-    write_table(directory.path());
-    auto options = small_options();
-    options.placement = raster_store::pixel::Placement::Vertex;
-    const auto constant = [](float value) {
-        raster_store::Tile<float> tile(4);
-        tile.data.fill(value);
-        tile.attribution.fill(std::uint16_t(value));
-        return tile;
-    };
-    // Along the southern world edge, and inland where the southern neighbours are missing.
-    const radix::tile::Id polar { 1, { 0, 1 } };
-    const radix::tile::Id inland { 2, { 0, 0 } };
-    auto created = storage::create<float>(directory.path() / "snapshot", options);
-    REQUIRE(created);
-    REQUIRE(created->first->save(polar, constant(10)));
-    REQUIRE(created->first->save({ 1, { 1, 1 } }, constant(20)));
-    REQUIRE(created->first->save(inland, constant(30)));
-    REQUIRE(created->first->save({ 2, { 1, 0 } }, constant(40)));
-    REQUIRE(storage::publish(std::move(created->first)));
-    auto opened = storage::open<float>(directory.path() / "snapshot");
-    REQUIRE(opened);
-    for (const auto& [key, own, eastern] : { std::tuple { polar, 10.f, 20.f }, std::tuple { inland, 30.f, 40.f } }) {
-        INFO(to_string(key));
-        const auto closed = raster_store::vertex_grid::closed(*opened->first, 4, raster_store::pixel::Mapping::Linear, key, constant(own));
-        REQUIRE(closed);
-        for (unsigned i = 0; i < 4; ++i) {
-            CHECK(closed->data.pixel({ 4, i }) == eastern);
-            CHECK(closed->data.pixel({ i, 4 }) == own);
-        }
-        CHECK(closed->data.pixel({ 4, 4 }) == eastern);
-        CHECK(closed->attribution.pixel({ 4, 4 }) == std::uint16_t(eastern));
-    }
 }

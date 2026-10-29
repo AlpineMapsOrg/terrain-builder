@@ -41,8 +41,9 @@
 namespace {
 
 namespace algorithm = raster::algorithm;
-using algorithm::Placement;
 using algorithm::Resampling;
+using algorithm::SampleAlignment;
+using raster_store::pixel::Placement;
 using ValueMapping = raster_store::pixel::Mapping;
 using Catch::Matchers::WithinAbs;
 
@@ -869,6 +870,25 @@ TEST_CASE("scaling validates full destinations and windows before writing", "[ra
     CHECK(destination.pixel({ 0, 0 }) == 99);
 }
 
+TEST_CASE("raster-store scaling rejects unknown placement before writing", "[raster-algorithm]")
+{
+    auto [data, attribution] = field({ 4, 4 }, 0);
+    radix::Raster<float> output({ 2, 2 });
+    radix::Raster<std::uint16_t> output_attribution({ 2, 2 });
+    output.fill(-99);
+    output_attribution.fill(99);
+    const auto invalid = static_cast<Placement>(7);
+    const auto allocated = raster_store::scale(data, attribution, 0, 0, Resampling::Cheapest, { 0, 0 }, { 2, 2 }, ValueMapping::Linear, invalid);
+    REQUIRE_FALSE(allocated);
+    CHECK(allocated.error().code() == Error::Code::InvalidInput);
+    const auto written
+        = raster_store::scale(data, attribution, 0, 0, Resampling::Cheapest, { 0, 0 }, ValueMapping::Linear, output, output_attribution, invalid);
+    REQUIRE_FALSE(written);
+    CHECK(written.error().code() == Error::Code::InvalidInput);
+    CHECK(std::ranges::all_of(output, [](float value) { return value == -99; }));
+    CHECK(std::ranges::all_of(output_attribution, [](std::uint16_t value) { return value == 99; }));
+}
+
 TEST_CASE("windowed scaling writes strided destinations and rejects overlap before writes", "[raster-algorithm]")
 {
     auto [data, attribution] = field({ 16, 16 }, 1);
@@ -1063,36 +1083,36 @@ TEST_CASE("scaling accepts raster dimensions whose pixel count exceeds 32 bits",
 
 TEST_CASE("vertex halo queries read one sample more after than before an upscaled position", "[raster-algorithm]")
 {
-    CHECK(algorithm::required_halo(2, Resampling::Cheapest, Placement::Vertex).value() == 1);
+    CHECK(algorithm::required_halo(2, Resampling::Cheapest, SampleAlignment::GridNodes).value() == 1);
     for (unsigned radius : { 2u, 3u, 4u }) {
-        CHECK(algorithm::required_halo(1, lanczos_method(radius), Placement::Vertex).value() == radius);
-        CHECK(algorithm::required_halo(-2, lanczos_method(radius), Placement::Vertex).value() == 3 * (2 * radius - 1));
+        CHECK(algorithm::required_halo(1, lanczos_method(radius), SampleAlignment::GridNodes).value() == radius);
+        CHECK(algorithm::required_halo(-2, lanczos_method(radius), SampleAlignment::GridNodes).value() == 3 * (2 * radius - 1));
     }
-    CHECK(algorithm::required_halo(-3, Resampling::Cheapest, Placement::Vertex).value() == 0);
-    CHECK(algorithm::required_halo(1, Resampling::BiliinearAndBox, Placement::Vertex).error().code() == Error::Code::InvalidInput);
-    CHECK_FALSE(algorithm::required_halo(1, Resampling::Lanczos3, static_cast<Placement>(7)));
+    CHECK(algorithm::required_halo(-3, Resampling::Cheapest, SampleAlignment::GridNodes).value() == 0);
+    CHECK(algorithm::required_halo(1, Resampling::BiliinearAndBox, SampleAlignment::GridNodes).error().code() == Error::Code::InvalidInput);
+    CHECK_FALSE(algorithm::required_halo(1, Resampling::Lanczos3, static_cast<SampleAlignment>(7)));
 
     // A single retained vertex reads only its source vertex.
-    const auto up = algorithm::required_source_window({ 10, 10 }, 3, 1, Resampling::Lanczos3, { 0, 3 }, { 1, 1 }, Placement::Vertex);
+    const auto up = algorithm::required_source_window({ 10, 10 }, 3, 1, Resampling::Lanczos3, { 0, 3 }, { 1, 1 }, SampleAlignment::GridNodes);
     REQUIRE(up);
     CHECK(up->origin == glm::uvec2(3, 2));
     CHECK(up->size == glm::uvec2(1, 6));
     // A window ending on a retained vertex reads up to it, here for linear interpolation.
-    const auto linear = algorithm::required_source_window({ 6, 6 }, 1, 1, Resampling::Cheapest, { 0, 0 }, { 3, 3 }, Placement::Vertex);
+    const auto linear = algorithm::required_source_window({ 6, 6 }, 1, 1, Resampling::Cheapest, { 0, 0 }, { 3, 3 }, SampleAlignment::GridNodes);
     REQUIRE(linear);
     CHECK(linear->origin == glm::uvec2(1));
     CHECK(linear->size == glm::uvec2(2));
-    const auto ending = algorithm::required_source_window({ 10, 10 }, 0, 1, Resampling::Lanczos3, { 0, 0 }, { 5, 5 }, Placement::Vertex);
+    const auto ending = algorithm::required_source_window({ 10, 10 }, 0, 1, Resampling::Lanczos3, { 0, 0 }, { 5, 5 }, SampleAlignment::GridNodes);
     CHECK_FALSE(ending);
-    const auto retained = algorithm::required_source_window({ 5, 5 }, 0, 1, Resampling::Lanczos3, { 8, 8 }, { 1, 1 }, Placement::Vertex);
+    const auto retained = algorithm::required_source_window({ 5, 5 }, 0, 1, Resampling::Lanczos3, { 8, 8 }, { 1, 1 }, SampleAlignment::GridNodes);
     REQUIRE(retained);
     CHECK(retained->origin == glm::uvec2(4));
     CHECK(retained->size == glm::uvec2(1));
-    const auto down = algorithm::required_source_window({ 15, 15 }, 5, -1, Resampling::Lanczos3, { 0, 0 }, { 2, 2 }, Placement::Vertex);
+    const auto down = algorithm::required_source_window({ 15, 15 }, 5, -1, Resampling::Lanczos3, { 0, 0 }, { 2, 2 }, SampleAlignment::GridNodes);
     REQUIRE(down);
     CHECK(down->origin == glm::uvec2(0));
     CHECK(down->size == glm::uvec2(13));
-    CHECK_FALSE(algorithm::required_source_window({ 10, 10 }, 3, 1, Resampling::BiliinearAndBox, { 0, 0 }, { 1, 1 }, Placement::Vertex));
+    CHECK_FALSE(algorithm::required_source_window({ 10, 10 }, 3, 1, Resampling::BiliinearAndBox, { 0, 0 }, { 1, 1 }, SampleAlignment::GridNodes));
 }
 
 TEST_CASE("vertex upscaling copies retained vertices and matches separable references", "[raster-algorithm]")
@@ -1100,7 +1120,7 @@ TEST_CASE("vertex upscaling copies retained vertices and matches separable refer
     for (int levels : { 1, 2 }) {
         const unsigned factor = 1u << levels;
         for (const auto method : { Resampling::Cheapest, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
-            const unsigned radius = algorithm::detail::upscaling_radius(method, Placement::Vertex);
+            const unsigned radius = algorithm::detail::upscaling_radius(method, SampleAlignment::GridNodes);
             const unsigned halo = radius;
             auto [data, ids] = field({ 4, 4 }, halo);
             // Output positions from one source spacing before vertex 0 through vertex 3.
@@ -1210,7 +1230,7 @@ TEST_CASE("vertex scaling windows match larger windows in both directions", "[ra
     for (const auto method : { Resampling::Cheapest, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
         for (int levels : { -2, -1, 1, 2 }) {
             const unsigned factor = 1u << std::abs(levels);
-            const unsigned halo = *algorithm::required_halo(levels, method, Placement::Vertex) + 4;
+            const unsigned halo = *algorithm::required_halo(levels, method, SampleAlignment::GridNodes) + 4;
             auto [data, ids] = field({ 17, 17 }, halo);
             const glm::uvec2 size(levels < 0 ? 16 / factor + 3 : 16 * factor + 3);
             auto whole = raster_store::scale(data, ids, halo, levels, method, { -1, -1 }, size, ValueMapping::Linear, Placement::Vertex);
@@ -1234,7 +1254,7 @@ TEST_CASE("vertex source window queries match the samples scaling reads", "[rast
         for (const auto [levels, offset, size] : { Case { 1, { 0, 0 }, { 4, 4 } }, Case { 1, { 0, 0 }, { 5, 5 } }, Case { -1, { 0, 0 }, { 2, 2 } } }) {
             const unsigned halo = 5;
             auto [data, ids] = field({ 12, 12 }, halo);
-            const auto window = algorithm::required_source_window(data.size(), halo, levels, method, offset, size, Placement::Vertex);
+            const auto window = algorithm::required_source_window(data.size(), halo, levels, method, offset, size, SampleAlignment::GridNodes);
             REQUIRE(window);
             REQUIRE(window->origin.x == window->origin.y);
             const auto expected = raster_store::scale(data, ids, halo, levels, method, offset, size, ValueMapping::Linear, Placement::Vertex);

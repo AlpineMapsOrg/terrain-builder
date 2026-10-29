@@ -19,15 +19,15 @@
 #pragma once
 
 #include "copy.h"
-#include "placement.h"
+#include "sample_alignment.h"
 #include "window_transform.h"
 
 namespace raster::algorithm {
 
 enum class Resampling {
-    // Area: nearest-neighbour upsampling and box reduction. Vertex: linear upsampling and decimation.
+    // CellCenters: nearest-neighbour upsampling and box reduction. GridNodes: linear upsampling and decimation.
     Cheapest,
-    // Area only.
+    // CellCenters only.
     BiliinearAndBox,
     Lanczos2,
     Lanczos3,
@@ -35,13 +35,13 @@ enum class Resampling {
 };
 
 namespace detail {
-    inline Expected<void> validate_placement(Resampling method, Placement placement)
+    inline Expected<void> validate_alignment(Resampling method, SampleAlignment alignment)
     {
-        if (placement != Placement::Area && placement != Placement::Vertex) {
-            return Error::fail(Error::Code::InvalidInput, "invalid raster sampling placement");
+        if (alignment != SampleAlignment::CellCenters && alignment != SampleAlignment::GridNodes) {
+            return Error::fail(Error::Code::InvalidInput, "invalid raster sampling alignment");
         }
-        if (placement == Placement::Vertex && method == Resampling::BiliinearAndBox) {
-            return Error::fail(Error::Code::InvalidInput, "bilinear resampling requires area placement");
+        if (alignment == SampleAlignment::GridNodes && method == Resampling::BiliinearAndBox) {
+            return Error::fail(Error::Code::InvalidInput, "bilinear resampling requires cell-centre alignment");
         }
         return {};
     }
@@ -75,27 +75,27 @@ namespace detail {
 
     inline unsigned source_phase(std::int64_t position, unsigned factor) { return unsigned(position - source_cell(position, factor) * factor); }
 
-    // A vertex position lies at or after its source vertex; an area position before
+    // A grid-node position lies at or after its source node; a cell-centre position before
     // its cell centre also needs the previous cell.
-    inline std::int64_t upscaling_origin(std::int64_t position, unsigned factor, unsigned radius, Placement placement = Placement::Area)
+    inline std::int64_t upscaling_origin(std::int64_t position, unsigned factor, unsigned radius, SampleAlignment alignment = SampleAlignment::CellCenters)
     {
         const std::int64_t cell = source_cell(position, factor);
         if (radius == 0)
             return cell;
-        const bool before_centre = placement == Placement::Area && source_phase(position, factor) < factor / 2;
+        const bool before_centre = alignment == SampleAlignment::CellCenters && source_phase(position, factor) < factor / 2;
         return cell - (before_centre ? 1 : 0) - int(radius) + 1;
     }
 
-    // Vertex positions with zero phase lie on a source vertex; only its tap is read.
-    inline bool on_source_vertex(std::int64_t position, unsigned factor, Placement placement)
+    // Grid-node positions with zero phase lie on a source node; only its tap is read.
+    inline bool on_source_node(std::int64_t position, unsigned factor, SampleAlignment alignment)
     {
-        return placement == Placement::Vertex && source_phase(position, factor) == 0;
+        return alignment == SampleAlignment::GridNodes && source_phase(position, factor) == 0;
     }
 
-    inline unsigned upscaling_radius(Resampling method, Placement placement = Placement::Area)
+    inline unsigned upscaling_radius(Resampling method, SampleAlignment alignment = SampleAlignment::CellCenters)
     {
         if (method == Resampling::Cheapest)
-            return placement == Placement::Vertex ? 1 : 0;
+            return alignment == SampleAlignment::GridNodes ? 1 : 0;
         return method == Resampling::BiliinearAndBox ? 1 : *filter_radius(method);
     }
 
@@ -147,7 +147,7 @@ namespace detail {
 
     // Each stage retains just enough halo for the remaining steps. The first
     // source can be clamped; subsequent stages read ordinary intermediate rasters.
-    // Vertex stages keep the closing vertex: n intervals plus one sample become n/2 plus one.
+    // Grid-node stages keep the closing node: n intervals plus one sample become n/2 plus one.
     template <typename InputView, typename T, typename Function>
     Expected<void> reduce_levels(const InputView& source,
         unsigned halo_width,
@@ -155,12 +155,12 @@ namespace detail {
         unsigned base_halo,
         const Function& function,
         const View<T>& destination,
-        Placement placement = Placement::Area)
+        SampleAlignment alignment = SampleAlignment::CellCenters)
     {
         if (geometry.factor == 1) {
             return copy_views(*raster::make_view(source, glm::uvec2(halo_width), geometry.interior), destination);
         }
-        const glm::uvec2 closing(placement == Placement::Vertex ? 1 : 0);
+        const glm::uvec2 closing(alignment == SampleAlignment::GridNodes ? 1 : 0);
         auto interior = geometry.interior;
         radix::Raster<T> intermediate;
         bool first = true;
@@ -195,19 +195,19 @@ namespace detail {
 
 /// Positive levels upscale, negative levels downscale, and zero only crops.
 /// This query covers the full interior; a requested output halo needs additional support.
-/// Vertex upscaling reads one sample less before an output position than after it.
-inline Expected<unsigned> required_halo(int n_zoom_levels, Resampling method, Placement placement = Placement::Area)
+/// Grid-node upscaling reads one sample less before an output position than after it.
+inline Expected<unsigned> required_halo(int n_zoom_levels, Resampling method, SampleAlignment alignment = SampleAlignment::CellCenters)
 {
     auto radius = detail::filter_radius(method);
     if (!radius)
         return Error::propagate(std::move(radius));
-    if (auto valid = detail::validate_placement(method, placement); !valid)
+    if (auto valid = detail::validate_alignment(method, alignment); !valid)
         return Error::propagate(std::move(valid));
     auto factor = detail::scale_factor(static_cast<unsigned>(n_zoom_levels < 0 ? -std::int64_t(n_zoom_levels) : n_zoom_levels));
     if (!factor)
         return Error::propagate(std::move(factor));
     if (n_zoom_levels >= 0)
-        return n_zoom_levels == 0 ? 0 : detail::upscaling_radius(method, placement);
+        return n_zoom_levels == 0 ? 0 : detail::upscaling_radius(method, alignment);
     const auto width = *radius == 0 ? 0 : std::uint64_t(2 * *radius - 1) * (*factor - 1);
     if (width > (std::numeric_limits<unsigned>::max)())
         return Error::fail(Error::Code::ResourceExhausted, "required raster halo exceeds representable dimensions");
@@ -224,13 +224,18 @@ namespace detail {
     }
 
     // Validate actual source support, including windows outside the scaled interior.
-    // Vertex outputs lie on source position offset / factor, or offset * factor when reducing.
-    inline Expected<ScalingGeometry> window_geometry(
-        glm::uvec2 input, unsigned halo_width, int levels, Resampling method, glm::i64vec2 offset, glm::uvec2 size, Placement placement = Placement::Area)
+    // Grid-node outputs lie on source position offset / factor, or offset * factor when reducing.
+    inline Expected<ScalingGeometry> window_geometry(glm::uvec2 input,
+        unsigned halo_width,
+        int levels,
+        Resampling method,
+        glm::i64vec2 offset,
+        glm::uvec2 size,
+        SampleAlignment alignment = SampleAlignment::CellCenters)
     {
         assert(input.x <= (1u << 30) && input.y <= (1u << 30));
         assert(size.x <= (1u << 30) && size.y <= (1u << 30));
-        auto required = required_halo(levels, method, placement);
+        auto required = required_halo(levels, method, alignment);
         if (!required)
             return Error::propagate(std::move(required));
         const auto factor = *scale_factor(static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels));
@@ -247,17 +252,17 @@ namespace detail {
             std::int64_t first_source;
             std::int64_t last_source;
             if (levels > 0) {
-                const unsigned radius = upscaling_radius(method, placement);
-                first_source = std::int64_t(halo_width) + upscaling_origin(offset[axis], factor, radius, placement);
-                last_source = std::int64_t(halo_width) + upscaling_origin(last, factor, radius, placement) + (radius == 0 ? 0 : 2 * radius - 1);
-                // A retained vertex reads only its source vertex; its unretained neighbour in
-                // the window reads one source vertex less than the full footprint.
+                const unsigned radius = upscaling_radius(method, alignment);
+                first_source = std::int64_t(halo_width) + upscaling_origin(offset[axis], factor, radius, alignment);
+                last_source = std::int64_t(halo_width) + upscaling_origin(last, factor, radius, alignment) + (radius == 0 ? 0 : 2 * radius - 1);
+                // A retained node reads only its source node; its unretained neighbour in
+                // the window reads one source node less than the full footprint.
                 const bool single = size[axis] == 1;
-                if (single && on_source_vertex(offset[axis], factor, placement))
+                if (single && on_source_node(offset[axis], factor, alignment))
                     first_source += radius - 1;
-                if (on_source_vertex(last, factor, placement))
+                if (on_source_node(last, factor, alignment))
                     last_source -= single ? radius : 1;
-            } else if (levels < 0 && placement == Placement::Vertex) {
+            } else if (levels < 0 && alignment == SampleAlignment::GridNodes) {
                 first_source = std::int64_t(halo_width) + offset[axis] * factor - *required;
                 last_source = std::int64_t(halo_width) + last * factor + *required;
             } else if (levels < 0) {
@@ -293,9 +298,9 @@ struct SourceWindow {
     Resampling method,
     glm::i64vec2 output_offset,
     glm::uvec2 output_size,
-    Placement placement = Placement::Area)
+    SampleAlignment alignment = SampleAlignment::CellCenters)
 {
-    auto geometry = detail::window_geometry(input_size, halo_width, levels, method, output_offset, output_size, placement);
+    auto geometry = detail::window_geometry(input_size, halo_width, levels, method, output_offset, output_size, alignment);
     if (!geometry)
         return Error::propagate(std::move(geometry));
     return SourceWindow { geometry->source_origin, geometry->source_size };

@@ -20,10 +20,11 @@
 
 namespace raster::algorithm {
 
-// Area samples lie at cell centres, vertex samples on the grid vertices.
-enum class Placement {
-    Area,
-    Vertex,
+enum class SampleAlignment {
+    // Sample positions are i + 0.5; scaling maps x to (x + 0.5) / scale - 0.5.
+    CellCenters,
+    // Sample positions are i; scaling maps x to x / scale.
+    GridNodes,
 };
 
 } // namespace raster::algorithm
