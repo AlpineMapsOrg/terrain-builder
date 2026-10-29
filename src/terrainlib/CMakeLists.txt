@@ -113,12 +113,6 @@ add_library(terrainlib
     mesh/encode.h
     mesh/geometry.h mesh/geometry.cpp
     mesh/holes.h mesh/holes.cpp
-    mesh/igl/convert.h
-    mesh/igl/cut.h
-    mesh/igl/cut_to_disk.h
-    mesh/igl/igl.cpp
-    mesh/igl/manifold.h
-    mesh/igl/orient.h
     mesh/io.h mesh/io.cpp
     mesh/io/gltf.h mesh/io/gltf.cpp
     mesh/io/options.h
@@ -246,7 +240,6 @@ add_library(terrainlib
     uv/unwrap.h uv/unwrap.cpp
 )
 set_source_files_properties(
-    mesh/igl/igl.cpp
     mesh/io/gltf.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 )
@@ -280,8 +273,6 @@ target_link_libraries(terrainlib PUBLIC
     magic_enum::magic_enum
     meshoptimizer
     WideInteger
-    igl::core
-    igl_restricted::triangle
     xatlas
 )
 

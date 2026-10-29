@@ -20,14 +20,15 @@ if(NOT COMMAND alp_setup_cmake_project)
     include(${CMAKE_CURRENT_LIST_DIR}/SetupCMakeProject.cmake)
 endif()
 
-function(alp_setup_opencv version)
+function(alp_setup_opencv version sha256)
     set(_alp_opencv_sanitizer_arguments)
     if(ALP_ENABLE_ADDRESS_SANITIZER OR ALP_ENABLE_THREAD_SANITIZER)
         list(APPEND _alp_opencv_sanitizer_arguments -DOPENCV_SKIP_LINK_NO_UNDEFINED=ON)
     endif()
 
     alp_setup_cmake_project(opencv
-        URL https://github.com/opencv/opencv.git COMMITISH ${version}
+        URL https://github.com/opencv/opencv/archive/refs/tags/${version}.tar.gz
+        SHA256 ${sha256}
         CMAKE_ARGUMENTS
             ${_alp_opencv_sanitizer_arguments}
             -DBUILD_TESTS=OFF

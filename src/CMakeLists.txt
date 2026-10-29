@@ -27,9 +27,13 @@ find_package(ZLIB REQUIRED)
 
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 12.2.0)
 
-alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
+alp_setup_cmake_project(eigen
+    URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+    SHA256 8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72
+    CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DEIGEN_BUILD_DOC=OFF)
+find_package(Eigen3 CONFIG REQUIRED)
 add_library(Eigen3 INTERFACE)
-target_include_directories(Eigen3 SYSTEM INTERFACE ${eigen_SOURCE_DIR})
+target_link_libraries(Eigen3 INTERFACE Eigen3::Eigen)
 
 alp_setup_cmake_project(boost
     URL https://github.com/boostorg/boost/releases/download/boost-1.88.0/boost-1.88.0-cmake.tar.xz
@@ -40,17 +44,29 @@ alp_setup_cmake_project(boost
         "-DBOOST_INCLUDE_LIBRARIES=graph\;multiprecision\;heap\;format\;logic")
 find_package(Boost CONFIG REQUIRED)
 
-alp_setup_cmake_project(tbb URL https://github.com/uxlfoundation/oneTBB.git COMMITISH v2023.1.0 CMAKE_ARGUMENTS -DTBB_TEST=OFF -DTBBMALLOC_BUILD=OFF)
+alp_setup_cmake_project(tbb
+    URL https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2023.1.0.tar.gz
+    SHA256 191288b52e1e6b17198000b64d77d194bb65e791be46ebc606e9b091781e2070
+    CMAKE_ARGUMENTS -DTBB_TEST=OFF -DTBBMALLOC_BUILD=OFF)
 find_package(TBB REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
-alp_setup_gdal(GDAL_VERSION v3.10.3 GEOS_VERSION 3.13.1 PROJ_VERSION 9.6.0)
+alp_setup_gdal(
+    GDAL_VERSION v3.10.3
+    GDAL_SHA256 e4bf7f104acbcb3e2d16c97fd1af2b92b28d0ba59d17d976e3ef08b794f4153b
+    GEOS_VERSION 3.13.1
+    GEOS_SHA256 df2c50503295f325e7c8d7b783aca8ba4773919cde984193850cf9e361dfd28c
+    PROJ_VERSION 9.6.0
+    PROJ_SHA256 d8cae521c311c39513193657e75767f7cfbf2f91bd202fcd4a200028d3b57e14)
 
-alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DWITH_examples=OFF)
+alp_setup_cmake_project(cgal
+    URL https://github.com/CGAL/cgal/releases/download/v6.0.1/CGAL-6.0.1-library.tar.xz
+    SHA256 c752737f91d1af71fa96038f0e37945ce82a5f1fffb6200172cfcdd77755a356
+    CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DWITH_examples=OFF)
 find_package(CGAL REQUIRED)
 
 include(../cmake/SetupOpenCV.cmake)
-alp_setup_opencv(4.11.0)
+alp_setup_opencv(4.11.0 9a7c11f924eff5f8d8070e297b322ee68b9227e003fd600d4b8122198091665f)
 
 include(../cmake/SetupJpegXL.cmake)
 alp_setup_jpegxl(v0.12.0)
@@ -97,10 +113,6 @@ alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
 
 alp_add_git_repository(wideinteger URL https://github.com/ckormanyos/wide-integer.git COMMITISH 719cbbd557fe974f48b055568e2b149b2444bee9)
-
-set(LIBIGL_COPYLEFT_CORE ON)
-set(LIBIGL_RESTRICTED_TRIANGLE ON)
-alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
 
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 799db1af54a1f58454800e899bfc7fc544711834 NOT_SYSTEM)
 

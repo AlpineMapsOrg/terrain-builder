@@ -21,19 +21,24 @@ if(NOT COMMAND alp_setup_cmake_project)
 endif()
 
 function(alp_setup_gdal)
-    set(oneValueArgs GDAL_VERSION GEOS_VERSION PROJ_VERSION)
+    set(oneValueArgs GDAL_VERSION GDAL_SHA256 GEOS_VERSION GEOS_SHA256 PROJ_VERSION PROJ_SHA256)
     cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
 
-    if(NOT ARG_GDAL_VERSION OR NOT ARG_GEOS_VERSION OR NOT ARG_PROJ_VERSION)
-        message(FATAL_ERROR "alp_setup_gdal() needs: GDAL_VERSION <tag> GEOS_VERSION <tag> PROJ_VERSION <tag>")
+    if(NOT ARG_GDAL_VERSION OR NOT ARG_GDAL_SHA256
+            OR NOT ARG_GEOS_VERSION OR NOT ARG_GEOS_SHA256
+            OR NOT ARG_PROJ_VERSION OR NOT ARG_PROJ_SHA256)
+        message(FATAL_ERROR "alp_setup_gdal() needs VERSION and SHA256 arguments for GDAL, GEOS and PROJ")
     endif()
 
-    alp_setup_cmake_project(proj URL https://github.com/OSGeo/PROJ.git COMMITISH ${ARG_PROJ_VERSION} CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DBUILD_APPS=OFF)
+    alp_setup_cmake_project(proj
+        URL https://download.osgeo.org/proj/proj-${ARG_PROJ_VERSION}.tar.gz
+        SHA256 ${ARG_PROJ_SHA256}
+        CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DBUILD_APPS=OFF)
     find_package(PROJ CONFIG REQUIRED)
 
     alp_setup_cmake_project(geos
-        URL https://github.com/libgeos/geos.git
-        COMMITISH ${ARG_GEOS_VERSION}
+        URL https://download.osgeo.org/geos/geos-${ARG_GEOS_VERSION}.tar.bz2
+        SHA256 ${ARG_GEOS_SHA256}
         CMAKE_ARGUMENTS
             -DBUILD_SHARED_LIBS=OFF
             -DBUILD_TESTING=OFF
@@ -41,9 +46,10 @@ function(alp_setup_gdal)
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     )
 
+    string(REGEX REPLACE "^v" "" _gdal_version "${ARG_GDAL_VERSION}")
     alp_setup_cmake_project(gdal
-        URL https://github.com/OSGeo/gdal.git
-        COMMITISH ${ARG_GDAL_VERSION}
+        URL https://github.com/OSGeo/gdal/releases/download/v${_gdal_version}/gdal-${_gdal_version}.tar.gz
+        SHA256 ${ARG_GDAL_SHA256}
         CMAKE_ARGUMENTS
             -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF
             -DGDAL_ENABLE_DRIVER_HFA=ON
