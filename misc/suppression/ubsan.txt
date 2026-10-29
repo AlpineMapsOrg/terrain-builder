@@ -13,12 +13,12 @@ bool:CGAL::Trapezoidal_decomposition_2<*::set_with_guarantees(bool)
 
 # OpenCV's random-number dispatch casts typed functions to a common signature.
 # Suppress only function-type diagnostics in that implementation.
-function:*opencv/modules/core/src/rand.cpp
+function:*opencv*/modules/core/src/rand.cpp
 
 # OpenCV's IPP color conversion dispatch casts typed functions to a common signature.
 # Suppress only function-type diagnostics in that implementation.
-function:*opencv/modules/imgproc/src/color.hpp
+function:*opencv*/modules/imgproc/src/color.hpp
 
 # OpenCV's IPP resize fallback uses -1 as an unsupported-interpolation sentinel.
 # Suppress only enum diagnostics in that implementation.
-enum:*opencv/modules/imgproc/src/resize.cpp
+enum:*opencv*/modules/imgproc/src/resize.cpp
