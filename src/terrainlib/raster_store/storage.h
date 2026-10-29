@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -45,6 +46,8 @@ struct OpenOptions {
 struct CreateOptions {
     unsigned nominal_tile_size = default_tile_side;
     unsigned halo_width = 0;
+    pixel::Placement placement = pixel::Placement::Area;
+    unsigned overlap = 0;
     std::optional<pixel::Mapping> value_mapping = std::nullopt;
     std::string codec_selector = "amort";
     ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression;
@@ -105,16 +108,19 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (destination.filename().empty() || destination.filename() == "." || destination.filename() == ".." || destination.extension() == ".part") {
         return Error::fail(Error::Code::InvalidInput, "creation requires a final snapshot path without a .part suffix", final_path);
     }
-    if (options.halo_width > ((std::numeric_limits<unsigned>::max)() - options.nominal_tile_size) / 2) {
+    const auto stored_tile_size = std::uint64_t(options.nominal_tile_size) + options.overlap + 2 * std::uint64_t(options.halo_width);
+    if (stored_tile_size > (std::numeric_limits<unsigned>::max)()) {
         return Error::fail(Error::Code::InvalidInput, "stored raster size overflows");
     }
     auto metadata = std::make_unique<const io::manifest::Metadata>(std::string(path_layout::zoom_xy_google::zoom_x_y_google().id),
         pixel::identifier<PixelType>(),
         options.codec_selector,
-        options.nominal_tile_size + 2 * options.halo_width,
+        unsigned(stored_tile_size),
         options.nominal_tile_size,
         options.halo_width,
-        options.value_mapping.value_or(pixel::default_mapping<PixelType>));
+        options.value_mapping.value_or(pixel::default_mapping<PixelType>),
+        options.placement,
+        options.overlap);
     if (auto valid = io::manifest::validate(*metadata); !valid) {
         return Error::propagate(std::move(valid));
     }

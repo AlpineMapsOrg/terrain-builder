@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "io/envelope.h"
@@ -65,7 +66,40 @@ namespace detail::v1 {
 
 } // namespace detail::v1
 
-using MetadataSchema = ::io::envelope::PayloadSchema<"raster_store.Metadata", ::io::envelope::Version<1, detail::v1::Metadata>>;
+namespace detail::v2 {
+
+    struct Metadata {
+        std::string layout_id;
+        std::string payload_type;
+        std::string codec_selector;
+        unsigned stored_tile_size = default_tile_side;
+        unsigned nominal_tile_size = default_tile_side;
+        unsigned halo_width = 0;
+        pixel::Mapping value_mapping = pixel::Mapping::Linear;
+        pixel::Placement placement = pixel::Placement::Area;
+        // One for vertex tiles storing the eastern column and southern row that close their grid.
+        unsigned overlap = 0;
+
+        static Metadata from_previous(v1::Metadata previous)
+        {
+            return {
+                .layout_id = std::move(previous.layout_id),
+                .payload_type = std::move(previous.payload_type),
+                .codec_selector = std::move(previous.codec_selector),
+                .stored_tile_size = previous.stored_tile_size,
+                .nominal_tile_size = previous.nominal_tile_size,
+                .halo_width = previous.halo_width,
+                .value_mapping = previous.value_mapping,
+                .placement = pixel::Placement::Area,
+                .overlap = 0,
+            };
+        }
+    };
+
+} // namespace detail::v2
+
+using MetadataSchema = ::io::envelope::
+    PayloadSchema<"raster_store.Metadata", ::io::envelope::Version<1, detail::v1::Metadata>, ::io::envelope::Version<2, detail::v2::Metadata>>;
 using IndexSchema = ::io::envelope::PayloadSchema<"raster_store.Index", ::io::envelope::Version<1, detail::v1::Hierarchy>>;
 using Metadata = MetadataSchema::latest_type;
 

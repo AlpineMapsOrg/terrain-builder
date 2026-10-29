@@ -697,8 +697,103 @@ TEST_CASE("snapshot geometry and mapping validation precede creation", "[raster-
         options.halo_width = 1u << 31;
     }
     SECTION("unknown mapping") { options.value_mapping = static_cast<raster_store::pixel::Mapping>(99); }
+    SECTION("area overlap") { options.overlap = 1; }
+    SECTION("double vertex overlap")
+    {
+        options.placement = raster_store::pixel::Placement::Vertex;
+        options.overlap = 2;
+    }
+    SECTION("unknown placement") { options.placement = static_cast<raster_store::pixel::Placement>(99); }
     CHECK_FALSE(storage::create<float>(directory.path() / "snapshot", options));
     CHECK_FALSE(std::filesystem::exists(directory.path() / "snapshot.part"));
+}
+
+TEST_CASE("vertex snapshots include the overlap in their stored tiles", "[raster-store][storage]")
+{
+    TemporaryDirectory directory;
+    write_table(directory.path());
+    auto options = small_options();
+    options.halo_width = 1;
+    options.placement = raster_store::pixel::Placement::Vertex;
+    options.overlap = 1;
+    auto created = storage::create<float>(directory.path() / "snapshot", options);
+    REQUIRE(created);
+    CHECK(created->second->nominal_tile_size == 4);
+    CHECK(created->second->stored_tile_size == 7);
+    raster_store::Tile<float> tile(7);
+    tile.data.fill(3.5f);
+    REQUIRE(created->first->save({ 0, { 0, 0 } }, tile));
+    REQUIRE(storage::publish(std::move(created->first)));
+    auto opened = storage::open<float>(directory.path() / "snapshot");
+    REQUIRE(opened);
+    CHECK(opened->second->placement == raster_store::pixel::Placement::Vertex);
+    CHECK(opened->second->overlap == 1);
+    CHECK(opened->second->halo_width == 1);
+    check_bytes(opened->first->load({ 0, { 0, 0 } })->data, tile.data);
+}
+
+TEST_CASE("raster metadata round-trips both placements as version 2", "[raster-store]")
+{
+    TemporaryDirectory directory;
+    manifest::Metadata metadata {
+        "zoom_x_y_google", "float32", "amort", 4, 4, 0, raster_store::pixel::Mapping::Linear, raster_store::pixel::Placement::Area, 0
+    };
+    SECTION("area") { }
+    SECTION("vertex without overlap") { metadata.placement = raster_store::pixel::Placement::Vertex; }
+    SECTION("vertex with overlap and halo")
+    {
+        metadata.placement = raster_store::pixel::Placement::Vertex;
+        metadata.overlap = 1;
+        metadata.halo_width = 2;
+        metadata.stored_tile_size = 9;
+    }
+    REQUIRE(manifest::write_metadata(metadata, directory.path()));
+    const auto header = io::envelope::read_header(directory.path() / manifest::metadata_file_name);
+    REQUIRE(header);
+    CHECK(header->class_version == 2);
+    const auto read = manifest::read_metadata(directory.path());
+    REQUIRE(read);
+    CHECK(read->placement == metadata.placement);
+    CHECK(read->overlap == metadata.overlap);
+    CHECK(read->halo_width == metadata.halo_width);
+    CHECK(read->stored_tile_size == metadata.stored_tile_size);
+}
+
+TEST_CASE("version 1 raster metadata reads as area placement without overlap", "[raster-store]")
+{
+    TemporaryDirectory directory;
+    const manifest::detail::v1::Metadata previous { "zoom_x_y_google", "vec3<uint8>", "amoit", 6, 4, 1, raster_store::pixel::Mapping::SRGBA };
+    const auto bytes = io::envelope::serialize<manifest::MetadataSchema, 1>(previous);
+    REQUIRE(bytes);
+    REQUIRE(io::byte::write(*bytes, directory.path() / manifest::metadata_file_name, io::byte::WriteMode::Overwrite));
+    const auto metadata = manifest::read_metadata(directory.path());
+    REQUIRE(metadata);
+    CHECK(metadata->layout_id == previous.layout_id);
+    CHECK(metadata->payload_type == previous.payload_type);
+    CHECK(metadata->codec_selector == previous.codec_selector);
+    CHECK(metadata->stored_tile_size == 6);
+    CHECK(metadata->nominal_tile_size == 4);
+    CHECK(metadata->halo_width == 1);
+    CHECK(metadata->value_mapping == raster_store::pixel::Mapping::SRGBA);
+    CHECK(metadata->placement == raster_store::pixel::Placement::Area);
+    CHECK(metadata->overlap == 0);
+}
+
+TEST_CASE("raster metadata permits overlap only for vertex placement", "[raster-store]")
+{
+    manifest::Metadata metadata {
+        "zoom_x_y_google", "float32", "amort", 5, 4, 0, raster_store::pixel::Mapping::Linear, raster_store::pixel::Placement::Vertex, 1
+    };
+    REQUIRE(manifest::validate(metadata));
+    SECTION("area overlap") { metadata.placement = raster_store::pixel::Placement::Area; }
+    SECTION("double overlap")
+    {
+        metadata.overlap = 2;
+        metadata.stored_tile_size = 6;
+    }
+    SECTION("stored size without overlap") { metadata.stored_tile_size = 4; }
+    SECTION("unknown placement") { metadata.placement = static_cast<raster_store::pixel::Placement>(2); }
+    CHECK(manifest::validate(metadata).error().code() == Error::Code::InvalidInput);
 }
 
 TEST_CASE("AMORT tiles return and verify their payload hash", "[raster-store][codec][hash]")

@@ -42,6 +42,8 @@ namespace {
 
 namespace algorithm = raster::algorithm;
 using algorithm::Resampling;
+using algorithm::SampleAlignment;
+using raster_store::pixel::Placement;
 using ValueMapping = raster_store::pixel::Mapping;
 using Catch::Matchers::WithinAbs;
 
@@ -56,7 +58,7 @@ auto scale(const radix::Raster<T>& data,
     const radix::Raster<std::uint16_t>& attribution,
     int levels,
     unsigned halo = 0,
-    Resampling method = Resampling::NearestNeighbourAndBox,
+    Resampling method = Resampling::Cheapest,
     ValueMapping mapping = ValueMapping::Linear)
 {
     return raster_store::scale(data, attribution, halo, levels, method, mapping);
@@ -104,6 +106,44 @@ double reference_lanczos(const radix::Raster<float>& data, const radix::Raster<s
     return sum / normalization;
 }
 
+double lanczos(double distance, unsigned radius)
+{
+    const auto sinc = [](double value) { return value == 0 ? 1. : std::sin(std::numbers::pi * value) / (std::numbers::pi * value); };
+    return std::abs(distance) >= radius ? 0. : sinc(distance) * sinc(distance / radius);
+}
+
+// Normalized taps relative to the interior for evaluating vertex samples at a source coordinate.
+std::vector<std::pair<int, double>> vertex_taps(double position, unsigned radius)
+{
+    const int cell = int(std::floor(position));
+    std::vector<std::pair<int, double>> taps;
+    double normalization = 0;
+    for (int index = cell - int(radius) + 1; index <= cell + int(radius); ++index) {
+        const double weight = radius == 1 ? 1 - std::abs(position - index) : lanczos(position - index, radius);
+        taps.emplace_back(index, weight);
+        normalization += weight;
+    }
+    for (auto& tap : taps)
+        tap.second /= normalization;
+    return taps;
+}
+
+// Normalized half-band taps of a vertex reduction by two, centred on the retained vertex.
+std::vector<double> vertex_reduction_taps(unsigned radius)
+{
+    std::vector<double> taps;
+    double normalization = 0;
+    for (int offset = 1 - 2 * int(radius); offset < 2 * int(radius); ++offset) {
+        taps.push_back(offset != 0 && offset % 2 == 0 ? 0. : lanczos(offset / 2., radius));
+        normalization += taps.back();
+    }
+    for (auto& tap : taps)
+        tap /= normalization;
+    return taps;
+}
+
+Resampling lanczos_method(unsigned radius) { return radius == 2 ? Resampling::Lanczos2 : radius == 3 ? Resampling::Lanczos3 : Resampling::Lanczos4; }
+
 static_assert(std::same_as<algorithm::detail::LinearPixel<float>, float>);
 static_assert(std::same_as<algorithm::detail::LinearPixel<std::uint8_t>, float>);
 static_assert(std::same_as<algorithm::detail::LinearPixel<std::int16_t>, float>);
@@ -117,12 +157,12 @@ static_assert(std::same_as<algorithm::detail::LinearPixel<glm::vec<3, std::int64
 
 TEST_CASE("raster halo queries use signed zoom levels and complete filter chains", "[raster-algorithm]")
 {
-    for (auto method : { Resampling::NearestNeighbourAndBox, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
+    for (auto method : { Resampling::Cheapest, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
         CHECK(algorithm::required_halo(0, method).value() == 0);
         CHECK(algorithm::required_halo(4, method).value() == algorithm::detail::upscaling_radius(method));
     }
     for (int levels = 1; levels <= 4; ++levels) {
-        CHECK(algorithm::required_halo(-levels, Resampling::NearestNeighbourAndBox).value() == 0);
+        CHECK(algorithm::required_halo(-levels, Resampling::Cheapest).value() == 0);
         CHECK(algorithm::required_halo(-levels, Resampling::BiliinearAndBox).value() == 0);
         CHECK(algorithm::required_halo(-levels, Resampling::Lanczos2).value() == 3u * ((1u << levels) - 1));
         CHECK(algorithm::required_halo(-levels, Resampling::Lanczos3).value() == 5u * ((1u << levels) - 1));
@@ -389,7 +429,7 @@ TEST_CASE("sRGB raster scaling and custom reduction operate in linear light with
 {
     const auto data = samples<glm::u8vec4>({ 2, 2 }, { { 0, 0, 0, 255 }, { 255, 255, 255, 0 }, { 0, 0, 0, 128 }, { 255, 255, 255, 127 } });
     radix::Raster<std::uint16_t> ids(glm::uvec2(2), 1);
-    const auto result = scale(data, ids, -1, 0, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
+    const auto result = scale(data, ids, -1, 0, Resampling::Cheapest, ValueMapping::SRGBA);
     REQUIRE(result);
     CHECK(result->first.pixel({ 0, 0 }) == glm::u8vec4(188, 188, 188, 128));
     const auto reducer = [](std::span<const glm::vec4> values) {
@@ -401,7 +441,7 @@ TEST_CASE("sRGB raster scaling and custom reduction operate in linear light with
     const auto custom = raster_store::reduce(data, ids, 0, 1, algorithm::srgb_conversion<glm::u8vec4>(), reducer);
     REQUIRE(custom);
     same_raster(custom->first, result->first);
-    const auto nearest = scale(data, ids, 1, 0, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
+    const auto nearest = scale(data, ids, 1, 0, Resampling::Cheapest, ValueMapping::SRGBA);
     REQUIRE(nearest);
     CHECK(nearest->first.pixel({ 2, 0 }) == data.pixel({ 1, 0 }));
 
@@ -412,11 +452,11 @@ TEST_CASE("sRGB raster scaling and custom reduction operate in linear light with
             rgb.pixel({ x, y }) = glm::u8vec3((13 * x + 79 * y) % 256);
         }
     }
-    const auto direct = scale(rgb, rgb_ids, -2, 1, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
-    const auto first = scale(rgb, rgb_ids, -1, 1, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
+    const auto direct = scale(rgb, rgb_ids, -2, 1, Resampling::Cheapest, ValueMapping::SRGBA);
+    const auto first = scale(rgb, rgb_ids, -1, 1, Resampling::Cheapest, ValueMapping::SRGBA);
     REQUIRE(direct);
     REQUIRE(first);
-    const auto second = scale(first->first, first->second, -1, 0, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
+    const auto second = scale(first->first, first->second, -1, 0, Resampling::Cheapest, ValueMapping::SRGBA);
     REQUIRE(second);
     same_raster(direct->first, second->first);
 }
@@ -473,7 +513,7 @@ TEST_CASE("repeated Lanczos retains intermediate halo and matches separately sup
 
 TEST_CASE("independent area tiles match their metatile through repeated scaling", "[raster-algorithm]")
 {
-    for (const auto filter : { Resampling::NearestNeighbourAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
+    for (const auto filter : { Resampling::Cheapest, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
         const auto halo = algorithm::required_halo(-2, filter).value();
         auto [whole, whole_ids] = field({ 16, 8 }, halo);
         const auto reference = scale(whole, whole_ids, -2, halo, filter);
@@ -618,7 +658,7 @@ TEST_CASE("scalers accept ordinary and clamped views with matching destination r
     const auto materialized = algorithm::copy(padded).value();
     radix::Raster<float> output_backing(glm::uvec2(6, 5), -100);
     const auto output = raster::make_view(output_backing, { 2, 2 }, { 2, 1 }).value();
-    for (const auto filter : { Resampling::NearestNeighbourAndBox, Resampling::Lanczos2 }) {
+    for (const auto filter : { Resampling::Cheapest, Resampling::Lanczos2 }) {
         const auto expected = algorithm::scale(materialized, 9, -2, filter);
         const auto actual = algorithm::scale(padded, 9, -2, filter);
         REQUIRE(expected);
@@ -699,7 +739,7 @@ TEST_CASE("nearest and crop bypass custom conversion and reducers", "[raster-alg
             return 0;
         } };
     for (const int level : { 0, 2 }) {
-        const auto result = algorithm::scale(data, 0, level, Resampling::NearestNeighbourAndBox, conversion);
+        const auto result = algorithm::scale(data, 0, level, Resampling::Cheapest, conversion);
         REQUIRE(result);
         for (const auto value : *result) {
             CHECK(std::bit_cast<std::uint32_t>(value) == bits);
@@ -716,12 +756,12 @@ TEST_CASE("nearest and crop bypass custom conversion and reducers", "[raster-alg
 TEST_CASE("separable filtering encodes once per two-dimensional reduction step", "[raster-algorithm]")
 {
     const auto data = samples<std::int16_t>({ 2, 2 }, { 0, 1, 0, 0 });
-    const auto rounded = algorithm::scale(data, 0, -1, Resampling::NearestNeighbourAndBox);
+    const auto rounded = algorithm::scale(data, 0, -1, Resampling::Cheapest);
     REQUIRE(rounded);
     CHECK(rounded->pixel({ 0, 0 }) == 0); // Rounding horizontal rows first would produce 1.
     const auto conversion = std::tuple { [](const std::int16_t& value) { return double(value) + 10; },
         [](const double& value) { return static_cast<std::int16_t>(std::round(value - 10)); } };
-    const auto custom = algorithm::scale(data, 0, -1, Resampling::NearestNeighbourAndBox, conversion);
+    const auto custom = algorithm::scale(data, 0, -1, Resampling::Cheapest, conversion);
     REQUIRE(custom);
     same_raster(*rounded, *custom);
 }
@@ -729,7 +769,7 @@ TEST_CASE("separable filtering encodes once per two-dimensional reduction step",
 namespace {
 template <typename Conversion>
 concept CanScaleFloat
-    = requires(radix::Raster<float>& source, const Conversion& conversion) { algorithm::scale(source, 0, -1, Resampling::NearestNeighbourAndBox, conversion); };
+    = requires(radix::Raster<float>& source, const Conversion& conversion) { algorithm::scale(source, 0, -1, Resampling::Cheapest, conversion); };
 template <typename Conversion>
 concept CanReduceFloat
     = requires(radix::Raster<float>& source, const Conversion& conversion) { algorithm::reduce(source, 0, 1, conversion, algorithm::Max {}); };
@@ -755,7 +795,7 @@ TEST_CASE("scaling invokes encoders with const working values", "[raster-algorit
     };
     const auto conversion = std::tuple { [](const float& value) { return double(value); }, Encoder {} };
     radix::Raster<float> source(glm::uvec2(4), 7);
-    const auto down = algorithm::scale(source, 0, -1, Resampling::NearestNeighbourAndBox, conversion);
+    const auto down = algorithm::scale(source, 0, -1, Resampling::Cheapest, conversion);
     const auto up = algorithm::scale(source, 1, 1, Resampling::BiliinearAndBox, conversion);
     REQUIRE(down);
     REQUIRE(up);
@@ -770,8 +810,7 @@ TEST_CASE("scaling invokes encoders with const working values", "[raster-algorit
 TEST_CASE("scaling windows match full output crops across stages and kernels", "[raster-algorithm]")
 {
     for (int levels : { -2, 0, 2 })
-        for (auto method :
-            { Resampling::NearestNeighbourAndBox, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
+        for (auto method : { Resampling::Cheapest, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
             const unsigned halo = *algorithm::required_halo(levels, method);
             auto [data, attribution] = field({ 32, 24 }, halo);
             auto full = raster_store::scale(data, attribution, halo, levels, method, ValueMapping::Linear);
@@ -794,8 +833,8 @@ TEST_CASE("scaling windows retain conversion tuples and per-stage encoded roundi
             data.pixel({ x, y }) = { x * 7, y * 7, (x * y) % 256, (x + 3 * y) % 256 };
             attribution.pixel({ x, y }) = (x + y) % 3;
         }
-    auto full = raster_store::scale(data, attribution, 0, -2, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
-    auto window = raster_store::scale(data, attribution, 0, -2, Resampling::NearestNeighbourAndBox, { 1, 2 }, { 4, 3 }, ValueMapping::SRGBA);
+    auto full = raster_store::scale(data, attribution, 0, -2, Resampling::Cheapest, ValueMapping::SRGBA);
+    auto window = raster_store::scale(data, attribution, 0, -2, Resampling::Cheapest, { 1, 2 }, { 4, 3 }, ValueMapping::SRGBA);
     REQUIRE(full);
     REQUIRE(window);
     same_raster(window->first, *algorithm::copy(*raster::make_view(full->first, { 1, 2 }, { 4, 3 })));
@@ -806,7 +845,7 @@ TEST_CASE("small upscale windows do not require a representable full raster", "[
 {
     radix::Raster<float> source({ 4096, 2 });
     source.fill(17);
-    auto result = algorithm::scale(source, 0, 20, Resampling::NearestNeighbourAndBox, { 1000000000, 37 }, { 2, 3 });
+    auto result = algorithm::scale(source, 0, 20, Resampling::Cheapest, { 1000000000, 37 }, { 2, 3 });
     REQUIRE(result);
     CHECK(result->pixel({ 1, 2 }) == 17);
     auto clamped = *raster::make_clamped_view(source, { -1, -1 }, { 4098, 4 });
@@ -821,14 +860,33 @@ TEST_CASE("scaling validates full destinations and windows before writing", "[ra
     source.fill(1);
     radix::Raster<float> destination({ 3, 3 });
     destination.fill(99);
-    CHECK_FALSE(algorithm::scale(source, 0, 1, Resampling::NearestNeighbourAndBox, destination));
-    CHECK_FALSE(algorithm::scale(source, 0, 0, Resampling::NearestNeighbourAndBox, { 2, 2 }, destination));
-    CHECK_FALSE(algorithm::scale(source, 0, 0, Resampling::NearestNeighbourAndBox, { 1 << 29, 0 }, destination));
+    CHECK_FALSE(algorithm::scale(source, 0, 1, Resampling::Cheapest, destination));
+    CHECK_FALSE(algorithm::scale(source, 0, 0, Resampling::Cheapest, { 2, 2 }, destination));
+    CHECK_FALSE(algorithm::scale(source, 0, 0, Resampling::Cheapest, { 1 << 29, 0 }, destination));
     CHECK(destination.pixel({ 0, 0 }) == 99);
     radix::Raster<std::uint16_t> attribution({ 4, 4 });
     radix::Raster<std::uint16_t> wrong({ 2, 2 });
-    CHECK_FALSE(raster_store::scale(source, attribution, 0, 1, Resampling::NearestNeighbourAndBox, { 0, 0 }, ValueMapping::Linear, destination, wrong));
+    CHECK_FALSE(raster_store::scale(source, attribution, 0, 1, Resampling::Cheapest, { 0, 0 }, ValueMapping::Linear, destination, wrong));
     CHECK(destination.pixel({ 0, 0 }) == 99);
+}
+
+TEST_CASE("raster-store scaling rejects unknown placement before writing", "[raster-algorithm]")
+{
+    auto [data, attribution] = field({ 4, 4 }, 0);
+    radix::Raster<float> output({ 2, 2 });
+    radix::Raster<std::uint16_t> output_attribution({ 2, 2 });
+    output.fill(-99);
+    output_attribution.fill(99);
+    const auto invalid = static_cast<Placement>(7);
+    const auto allocated = raster_store::scale(data, attribution, 0, 0, Resampling::Cheapest, { 0, 0 }, { 2, 2 }, ValueMapping::Linear, invalid);
+    REQUIRE_FALSE(allocated);
+    CHECK(allocated.error().code() == Error::Code::InvalidInput);
+    const auto written
+        = raster_store::scale(data, attribution, 0, 0, Resampling::Cheapest, { 0, 0 }, ValueMapping::Linear, output, output_attribution, invalid);
+    REQUIRE_FALSE(written);
+    CHECK(written.error().code() == Error::Code::InvalidInput);
+    CHECK(std::ranges::all_of(output, [](float value) { return value == -99; }));
+    CHECK(std::ranges::all_of(output_attribution, [](std::uint16_t value) { return value == 99; }));
 }
 
 TEST_CASE("windowed scaling writes strided destinations and rejects overlap before writes", "[raster-algorithm]")
@@ -933,7 +991,7 @@ TEST_CASE("Lanczos3 enlarges a 256 tile while preserving five halo pixels", "[ra
 
 TEST_CASE("halo windows match larger raster crops in both scaling directions", "[raster-algorithm]")
 {
-    for (auto method : { Resampling::NearestNeighbourAndBox, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
+    for (auto method : { Resampling::Cheapest, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
         for (int levels : { -2, -1, 0, 1, 2 }) {
             const unsigned factor = 1u << std::abs(levels);
             const unsigned support = *algorithm::required_halo(levels, method);
@@ -1006,7 +1064,7 @@ TEST_CASE("Lanczos upscaling retains floating overshoot and encodes bounded inte
 TEST_CASE("scaling accepts raster dimensions whose pixel count exceeds 32 bits", "[raster-algorithm]")
 {
     constexpr unsigned side = 1u << 17;
-    auto geometry = algorithm::detail::scale_geometry({ side, side }, 0, 0, Resampling::NearestNeighbourAndBox);
+    auto geometry = algorithm::detail::scale_geometry({ side, side }, 0, 0, Resampling::Cheapest);
     REQUIRE(geometry);
     CHECK(geometry->output == glm::uvec2(side));
     CHECK(std::size_t(geometry->output.x) * geometry->output.y == (std::size_t(1) << 34));
@@ -1014,11 +1072,232 @@ TEST_CASE("scaling accepts raster dimensions whose pixel count exceeds 32 bits",
     radix::Raster<std::uint8_t> sample(1);
     sample.fill(73);
     auto large = *raster::make_clamped_view(sample, { 0, 0 }, { side, side });
-    auto corner = algorithm::scale(large, 0, 0, Resampling::NearestNeighbourAndBox, { side - 2, side - 2 }, { 2, 2 });
+    auto corner = algorithm::scale(large, 0, 0, Resampling::Cheapest, { side - 2, side - 2 }, { 2, 2 });
     REQUIRE(corner);
     CHECK(std::ranges::all_of(*corner, [](unsigned value) { return value == 73; }));
-    auto magnified = algorithm::detail::scale_geometry({ side, side }, 0, 13, Resampling::NearestNeighbourAndBox);
+    auto magnified = algorithm::detail::scale_geometry({ side, side }, 0, 13, Resampling::Cheapest);
     REQUIRE(magnified);
     CHECK(magnified->output == glm::uvec2(1u << 30));
-    CHECK_FALSE(algorithm::detail::scale_geometry({ side, side }, 0, 16, Resampling::NearestNeighbourAndBox));
+    CHECK_FALSE(algorithm::detail::scale_geometry({ side, side }, 0, 16, Resampling::Cheapest));
+}
+
+TEST_CASE("vertex halo queries read one sample more after than before an upscaled position", "[raster-algorithm]")
+{
+    CHECK(algorithm::required_halo(2, Resampling::Cheapest, SampleAlignment::GridNodes).value() == 1);
+    for (unsigned radius : { 2u, 3u, 4u }) {
+        CHECK(algorithm::required_halo(1, lanczos_method(radius), SampleAlignment::GridNodes).value() == radius);
+        CHECK(algorithm::required_halo(-2, lanczos_method(radius), SampleAlignment::GridNodes).value() == 3 * (2 * radius - 1));
+    }
+    CHECK(algorithm::required_halo(-3, Resampling::Cheapest, SampleAlignment::GridNodes).value() == 0);
+    CHECK(algorithm::required_halo(1, Resampling::BiliinearAndBox, SampleAlignment::GridNodes).error().code() == Error::Code::InvalidInput);
+    CHECK_FALSE(algorithm::required_halo(1, Resampling::Lanczos3, static_cast<SampleAlignment>(7)));
+
+    // A single retained vertex reads only its source vertex.
+    const auto up = algorithm::required_source_window({ 10, 10 }, 3, 1, Resampling::Lanczos3, { 0, 3 }, { 1, 1 }, SampleAlignment::GridNodes);
+    REQUIRE(up);
+    CHECK(up->origin == glm::uvec2(3, 2));
+    CHECK(up->size == glm::uvec2(1, 6));
+    // A window ending on a retained vertex reads up to it, here for linear interpolation.
+    const auto linear = algorithm::required_source_window({ 6, 6 }, 1, 1, Resampling::Cheapest, { 0, 0 }, { 3, 3 }, SampleAlignment::GridNodes);
+    REQUIRE(linear);
+    CHECK(linear->origin == glm::uvec2(1));
+    CHECK(linear->size == glm::uvec2(2));
+    const auto ending = algorithm::required_source_window({ 10, 10 }, 0, 1, Resampling::Lanczos3, { 0, 0 }, { 5, 5 }, SampleAlignment::GridNodes);
+    CHECK_FALSE(ending);
+    const auto retained = algorithm::required_source_window({ 5, 5 }, 0, 1, Resampling::Lanczos3, { 8, 8 }, { 1, 1 }, SampleAlignment::GridNodes);
+    REQUIRE(retained);
+    CHECK(retained->origin == glm::uvec2(4));
+    CHECK(retained->size == glm::uvec2(1));
+    const auto down = algorithm::required_source_window({ 15, 15 }, 5, -1, Resampling::Lanczos3, { 0, 0 }, { 2, 2 }, SampleAlignment::GridNodes);
+    REQUIRE(down);
+    CHECK(down->origin == glm::uvec2(0));
+    CHECK(down->size == glm::uvec2(13));
+    CHECK_FALSE(algorithm::required_source_window({ 10, 10 }, 3, 1, Resampling::BiliinearAndBox, { 0, 0 }, { 1, 1 }, SampleAlignment::GridNodes));
+}
+
+TEST_CASE("vertex upscaling copies retained vertices and matches separable references", "[raster-algorithm]")
+{
+    for (int levels : { 1, 2 }) {
+        const unsigned factor = 1u << levels;
+        for (const auto method : { Resampling::Cheapest, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
+            const unsigned radius = algorithm::detail::upscaling_radius(method, SampleAlignment::GridNodes);
+            const unsigned halo = radius;
+            auto [data, ids] = field({ 4, 4 }, halo);
+            // Output positions from one source spacing before vertex 0 through vertex 3.
+            const glm::i64vec2 offset(-std::int64_t(factor));
+            const glm::uvec2 size(4 * factor + 1);
+            auto output = raster_store::scale(data, ids, halo, levels, method, offset, size, ValueMapping::Linear, Placement::Vertex);
+            REQUIRE(output);
+            for (unsigned y = 0; y < size.y; ++y) {
+                for (unsigned x = 0; x < size.x; ++x) {
+                    const glm::i64vec2 position = offset + glm::i64vec2(x, y);
+                    const glm::uvec2 preceding(halo + std::floor(double(position.x) / factor), halo + std::floor(double(position.y) / factor));
+                    CHECK(output->second.pixel({ x, y }) == ids.pixel(preceding));
+                    if (position.x % factor == 0 && position.y % factor == 0) {
+                        CHECK(output->first.pixel({ x, y }) == data.pixel(preceding));
+                        continue;
+                    }
+                    double expected = 0;
+                    for (const auto& [row, weight_y] : vertex_taps(double(position.y) / factor, radius))
+                        for (const auto& [column, weight_x] : vertex_taps(double(position.x) / factor, radius))
+                            expected += weight_x * weight_y * data.pixel({ unsigned(int(halo) + column), unsigned(int(halo) + row) });
+                    CHECK_THAT(output->first.pixel({ x, y }), WithinAbs(expected, 5e-6));
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("vertex reduction centres half-band Lanczos filters on retained vertices", "[raster-algorithm]")
+{
+    for (unsigned radius : { 2u, 3u, 4u }) {
+        const auto method = lanczos_method(radius);
+        const unsigned halo = 2 * radius - 1;
+        auto [data, ids] = field({ 7, 5 }, halo);
+        const glm::uvec2 size(4, 3);
+        auto output = raster_store::scale(data, ids, halo, -1, method, { 0, 0 }, size, ValueMapping::Linear, Placement::Vertex);
+        REQUIRE(output);
+        const auto taps = vertex_reduction_taps(radius);
+        for (unsigned y = 0; y < size.y; ++y) {
+            for (unsigned x = 0; x < size.x; ++x) {
+                double expected = 0;
+                for (unsigned v = 0; v < taps.size(); ++v)
+                    for (unsigned u = 0; u < taps.size(); ++u)
+                        expected += taps[u] * taps[v] * data.pixel({ 2 * x + u, 2 * y + v });
+                CHECK_THAT(output->first.pixel({ x, y }), WithinAbs(expected, 3e-6));
+                CHECK(output->second.pixel({ x, y }) == ids.pixel({ halo + 2 * x, halo + 2 * y }));
+            }
+        }
+        CHECK_FALSE(raster_store::scale(data, ids, halo, -1, method, { 0, 0 }, glm::uvec2(5, 3), ValueMapping::Linear, Placement::Vertex));
+
+        // An impulse two samples from a retained vertex lies on a vanishing tap.
+        data.fill(0);
+        data.pixel({ halo + 4, halo + 2 }) = 1;
+        auto impulse = raster_store::scale(data, ids, halo, -1, method, { 0, 0 }, size, ValueMapping::Linear, Placement::Vertex);
+        REQUIRE(impulse);
+        CHECK(impulse->first.pixel({ 1, 1 }) == 0);
+        CHECK_THAT(impulse->first.pixel({ 2, 1 }), WithinAbs(taps[2 * radius - 1] * taps[2 * radius - 1], 1e-6));
+        data.fill(7);
+        auto constant = raster_store::scale(data, ids, halo, -1, method, { 0, 0 }, size, ValueMapping::Linear, Placement::Vertex);
+        REQUIRE(constant);
+        for (const auto value : constant->first)
+            CHECK_THAT(value, WithinAbs(7, 3e-5));
+    }
+}
+
+TEST_CASE("repeated vertex reduction matches separately supplied stages", "[raster-algorithm]")
+{
+    const unsigned halo = 15;
+    auto [data, ids] = field({ 9, 5 }, halo);
+    const auto direct = raster_store::scale(data, ids, halo, -2, Resampling::Lanczos3, { 0, 0 }, { 3, 2 }, ValueMapping::Linear, Placement::Vertex);
+    REQUIRE(direct);
+    // The first stage retains five vertices around the second stage's input.
+    const auto first = raster_store::scale(data, ids, halo, -1, Resampling::Lanczos3, { -5, -5 }, { 15, 13 }, ValueMapping::Linear, Placement::Vertex);
+    REQUIRE(first);
+    const auto second
+        = raster_store::scale(first->first, first->second, 5, -1, Resampling::Lanczos3, { 0, 0 }, { 3, 2 }, ValueMapping::Linear, Placement::Vertex);
+    REQUIRE(second);
+    same_raster(direct->first, second->first);
+    same_raster(direct->second, second->second);
+}
+
+TEST_CASE("cheapest vertex reduction copies retained vertices and their attribution", "[raster-algorithm]")
+{
+    radix::Raster<glm::u8vec3> colours({ 9, 9 });
+    radix::Raster<float> heights({ 9, 9 });
+    radix::Raster<std::uint16_t> ids({ 9, 9 });
+    for (unsigned y = 0; y < 9; ++y)
+        for (unsigned x = 0; x < 9; ++x) {
+            colours.pixel({ x, y }) = { x * 29, y * 31, (x * y) % 256 };
+            heights.pixel({ x, y }) = float(x) - 2.5f * float(y);
+            ids.pixel({ x, y }) = std::uint16_t(x + 10 * y);
+        }
+    heights.pixel({ 4, 8 }) = std::numeric_limits<float>::quiet_NaN();
+    auto decimated = raster_store::scale(colours, ids, 0, -2, Resampling::Cheapest, { 0, 0 }, { 3, 3 }, ValueMapping::SRGBA, Placement::Vertex);
+    auto decimated_heights = raster_store::scale(heights, ids, 0, -2, Resampling::Cheapest, { 0, 0 }, { 3, 3 }, ValueMapping::Linear, Placement::Vertex);
+    REQUIRE(decimated);
+    REQUIRE(decimated_heights);
+    for (unsigned y = 0; y < 3; ++y)
+        for (unsigned x = 0; x < 3; ++x) {
+            CHECK(decimated->first.pixel({ x, y }) == colours.pixel({ 4 * x, 4 * y }));
+            CHECK(decimated->second.pixel({ x, y }) == ids.pixel({ 4 * x, 4 * y }));
+            CHECK(std::bit_cast<std::uint32_t>(decimated_heights->first.pixel({ x, y })) == std::bit_cast<std::uint32_t>(heights.pixel({ 4 * x, 4 * y })));
+        }
+}
+
+TEST_CASE("vertex scaling windows match larger windows in both directions", "[raster-algorithm]")
+{
+    for (const auto method : { Resampling::Cheapest, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
+        for (int levels : { -2, -1, 1, 2 }) {
+            const unsigned factor = 1u << std::abs(levels);
+            const unsigned halo = *algorithm::required_halo(levels, method, SampleAlignment::GridNodes) + 4;
+            auto [data, ids] = field({ 17, 17 }, halo);
+            const glm::uvec2 size(levels < 0 ? 16 / factor + 3 : 16 * factor + 3);
+            auto whole = raster_store::scale(data, ids, halo, levels, method, { -1, -1 }, size, ValueMapping::Linear, Placement::Vertex);
+            auto part = raster_store::scale(data, ids, halo, levels, method, { 1, 2 }, { 3, 2 }, ValueMapping::Linear, Placement::Vertex);
+            REQUIRE(whole);
+            REQUIRE(part);
+            same_raster(part->first, *algorithm::copy(*raster::make_view(whole->first, { 2, 3 }, { 3, 2 })));
+            same_raster(part->second, *algorithm::copy(*raster::make_view(whole->second, { 2, 3 }, { 3, 2 })));
+        }
+    }
+}
+
+TEST_CASE("vertex source window queries match the samples scaling reads", "[raster-algorithm]")
+{
+    struct Case {
+        int levels;
+        glm::i64vec2 offset;
+        glm::uvec2 size;
+    };
+    for (const auto method : { Resampling::Cheapest, Resampling::Lanczos3 }) {
+        for (const auto [levels, offset, size] : { Case { 1, { 0, 0 }, { 4, 4 } }, Case { 1, { 0, 0 }, { 5, 5 } }, Case { -1, { 0, 0 }, { 2, 2 } } }) {
+            const unsigned halo = 5;
+            auto [data, ids] = field({ 12, 12 }, halo);
+            const auto window = algorithm::required_source_window(data.size(), halo, levels, method, offset, size, SampleAlignment::GridNodes);
+            REQUIRE(window);
+            REQUIRE(window->origin.x == window->origin.y);
+            const auto expected = raster_store::scale(data, ids, halo, levels, method, offset, size, ValueMapping::Linear, Placement::Vertex);
+            REQUIRE(expected);
+            // The cropped source keeps the interior origin, so the output window is unchanged.
+            const unsigned cropped_halo = halo - window->origin.x;
+            const auto crop = [&](glm::uvec2 crop_size) {
+                return std::pair { *algorithm::copy(*raster::make_view(data, window->origin, crop_size)),
+                    *algorithm::copy(*raster::make_view(ids, window->origin, crop_size)) };
+            };
+            auto [exact, exact_ids] = crop(window->size);
+            const auto result = raster_store::scale(exact, exact_ids, cropped_halo, levels, method, offset, size, ValueMapping::Linear, Placement::Vertex);
+            REQUIRE(result);
+            same_raster(result->first, expected->first);
+            same_raster(result->second, expected->second);
+            auto [short_data, short_ids] = crop(window->size - glm::uvec2(1));
+            CHECK_FALSE(raster_store::scale(short_data, short_ids, cropped_halo, levels, method, offset, size, ValueMapping::Linear, Placement::Vertex));
+        }
+    }
+}
+
+TEST_CASE("vertex upscaling of a closed grid needs no support beyond its retained vertices", "[raster-algorithm]")
+{
+    radix::Raster<float> data({ 5, 5 });
+    radix::Raster<std::uint16_t> ids({ 5, 5 });
+    for (unsigned y = 0; y < 5; ++y) {
+        for (unsigned x = 0; x < 5; ++x) {
+            data.pixel({ x, y }) = float(x * x + 7 * y);
+            ids.pixel({ x, y }) = std::uint16_t(x + 5 * y);
+        }
+    }
+    const auto output = raster_store::scale(data, ids, 0, 1, Resampling::Cheapest, { 0, 0 }, { 9, 9 }, ValueMapping::Linear, Placement::Vertex);
+    REQUIRE(output);
+    for (unsigned y = 0; y < 9; ++y) {
+        for (unsigned x = 0; x < 9; ++x) {
+            double expected = 0;
+            for (const auto& [row, weight_y] : vertex_taps(y / 2., 1))
+                for (const auto& [column, weight_x] : vertex_taps(x / 2., 1))
+                    if (weight_x * weight_y != 0)
+                        expected += weight_x * weight_y * data.pixel({ unsigned(column), unsigned(row) });
+            CHECK(output->first.pixel({ x, y }) == Catch::Approx(expected));
+            CHECK(output->second.pixel({ x, y }) == ids.pixel({ x / 2, y / 2 }));
+        }
+    }
+    CHECK_FALSE(raster_store::scale(data, ids, 0, 1, Resampling::Cheapest, { 0, 0 }, { 10, 9 }, ValueMapping::Linear, Placement::Vertex));
 }

@@ -186,6 +186,7 @@ add_library(terrainlib
     raster/algorithm/reduce.h
     raster/algorithm/reducers.h
     raster/algorithm/scale.h
+    raster/algorithm/sample_alignment.h
     raster/algorithm/scaling_detail.h
     raster/algorithm/copy.h
     raster/algorithm/fold.h
