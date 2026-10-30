@@ -41,7 +41,7 @@ alp_setup_cmake_project(boost
     CMAKE_ARGUMENTS
         -DBOOST_ENABLE_PYTHON=OFF
         -DBUILD_TESTING=OFF
-        "-DBOOST_INCLUDE_LIBRARIES=graph\;multiprecision\;heap\;format\;logic")
+        "-DBOOST_INCLUDE_LIBRARIES=graph\;multiprecision\;heap\;format\;logic\;asio\;beast")
 find_package(Boost CONFIG REQUIRED)
 
 alp_setup_cmake_project(tbb
