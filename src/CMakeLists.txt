@@ -148,6 +148,9 @@ add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
 target_include_directories(xatlas SYSTEM PUBLIC ${xatlas_SOURCE_DIR}/source)
 
 if(ALP_BUILD_DAG_BUILDER OR ALP_BUILD_DAG_CONVERT_DEBUG)
+    # Reuse the Eigen3::Eigen target above instead of libigl's Eigen download.
+    alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
+
     alp_add_git_repository(rectpack2D URL https://github.com/TeamHypersomnia/rectpack2D.git COMMITISH bbc9d0ec05b9b508f6c781667fec718bf9e78d21)
 
     set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
