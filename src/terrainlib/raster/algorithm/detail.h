@@ -46,8 +46,14 @@ template <typename Destination>
 concept WritableViewDestination
     = ViewSource<Destination> && view_details::is_ordinary_view<SourceView<Destination>> && (!std::is_const_v<typename SourceView<Destination>::element_type>);
 
+/// Per-pixel callables must be class types such as lambdas or function objects. A function pointer or reference reaches the
+/// pixel loop as a runtime value and can't be inlined (measured 229 ms vs 29 ms for a 4096² RGB swap).
+template <typename F>
+concept InlinableCallable = std::is_class_v<std::remove_cvref_t<F>>;
+
 template <typename Function, typename Output, typename... Inputs>
-concept PixelFunction = std::invocable<const Function&, const Inputs&...> && std::same_as<std::invoke_result_t<const Function&, const Inputs&...>, Output>;
+concept PixelFunction = InlinableCallable<Function> && std::invocable<const Function&, const Inputs&...>
+    && std::same_as<std::invoke_result_t<const Function&, const Inputs&...>, Output>;
 
 template <typename T>
 concept RasterPixel = std::is_object_v<T> && (!std::is_array_v<T>) && std::same_as<T, std::remove_cv_t<T>> && (!std::same_as<T, bool>)
@@ -57,7 +63,7 @@ template <typename Function, typename... Inputs>
 using FunctionOutput = std::invoke_result_t<const Function&, const Inputs&...>;
 
 template <typename Function, typename... Inputs>
-concept RasterFunction = std::invocable<const Function&, const Inputs&...> && RasterPixel<FunctionOutput<Function, Inputs...>>;
+concept RasterFunction = InlinableCallable<Function> && std::invocable<const Function&, const Inputs&...> && RasterPixel<FunctionOutput<Function, Inputs...>>;
 
 /// The output is uninitialised: the caller must write every pixel before anything reads it.
 template <RasterPixel T>

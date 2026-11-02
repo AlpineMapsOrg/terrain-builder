@@ -30,6 +30,8 @@
 
 #include <glm/glm.hpp>
 
+#include "detail.h"
+
 namespace raster::algorithm {
 
 namespace detail {
@@ -97,7 +99,8 @@ namespace detail {
     using DecodedPixel = std::invoke_result_t<const std::tuple_element_t<0, Conversion>&, const T&>;
 
     template <typename Conversion, typename T>
-    concept PixelConversion = IsConversionTuple<Conversion>::value && std::invocable<const std::tuple_element_t<0, Conversion>&, const T&>
+    concept PixelConversion = IsConversionTuple<Conversion>::value && InlinableCallable<std::tuple_element_t<0, Conversion>>
+        && InlinableCallable<std::tuple_element_t<1, Conversion>> && std::invocable<const std::tuple_element_t<0, Conversion>&, const T&>
         && NumericPixel<DecodedPixel<Conversion, T>> && std::invocable<const std::tuple_element_t<1, Conversion>&, const DecodedPixel<Conversion, T>&>
         && std::same_as<std::invoke_result_t<const std::tuple_element_t<1, Conversion>&, const DecodedPixel<Conversion, T>&>, T>;
 

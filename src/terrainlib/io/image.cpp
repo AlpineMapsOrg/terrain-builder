@@ -56,17 +56,15 @@ namespace {
         return {};
     }
 
-    template <typename Pixel>
-    Pixel swap_red_blue(Pixel pixel)
-    {
+    constexpr auto swap_red_blue = [](auto pixel) {
         std::swap(pixel.x, pixel.z);
         return pixel;
-    }
+    };
 
     template <typename Pixel>
     Expected<byte::vector> encode_opencv(const radix::Raster<Pixel>& image, Format format, EncodeOptions options)
     try {
-        auto bgr = raster::algorithm::transform(image, swap_red_blue<Pixel>);
+        auto bgr = raster::algorithm::transform(image, swap_red_blue);
         if (!bgr) {
             return Error::propagate(std::move(bgr));
         }
@@ -204,7 +202,7 @@ namespace {
         if (!raster) {
             return Error::propagate(std::move(raster));
         }
-        if (auto converted = raster::algorithm::transform(*raster, swap_red_blue<Pixel>, *raster); !converted) {
+        if (auto converted = raster::algorithm::transform(*raster, swap_red_blue, *raster); !converted) {
             return Error::propagate(std::move(converted));
         }
         return raster;
