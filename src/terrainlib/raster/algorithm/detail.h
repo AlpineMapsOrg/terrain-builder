@@ -18,7 +18,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -57,6 +59,7 @@ using FunctionOutput = std::invoke_result_t<const Function&, const Inputs&...>;
 template <typename Function, typename... Inputs>
 concept RasterFunction = std::invocable<const Function&, const Inputs&...> && RasterPixel<FunctionOutput<Function, Inputs...>>;
 
+/// The output is uninitialised: the caller must write every pixel before anything reads it.
 template <RasterPixel T>
 Expected<radix::Raster<T>> allocate_output(glm::uvec2 size)
 {
@@ -64,12 +67,21 @@ Expected<radix::Raster<T>> allocate_output(glm::uvec2 size)
         return Error::fail(Error::Code::ResourceExhausted, "raster output dimensions exceed storage capacity");
     }
     try {
-        return radix::Raster<T>(size);
+        radix::Raster<T> output(size, radix::uninitialised);
+#ifdef ALP_UNITTEST_POISON_FILL
+        // Unwritten pixels then hold a fixed pattern that tests can detect.
+        if constexpr (std::is_trivially_copyable_v<T>) {
+            std::ranges::fill(output.bytes(), std::byte { 0xA5 });
+        }
+#endif
+        return output;
     } catch (const std::bad_alloc&) {
         return Error::fail(Error::Code::ResourceExhausted, "allocate raster output");
     }
 }
 
+/// Precondition: on success, the operation has written every output pixel before anything reads it;
+/// the output starts uninitialised. On failure, the output is discarded.
 template <RasterPixel T, typename Operation>
 Expected<radix::Raster<T>> produce_raster(glm::uvec2 size, const Operation& operation)
 {

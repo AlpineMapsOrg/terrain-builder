@@ -50,7 +50,10 @@ using Catch::Matchers::WithinAbs;
 template <typename T>
 radix::Raster<T> samples(glm::uvec2 size, std::initializer_list<T> values)
 {
-    return radix::Raster<T>(size, std::vector<T>(values));
+    radix::Raster<T> raster(size, radix::uninitialised);
+    REQUIRE(values.size() == raster.buffer_length());
+    std::copy(values.begin(), values.end(), raster.begin());
+    return raster;
 }
 
 template <typename T>

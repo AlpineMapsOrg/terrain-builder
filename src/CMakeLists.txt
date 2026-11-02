@@ -114,7 +114,7 @@ alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.g
 
 alp_add_git_repository(wideinteger URL https://github.com/ckormanyos/wide-integer.git COMMITISH 719cbbd557fe974f48b055568e2b149b2444bee9)
 
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 799db1af54a1f58454800e899bfc7fc544711834 NOT_SYSTEM)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 14661a318190e46428059d9d8f2733e132f85de5 NOT_SYSTEM)
 
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_SF_MERGER

@@ -141,6 +141,7 @@ jobs:
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         -DALP_WARNINGS_AS_ERRORS=${{ matrix.warnings_as_errors }}
+        -DALP_UNITTEST_POISON_FILL=ON
         ${{ matrix.cmake_flags }}
 
     - name: Save installed CMake dependencies
