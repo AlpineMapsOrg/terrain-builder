@@ -91,17 +91,8 @@ namespace {
     using TurboJpeg = std::unique_ptr<void, decltype(&tj3Destroy)>;
     using TurboJpegBuffer = std::unique_ptr<unsigned char, decltype(&tj3Free)>;
 
-    // Restart interval in MCUs after GPUJPEG's gpujpeg_encoder_suggest_restart_interval() for three
-    // components, halved for subsampled interleaved scans: 6 at 4096², 5 at 2048² and 2 at 512².
-    // Restart markers let GPU decoders decode the segments in parallel.
-    int jpeg_restart_interval(glm::uvec2 size)
-    {
-        const double megapixels = double(size.x) * size.y / 1e6;
-        const int interval = megapixels < 1 ? 4 : megapixels < 3 ? 8 : megapixels < 9 ? 10 : 12;
-        return interval / 2;
-    }
-
-    // Baseline 4:2:0 JPEG with restart markers, compressed straight from the raster.
+    // Baseline 4:2:0 JPEG, compressed straight from the raster. No restart markers: any restart interval
+    // switches off libjpeg-turbo's fast Huffman decoder for the whole image (about 13% slower decoding).
     Expected<byte::vector> encode_jpeg(const radix::Raster<glm::u8vec3>& image, EncodeOptions options)
     try {
         if (image.width() == 0 || image.height() == 0 || image.width() > static_cast<unsigned>(std::numeric_limits<int>::max())
@@ -113,8 +104,7 @@ namespace {
             return Error::fail(Error::Code::ResourceExhausted, "create JPEG encoder");
         }
         // libjpeg maps quality 0 to 1; TurboJPEG rejects it.
-        if (tj3Set(compressor.get(), TJPARAM_QUALITY, std::max(options.jpeg_quality, 1)) != 0 || tj3Set(compressor.get(), TJPARAM_SUBSAMP, TJSAMP_420) != 0
-            || tj3Set(compressor.get(), TJPARAM_RESTARTBLOCKS, jpeg_restart_interval(image.size())) != 0) {
+        if (tj3Set(compressor.get(), TJPARAM_QUALITY, std::max(options.jpeg_quality, 1)) != 0 || tj3Set(compressor.get(), TJPARAM_SUBSAMP, TJSAMP_420) != 0) {
             return Error::fail(Error::Code::Internal, std::string("configure JPEG encoder: ") + tj3GetErrorStr(compressor.get()));
         }
         unsigned char* output = nullptr;

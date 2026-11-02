@@ -23,7 +23,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -59,12 +58,6 @@ image::RGB8 gradient(glm::uvec2 size)
         }
     }
     return result;
-}
-
-bool contains_marker(const io::byte::vector& bytes, std::uint8_t marker)
-{
-    const std::array pattern { std::byte { 0xFF }, std::byte { marker } };
-    return !std::ranges::search(bytes, pattern).empty();
 }
 
 // Walks the segments after SOI (0xFF, marker, big-endian length that includes itself) up to the start of scan.
@@ -150,14 +143,12 @@ TEST_CASE("PNG compression and JPEG quality options reach encoders", "[io-image]
     CHECK(rgba->pixel({ 0, 0 }).w == 255);
 }
 
-TEST_CASE("JPEG has restart markers and decodes like OpenCV's JPEG of the same quality", "[io-image]")
+TEST_CASE("JPEG has no restart markers and decodes like OpenCV's JPEG of the same quality", "[io-image]")
 {
     const auto source = gradient({ 70, 45 });
     const auto jpeg = image::encode(source, image::Format::Jpeg, { .jpeg_quality = 95 });
     REQUIRE(jpeg);
-    // Define restart interval (DRI) and the first restart marker (RST0).
-    CHECK(contains_marker(*jpeg, 0xDD));
-    CHECK(contains_marker(*jpeg, 0xD0));
+    CHECK_FALSE(restart_interval(*jpeg));
 
     cv::Mat bgr(int(source.height()), int(source.width()), CV_8UC3);
     for (unsigned y = 0; y < source.height(); ++y) {
@@ -174,25 +165,6 @@ TEST_CASE("JPEG has restart markers and decodes like OpenCV's JPEG of the same q
     REQUIRE(decoded_reference);
     CHECK(decoded->size() == source.size());
     CHECK(std::ranges::equal(decoded->bytes(), decoded_reference->bytes()));
-}
-
-TEST_CASE("JPEG restart interval follows GPUJPEG's suggestion for the image size", "[io-image]")
-{
-    // 4, 8, 10 and 12 MCUs below 1, 3 and 9 megapixels and above, halved for 4:2:0; the larger sizes sit on the boundaries.
-    const std::array<std::pair<glm::uvec2, unsigned>, 4> cases { {
-        { { 64, 64 }, 2 },
-        { { 1000, 1000 }, 4 },
-        { { 2000, 1500 }, 5 },
-        { { 3000, 3000 }, 6 },
-    } };
-    for (const auto& [size, interval] : cases) {
-        CAPTURE(size.x, size.y);
-        const auto jpeg = image::encode(image::RGB8(size), image::Format::Jpeg);
-        REQUIRE(jpeg);
-        const auto found = restart_interval(*jpeg);
-        REQUIRE(found);
-        CHECK(*found == interval);
-    }
 }
 
 TEST_CASE("JPEG decoding rejects CMYK images", "[io-image]")
