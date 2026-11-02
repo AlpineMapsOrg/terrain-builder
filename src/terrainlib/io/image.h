@@ -57,8 +57,8 @@ Expected<byte::vector> encode(const RGB8& image, Format format, EncodeOptions op
 /// PNG and JPEG XL preserve all four channels. JPEG rejects RGBA input. JPEG XL tags the channels as sRGB.
 Expected<byte::vector> encode(const RGBA8& image, Format format, EncodeOptions options = {});
 /// RGB readers discard alpha. RGBA readers supply opaque alpha when absent.
-/// Both return 8-bit channels and ignore EXIF orientation. Given an expected size, images of other sizes
-/// are corrupt data; JPEG XL rejects them before allocating their pixels.
+/// Both return 8-bit channels and ignore EXIF orientation. CMYK JPEG images are unsupported. Given an expected
+/// size, images of other sizes are corrupt data; JPEG and JPEG XL reject them before allocating their pixels.
 Expected<RGB8> decode_rgb8(byte::span bytes, std::optional<glm::uvec2> expected_size = std::nullopt);
 Expected<RGBA8> decode_rgba8(byte::span bytes, std::optional<glm::uvec2> expected_size = std::nullopt);
 Expected<RGB8> read_rgb8(const std::filesystem::path& path);
