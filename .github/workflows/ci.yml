@@ -78,6 +78,7 @@ jobs:
           libwayland-bin \
           libwayland-dev \
           libxkbcommon-dev \
+          nasm \
           ninja-build \
           pkg-config \
           sqlite3 \

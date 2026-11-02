@@ -65,8 +65,12 @@ alp_setup_cmake_project(cgal
     CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DWITH_examples=OFF)
 find_package(CGAL REQUIRED)
 
+include(../cmake/SetupLibJpegTurbo.cmake)
+alp_setup_libjpeg_turbo(3.2.1 c27ad72a68da151177929aa969ae773a2da5ac2af9ce946079314fdac8cece7f)
+
 include(../cmake/SetupOpenCV.cmake)
-alp_setup_opencv(4.11.0 9a7c11f924eff5f8d8070e297b322ee68b9227e003fd600d4b8122198091665f)
+alp_setup_opencv(4.11.0 9a7c11f924eff5f8d8070e297b322ee68b9227e003fd600d4b8122198091665f
+    "${ALP_LIBJPEG_TURBO_INCLUDE_DIR}" "${ALP_LIBJPEG_TURBO_JPEG_LIBRARY}" "${ALP_LIBJPEG_TURBO_SIGNATURE}")
 
 include(../cmake/SetupJpegXL.cmake)
 alp_setup_jpegxl(v0.12.0)

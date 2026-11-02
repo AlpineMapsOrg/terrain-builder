@@ -20,7 +20,8 @@ if(NOT COMMAND alp_setup_cmake_project)
     include(${CMAKE_CURRENT_LIST_DIR}/SetupCMakeProject.cmake)
 endif()
 
-function(alp_setup_opencv version sha256)
+# OpenCV links the given static libjpeg and keeps it private (see SetupLibJpegTurbo.cmake).
+function(alp_setup_opencv version sha256 jpeg_include_dir jpeg_library jpeg_signature)
     set(_alp_opencv_sanitizer_arguments)
     if(ALP_ENABLE_ADDRESS_SANITIZER OR ALP_ENABLE_THREAD_SANITIZER)
         list(APPEND _alp_opencv_sanitizer_arguments -DOPENCV_SKIP_LINK_NO_UNDEFINED=ON)
@@ -42,7 +43,12 @@ function(alp_setup_opencv version sha256)
             -DWITH_OPENGL=OFF
             -DWITH_GSTREAMER=OFF
             -DWITH_FFMPEG=OFF
-            -DWITH_JPEG=ON -DBUILD_JPEG=ON -DWITH_PNG=ON -DWITH_TIFF=ON
+            -DWITH_JPEG=ON -DBUILD_JPEG=OFF -DWITH_PNG=ON -DWITH_TIFF=ON
+            -DJPEG_INCLUDE_DIR=${jpeg_include_dir}
+            -DJPEG_LIBRARY=${jpeg_library}
+            -DOPENCV_EXTRA_SHARED_LINKER_FLAGS=-Wl,--exclude-libs,libjpeg.a
+            # Unused by OpenCV. Puts libjpeg into OpenCV's cache key, because OpenCV links it statically.
+            -DALP_JPEG_SIGNATURE=${jpeg_signature}
             -DWITH_GTK=OFF -DWITH_QT=OFF
             -DBUILD_LIST=core,imgproc,imgcodecs
         )
