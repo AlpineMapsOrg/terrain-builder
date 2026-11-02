@@ -24,7 +24,7 @@ namespace raster::algorithm {
 
 /// Accumulate read-only pixels in row order. Empty sources return the initial state.
 template <detail::ViewSource Source, std::movable State, typename Function>
-requires std::invocable<const Function&, State, const detail::SourcePixel<Source>&>
+requires detail::InlinableCallable<Function> && std::invocable<const Function&, State, const detail::SourcePixel<Source>&>
     && std::same_as<std::invoke_result_t<const Function&, State, const detail::SourcePixel<Source>&>, State>
 [[nodiscard]] State fold(Source&& source, State initial, const Function& function)
 {

@@ -103,7 +103,8 @@ add_executable(unittests_terrainlib
     terrainlib/union_find.cpp
     terrainlib/uv_atlas.cpp
 )
-target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain)
+# io_image.cpp creates CMYK JPEG images with TurboJPEG.
+target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain libjpeg-turbo::turbojpeg-static)
 atb_configure_test(unittests_terrainlib)
 
 # Keep the aligned GLM configuration isolated from terrainlib and its PCH.

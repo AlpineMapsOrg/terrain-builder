@@ -41,7 +41,7 @@ alp_setup_cmake_project(boost
     CMAKE_ARGUMENTS
         -DBOOST_ENABLE_PYTHON=OFF
         -DBUILD_TESTING=OFF
-        "-DBOOST_INCLUDE_LIBRARIES=graph\;multiprecision\;heap\;format\;logic\;asio\;beast")
+        "-DBOOST_INCLUDE_LIBRARIES=graph\;multiprecision\;heap\;format\;logic\;asio\;beast\;url")
 find_package(Boost CONFIG REQUIRED)
 
 alp_setup_cmake_project(tbb
@@ -65,8 +65,12 @@ alp_setup_cmake_project(cgal
     CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DWITH_examples=OFF)
 find_package(CGAL REQUIRED)
 
+include(../cmake/SetupLibJpegTurbo.cmake)
+alp_setup_libjpeg_turbo(3.2.1 c27ad72a68da151177929aa969ae773a2da5ac2af9ce946079314fdac8cece7f)
+
 include(../cmake/SetupOpenCV.cmake)
-alp_setup_opencv(4.11.0 9a7c11f924eff5f8d8070e297b322ee68b9227e003fd600d4b8122198091665f)
+alp_setup_opencv(4.11.0 9a7c11f924eff5f8d8070e297b322ee68b9227e003fd600d4b8122198091665f
+    "${ALP_LIBJPEG_TURBO_INCLUDE_DIR}" "${ALP_LIBJPEG_TURBO_JPEG_LIBRARY}" "${ALP_LIBJPEG_TURBO_SIGNATURE}")
 
 include(../cmake/SetupJpegXL.cmake)
 alp_setup_jpegxl(v0.12.0)
@@ -114,7 +118,7 @@ alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.g
 
 alp_add_git_repository(wideinteger URL https://github.com/ckormanyos/wide-integer.git COMMITISH 719cbbd557fe974f48b055568e2b149b2444bee9)
 
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 799db1af54a1f58454800e899bfc7fc544711834 NOT_SYSTEM)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH b2410ab0a5b9e329d9c1560138793ba6be70bfa2 NOT_SYSTEM)
 
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_SF_MERGER

@@ -18,11 +18,17 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <optional>
+#include <span>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <glm/glm.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <turbojpeg.h>
 
 #include "../temporary_directory.h"
 #include "io/byte.h"
@@ -42,6 +48,29 @@ image::RGBA8 colours()
 }
 
 cv::Mat encoded_mat(const io::byte::vector& bytes) { return { 1, int(bytes.size()), CV_8UC1, const_cast<std::byte*>(bytes.data()) }; }
+
+image::RGB8 gradient(glm::uvec2 size)
+{
+    image::RGB8 result(size);
+    for (unsigned y = 0; y < size.y; ++y) {
+        for (unsigned x = 0; x < size.x; ++x) {
+            result.pixel({ x, y }) = glm::u8vec3(x * 3, y * 5, (x * 7 + y * 11) % 256);
+        }
+    }
+    return result;
+}
+
+// Walks the segments after SOI (0xFF, marker, big-endian length that includes itself) up to the start of scan.
+std::optional<unsigned> restart_interval(const io::byte::vector& jpeg)
+{
+    const auto at = [&jpeg](std::size_t index) { return std::to_integer<unsigned>(jpeg.at(index)); };
+    for (std::size_t index = 2; at(index) == 0xFF && at(index + 1) != 0xDA; index += 2 + (at(index + 2) << 8 | at(index + 3))) {
+        if (at(index + 1) == 0xDD) {
+            return at(index + 4) << 8 | at(index + 5);
+        }
+    }
+    return std::nullopt;
+}
 } // namespace
 
 TEST_CASE("PNG preserves RGBA including hidden colour and row order", "[io-image]")
@@ -114,6 +143,54 @@ TEST_CASE("PNG compression and JPEG quality options reach encoders", "[io-image]
     CHECK(rgba->pixel({ 0, 0 }).w == 255);
 }
 
+TEST_CASE("JPEG has no restart markers and decodes like OpenCV's JPEG of the same quality", "[io-image]")
+{
+    const auto source = gradient({ 70, 45 });
+    const auto jpeg = image::encode(source, image::Format::Jpeg, { .jpeg_quality = 95 });
+    REQUIRE(jpeg);
+    CHECK_FALSE(restart_interval(*jpeg));
+
+    cv::Mat bgr(int(source.height()), int(source.width()), CV_8UC3);
+    for (unsigned y = 0; y < source.height(); ++y) {
+        for (unsigned x = 0; x < source.width(); ++x) {
+            const auto pixel = source.pixel({ x, y });
+            bgr.at<cv::Vec3b>(int(y), int(x)) = cv::Vec3b(pixel.z, pixel.y, pixel.x);
+        }
+    }
+    std::vector<std::uint8_t> reference;
+    REQUIRE(cv::imencode(".jpg", bgr, reference, { cv::IMWRITE_JPEG_QUALITY, 95 }));
+    const auto decoded = image::decode_rgb8(*jpeg);
+    const auto decoded_reference = image::decode_rgb8(std::as_bytes(std::span(reference)));
+    REQUIRE(decoded);
+    REQUIRE(decoded_reference);
+    CHECK(decoded->size() == source.size());
+    CHECK(std::ranges::equal(decoded->bytes(), decoded_reference->bytes()));
+}
+
+TEST_CASE("JPEG decoding rejects CMYK images", "[io-image]")
+{
+    const std::array<unsigned char, 8 * 8 * 4> cmyk {};
+    for (const int colour_space : { TJCS_CMYK, TJCS_YCCK }) {
+        const std::unique_ptr<void, decltype(&tj3Destroy)> compressor(tj3Init(TJINIT_COMPRESS), &tj3Destroy);
+        REQUIRE(compressor);
+        REQUIRE(tj3Set(compressor.get(), TJPARAM_QUALITY, 90) == 0);
+        REQUIRE(tj3Set(compressor.get(), TJPARAM_SUBSAMP, TJSAMP_444) == 0);
+        REQUIRE(tj3Set(compressor.get(), TJPARAM_COLORSPACE, colour_space) == 0);
+        unsigned char* output = nullptr;
+        std::size_t size = 0;
+        const int result = tj3Compress8(compressor.get(), cmyk.data(), 8, 0, 8, TJPF_CMYK, &output, &size);
+        const std::unique_ptr<unsigned char, decltype(&tj3Free)> jpeg(output, &tj3Free);
+        REQUIRE(result == 0);
+        const auto bytes = std::as_bytes(std::span(jpeg.get(), size));
+        const auto rgb = image::decode_rgb8(bytes);
+        const auto rgba = image::decode_rgba8(bytes);
+        REQUIRE_FALSE(rgb);
+        REQUIRE_FALSE(rgba);
+        CHECK(rgb.error().code() == Error::Code::Unsupported);
+        CHECK(rgba.error().code() == Error::Code::Unsupported);
+    }
+}
+
 TEST_CASE("JPEG XL is lossy by default, lossless at distance zero and keeps row order", "[io-image]")
 {
     image::RGB8 source({ 64, 48 });
@@ -182,12 +259,19 @@ TEST_CASE("image I/O rejects invalid inputs without silent alpha loss", "[io-ima
     CHECK_FALSE(image::encode(source, image::Format::JpegXl, { .jpegxl_effort = 11 }));
     CHECK_FALSE(image::encode(image::RGB8 {}, image::Format::Png));
     CHECK(image::encode(image::RGB8 {}, image::Format::JpegXl).error().code() == Error::Code::InvalidInput);
+    CHECK(image::encode(image::RGB8 {}, image::Format::Jpeg).error().code() == Error::Code::InvalidInput);
+    CHECK(image::encode(image::RGB8({ 4, 0 }), image::Format::Jpeg).error().code() == Error::Code::InvalidInput);
     CHECK_FALSE(image::decode_rgb8({}));
     const std::array junk { std::byte { 1 }, std::byte { 2 }, std::byte { 3 }, std::byte { 4 } };
     CHECK(image::decode_rgba8(junk).error().code() == Error::Code::CorruptData);
     auto truncated = image::encode(source, image::Format::JpegXl).value();
     truncated.resize(truncated.size() / 2);
     CHECK(image::decode_rgba8(truncated).error().code() == Error::Code::CorruptData);
+    auto truncated_jpeg = image::encode(gradient({ 64, 64 }), image::Format::Jpeg).value();
+    truncated_jpeg.resize(truncated_jpeg.size() / 2);
+    const auto decoded_truncated_jpeg = image::decode_rgb8(truncated_jpeg);
+    REQUIRE_FALSE(decoded_truncated_jpeg);
+    CHECK(decoded_truncated_jpeg.error().code() == Error::Code::CorruptData);
 }
 
 TEST_CASE("disk image I/O preserves RGBA and honours overwrite and directory policies", "[io-image]")

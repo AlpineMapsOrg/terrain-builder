@@ -106,6 +106,8 @@ struct MutableWindow {
     int operator()(const View& window) const { return ++window.pixel({ 0, 0 }); }
 };
 
+using IdentityFunction = int(const int&);
+
 static_assert(CanMakeView<Raster&> && CanMakeView<const Raster&>);
 static_assert(!CanMakeView<Raster> && !CanMakeView<const Raster>);
 static_assert(CanMakeView<View> && CanMakeView<const View&> && CanMakeView<ClampedView>);
@@ -131,6 +133,9 @@ static_assert(!CanZipTuple<std::tuple<View, View, View, View>, Sum, ClampedView>
 static_assert(CanAllocateTransform<Identity> && !CanAllocateTransform<ReferenceResult> && !CanAllocateTransform<MutableInput>);
 static_assert(!CanAllocateTransform<decltype([](int) { return true; })>);
 static_assert(!CanAllocateTransform<decltype([](int) { })>);
+static_assert(CanAllocateTransform<decltype([](const int& value) { return value; })>);
+static_assert(!CanAllocateTransform<IdentityFunction> && !CanAllocateTransform<IdentityFunction*>);
+static_assert(!CanTransform<Raster&, IdentityFunction*, Raster&>);
 
 Raster numbered(glm::uvec2 size)
 {
