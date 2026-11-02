@@ -58,7 +58,7 @@ public:
 
     virtual alp::Result<cv::Mat, TileError> get_tile(const radix::tile::Id tile) const override {
         if (!this->has_tile(tile)) {
-            return alp::make_unexpected(MissingTile{tile});
+            return alp::make_error(MissingTile{tile});
         }
         return cv::Mat();
     }

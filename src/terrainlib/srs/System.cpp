@@ -124,13 +124,13 @@ alp::Result<System, UnsupportedSystem> from_gdal(OGRSpatialReference srs) {
 
     // A compound system is geographic or projected if its horizontal part is.
     if (!srs.IsGeographic() && !srs.IsProjected() && !srs.IsGeocentric()) {
-        return alp::make_unexpected(UnsupportedSystem::NotGeodetic);
+        return alp::make_error(UnsupportedSystem::NotGeodetic);
     }
 
     const std::vector<int> data_axes = srs.GetDataAxisToSRSAxisMapping();
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     if (srs.GetDataAxisToSRSAxisMapping() != data_axes) {
-        return alp::make_unexpected(UnsupportedSystem::AxisOrder);
+        return alp::make_error(UnsupportedSystem::AxisOrder);
     }
 
     return System(std::move(srs));

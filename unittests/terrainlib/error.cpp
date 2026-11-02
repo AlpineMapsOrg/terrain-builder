@@ -219,6 +219,20 @@ TEST_CASE("A const error widens into a set and stays as it was", "[error]") {
     CHECK(error.frames().size() == 2);
 }
 
+TEST_CASE("An error converts into a failed result whose error it converts to", "[error]") {
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Result<int, FileError>>);
+    STATIC_REQUIRE(std::is_convertible_v<const alp::Error<FileError> &, alp::Result<int, FileError>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Result<int, FileError, ParseError>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Result<void, FileError>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Result<int>>);
+    STATIC_REQUIRE(!std::is_convertible_v<alp::Error<FileError>, alp::Result<int, ParseError>>);
+}
+
+TEST_CASE("An error with a move-only code converts into a failed result only when moved", "[error]") {
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<MoveOnlyError>, alp::Result<int, MoveOnlyError>>);
+    STATIC_REQUIRE(!std::is_convertible_v<const alp::Error<MoveOnlyError> &, alp::Result<int, MoveOnlyError>>);
+}
+
 TEST_CASE("Erasure keeps the code the error holds and its frames", "[error]") {
     const alp::Error<> erased = alp::Error<FileError, ParseError>(ParseError::BadDigit).context("parsing the header");
 

@@ -140,7 +140,7 @@ public:
             }
         });
         if (!success || !std::ranges::all_of(successes, std::identity())) {
-            return alp::make_unexpected(detail::make_untransformable(this->_transform.get(), std::move(gdal_error)));
+            return alp::make_error(detail::make_untransformable(this->_transform.get(), std::move(gdal_error)));
         }
 
         for (auto [i, out_point] : enumerate(out)) {
@@ -177,7 +177,7 @@ inline alp::Result<Transform, MissingTransform> create_transform(const System &s
     });
     std::shared_ptr<OGRCoordinateTransformation> gdal_transform(created);
     if (!gdal_transform) {
-        return alp::make_unexpected(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
+        return alp::make_error(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
     }
     return Transform(std::move(gdal_transform));
 }
@@ -203,7 +203,7 @@ inline alp::Result<Transform, MissingTransform> get_transform(const System &sour
             });
             std::shared_ptr<OGRCoordinateTransformation> inverse(inverted);
             if (!inverse) {
-                return alp::make_unexpected(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
+                return alp::make_error(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
             }
             const Transform transform(std::move(inverse));
             cache.push_back({source_srs, target_srs, transform});

@@ -58,7 +58,7 @@ inline std::string_view format_as(const OgrError error) {
 [[nodiscard]]
 inline alp::Result<void, OgrError> to_result(const OGRErr code) {
     if (code != OGRERR_NONE) {
-        return alp::make_unexpected(OgrError(code));
+        return alp::make_error(OgrError(code));
     }
     return {};
 }

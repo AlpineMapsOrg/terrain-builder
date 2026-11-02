@@ -41,7 +41,7 @@ alp::Result<IndexedStorage_<T, Codec>, OpenError> open_index(const std::filesyst
     const auto base_path = index_path.parent_path();
     auto layout_strategy = disk::layout::StrategyRegister::instance().create(index_file.layout_strategy_id);
     if (!layout_strategy) {
-        return alp::make_unexpected(disk::layout::UnknownLayoutStrategy{.id = index_file.layout_strategy_id}, context);
+        return alp::make_error(disk::layout::UnknownLayoutStrategy{.id = index_file.layout_strategy_id}, context);
     }
     disk::Layout layout(base_path, std::move(layout_strategy), index_file.preferred_extension);
     RawStorage_<T, Codec> raw_storage(std::move(layout));
@@ -59,7 +59,7 @@ inline alp::Result<void, io::FileError> ensure_directory(const std::filesystem::
 
     ALP_TRY(const bool exists, io::filesystem::exists(path));
     if (exists) {
-        return alp::make_unexpected(io::FileError(std::make_error_code(std::errc::not_a_directory), path));
+        return alp::make_error(io::FileError(std::make_error_code(std::errc::not_a_directory), path));
     }
 
     LOG_TRACE("Base path {} does not exist, creating it", path);

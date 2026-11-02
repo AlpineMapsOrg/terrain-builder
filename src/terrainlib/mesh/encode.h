@@ -73,7 +73,7 @@ alp::Result<Encoded, EncodeError> encode(const Simple_<n_dims, T>& mesh, const E
         position_buf.resize(meshopt_encodeVertexBufferBound(vertex_count, position_size));
         const size_t pos_written = meshopt_encodeVertexBuffer(position_buf.data(), position_buf.size(), mesh.positions.data(), vertex_count, position_size);
         if (pos_written == 0) {
-            return alp::make_unexpected(GeometryEncodeError::Positions);
+            return alp::make_error(GeometryEncodeError::Positions);
         }
         position_buf.resize(pos_written);
     }
@@ -84,7 +84,7 @@ alp::Result<Encoded, EncodeError> encode(const Simple_<n_dims, T>& mesh, const E
         uv_buf.resize(meshopt_encodeVertexBufferBound(vertex_count, uv_size));
         const size_t uv_written = meshopt_encodeVertexBuffer(uv_buf.data(), uv_buf.size(), mesh.uvs.data(), vertex_count, uv_size);
         if (uv_written == 0) {
-            return alp::make_unexpected(GeometryEncodeError::Uvs);
+            return alp::make_error(GeometryEncodeError::Uvs);
         }
         uv_buf.resize(uv_written);
     }
@@ -98,7 +98,7 @@ alp::Result<Encoded, EncodeError> encode(const Simple_<n_dims, T>& mesh, const E
             reinterpret_cast<const unsigned int *>(mesh.triangles.data()),
             index_count);
         if (index_written == 0) {
-            return alp::make_unexpected(GeometryEncodeError::Triangles);
+            return alp::make_error(GeometryEncodeError::Triangles);
         }
         index_buf.resize(index_written);
     }
@@ -136,7 +136,7 @@ alp::Result<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, cons
     if (header.version != 1 ||
         header.n_dims != n_dims ||
         header.component_type != expected_component_type) {
-        return alp::make_unexpected(GeometryDecodeError::IncompatibleData);
+        return alp::make_error(GeometryDecodeError::IncompatibleData);
     }
 
     using Mesh = Simple_<n_dims, T>;
@@ -151,7 +151,7 @@ alp::Result<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, cons
 
         result = meshopt_decodeVertexBuffer(mesh.positions.data(), vertex_count, position_size, encoded.positions.data(), encoded.positions.size());
         if (result != 0) {
-            return alp::make_unexpected(GeometryDecodeError::Positions);
+            return alp::make_error(GeometryDecodeError::Positions);
         }
     }
 
@@ -161,7 +161,7 @@ alp::Result<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, cons
         mesh.uvs.resize(vertex_count);
         result = meshopt_decodeVertexBuffer(mesh.uvs.data(), vertex_count, uv_size, encoded.uvs.data(), encoded.uvs.size());
         if (result != 0) {
-            return alp::make_unexpected(GeometryDecodeError::Uvs);
+            return alp::make_error(GeometryDecodeError::Uvs);
         }
     }
 
@@ -174,7 +174,7 @@ alp::Result<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, cons
         
         result = meshopt_decodeIndexBuffer(mesh.triangles.data(), index_count, index_size, encoded.triangles.data(), encoded.triangles.size());
         if (result != 0) {
-            return alp::make_unexpected(GeometryDecodeError::Triangles);
+            return alp::make_error(GeometryDecodeError::Triangles);
         }
     }
 

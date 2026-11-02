@@ -17,7 +17,7 @@ alp::Result<std::vector<uint8_t>, SerdeError> write_to_bytes(const T &value) {
     zpp::bits::out out(data);
     const auto result = out(value);
     if (zpp::bits::failure(result)) {
-        return alp::make_unexpected(SerdeError(result), fmt::format("encoding {}", type_name<T>()));
+        return alp::make_error(SerdeError(result), fmt::format("encoding {}", type_name<T>()));
     }
     return data;
 }
@@ -28,7 +28,7 @@ alp::Result<T, SerdeError> read_from_bytes(const std::span<const uint8_t> bytes)
     T value = zpp::bits::access::make<T>();
     const auto result = in(value);
     if (zpp::bits::failure(result)) {
-        return alp::make_unexpected(SerdeError(result), fmt::format("decoding {}", type_name<T>()));
+        return alp::make_error(SerdeError(result), fmt::format("decoding {}", type_name<T>()));
     }
     return value;
 }

@@ -74,7 +74,7 @@ public:
             static_cast<void*>(height_data.buffer().data()), bounds.width(), bounds.height(), GDT_Float32, 0, 0);
 
         if (read_result != CE_None) {
-            return alp::make_unexpected(gdal::CplError::get_last_error(), fmt::format("reading pixels {} from {}", bounds, this->dataset->GetDescription()));
+            return alp::make_error(gdal::CplError::get_last_error(), fmt::format("reading pixels {} from {}", bounds, this->dataset->GetDescription()));
         }
 
         return height_data;

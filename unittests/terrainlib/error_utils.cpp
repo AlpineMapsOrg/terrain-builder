@@ -185,7 +185,7 @@ TEST_CASE("make_context keeps a temporary argument alive", "[error][utils]") {
 }
 
 TEST_CASE("with_context adds a frame at the location it is handed to a failed result", "[error][utils]") {
-    alp::Result<int, FileError> failed = alp::make_unexpected(FileError::NotFound);
+    alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
     const std::source_location location = std::source_location::current();
     const alp::Result<int, FileError> result = alp::with_context(std::move(failed), "loading the configuration", location);
 
@@ -212,7 +212,7 @@ TEST_CASE("with_context builds its message only for a failed result", "[error][u
     CHECK(succeeded.value() == 3);
     CHECK(calls == 0);
 
-    const alp::Result<int, FileError> failed = alp::with_context(alp::Result<int, FileError>(alp::make_unexpected(FileError::NotFound)), make_message);
+    const alp::Result<int, FileError> failed = alp::with_context(alp::Result<int, FileError>(alp::make_error(FileError::NotFound)), make_message);
     CHECK(calls == 1);
     REQUIRE(!failed.has_value());
     REQUIRE(failed.error().frames().size() == 2);
@@ -221,7 +221,7 @@ TEST_CASE("with_context builds its message only for a failed result", "[error][u
 
 TEST_CASE("A body run with a context that fails gets the context", "[error][utils]") {
     const auto fail = []() -> alp::Result<int, FileError> {
-        return alp::make_unexpected(FileError::NotFound);
+        return alp::make_error(FileError::NotFound);
     };
     std::optional<alp::Result<int, FileError>> result;
 
@@ -260,7 +260,7 @@ TEST_CASE("A body run with a context records the context at the location it is h
     const alp::Result<int, FileError> result = alp::run_with_context(
         "loading the configuration",
         []() -> alp::Result<int, FileError> {
-            return alp::make_unexpected(FileError::NotFound);
+            return alp::make_error(FileError::NotFound);
         },
         location);
 

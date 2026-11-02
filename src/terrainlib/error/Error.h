@@ -85,6 +85,18 @@ public:
         : _code(std::move(other._code)),
           _trace(std::move(other._trace)) {}
 
+    // Converts into a failed result holding this error, for a result whose error this error converts to.
+    template <typename T, typename... Fs> requires std::convertible_to<const BasicError &, BasicError<Fs...>>
+    operator std::expected<T, BasicError<Fs...>>() const & {
+        return std::unexpected(BasicError<Fs...>(*this));
+    }
+
+    // Converts into a failed result holding this error, moved there, for a result whose error this error converts to.
+    template <typename T, typename... Fs> requires std::convertible_to<BasicError, BasicError<Fs...>>
+    operator std::expected<T, BasicError<Fs...>>() && {
+        return std::unexpected(BasicError<Fs...>(std::move(*this)));
+    }
+
     // Adds a frame holding `context`.
     [[nodiscard]]
     BasicError context(Context auto &&context, const std::source_location location = std::source_location::current()) && {
@@ -169,7 +181,7 @@ public:
         if (!code_result.has_value()) {
             return std::unexpected(std::forward<Self>(self));
         }
-        return Narrowed(std::move(*code_result), std::forward<Self>(self)._trace);
+        return {Narrowed(std::move(*code_result), std::forward<Self>(self)._trace)};
     }
 
     // This error with only the codes Fs if it holds one of them, otherwise with only its other codes; a set among Fs stands for its codes.
@@ -180,7 +192,7 @@ public:
 
         std::expected<Error<Fs...>, BasicError> named_result = std::forward<Self>(self).template narrow<Fs...>();
         if (named_result.has_value()) {
-            return *std::move(named_result);
+            return {*std::move(named_result)};
         }
 
         std::expected<Others, BasicError> others_result = std::move(named_result).error().template narrow<Others>();

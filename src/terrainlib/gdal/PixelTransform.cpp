@@ -9,7 +9,7 @@ namespace gdal {
 alp::Result<PixelTransform, PixelTransformError> PixelTransform::from_forward(const std::array<double, 6> &forward) {
     std::array<double, 6> inverse;
     if (GDALInvGeoTransform(forward.data(), inverse.data()) != TRUE) {
-        return alp::make_unexpected(PixelTransformError::NotInvertible);
+        return alp::make_error(PixelTransformError::NotInvertible);
     }
     return PixelTransform(forward, inverse);
 }
@@ -17,7 +17,7 @@ alp::Result<PixelTransform, PixelTransformError> PixelTransform::from_forward(co
 alp::Result<PixelTransform, PixelTransformError> PixelTransform::from_dataset(GDALDataset &dataset) {
     std::array<double, 6> forward;
     if (dataset.GetGeoTransform(forward.data()) != CE_None) {
-        return alp::make_unexpected(PixelTransformError::Missing);
+        return alp::make_error(PixelTransformError::Missing);
     }
     return PixelTransform::from_forward(forward);
 }

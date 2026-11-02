@@ -323,7 +323,7 @@ inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_datase
 
     const std::optional<double> tolerance = simplification_tolerance(srs);
     if (!tolerance) {
-        return alp::make_unexpected(MaskError::UnsupportedSpatialReference);
+        return alp::make_error(MaskError::UnsupportedSpatialReference);
     }
 
     MultipolygonWithHoles2 polygons;
@@ -334,7 +334,7 @@ inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_datase
         const uint64_t original_point_count = point_count(*geometry);
         std::unique_ptr<OGRGeometry> simplified = simplify_geometry(*geometry, *tolerance);
         if (!simplified || simplified->IsEmpty() || !simplified->IsValid()) {
-            return alp::make_unexpected(MaskError::SimplificationFailed);
+            return alp::make_error(MaskError::SimplificationFailed);
         }
 
         LOG_DEBUG("Simplified mask with {} m tolerance from {} to {} points",
@@ -343,7 +343,7 @@ inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_datase
     }
 
     if (polygons.is_empty()) {
-        return alp::make_unexpected(MaskError::NoPolygons);
+        return alp::make_error(MaskError::NoPolygons);
     }
 
     return ReferencedPolygonMask{.polygons = std::move(polygons), .srs = std::move(srs)};

@@ -64,7 +64,7 @@ inline std::string_view format_as(const CplError &error) {
 [[nodiscard]]
 inline alp::Result<void, CplError> to_result(const CPLErr code) {
     if (code == CE_Failure || code == CE_Fatal) {
-        return alp::make_unexpected(CplError::get_last_error());
+        return alp::make_error(CplError::get_last_error());
     }
     return {};
 }

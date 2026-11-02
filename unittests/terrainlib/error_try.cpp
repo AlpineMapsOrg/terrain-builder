@@ -46,7 +46,7 @@ TEST_CASE("ALP_TRY passes a failed result on with a frame at its line", "[error]
         ALP_TRY(const int value, std::move(source));
         return value + 1;
     };
-    const alp::Result<int, FileError> result = forward(alp::make_unexpected(FileError::NotFound));
+    const alp::Result<int, FileError> result = forward(alp::make_error(FileError::NotFound));
 
     REQUIRE(!result.has_value());
     CHECK(result.error().code() == FileError::NotFound);
@@ -64,7 +64,7 @@ TEST_CASE("ALP_TRY without a target passes a failed result on with a frame at it
     };
     CHECK(skip({}).has_value());
 
-    const alp::Result<void, FileError> result = skip(alp::make_unexpected(FileError::NotFound));
+    const alp::Result<void, FileError> result = skip(alp::make_error(FileError::NotFound));
     REQUIRE(!result.has_value());
     REQUIRE(result.error().frames().size() == 2);
     CHECK(result.error().frames()[1].location.line() == before.line() + 1);
@@ -77,7 +77,7 @@ TEST_CASE("ALP_TRY_CONTEXT adds one frame with its message at its line", "[error
         ALP_TRY_CONTEXT(const int value, std::move(source), "loading the configuration");
         return value + 1;
     };
-    const alp::Result<int, FileError> result = forward(alp::make_unexpected(FileError::NotFound));
+    const alp::Result<int, FileError> result = forward(alp::make_error(FileError::NotFound));
 
     REQUIRE(!result.has_value());
     REQUIRE(result.error().frames().size() == 2);
@@ -104,8 +104,8 @@ TEST_CASE("ALP_TRY_CONTEXT builds its message only on failure", "[error][try]") 
     CHECK(skip({}).has_value());
     CHECK(messages == 0);
 
-    CHECK(!forward(alp::make_unexpected(FileError::NotFound)).has_value());
-    CHECK(!skip(alp::make_unexpected(FileError::NotFound)).has_value());
+    CHECK(!forward(alp::make_error(FileError::NotFound)).has_value());
+    CHECK(!skip(alp::make_error(FileError::NotFound)).has_value());
     CHECK(messages == 2);
 }
 
@@ -123,7 +123,7 @@ TEST_CASE("ALP_TRY_CONTEXT takes a lazy message and builds it only on failure", 
     CHECK(forward(3).value() == 4);
     CHECK(messages == 0);
 
-    const alp::Result<int, FileError> result = forward(alp::make_unexpected(FileError::NotFound));
+    const alp::Result<int, FileError> result = forward(alp::make_error(FileError::NotFound));
     CHECK(messages == 1);
     REQUIRE(!result.has_value());
     REQUIRE(result.error().frames().size() == 2);
@@ -210,7 +210,7 @@ TEST_CASE("ALP_TRY assigns to an existing variable", "[error][try]") {
     };
 
     CHECK(assign(3).value() == 3);
-    CHECK(!assign(alp::make_unexpected(FileError::NotFound)).has_value());
+    CHECK(!assign(alp::make_error(FileError::NotFound)).has_value());
 }
 
 TEST_CASE("ALP_TRY assigns to a member and leaves it alone on failure", "[error][try]") {
@@ -227,7 +227,7 @@ TEST_CASE("ALP_TRY assigns to a member and leaves it alone on failure", "[error]
     REQUIRE(holder.load(3).has_value());
     CHECK(holder.value == 3);
 
-    CHECK(!holder.load(alp::make_unexpected(FileError::NotFound)).has_value());
+    CHECK(!holder.load(alp::make_error(FileError::NotFound)).has_value());
     CHECK(holder.value == 3);
 }
 
@@ -289,14 +289,14 @@ TEST_CASE("ALP_TRY evaluates its expression once", "[error][try]") {
     CHECK(forward(7).value() == 7);
     CHECK(calls == 1);
 
-    CHECK(!forward(alp::make_unexpected(FileError::NotFound)).has_value());
+    CHECK(!forward(alp::make_error(FileError::NotFound)).has_value());
     CHECK(calls == 2);
 }
 
 TEST_CASE("ALP_TRY in a loop returns at the first failure and leaves the result it was given intact", "[error][try]") {
     const std::vector<alp::Result<int, FileError>> sources{
         alp::Result<int, FileError>(1),
-        alp::Result<int, FileError>(alp::make_unexpected(FileError::NotFound)),
+        alp::Result<int, FileError>(alp::make_error(FileError::NotFound)),
         alp::Result<int, FileError>(3),
     };
     uint32_t visited = 0;
@@ -325,7 +325,7 @@ TEST_CASE("Two ALP_TRY on one line do not collide", "[error][try]") {
     };
 
     CHECK(add(1, 2).value() == 3);
-    CHECK(!add(1, alp::make_unexpected(FileError::NotFound)).has_value());
+    CHECK(!add(1, alp::make_error(FileError::NotFound)).has_value());
 }
 
 TEST_CASE("ALP_TRY takes an expression with commas inside parentheses", "[error][try]") {
@@ -360,7 +360,7 @@ TEST_CASE("ALP_TRY_CONTEXT takes a message with commas and variables named like 
     };
     CHECK(forward(3).value() == 3);
 
-    const alp::Result<int, FileError> result = forward(alp::make_unexpected(FileError::NotFound));
+    const alp::Result<int, FileError> result = forward(alp::make_error(FileError::NotFound));
     REQUIRE(!result.has_value());
     REQUIRE(result.error().frames().size() == 2);
     CHECK(result.error().frames()[1].message == "reading app.cfg, then the index");
@@ -368,7 +368,7 @@ TEST_CASE("ALP_TRY_CONTEXT takes a message with commas and variables named like 
 
 TEST_CASE("Frames accumulate across several ALP_TRY", "[error][try]") {
     const auto fail_inner = []() -> alp::Result<int, FileError> {
-        return alp::make_unexpected(FileError::NotFound);
+        return alp::make_error(FileError::NotFound);
     };
     const auto fail_middle = [&fail_inner]() -> alp::Result<int, FileError> {
         ALP_TRY_CONTEXT(const int value, fail_inner(), "reading the configuration");

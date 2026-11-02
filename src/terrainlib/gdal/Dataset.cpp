@@ -57,7 +57,7 @@ static alp::Result<GDALDataset *, CplError> open_gdal_dataset(const std::filesys
     CPLErrorReset();
     GDALDataset *dataset = static_cast<GDALDataset *>(GDALOpenEx(path_str.c_str(), flags | GDAL_OF_VERBOSE_ERROR, nullptr, nullptr, nullptr));
     if (dataset == nullptr) {
-        return alp::make_unexpected(CplError::get_last_error(), fmt::format("opening a dataset at {}", path_str));
+        return alp::make_error(CplError::get_last_error(), fmt::format("opening a dataset at {}", path_str));
     }
     return dataset;
 }
