@@ -74,7 +74,7 @@ Expected<radix::Raster<T>> allocate_output(glm::uvec2 size)
     }
     try {
         radix::Raster<T> output(size, radix::uninitialised);
-#ifdef ALP_UNITTEST_POISON_FILL
+#ifdef ALP_DEBUG_POISON_FILL
         // Unwritten pixels then hold a fixed pattern that tests can detect.
         if constexpr (std::is_trivially_copyable_v<T>) {
             std::ranges::fill(output.bytes(), std::byte { 0xA5 });

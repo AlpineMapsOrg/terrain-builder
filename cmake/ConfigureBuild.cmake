@@ -20,12 +20,12 @@ set(ALP_DEPENDENCIES_N_BUILD_JOBS "" CACHE STRING
 # Unit-test configuration
 option(ALP_UNITTESTS_EXTENDED "Perform extended unit tests (they take long)" OFF)
 option(ALP_UNITTESTS_DEBUG_IMAGES "Output debug height images for visual comparison" OFF)
-option(ALP_UNITTEST_POISON_FILL "Fill uninitialised raster algorithm outputs with a byte pattern to expose reads of unwritten pixels" OFF)
+option(ALP_DEBUG_POISON_FILL "Fill uninitialised raster algorithm outputs with a byte pattern to expose reads of unwritten pixels" OFF)
 
 # Global, because the raster algorithm templates are instantiated in terrainlib and in test
 # translation units; differing definitions would violate the one-definition rule.
-if(ALP_UNITTEST_POISON_FILL)
-    add_compile_definitions(ALP_UNITTEST_POISON_FILL)
+if(ALP_DEBUG_POISON_FILL)
+    add_compile_definitions(ALP_DEBUG_POISON_FILL)
 endif()
 
 if(ALP_ENABLE_ADDRESS_SANITIZER AND ALP_ENABLE_THREAD_SANITIZER)
