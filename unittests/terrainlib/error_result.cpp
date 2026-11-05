@@ -34,20 +34,20 @@ TEST_CASE("A result holds the error of its codes, with a nested set expanded", "
 }
 
 TEST_CASE("A result converts from a result whose error converts, but not from a plain code", "[error][Result]") {
-    STATIC_REQUIRE(std::is_convertible_v<alp::Result<int, FileError>, alp::Result<int>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Result<int, FileError>, alp::ErasedResult<int>>);
     STATIC_REQUIRE(std::is_convertible_v<alp::Result<int, FileError>, alp::Result<int, FileError, ParseError>>);
-    STATIC_REQUIRE(!std::is_convertible_v<alp::Result<int>, alp::Result<int, FileError>>);
+    STATIC_REQUIRE(!std::is_convertible_v<alp::ErasedResult<int>, alp::Result<int, FileError>>);
     STATIC_REQUIRE(!std::is_convertible_v<std::unexpected<FileError>, alp::Result<int, FileError>>);
     STATIC_REQUIRE(!std::is_convertible_v<std::expected<int, FileError>, alp::Result<int, FileError>>);
 }
 
 TEST_CASE("A typed result converts to an erased result", "[error][Result]") {
     const alp::Result<int, FileError> succeeded = 3;
-    const alp::Result<int> erased_success = succeeded;
+    const alp::ErasedResult<int> erased_success = succeeded;
     CHECK(erased_success.value() == 3);
 
     const alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound, "opening app.cfg");
-    const alp::Result<int> erased_failure = failed;
+    const alp::ErasedResult<int> erased_failure = failed;
     REQUIRE(!erased_failure.has_value());
     CHECK(erased_failure.error().holds_code(FileError::NotFound));
     REQUIRE(erased_failure.error().frames().size() == 1);
@@ -59,7 +59,7 @@ TEST_CASE("An unexpected error converts into a result whose error includes its c
     REQUIRE(!set_result.has_value());
     CHECK(set_result.error().holds_code(ParseError::BadDigit));
 
-    const alp::Result<int> erased_result = alp::make_error(FileError::NotFound);
+    const alp::ErasedResult<int> erased_result = alp::make_error(FileError::NotFound);
     REQUIRE(!erased_result.has_value());
     CHECK(erased_result.error().holds_code(FileError::NotFound));
 }

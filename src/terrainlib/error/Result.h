@@ -15,6 +15,10 @@ using BasicResult = std::expected<T, E>;
 template <typename T, typename... Es>
 using Result = BasicResult<T, Error<Es...>>;
 
+// A value, or an erased error.
+template <typename T>
+using ErasedResult = BasicResult<T, ErasedError>;
+
 // The underlying unexpected type; an error of type E, to return from a function that returns a BasicResult.
 template <typename E>
 using BasicUnexpected = std::unexpected<E>;

@@ -374,11 +374,11 @@ TEST_CASE("Frames accumulate across several ALP_TRY", "[error][try]") {
         ALP_TRY_CONTEXT(const int value, fail_inner(), "reading the configuration");
         return value;
     };
-    const auto fail_outer = [&fail_middle]() -> alp::Result<int> {
+    const auto fail_outer = [&fail_middle]() -> alp::ErasedResult<int> {
         ALP_TRY(const int value, fail_middle());
         return value;
     };
-    const alp::Result<int> result = fail_outer();
+    const alp::ErasedResult<int> result = fail_outer();
 
     REQUIRE(!result.has_value());
     REQUIRE(result.error().frames().size() == 3);

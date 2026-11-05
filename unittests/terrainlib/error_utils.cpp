@@ -57,7 +57,7 @@ TEST_CASE("make_error adds a message as the first context at the error's origin"
 
 TEST_CASE("make_error creates an erased error from text that originates at the location it is handed", "[error][utils]") {
     const std::source_location location = std::source_location::current();
-    const alp::Error<> error = alp::make_error("round 3 made no progress", location);
+    const alp::ErasedError error = alp::make_error("round 3 made no progress", location);
 
     CHECK(fmt::to_string(error).contains("round 3 made no progress"));
     CHECK(is_same_location(error.origin(), location));
@@ -89,7 +89,7 @@ TEST_CASE("make_unexpected creates an error that originates at the location it i
 
 TEST_CASE("make_unexpected creates an erased error from a message that originates at the location it is handed", "[error][utils]") {
     const std::source_location location = std::source_location::current();
-    const alp::Result<int> result = alp::make_unexpected("round 3 made no progress", location);
+    const alp::ErasedResult<int> result = alp::make_unexpected("round 3 made no progress", location);
 
     REQUIRE(!result.has_value());
     CHECK(fmt::to_string(result.error()).contains("round 3 made no progress"));
@@ -143,7 +143,7 @@ TEST_CASE("to_result adds a message as the first context", "[error][utils]") {
 }
 
 TEST_CASE("to_result turns an empty optional into an erased error from text", "[error][utils]") {
-    const alp::Result<int> result = alp::to_result(std::optional<int>(), "the mesh is missing");
+    const alp::ErasedResult<int> result = alp::to_result(std::optional<int>(), "the mesh is missing");
 
     REQUIRE(!result.has_value());
     CHECK(fmt::to_string(result.error()).contains("the mesh is missing"));

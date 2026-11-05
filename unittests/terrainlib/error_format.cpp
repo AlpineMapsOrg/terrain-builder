@@ -67,7 +67,7 @@ TEST_CASE("An error in a set mentions the code it holds", "[error][format]") {
 }
 
 TEST_CASE("An erased error mentions the code it was erased from", "[error][format]") {
-    const alp::Error<> erased = alp::make_error(ParseError::BadDigit);
+    const alp::ErasedError erased = alp::make_error(ParseError::BadDigit);
 
     CHECK(fmt::to_string(erased).contains("bad digit"));
 }

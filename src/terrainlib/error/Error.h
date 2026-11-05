@@ -37,6 +37,9 @@ struct ErrorFor {
 template <typename... Es>
 using Error = typename detail::ErrorFor<Es...>::type;
 
+// An error with a code of any copyable type.
+using ErasedError = BasicError<>;
+
 // An error with a code of type Es, or an erased error when Es is empty, together with the frames it collected.
 template <typename... Es>
 class BasicError {

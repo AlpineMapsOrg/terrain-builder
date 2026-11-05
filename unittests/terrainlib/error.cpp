@@ -96,9 +96,9 @@ TEST_CASE("An error is created explicitly from one of its codes, an erased error
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, ParseError>);
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError, ParseError>, OffsetError>);
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, std::string>);
-    STATIC_REQUIRE(std::is_constructible_v<alp::Error<>, std::string>);
-    STATIC_REQUIRE(!std::is_convertible_v<std::string, alp::Error<>>);
-    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<>, FileError>);
+    STATIC_REQUIRE(std::is_constructible_v<alp::ErasedError, std::string>);
+    STATIC_REQUIRE(!std::is_convertible_v<std::string, alp::ErasedError>);
+    STATIC_REQUIRE(!std::is_constructible_v<alp::ErasedError, FileError>);
 }
 
 TEST_CASE("An error converts into any error that includes its codes, and into an erased error", "[error]") {
@@ -106,16 +106,16 @@ TEST_CASE("An error converts into any error that includes its codes, and into an
     STATIC_REQUIRE(std::is_convertible_v<const alp::Error<FileError> &, alp::Error<FileError, ParseError>>);
     STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError, ParseError>, alp::Error<ParseError, FileError>>);
     STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError, ParseError>, alp::Error<FileError, ParseError, OffsetError>>);
-    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Error<>>);
-    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError, ParseError>, alp::Error<>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::ErasedError>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError, ParseError>, alp::ErasedError>);
 }
 
 TEST_CASE("An error does not convert into an error that lacks one of its codes", "[error]") {
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, alp::Error<ParseError>>);
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, alp::Error<FileError, ParseError>>);
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError, ParseError>, alp::Error<OffsetError>>);
-    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, alp::Error<>>);
-    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError, ParseError>, alp::Error<>>);
+    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, alp::ErasedError>);
+    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError, ParseError>, alp::ErasedError>);
 }
 
 TEST_CASE("A nested error set expands into its codes, each kept once in the order it first appears", "[error]") {
@@ -129,8 +129,8 @@ TEST_CASE("An error narrows only to a set of codes it can hold", "[error]") {
     STATIC_REQUIRE(alp::Error<FileError, ParseError, OffsetError>::narrows_to<alp::Error<FileError, ParseError>>);
     STATIC_REQUIRE(!alp::Error<FileError>::narrows_to<alp::Error<FileError, ParseError>>);
     STATIC_REQUIRE(!alp::Error<FileError>::narrows_to<>);
-    STATIC_REQUIRE(alp::Error<>::narrows_to<FileError>);
-    STATIC_REQUIRE(!alp::Error<>::narrows_to<MoveOnlyError>);
+    STATIC_REQUIRE(alp::ErasedError::narrows_to<FileError>);
+    STATIC_REQUIRE(!alp::ErasedError::narrows_to<MoveOnlyError>);
 }
 
 TEST_CASE("An error splits only into codes it holds and at least one other", "[error]") {
@@ -142,7 +142,7 @@ TEST_CASE("An error splits only into codes it holds and at least one other", "[e
 TEST_CASE("An error converts as if Infallible were not among its codes", "[error]") {
     STATIC_REQUIRE(std::is_convertible_v<alp::Error<alp::Infallible>, alp::Error<FileError>>);
     STATIC_REQUIRE(std::is_convertible_v<alp::Error<alp::Infallible>, alp::Error<FileError, ParseError>>);
-    STATIC_REQUIRE(std::is_convertible_v<alp::Error<alp::Infallible>, alp::Error<>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<alp::Infallible>, alp::ErasedError>);
     STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError, alp::Infallible>, alp::Error<FileError>>);
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<alp::Infallible>, alp::Error<FileError>>);
     STATIC_REQUIRE(!std::is_constructible_v<alp::Error<FileError>, alp::Error<ParseError, alp::Infallible>>);
@@ -158,7 +158,7 @@ TEST_CASE("An error holds its code and originates at the location it is handed",
 
 TEST_CASE("An erased error holds a message and originates at the location it is handed", "[error]") {
     const std::source_location location = std::source_location::current();
-    const alp::Error<> error("round 3 made no progress", location);
+    const alp::ErasedError error("round 3 made no progress", location);
 
     CHECK(fmt::to_string(error).contains("round 3 made no progress"));
     CHECK(is_same_location(error.origin(), location));
@@ -224,7 +224,7 @@ TEST_CASE("An error converts into a failed result whose error it converts to", "
     STATIC_REQUIRE(std::is_convertible_v<const alp::Error<FileError> &, alp::Result<int, FileError>>);
     STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Result<int, FileError, ParseError>>);
     STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Result<void, FileError>>);
-    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::Result<int>>);
+    STATIC_REQUIRE(std::is_convertible_v<alp::Error<FileError>, alp::ErasedResult<int>>);
     STATIC_REQUIRE(!std::is_convertible_v<alp::Error<FileError>, alp::Result<int, ParseError>>);
 }
 
@@ -234,7 +234,7 @@ TEST_CASE("An error with a move-only code converts into a failed result only whe
 }
 
 TEST_CASE("Erasure keeps the code the error holds and its frames", "[error]") {
-    const alp::Error<> erased = alp::Error<FileError, ParseError>(ParseError::BadDigit).context("parsing the header");
+    const alp::ErasedError erased = alp::Error<FileError, ParseError>(ParseError::BadDigit).context("parsing the header");
 
     CHECK(erased.holds_code(ParseError::BadDigit));
     REQUIRE(erased.frames().size() == 2);
@@ -242,7 +242,7 @@ TEST_CASE("Erasure keeps the code the error holds and its frames", "[error]") {
 }
 
 TEST_CASE("Erasing an error moves its code instead of copying it", "[error]") {
-    const alp::Error<> erased = alp::Error<TrackedError>(TrackedError{});
+    const alp::ErasedError erased = alp::Error<TrackedError>(TrackedError{});
 
     const TrackedError *code = erased.get_if<TrackedError>();
     REQUIRE(code != nullptr);
@@ -250,7 +250,7 @@ TEST_CASE("Erasing an error moves its code instead of copying it", "[error]") {
 }
 
 TEST_CASE("An error with a move-only code does not erase", "[error]") {
-    STATIC_REQUIRE(!std::is_constructible_v<alp::Error<>, alp::Error<MoveOnlyError>>);
+    STATIC_REQUIRE(!std::is_constructible_v<alp::ErasedError, alp::Error<MoveOnlyError>>);
 }
 
 TEST_CASE("An error with a move-only code widens into a set", "[error]") {
@@ -264,7 +264,7 @@ TEST_CASE("An error with a move-only code widens into a set", "[error]") {
 TEST_CASE("narrow returns the narrowed error or the error it was called on", "[error]") {
     STATIC_REQUIRE(std::is_same_v<decltype(std::declval<alp::Error<FileError, ParseError>>().narrow<FileError>()), std::expected<alp::Error<FileError>, alp::Error<FileError, ParseError>>>);
     STATIC_REQUIRE(std::is_same_v<decltype(std::declval<alp::Error<FileError, ParseError, OffsetError>>().narrow<alp::Error<FileError, ParseError>>()), std::expected<alp::Error<FileError, ParseError>, alp::Error<FileError, ParseError, OffsetError>>>);
-    STATIC_REQUIRE(std::is_same_v<decltype(std::declval<alp::Error<>>().narrow<FileError>()), std::expected<alp::Error<FileError>, alp::Error<>>>);
+    STATIC_REQUIRE(std::is_same_v<decltype(std::declval<alp::ErasedError>().narrow<FileError>()), std::expected<alp::Error<FileError>, alp::ErasedError>>);
 }
 
 TEST_CASE("narrow gives the error with only the code it holds, keeping its frames", "[error]") {
@@ -325,7 +325,7 @@ TEST_CASE("narrow to a set hands the error back when it holds a code outside the
 }
 
 TEST_CASE("narrow on an erased error gives the error with the code it was erased from, keeping its frames", "[error]") {
-    const auto result = alp::Error<>(alp::make_error(FileError::NotFound).context("opening app.cfg")).narrow<FileError>();
+    const auto result = alp::ErasedError(alp::make_error(FileError::NotFound).context("opening app.cfg")).narrow<FileError>();
 
     REQUIRE(result.has_value());
     CHECK(result->code() == FileError::NotFound);
@@ -334,7 +334,7 @@ TEST_CASE("narrow on an erased error gives the error with the code it was erased
 }
 
 TEST_CASE("narrow on an erased error hands it back when it holds another code", "[error]") {
-    const auto result = alp::Error<>(alp::make_error(ParseError::BadDigit).context("parsing the header")).narrow<FileError>();
+    const auto result = alp::ErasedError(alp::make_error(ParseError::BadDigit).context("parsing the header")).narrow<FileError>();
 
     REQUIRE(!result.has_value());
     CHECK(result.error().holds_code(ParseError::BadDigit));
@@ -438,7 +438,7 @@ TEST_CASE("holds<Fs...> is true for a code of a type among Fs", "[error]") {
         CHECK(!error.holds<FileError>());
     }
     SECTION("an erased error") {
-        const alp::Error<> erased = alp::make_error(OffsetError{.offset = 7});
+        const alp::ErasedError erased = alp::make_error(OffsetError{.offset = 7});
 
         CHECK(erased.holds<OffsetError>());
         CHECK(!erased.holds<FileError>());
@@ -477,7 +477,7 @@ TEST_CASE("get_if points at the held code if it has that type, and is null other
 }
 
 TEST_CASE("get_if on an erased error points at the code it was erased from, and is null for another type", "[error]") {
-    const alp::Error<> erased = alp::make_error(OffsetError{.offset = 7});
+    const alp::ErasedError erased = alp::make_error(OffsetError{.offset = 7});
 
     const OffsetError *offset_error = erased.get_if<OffsetError>();
     REQUIRE(offset_error != nullptr);
@@ -521,7 +521,7 @@ TEST_CASE("visit_if<Fs...> returns what f returns for a code of a type among Fs,
         CHECK(error.visit_if<alp::Error<FileError, Incomparable>>(zero) == std::nullopt);
     }
     SECTION("an erased error") {
-        const alp::Error<> erased = alp::make_error(OffsetError{.offset = 7});
+        const alp::ErasedError erased = alp::make_error(OffsetError{.offset = 7});
 
         CHECK(erased.visit_if<OffsetError>(offset_or_zero) == 7u);
         CHECK(erased.visit_if<alp::Error<FileError, OffsetError>>(offset_or_zero) == 7u);

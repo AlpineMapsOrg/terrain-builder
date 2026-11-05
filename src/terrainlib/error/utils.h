@@ -33,8 +33,8 @@ Error<E> make_error(E code, Context auto &&context, const std::source_location l
 
 // Creates an erased error from `message` that originates at the caller.
 [[nodiscard]]
-inline Error<> make_error(std::string message, const std::source_location location = std::source_location::current()) {
-    return Error<>(std::move(message), location);
+inline ErasedError make_error(std::string message, const std::source_location location = std::source_location::current()) {
+    return ErasedError(std::move(message), location);
 }
 
 // Creates an unexpected holding a new error with `code` that originates at the caller.
@@ -105,7 +105,7 @@ Result<T, E> to_result(
 // Turns `value` into a result that fails with an erased error from `message` when it is empty.
 template <typename T>
 [[nodiscard]]
-Result<T> to_result(std::optional<T> value, std::string message, const std::source_location location = std::source_location::current()) {
+ErasedResult<T> to_result(std::optional<T> value, std::string message, const std::source_location location = std::source_location::current()) {
     return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(message), location); });
 }
 
