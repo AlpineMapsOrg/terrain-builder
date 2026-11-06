@@ -7,13 +7,11 @@
 
 #include <cpptrace/utils.hpp>
 #include <fmt/format.h>
-#include <libassert/assert.hpp>
 
 #include "enumerate.h"
 #include "error/Error.h"
 #include "error/ErrorCode.h"
 #include "error/Trace.h"
-#include "span_utils.h"
 
 template <alp::ErrorCode... Es>
 struct fmt::formatter<alp::BasicError<Es...>> {
@@ -37,8 +35,6 @@ struct fmt::formatter<alp::BasicError<Es...>> {
         const std::string cause = error._code.message();
         fmt::format_context::iterator output = context.out();
 
-        const auto [origin, outer_frames] = *ASSERT_VAL(split_first(frames));
-
         switch (this->_form) {
         case Form::Message:
             return fmt::format_to(output, "{}", cause);
@@ -53,15 +49,8 @@ struct fmt::formatter<alp::BasicError<Es...>> {
             return output;
 
         case Form::Report:
-            if (origin->message.has_value()) {
-                output = fmt::format_to(output, "{}\n    ", *origin->message);
-            }
-            output = fmt::format_to(output, "{}\n    {}", format_location(origin->location), cause);
-            if (outer_frames.empty()) {
-                return output;
-            }
-            output = fmt::format_to(output, "\n\nTrace:");
-            for (const auto [number, frame] : enumerate<uint32_t>(outer_frames)) {
+            output = fmt::format_to(output, "{}\n\nTrace:", cause);
+            for (const auto [number, frame] : enumerate<uint32_t>(frames)) {
                 output = fmt::format_to(output, "\n    {}: ", number);
                 if (frame.message.has_value()) {
                     output = fmt::format_to(output, "{}\n       ", *frame.message);
@@ -82,7 +71,7 @@ private:
         // Its cause and all of its messages on one line, innermost first.
         Chain,
 
-        // Every place it was, innermost first, each with what was being done there and the cause at the origin.
+        // Its cause, then every place it was, innermost first, each with what was being done there.
         Report,
     };
 
