@@ -31,21 +31,21 @@ struct PendingCode {
 
     // Becomes any other type the code converts to, dropping the location.
     template <typename Target>
-        requires(!is_specialization_of_v<Target, BasicError> && std::is_convertible_v<const E &, Target>)
-    operator Target() const {
+        requires(!is_specialization_of_v<Target, BasicError> && std::is_convertible_v<E, Target>)
+    operator Target() && {
         // Declared for every message so that std::expected sees the conversion, and rejected on use so that the reason is readable.
         static_assert(std::same_as<M, std::nullopt_t>, "ALP_TRY_CONTEXT can only be called in a function returning an alp::Result, a plain std::expected has no place for the message");
-        return this->code;
+        return std::move(this->code);
     }
 
     // Becomes an Error with its origin where the code was caught and the message, if any, as its first context.
     template <ErrorCode... Es>
         requires std::is_convertible_v<Error<E>, BasicError<Es...>>
-    operator BasicError<Es...>() const {
+    operator BasicError<Es...>() && {
         if constexpr (std::same_as<M, std::nullopt_t>) {
-            return make_error(this->code, this->location);
+            return make_error(std::move(this->code), this->location);
         } else {
-            return make_error(this->code, this->message, this->location);
+            return make_error(std::move(this->code), std::move(this->message), this->location);
         }
     }
 };
@@ -65,7 +65,7 @@ auto make_residual_error(E error, M message, const std::source_location location
         }
     } else if constexpr (ErrorCode<E>) {
         return PendingCode<E, M>{
-            .code = error, 
+            .code = std::move(error),
             .message = std::move(message), 
             .location = location};
     } else {

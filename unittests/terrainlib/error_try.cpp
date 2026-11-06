@@ -28,6 +28,14 @@ std::string_view format_as(const FileError) {
     return "file not found";
 }
 
+struct MoveOnlyError {
+    std::unique_ptr<int> value;
+};
+
+std::string_view format_as(const MoveOnlyError &) {
+    return "move only";
+}
+
 } // namespace
 
 TEST_CASE("ALP_TRY binds the value of a succeeded result", "[error][try]") {
@@ -156,6 +164,30 @@ TEST_CASE("ALP_TRY turns a plain code into an error that originates at its line 
     CHECK(result.error().code() == FileError::NotFound);
     CHECK(result.error().frames().size() == 1);
     CHECK(result.error().origin().line() == before.line() + 1);
+}
+
+TEST_CASE("ALP_TRY hands a move-only plain code on", "[error][try]") {
+    SECTION("to an enclosing function whose error is that code") {
+        const auto forward = [](std::expected<int, MoveOnlyError> source) -> std::expected<int, MoveOnlyError> {
+            ALP_TRY(const int value, std::move(source));
+            return value;
+        };
+        const std::expected<int, MoveOnlyError> result = forward(std::unexpected(MoveOnlyError{.value = std::make_unique<int>(5)}));
+
+        REQUIRE(!result.has_value());
+        CHECK(*result.error().value == 5);
+    }
+
+    SECTION("to an enclosing function that returns an Error") {
+        const auto forward = [](std::expected<int, MoveOnlyError> source) -> alp::Result<int, MoveOnlyError> {
+            ALP_TRY(const int value, std::move(source));
+            return value;
+        };
+        const alp::Result<int, MoveOnlyError> result = forward(std::unexpected(MoveOnlyError{.value = std::make_unique<int>(5)}));
+
+        REQUIRE(!result.has_value());
+        CHECK(*result.error().code().value == 5);
+    }
 }
 
 TEST_CASE("ALP_TRY_CONTEXT adds its message to a plain code as the first context", "[error][try]") {
