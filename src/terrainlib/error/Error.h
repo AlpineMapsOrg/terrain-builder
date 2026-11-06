@@ -127,9 +127,9 @@ public:
     }
 
     // Calls `f` with the held code.
-    template <typename F> requires(!is_erased)
-    decltype(auto) visit(F &&f) const {
-        return this->_code.visit(std::forward<F>(f));
+    template <typename F, typename Self> requires(!is_erased)
+    decltype(auto) visit(this Self &&self, F &&f) {
+        return std::forward<Self>(self)._code.visit(std::forward<F>(f));
     }
 
     // Calls `visitor` with the held code if it is in Fs, or returns nothing otherwise.

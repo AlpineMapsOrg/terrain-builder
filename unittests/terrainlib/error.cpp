@@ -495,6 +495,13 @@ TEST_CASE("visit calls the branch for the held code and returns what it returns"
     CHECK(offset == 7);
 }
 
+TEST_CASE("visit hands the code of a moved error over as an rvalue", "[error]") {
+    alp::Error<MoveOnlyError> error(MoveOnlyError{.value = std::make_unique<int>(5)});
+
+    const std::unique_ptr<int> value = std::move(error).visit([](MoveOnlyError &&code) { return std::move(code.value); });
+    CHECK(*value == 5);
+}
+
 TEST_CASE("visit_if<Fs...> returns what f returns for a code of a type among Fs, and nothing otherwise", "[error]") {
     const auto offset_or_zero = overloaded{
         [](const FileError) -> uint32_t { return 0; },
