@@ -66,7 +66,7 @@ auto make_residual_error(E error, M message, const std::source_location location
     } else if constexpr (ErrorCode<E>) {
         return PendingCode<E, M>{
             .code = std::move(error),
-            .message = std::move(message), 
+            .message = std::move(message),
             .location = location};
     } else {
         static_assert(!has_message, "ALP_TRY_CONTEXT needs an expression whose error is an alp::Error or an alp::ErrorCode, any other error has no place for the message");

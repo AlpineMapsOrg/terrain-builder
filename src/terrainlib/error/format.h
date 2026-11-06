@@ -76,7 +76,7 @@ struct fmt::formatter<alp::BasicError<Es...>> {
 private:
     // How an error was asked to format.
     enum class Form {
-        // The cause message
+        // The cause message.
         Message,
 
         // Its cause and all of its messages on one line, innermost first.
