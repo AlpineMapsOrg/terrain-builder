@@ -1,13 +1,12 @@
 #pragma once
 
 #include <cstdint>
-#include <source_location>
 #include <span>
 #include <string>
 
-#include <cpptrace/utils.hpp>
 #include <fmt/format.h>
 
+#include "PrunedLocation.h"
 #include "enumerate.h"
 #include "error/Error.h"
 #include "error/ErrorCode.h"
@@ -55,7 +54,7 @@ struct fmt::formatter<alp::BasicError<Es...>> {
                 if (frame.message.has_value()) {
                     output = fmt::format_to(output, "{}\n       ", *frame.message);
                 }
-                output = fmt::format_to(output, "{}", format_location(frame.location));
+                output = fmt::format_to(output, "{}", PrunedLocation{frame.location});
             }
             return output;
         }
@@ -74,10 +73,6 @@ private:
         // Its cause, then every place it was, innermost first, each with what was being done there.
         Report,
     };
-
-    static std::string format_location(const std::source_location location) {
-        return fmt::format("{} at {}:{}:{}", cpptrace::prune_symbol(location.function_name()), location.file_name(), location.line(), location.column());
-    }
 
     Form _form = Form::Message;
 };

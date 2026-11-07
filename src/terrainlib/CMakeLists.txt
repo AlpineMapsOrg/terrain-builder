@@ -56,6 +56,7 @@ add_library(terrainlib
 
     log.cpp
     ProgressIndicator.cpp
+    PrunedLocation.cpp
     tile_path.h
 )
 
