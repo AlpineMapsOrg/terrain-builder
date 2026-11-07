@@ -79,6 +79,7 @@ target_link_libraries(terrainlib PUBLIC
     spdlog
     fmt
     zpp_bits
+    value_types
     zstd::libzstd_static
     cgltf
     TBB::tbb

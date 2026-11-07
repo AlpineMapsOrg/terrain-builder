@@ -60,6 +60,10 @@ alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COM
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits SYSTEM INTERFACE ${zpp_bits_SOURCE_DIR})
 
+alp_add_git_repository(value_types URL https://github.com/jbcoe/value_types.git COMMITISH v1.0.1 DO_NOT_ADD_SUBPROJECT)
+add_library(value_types INTERFACE)
+target_include_directories(value_types SYSTEM INTERFACE ${value_types_SOURCE_DIR})
+
 alp_setup_cmake_project(zstd
     URL https://github.com/AlpineMapsOrgDependencies/zstd.git
     COMMITISH 5c7b7bad26808e6b40ac3b3d0075466e27738a9d
