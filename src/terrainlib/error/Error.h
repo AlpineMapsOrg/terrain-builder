@@ -11,6 +11,7 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <indirect.h>
 #include <libassert/assert.hpp>
 
 #include "error/CodeStorage.h"
@@ -76,17 +77,25 @@ public:
         : _code(std::move(code)),
           _trace(location, detail::resolve_message(std::forward<decltype(context)>(context))) {}
 
+    // Creates an error with `code` that originates at `location`, created from `inner`.
+    template <OneOf<Es...> E, ErrorCode... Fs> requires std::constructible_from<ErasedError, BasicError<Fs...>>
+    BasicError(E code, BasicError<Fs...> inner, const std::source_location location = std::source_location::current())
+        : _code(std::move(code)),
+          _trace(location),
+          _source(std::in_place, ErasedError(std::move(inner))) {}
+
     // Creates an erased error from `message`.
     explicit BasicError(std::string message, const std::source_location location = std::source_location::current())
         requires(is_erased)
         : _code(detail::Message{.text = std::move(message)}),
           _trace(location) {}
 
-    // Takes over an error whose codes are all among Es, or any error with copyable codes when this error is erased, keeping its frames.
+    // Takes over an error whose codes are all among Es, or any error with copyable codes when this error is erased, keeping its frames and the error it was created from.
     template <typename... Fs> requires std::constructible_from<CodeStorage, alp::CodeStorage<Fs...>>
     BasicError(BasicError<Fs...> other)
         : _code(std::move(other._code)),
-          _trace(std::move(other._trace)) {}
+          _trace(std::move(other._trace)),
+          _source(std::move(other._source)) {}
 
     // Converts into a failed result holding this error, for a result whose error this error converts to.
     template <typename T, typename... Fs> requires std::convertible_to<const BasicError &, BasicError<Fs...>>
@@ -173,6 +182,15 @@ public:
         return this->_trace.frames();
     }
 
+    // The error this one was created from, or null if it was created from none.
+    [[nodiscard]]
+    const ErasedError *source() const {
+        if (!this->_source.has_value()) {
+            return nullptr;
+        }
+        return &**this->_source;
+    }
+
     // This error with only the codes Fs if it holds one of them, otherwise this error unchanged; a set among Fs stands for its codes.
     template <ErrorCodes... Fs, typename Self> requires(narrows_to<Fs...>)
     [[nodiscard]]
@@ -184,7 +202,7 @@ public:
         if (!code_result.has_value()) {
             return std::unexpected(std::forward<Self>(self));
         }
-        return {Narrowed(std::move(*code_result), std::forward<Self>(self)._trace)};
+        return {Narrowed(std::move(*code_result), std::forward<Self>(self)._trace, std::forward<Self>(self)._source)};
     }
 
     // This error with only the codes Fs if it holds one of them, otherwise with only its other codes; a set among Fs stands for its codes.
@@ -207,7 +225,10 @@ private:
     template <typename... Fs>
     friend class BasicError;
 
-    BasicError(CodeStorage code, Trace trace) : _code(std::move(code)), _trace(std::move(trace)) {}
+    BasicError(CodeStorage code, Trace trace, std::optional<xyz::indirect<ErasedError>> source)
+        : _code(std::move(code)),
+          _trace(std::move(trace)),
+          _source(std::move(source)) {}
 
     // Calls `visitor` with the code `error` holds if it is in Es, or returns nothing otherwise.
     template <typename Source, typename Visitor>
@@ -219,6 +240,9 @@ private:
 
     CodeStorage _code;
     Trace _trace;
+
+    // The error this one was created from, if any.
+    std::optional<xyz::indirect<ErasedError>> _source;
 };
 
 } // namespace alp

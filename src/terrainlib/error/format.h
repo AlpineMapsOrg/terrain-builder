@@ -6,7 +6,6 @@
 
 #include <fmt/format.h>
 
-#include "PrunedLocation.h"
 #include "enumerate.h"
 #include "error/Error.h"
 #include "error/ErrorCode.h"
@@ -48,13 +47,11 @@ struct fmt::formatter<alp::BasicError<Es...>> {
             return output;
 
         case Form::Report:
-            output = fmt::format_to(output, "{}\n\nTrace:", cause);
-            for (const auto [number, frame] : enumerate<uint32_t>(frames)) {
-                output = fmt::format_to(output, "\n    {}: ", number);
-                if (frame.message.has_value()) {
-                    output = fmt::format_to(output, "{}\n       ", *frame.message);
-                }
-                output = fmt::format_to(output, "{}", PrunedLocation{frame.location});
+            output = fmt::format_to(output, "{}", cause);
+            output = format_frames(output, frames);
+            for (const alp::ErasedError *source = error.source(); source != nullptr; source = source->source()) {
+                output = fmt::format_to(output, "\n\nCaused by: {}", *source);
+                output = format_frames(output, source->frames());
             }
             return output;
         }
@@ -62,6 +59,14 @@ struct fmt::formatter<alp::BasicError<Es...>> {
     }
 
 private:
+    // Writes each of `frames` on a line of its own, numbered from the origin.
+    static fmt::format_context::iterator format_frames(fmt::format_context::iterator output, const std::span<const alp::Frame> frames) {
+        for (const auto [number, frame] : enumerate<uint32_t>(frames)) {
+            output = fmt::format_to(output, "\n    {}: {}", number, frame);
+        }
+        return output;
+    }
+
     // How an error was asked to format.
     enum class Form {
         // The cause message.
@@ -70,7 +75,7 @@ private:
         // Its cause and all of its messages on one line, innermost first.
         Chain,
 
-        // Its cause, then every place it was, innermost first, each with what was being done there.
+        // Its cause and every place it was, one per line starting at its origin, then the same for each error it was created from, the one it was directly created from first.
         Report,
     };
 

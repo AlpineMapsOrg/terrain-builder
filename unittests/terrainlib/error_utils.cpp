@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_range_equals.hpp>
 
 #include <cstdint>
 #include <expected>
@@ -8,6 +9,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -25,6 +27,14 @@ enum class FileError {
 
 std::string_view format_as(const FileError) {
     return "file not found";
+}
+
+enum class ConfigError {
+    Missing,
+};
+
+std::string_view format_as(const ConfigError) {
+    return "the configuration is missing";
 }
 
 // A value that counts how often it is formatted.
@@ -61,6 +71,53 @@ TEST_CASE("make_error creates an erased error from text that originates at the l
 
     CHECK(fmt::to_string(error).contains("round 3 made no progress"));
     CHECK(is_same_location(error.origin(), location));
+}
+
+TEST_CASE("make_error with an inner code or error creates an error with its code that originates at the location it is handed and was created from the inner one", "[error][utils]") {
+    SECTION("code") {
+        const std::source_location location = std::source_location::current();
+        const alp::Error<ConfigError> error = alp::make_error(ConfigError::Missing, FileError::NotFound, location);
+
+        CHECK(error.code() == ConfigError::Missing);
+        const std::vector<alp::Frame> expected{
+            {.location = location},
+        };
+        CHECK_THAT(error.frames(), Catch::Matchers::RangeEquals(expected, is_same_frame));
+        REQUIRE(error.source() != nullptr);
+        CHECK(error.source()->holds_code(FileError::NotFound));
+        CHECK_THAT(error.source()->frames(), Catch::Matchers::RangeEquals(expected, is_same_frame));
+        CHECK(error.source()->source() == nullptr);
+    }
+
+    SECTION("error") {
+        const std::source_location origin = std::source_location::current();
+        const std::source_location context_location = std::source_location::current();
+        alp::Error<FileError> inner = alp::make_error(FileError::NotFound, "opening app.cfg", origin).context("reading the configuration", context_location);
+        const std::source_location location = std::source_location::current();
+        const alp::Error<ConfigError> error = alp::make_error(ConfigError::Missing, std::move(inner), location);
+
+        CHECK(error.code() == ConfigError::Missing);
+        const std::vector<alp::Frame> expected{
+            {.location = location},
+        };
+        CHECK_THAT(error.frames(), Catch::Matchers::RangeEquals(expected, is_same_frame));
+        REQUIRE(error.source() != nullptr);
+        CHECK(error.source()->holds_code(FileError::NotFound));
+        const std::vector<alp::Frame> expected_inner{
+            {.message = "opening app.cfg", .location = origin},
+            {.message = "reading the configuration", .location = context_location},
+        };
+        CHECK_THAT(error.source()->frames(), Catch::Matchers::RangeEquals(expected_inner, is_same_frame));
+    }
+
+    SECTION("error created from another error") {
+        alp::Error<ConfigError> inner = alp::make_error(ConfigError::Missing, alp::make_error(FileError::NotFound));
+        const alp::Error<ConfigError> error = alp::make_error(ConfigError::Missing, std::move(inner));
+
+        REQUIRE(error.source() != nullptr);
+        REQUIRE(error.source()->source() != nullptr);
+        CHECK(error.source()->source()->holds_code(FileError::NotFound));
+    }
 }
 
 TEST_CASE("make_unexpected creates an error with its code and only its origin", "[error][utils]") {

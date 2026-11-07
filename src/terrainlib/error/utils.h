@@ -14,6 +14,7 @@
 #include "error/ErrorCode.h"
 #include "error/Result.h"
 #include "optional_utils.h"
+#include "type_utils.h"
 
 namespace alp {
 
@@ -29,6 +30,25 @@ template <ErrorCode E>
 [[nodiscard]]
 Error<E> make_error(E code, Context auto &&context, const std::source_location location = std::source_location::current()) {
     return Error<E>(std::move(code), std::forward<decltype(context)>(context), location);
+}
+
+// Creates an error with `code` that originates at the caller, created from `inner`, or from an error with the code `inner` that originates there too.
+template <ErrorCode E, typename F> requires(ErrorCode<F> || is_specialization_of_v<F, BasicError>)
+[[nodiscard]]
+Error<E> make_error(E code, F inner, const std::source_location location = std::source_location::current()) {
+    if constexpr (ErrorCode<F>) {
+        return Error<E>(std::move(code), Error<F>(std::move(inner), location), location);
+    } else {
+        return Error<E>(std::move(code), std::move(inner), location);
+    }
+}
+
+// Creates an error with `code` that originates at the caller, created from `inner`, or from an error with the code `inner` that originates there too, with `context` added at the caller.
+template <ErrorCode E, typename F> requires(ErrorCode<F> || is_specialization_of_v<F, BasicError>)
+[[nodiscard]]
+Error<E> make_error(E code, Context auto &&context, F inner, const std::source_location location = std::source_location::current()) {
+    return make_error(std::move(code), std::move(inner), location)
+        .context(std::forward<decltype(context)>(context), location);
 }
 
 // Creates an erased error from `message` that originates at the caller.
