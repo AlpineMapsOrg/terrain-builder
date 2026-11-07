@@ -7,6 +7,10 @@
 #include <utility>
 #include <vector>
 
+#include <fmt/format.h>
+
+#include "PrunedLocation.h"
+
 namespace alp {
 
 // A point an error was at: where it originated, was propagated or was given context.
@@ -17,6 +21,15 @@ struct Frame {
     // Where in the source this point is.
     std::source_location location;
 };
+
+// The frame's message, if it has one, and where it is.
+inline std::string format_as(const Frame &frame) {
+    if (frame.message.has_value()) {
+        return fmt::format("{} ({})", *frame.message, PrunedLocation{frame.location});
+    } else {
+        return fmt::to_string(PrunedLocation{frame.location});
+    }
+}
 
 // The points an error was at, starting where it originated.
 class Trace {
