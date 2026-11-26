@@ -347,29 +347,4 @@ alp::Result<std::vector<radix::geometry::Aabb3d>, Error> compute_from_ecef(const
     return result;
 }
 
-alp::Result<std::vector<radix::tile::SrsBounds>, WrapLongitudesError> wrap_longitudes(const System &reference, const radix::tile::SrsBounds &bounds, const glm::dvec2 &centre) {
-    const auto context = alp::make_context("wrapping longitudes in {}", reference);
-    if (reference.kind() != Kind::Geographic) {
-        return alp::make_error(NotGeographic{}, context);
-    }
-
-    const std::optional<LongitudeLatitudeAxes> longitude_latitude_axes_opt = longitude_latitude_axes(reference);
-    if (!longitude_latitude_axes_opt.has_value()) {
-        return alp::make_error(UnsupportedAxisOrder{}, context);
-    }
-    const IndexedAxis longitude = longitude_latitude_axes_opt->longitude;
-    // The bounds are horizontal, so their longitude has to be one of their two dimensions.
-    if (longitude.index >= 2) {
-        return alp::make_error(UnsupportedAxisOrder{}, context);
-    }
-
-    const glm::length_t dimension = static_cast<glm::length_t>(longitude.index);
-    glm::bvec2 longitude_only(false);
-    longitude_only[dimension] = true;
-    glm::dvec2 period(0);
-    period[dimension] = convert(2 * std::numbers::pi, units::radian, longitude.axis.unit);
-    const std::vector<radix::geometry::Aabb<2, double>> wrapped = geometry::wrap_into_periods(bounds, longitude_only, centre, period);
-    return std::vector<radix::tile::SrsBounds>(wrapped.begin(), wrapped.end());
-}
-
 }

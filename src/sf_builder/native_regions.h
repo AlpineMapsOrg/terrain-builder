@@ -29,10 +29,11 @@
 #include "gis/srs/System.h"
 #include "gis/srs/Transform.h"
 #include "gis/srs/coverage.h"
+#include "gis/srs/geographic.h"
 
 namespace sf {
 
-using ComputeNativeRegionsError = alp::Error<gis::srs::coverage::Error, gis::srs::coverage::WrapLongitudesError>;
+using ComputeNativeRegionsError = alp::Error<gis::srs::coverage::Error, gis::srs::WrapLongitudesError>;
 // Computes the bounds in the dataset's srs that cover the ECEF bounds.
 // For a geographic srs, longitudes lie in the turn centred on the native bounds, and bounds crossing its edges are split there.
 [[nodiscard]]
@@ -43,7 +44,7 @@ alp::Result<std::vector<radix::tile::SrsBounds>, ComputeNativeRegionsError> comp
 [[nodiscard]]
 std::vector<radix::tile::SrsBounds> clip_to_native_bounds(const std::vector<radix::tile::SrsBounds>& regions, const radix::tile::SrsBounds& native_bounds);
 
-using IntersectsNativeBoundsError = alp::Error<gis::srs::coverage::UnsupportedSystem, gis::srs::coverage::UnsupportedBounds, gis::srs::UnsupportedTransform, gis::srs::coverage::NotGeographic>;
+using IntersectsNativeBoundsError = alp::Error<gis::srs::coverage::UnsupportedSystem, gis::srs::coverage::UnsupportedBounds, gis::srs::UnsupportedTransform, gis::srs::NotGeographic>;
 // Whether any part of the ECEF bounds lies within the dataset's native bounds.
 // Bounds the dataset's srs cannot express lie outside.
 [[nodiscard]]

@@ -72,6 +72,7 @@ add_executable(unittests_terrainlib
     terrainlib/gis_srs_classify.cpp
     terrainlib/gis_srs_coverage.cpp
     terrainlib/gis_srs_detail_benchmark.cpp
+    terrainlib/gis_srs_geographic.cpp
     terrainlib/gis_srs_system.cpp
     terrainlib/gis_srs_thread_local_system.cpp
     terrainlib/gis_srs_transform.cpp

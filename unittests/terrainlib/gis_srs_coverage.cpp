@@ -17,7 +17,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "../catch2_helpers.h"
 #include "../result_helpers.h"
 #include "gis/srs/System.h"
 #include "gis/srs/coverage.h"
@@ -296,51 +295,3 @@ TEST_CASE("compute_from_ecef rejects systems it cannot cover", "[gis][srs][cover
         CHECK(error.holds<gis::srs::UnsupportedAxisOrder>());
     }
 }
-
-TEST_CASE("wrap_longitudes shifts bounds into the half circle around the longitude of the centre", "[gis][srs][coverage]")
-{
-    const auto wrapped = REQUIRE_VALUE(gis::srs::coverage::wrap_longitudes(gis::srs::wgs84(), { { -170, -5 }, { -160, 5 } }, { 185, 0 }));
-
-    CHECK_THAT(wrapped, UnorderedWithinEpsilon(std::vector<radix::tile::SrsBounds> { { { 190, -5 }, { 200, 5 } } }));
-}
-
-TEST_CASE("wrap_longitudes wraps the longitude wherever it is among the data axes", "[gis][srs][coverage]")
-{
-    OGRSpatialReference authority_srs;
-    REQUIRE(authority_srs.importFromEPSG(4326) == OGRERR_NONE);
-    const gis::srs::System latitude_first(std::move(authority_srs));
-
-    const auto wrapped = REQUIRE_VALUE(gis::srs::coverage::wrap_longitudes(latitude_first, { { -5, -170 }, { 5, -160 } }, { 0, 185 }));
-
-    CHECK_THAT(wrapped, UnorderedWithinEpsilon(std::vector<radix::tile::SrsBounds> { { { -5, 190 }, { 5, 200 } } }));
-}
-
-TEST_CASE("wrap_longitudes wraps by a full circle in the unit of the longitude", "[gis][srs][coverage]")
-{
-    const auto grads = REQUIRE_VALUE(gis::srs::from_user_input(
-        R"(GEOGCRS["grads",DATUM["World Geodetic System 1984",ELLIPSOID["WGS 84",6378137,298.257223563]],CS[ellipsoidal,2],AXIS["longitude",east,ANGLEUNIT["grad",0.015707963267949]],AXIS["latitude",north,ANGLEUNIT["grad",0.015707963267949]]])"));
-
-    const auto wrapped = REQUIRE_VALUE(gis::srs::coverage::wrap_longitudes(grads, { { -210, 10 }, { -200, 20 } }, { 200, 0 }));
-
-    CHECK_THAT(wrapped, UnorderedWithinEpsilon(std::vector<radix::tile::SrsBounds> { { { 190, 10 }, { 200, 20 } } }));
-}
-
-TEST_CASE("wrap_longitudes fails for a system that is not geographic", "[gis][srs][coverage]")
-{
-    const auto error = REQUIRE_ERROR(gis::srs::coverage::wrap_longitudes(gis::srs::webmercator(), { { -170, -5 }, { -160, 5 } }, { 185, 0 }));
-
-    CHECK(error.holds<gis::srs::coverage::NotGeographic>());
-}
-
-// TODO: enable once gis::srs::System reads per-axis units; System::axes() reports the metre axes of a geographic system as radians (see the merge todo).
-/*
-TEST_CASE("wrap_longitudes fails without an angular longitude", "[gis][srs][coverage]")
-{
-    const auto metres = REQUIRE_VALUE(gis::srs::from_user_input(
-        R"(GEOGCRS["metres",DATUM["World Geodetic System 1984",ELLIPSOID["WGS 84",6378137,298.257223563]],CS[ellipsoidal,2],AXIS["longitude",east,LENGTHUNIT["metre",1]],AXIS["latitude",north,LENGTHUNIT["metre",1]]])"));
-
-    const auto error = REQUIRE_ERROR(gis::srs::coverage::wrap_longitudes(metres, { { -170, -5 }, { -160, 5 } }, { 185, 0 }));
-
-    CHECK(error.holds<gis::srs::UnsupportedAxisOrder>());
-}
-*/

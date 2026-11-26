@@ -47,6 +47,7 @@
 #include "gis/srs/System.h"
 #include "gis/srs/Transform.h"
 #include "gis/srs/coverage.h"
+#include "gis/srs/geographic.h"
 #include "gis/srs/well_known.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
@@ -243,7 +244,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     ALP_TRY_CONTEXT(const radix::tile::SrsBounds native_bounds, alp::wrap_error(std::move(native_bounds_result), UnsupportedDataset{}), context);
     auto regions_result = compute_native_regions(source_srs, native_bounds, ecef_clip_bounds).transform_error([&](ComputeNativeRegionsError error) {
         return std::move(error)
-            .map<gis::srs::coverage::UnsupportedSystem, gis::srs::UnsupportedTransform, gis::srs::coverage::NotGeographic>(UnsupportedDataset{})
+            .map<gis::srs::coverage::UnsupportedSystem, gis::srs::UnsupportedTransform, gis::srs::NotGeographic>(UnsupportedDataset{})
             .map<gis::srs::coverage::UnsupportedBounds>(UnsupportedClip{})
             .map<gis::UntransformablePoint>(OutOfBounds{});
     });

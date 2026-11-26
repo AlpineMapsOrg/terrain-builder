@@ -52,6 +52,7 @@
 #include "gis/srs/System.h"
 #include "gis/srs/ThreadLocalSystem.h"
 #include "gis/srs/coverage.h"
+#include "gis/srs/geographic.h"
 #include "gis/srs/well_known.h"
 #include "inputs.h"
 #include "io/json/Value.h"
@@ -238,7 +239,7 @@ bool intersects_dataset(
 }
 
 // The nodes at `target_level` below `root` that may hold terrain of the dataset.
-alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::srs::coverage::NotGeographic> select_target_nodes(
+alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::srs::NotGeographic> select_target_nodes(
     const octree::Space &space,
     const octree::Id &root,
     const octree::Id::Level target_level,
@@ -254,7 +255,7 @@ alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::sr
     const gis::srs::ThreadLocalSystem wgs84_srs(gis::srs::wgs84());
     const radix::tile::SrsBounds native_bounds(dataset_bounds);
     tbb::concurrent_vector<octree::Id> concurrent_targets;
-    ALP_TRY(parallel::try_for_each(std::views::single(root), [&](const octree::Id &node, parallel::Feeder<octree::Id> &feeder) -> alp::Result<void, Stopped, gis::srs::coverage::Error, gis::srs::coverage::NotGeographic> {
+    ALP_TRY(parallel::try_for_each(std::views::single(root), [&](const octree::Id &node, parallel::Feeder<octree::Id> &feeder) -> alp::Result<void, Stopped, gis::srs::coverage::Error, gis::srs::NotGeographic> {
         // Check if node intersects with ecef bounds of dataset
         const auto node_bounds = space.get_node_bounds(node);
         const auto context = alp::make_context("checking whether node {} may hold terrain", node);

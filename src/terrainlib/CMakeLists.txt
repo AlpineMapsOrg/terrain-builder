@@ -123,6 +123,7 @@ add_library(terrainlib
     gis/srs/classify.h gis/srs/classify.cpp
     gis/srs/coverage.h gis/srs/coverage.cpp
     gis/srs/detail.h gis/srs/detail.cpp
+    gis/srs/geographic.h gis/srs/geographic.cpp
     gis/srs/error.h
     gis/srs/well_known.h
     gis/vector_mask.h gis/vector_mask.cpp

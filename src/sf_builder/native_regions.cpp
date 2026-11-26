@@ -37,7 +37,7 @@ alp::Result<std::vector<radix::tile::SrsBounds>, ComputeNativeRegionsError> comp
     for (const radix::geometry::Aabb3d& bounds : coverage) {
         const radix::tile::SrsBounds horizontal_bounds(bounds);
         if (is_geographic) {
-            ALP_TRY(const std::vector<radix::tile::SrsBounds> wrapped, gis::srs::coverage::wrap_longitudes(dataset_srs, horizontal_bounds, native_bounds.centre()));
+            ALP_TRY(const std::vector<radix::tile::SrsBounds> wrapped, gis::srs::wrap_longitudes(dataset_srs, horizontal_bounds, native_bounds.centre()));
             regions.append_range(wrapped);
         } else {
             regions.push_back(horizontal_bounds);
