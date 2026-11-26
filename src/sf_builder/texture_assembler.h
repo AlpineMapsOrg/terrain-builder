@@ -122,7 +122,7 @@ namespace sf {
 
         // Check if we even require this tile to fill the target region.
         const radix::tile::SrsBounds tile_bounds = gis::webmercator::compute_tile_bounds(tile);
-        if (!radix::geometry::intersect(target_bounds, tile_bounds)) {
+        if (!radix::geometry::intersect_inclusive(target_bounds, tile_bounds)) {
             return true;
         }
 

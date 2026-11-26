@@ -19,10 +19,10 @@
 
 #include "native_regions.h"
 
+#include <optional>
 #include <utility>
 
 #include "error/try.h"
-#include "geometry/geometry.h"
 #include "gis/srs/Kind.h"
 
 namespace sf {
@@ -49,9 +49,9 @@ alp::Result<std::vector<radix::tile::SrsBounds>, ComputeNativeRegionsError> comp
 std::vector<radix::tile::SrsBounds> clip_to_native_bounds(const std::vector<radix::tile::SrsBounds>& regions, const radix::tile::SrsBounds& native_bounds) {
     std::vector<radix::tile::SrsBounds> windows;
     for (const radix::tile::SrsBounds& region : regions) {
-        const radix::tile::SrsBounds window = radix::geometry::intersection(region, native_bounds);
-        if (!geometry::is_empty(window)) {
-            windows.push_back(window);
+        const std::optional<radix::tile::SrsBounds> window_opt = radix::geometry::intersection_strict(region, native_bounds);
+        if (window_opt.has_value()) {
+            windows.push_back(*window_opt);
         }
     }
     return windows;

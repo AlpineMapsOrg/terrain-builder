@@ -280,7 +280,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
                 .map<gis::srs::coverage::UnsupportedBounds, gis::srs::TransformError>(UntransformableMesh{});
         });
         ALP_TRY_CONTEXT(const radix::geometry::Aabb3d actual_ecef_bounds, std::move(actual_ecef_bounds_result), context);
-        if (!radix::geometry::intersect(actual_ecef_bounds, ecef_clip_bounds)) {
+        if (!radix::geometry::intersect_inclusive(actual_ecef_bounds, ecef_clip_bounds)) {
             return alp::make_error(EmptyRegion{}, "the heights lie outside the clip bounds").context(context);
         }
     }

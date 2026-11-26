@@ -30,6 +30,7 @@ add_library(terrainlib
     build_config.h
     common_error_codes.h
     enumerate.h
+    expected_utils.h
     fmt_impls.h
     glm_utils.h
     hash_utils.h
@@ -152,6 +153,7 @@ add_library(terrainlib
     io/image.h io/image.cpp
     io/image/Format.h
     io/image/JxlError.h
+    io/image/TurboJpegError.h
     io/json.h
     io/json/Value.h
     io/json/file.h io/json/file.cpp
@@ -193,12 +195,6 @@ add_library(terrainlib
     mesh/encode_error.h
     mesh/geometry.h mesh/geometry.cpp
     mesh/holes.h mesh/holes.cpp
-    mesh/igl/convert.h
-    mesh/igl/cut.h
-    mesh/igl/cut_to_disk.h
-    mesh/igl/igl.cpp
-    mesh/igl/manifold.h
-    mesh/igl/orient.h
     mesh/io.h mesh/io.cpp
     mesh/io/CgltfError.h
     mesh/io/gltf.h mesh/io/gltf.cpp
@@ -228,6 +224,7 @@ add_library(terrainlib
 
     numeric/StrongDouble.h
     numeric/checked.h
+    numeric/checked_cast.h
     numeric/glm_math.h
     numeric/int_math.h
     numeric/number_types.h
@@ -279,6 +276,7 @@ add_library(terrainlib
     raster/algorithm/reduce.h
     raster/algorithm/reducers.h
     raster/algorithm/scale.h
+    raster/algorithm/sample_alignment.h
     raster/algorithm/scaling_detail.h
     raster/algorithm/transform.h
     raster/algorithm/window_transform.h
@@ -286,10 +284,11 @@ add_library(terrainlib
 
     raster_store/StoreTraits.h
     raster_store/Tile.h
-    raster_store/TileCodec.h
     raster_store/TilePool.h
     raster_store/attribution/Table.h
     raster_store/attribution/table_file.h raster_store/attribution/table_file.cpp
+    raster_store/io/TileCodec.h
+    raster_store/io/float_predictor.h raster_store/io/float_predictor.cpp
     raster_store/path_layout.h
     raster_store/path_layout/zoom_x_y_google.h
     raster_store/pixel.h
@@ -345,7 +344,6 @@ add_library(terrainlib
     uv/unwrap.h uv/unwrap.cpp
 )
 set_source_files_properties(
-    mesh/igl/igl.cpp
     mesh/io/gltf.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 )
@@ -380,8 +378,6 @@ target_link_libraries(terrainlib PUBLIC
     magic_enum::magic_enum
     meshoptimizer
     WideInteger
-    igl::core
-    igl_restricted::triangle
     xatlas
 )
 
@@ -389,5 +385,5 @@ target_link_libraries(terrainlib PUBLIC
 target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
 # Only io/hash.cpp includes xxHash.
 target_link_libraries(terrainlib PRIVATE xxhash)
-# Only io/image.cpp and io/image/JxlError.h include libjxl.
-target_link_libraries(terrainlib PRIVATE JpegXL::jxl)
+# Only io/image.cpp and io/image/JxlError.h include libjxl, and only io/image.cpp and io/image/TurboJpegError.h include TurboJPEG.
+target_link_libraries(terrainlib PRIVATE JpegXL::jxl libjpeg-turbo::turbojpeg-static)

@@ -175,11 +175,11 @@ alp::Result<std::vector<radix::tile::SrsBounds>, Error> compute_mercator(const S
     // Avoid the geographic round trip, it would widen exact Web Mercator bounds by a guard band.
     if (reference.is_same(mercator) && bounds.min.x >= -webmercator::half_extent && bounds.max.x <= webmercator::half_extent) {
         const radix::tile::SrsBounds world { -half_extent, half_extent };
-        const radix::tile::SrsBounds clipped = radix::geometry::intersection(bounds, world);
-        if (geometry::is_empty(clipped)) {
+        const std::optional<radix::tile::SrsBounds> clipped_opt = radix::geometry::intersection_strict(bounds, world);
+        if (!clipped_opt.has_value()) {
             return std::vector<radix::tile::SrsBounds> {};
         }
-        return std::vector<radix::tile::SrsBounds> { clipped };
+        return std::vector<radix::tile::SrsBounds> { *clipped_opt };
     }
     ALP_TRY_CONTEXT(const std::vector<radix::tile::SrsBounds> geographic, compute_geographic(reference, bounds), context);
     ALP_TRY_CONTEXT(const Transform transform, get_transform(wgs84(), mercator), context);

@@ -20,6 +20,9 @@
 
 #include <libassert/assert.hpp>
 
+#include "fmt_impls.h"
+#include "geometry/geometry.h"
+
 namespace octree {
 
 namespace detail {
@@ -39,7 +42,7 @@ inline bool contains_inclusive(const Bounds &outer, const Bounds &inner, const d
 } // namespace detail
 
 Space::Space(Bounds bounds) : _bounds(bounds) {
-    DEBUG_ASSERT(glm::all(glm::greaterThan(this->_bounds.size(), glm::dvec3(0))));
+    ASSERT(geometry::is_finite(this->_bounds) && !geometry::is_empty(this->_bounds), this->_bounds);
 }
 
 Space Space::earth() {

@@ -228,7 +228,7 @@ bool intersects_dataset(
         }
         const radix::tile::SrsBounds horizontal_bounds(region_bounds);
         for (const radix::tile::SrsBounds &dataset_region_bounds : dataset_coverage) {
-            if (radix::geometry::intersect(horizontal_bounds, dataset_region_bounds)) {
+            if (radix::geometry::intersect_inclusive(horizontal_bounds, dataset_region_bounds)) {
                 return true;
             }
         }
@@ -259,7 +259,7 @@ alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::sr
         // Check if node intersects with ecef bounds of dataset
         const auto node_bounds = space.get_node_bounds(node);
         const auto context = alp::make_context("checking whether node {} may hold terrain", node);
-        if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
+        if (!radix::geometry::intersect_inclusive(node_bounds, ecef_bounds)) {
             return {};
         }
         if (lies_within_terrain_free_radius(node_bounds)) {

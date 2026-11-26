@@ -1,6 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-// single file that includes all .cpp's that use libigl
+#pragma once
 
-#include "cut.cpp"
-#include "cut_to_disk.cpp"
-#include "orient.cpp"
-#include "manifold.cpp"
+namespace raster::algorithm {
+
+enum class SampleAlignment {
+    // Sample positions are i + 0.5; scaling maps x to (x + 0.5) / scale - 0.5.
+    CellCenters,
+    // Sample positions are i; scaling maps x to x / scale.
+    GridNodes,
+};
+
+} // namespace raster::algorithm

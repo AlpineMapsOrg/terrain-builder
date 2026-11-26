@@ -20,20 +20,71 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <catch2/catch_test_macros.hpp>
 #include <radix/raster.h>
 
 #include "../result_helpers.h"
 #include "io/WriteMode.h"
+#include "io/envelope.h"
 #include "io/text.h"
 #include "raster_store/attribution/table_file.h"
+#include "raster_store/pixel.h"
 #include "raster_store/storage.h"
 
 namespace raster_store_test {
+
+// Copies of the layouts of the raster metadata file, so that tests can write files that write_metadata never would.
+namespace v1 {
+
+    struct Metadata {
+        std::string layout_id;
+        std::string payload_class;
+        std::string codec_id;
+        uint32_t stored_tile_size;
+        uint32_t nominal_tile_size;
+        uint32_t halo_width;
+        raster_store::pixel::Mapping value_mapping;
+    };
+
+} // namespace v1
+
+namespace v2 {
+
+    struct Metadata {
+        std::string layout_id;
+        std::string payload_class;
+        std::string codec_id;
+        uint32_t stored_tile_size;
+        uint32_t nominal_tile_size;
+        uint32_t halo_width;
+        raster_store::pixel::Mapping value_mapping;
+        raster_store::pixel::Placement placement;
+        uint32_t overlap;
+
+        static Metadata from_previous(v1::Metadata previous) {
+            return {
+                .layout_id = std::move(previous.layout_id),
+                .payload_class = std::move(previous.payload_class),
+                .codec_id = std::move(previous.codec_id),
+                .stored_tile_size = previous.stored_tile_size,
+                .nominal_tile_size = previous.nominal_tile_size,
+                .halo_width = previous.halo_width,
+                .value_mapping = previous.value_mapping,
+                .placement = raster_store::pixel::Placement::Area,
+                .overlap = 0,
+            };
+        }
+    };
+
+} // namespace v2
+
+using MetadataSchema = io::envelope::PayloadSchema<"raster_store.Metadata", io::envelope::Version<1, v1::Metadata>, io::envelope::Version<2, v2::Metadata>>;
 
 inline constexpr std::string_view entity_json =
     R"({"spatial_resolution":0.25,"acquisition_date":"summer 2020","ingestion_date":"2026-09-08",)"

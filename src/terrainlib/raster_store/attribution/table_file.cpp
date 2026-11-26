@@ -94,16 +94,16 @@ alp::Result<Table, ParseError> parse(const std::string_view json) {
 }
 
 alp::Result<std::filesystem::path, FindTableError> find_table(const std::filesystem::path& storage_path) {
-    ALP_TRY(const std::filesystem::path absolute_path, io::filesystem::absolute(storage_path));
+    ALP_TRY(const std::filesystem::path absolute_path, ::io::filesystem::absolute(storage_path));
     std::filesystem::path directory = paths::normalized(absolute_path);
     for (int level = 0; level < 3; level++) {
         const std::filesystem::path path = directory / file_name;
         // A broken symlink counts as the table, so that a storage never falls back to an ancestor's table without notice.
-        ALP_TRY(const bool is_symlink, io::filesystem::is_symlink(path));
+        ALP_TRY(const bool is_symlink, ::io::filesystem::is_symlink(path));
         if (is_symlink) {
             return path;
         }
-        ALP_TRY(const bool exists, io::filesystem::exists(path));
+        ALP_TRY(const bool exists, ::io::filesystem::exists(path));
         if (exists) {
             return path;
         }
@@ -116,7 +116,7 @@ alp::Result<Table, ReadTableError> read_table(const std::filesystem::path& stora
     ALP_TRY(const std::filesystem::path path, find_table(storage_path));
 
     const auto context = alp::make_context("reading the attribution table at {}", path);
-    ALP_TRY_CONTEXT(const io::bytes::vector bytes, io::bytes::read(path), context);
+    ALP_TRY_CONTEXT(const ::io::bytes::vector bytes, ::io::bytes::read(path), context);
     const std::string_view json(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     ALP_TRY_CONTEXT(Table table, parse(json), context);
 
@@ -127,7 +127,7 @@ alp::Result<void, CopyTableError> copy_table(const std::filesystem::path& source
     ALP_TRY(const std::filesystem::path source, find_table(source_storage_path));
     const std::filesystem::path destination = destination_directory / file_name;
 
-    ALP_TRY(io::filesystem::copy_file(source, destination));
+    ALP_TRY(::io::filesystem::copy_file(source, destination));
 
     return {};
 }

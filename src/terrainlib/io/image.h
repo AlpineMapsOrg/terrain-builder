@@ -88,6 +88,7 @@ using DecodeError = alp::Error<CorruptData, AllocError, Unsupported, Unknown>;
 
 // Decodes the 8-bit image that `bytes` encodes, with its first row at the top and EXIF orientation ignored, dropping alpha or adding opaque alpha as `Image` needs.
 // Fails if the image's size differs from `options.expected_size`.
+// Fails for a CMYK JPEG image.
 template <ImageRaster Image>
 [[nodiscard]]
 alp::Result<Image, DecodeError> decode(bytes::span bytes, DecodeOptions options = {});

@@ -37,7 +37,7 @@
 #include "error/utils.h"
 #include "io/compression.h"
 #include "raster_store/Tile.h"
-#include "raster_store/TileCodec.h"
+#include "raster_store/io/TileCodec.h"
 #include "raster_store/attribution/table_file.h"
 #include "raster_store/pixel.h"
 #include "raster_store/storage/Index.h"
@@ -75,7 +75,7 @@ alp::Result<Storage<PixelType>, OpenError> open(const std::filesystem::path& pat
     ALP_TRY_CONTEXT(attribution::read_table(path), context);
 
     // Open the storage
-    const auto resolve_codec = [&metadata](const std::string_view id) { return tile_codec::resolve<PixelType>(id, metadata.stored_tile_size); };
+    const auto resolve_codec = [&metadata](const std::string_view id) { return io::tile_codec::resolve<PixelType>(id, metadata.stored_tile_size); };
     auto open_result = store::open<Index, Tile<PixelType>>(path, index_format(), metadata.ids, payload_class<PixelType>, resolve_codec, accept);
     ALP_TRY_CONTEXT(auto storage, std::move(open_result), context);
 
@@ -85,10 +85,13 @@ alp::Result<Storage<PixelType>, OpenError> open(const std::filesystem::path& pat
 struct CreateOptions {
     uint32_t nominal_tile_size = default_tile_side;
     uint32_t halo_width = 0;
+    pixel::Placement placement = pixel::Placement::Area;
+    // One for vertex tiles, which store the eastern column and southern row that close their grid.
+    uint32_t overlap = 0;
     // The pixel type's default mapping if not given.
     std::optional<pixel::Mapping> value_mapping = std::nullopt;
-    std::string codec_id = std::string(tile_codec::amort_id);
-    io::compression::Algorithm compression_algorithm = io::compression::Algorithm::ZstdDefault;
+    std::string codec_id = std::string(io::tile_codec::amort_id);
+    ::io::compression::Algorithm compression_algorithm = ::io::compression::Algorithm::ZstdDefault;
     // The storage whose attribution table the new storage gets a copy of; without one, it uses the table found beside it.
     std::optional<std::filesystem::path> copy_attribution_from = std::nullopt;
 };
@@ -111,13 +114,15 @@ alp::Result<Draft<PixelType>, CreateError> create(const std::filesystem::path& f
             .codec_id = options.codec_id,
         },
         // validate rejects a sum that wraps.
-        .stored_tile_size = options.nominal_tile_size + 2 * options.halo_width,
+        .stored_tile_size = options.nominal_tile_size + options.overlap + 2 * options.halo_width,
         .nominal_tile_size = options.nominal_tile_size,
         .halo_width = options.halo_width,
         .value_mapping = options.value_mapping.value_or(pixel::default_mapping<PixelType>),
+        .placement = options.placement,
+        .overlap = options.overlap,
     };
     ALP_TRY_CONTEXT(alp::wrap_error(validate(metadata), InvalidOptions{}), context);
-    ALP_TRY_CONTEXT(auto codec, tile_codec::resolve<PixelType>(metadata.ids.codec_id, metadata.stored_tile_size, options.compression_algorithm), context);
+    ALP_TRY_CONTEXT(auto codec, io::tile_codec::resolve<PixelType>(metadata.ids.codec_id, metadata.stored_tile_size, options.compression_algorithm), context);
     // The tiles' attribution indices refer to this table, so nothing is created without a valid one.
     const std::filesystem::path table_source = options.copy_attribution_from.value_or(final_path);
     ALP_TRY_CONTEXT(attribution::read_table(table_source), context);

@@ -107,8 +107,6 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_codec.cpp
     terrainlib/mesh_combine.cpp
     terrainlib/mesh_connected_components.cpp
-    terrainlib/mesh_cut.cpp
-    terrainlib/mesh_cut_to_disk.cpp
     terrainlib/mesh_encode.cpp
     terrainlib/mesh_holes.cpp
     terrainlib/mesh_io.cpp
@@ -145,12 +143,15 @@ add_executable(unittests_terrainlib
     terrainlib/raster_fold.cpp
     terrainlib/raster_store_attribution_table.cpp
     terrainlib/raster_store_attribution_table_file.cpp
+    terrainlib/raster_store_io_float_predictor.cpp
+    terrainlib/raster_store_io_tile_codec.cpp
+    terrainlib/raster_store_io_tile_codec_benchmark.cpp
     terrainlib/raster_store_path_layout.cpp
     terrainlib/raster_store_storage.cpp
     terrainlib/raster_store_storage_index_format.cpp
+    terrainlib/raster_store_storage_metadata.cpp
     terrainlib/raster_store_store_traits.cpp
     terrainlib/raster_store_test_utils.h
-    terrainlib/raster_store_tile_codec.cpp
     terrainlib/raster_tile_pool.cpp
     terrainlib/raster_view.cpp
     terrainlib/segmented_buffer.cpp
@@ -180,7 +181,8 @@ add_executable(unittests_terrainlib
     terrainlib/uv_atlas.cpp
     terrainlib/zpp_bits_utils.cpp
 )
-target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain)
+# io_image.cpp creates CMYK JPEG images with TurboJPEG.
+target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain libjpeg-turbo::turbojpeg-static)
 atb_configure_test(unittests_terrainlib)
 
 # Keep the aligned GLM configuration isolated from terrainlib and its PCH.

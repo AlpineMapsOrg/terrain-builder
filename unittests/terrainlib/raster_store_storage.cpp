@@ -25,6 +25,7 @@
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_precision.hpp>
 #include <radix/tile.h>
@@ -39,7 +40,7 @@
 #include "io/envelope.h"
 #include "io/filesystem.h"
 #include "raster_store/Tile.h"
-#include "raster_store/TileCodec.h"
+#include "raster_store/io/TileCodec.h"
 #include "raster_store/attribution/table_file.h"
 #include "raster_store/pixel.h"
 #include "raster_store/storage.h"
@@ -53,28 +54,13 @@ namespace {
 
 namespace attribution = raster_store::attribution;
 namespace storage = raster_store::storage;
-namespace tile_codec = raster_store::tile_codec;
-using raster_store::TileCodec;
+namespace tile_codec = raster_store::io::tile_codec;
+using raster_store::io::TileCodec;
+using raster_store_test::MetadataSchema;
 using raster_store_test::check_bytes;
 using raster_store_test::small_options;
 using raster_store_test::write_table;
 
-// A copy of the layout of version 1 of the raster metadata file, so that tests can write files that write_metadata never would.
-namespace v1 {
-
-    struct Metadata {
-        std::string layout_id;
-        std::string payload_class;
-        std::string codec_id;
-        uint32_t stored_tile_size;
-        uint32_t nominal_tile_size;
-        uint32_t halo_width;
-        raster_store::pixel::Mapping value_mapping;
-    };
-
-} // namespace v1
-
-using MetadataSchema = io::envelope::PayloadSchema<"raster_store.Metadata", io::envelope::Version<1, v1::Metadata>>;
 
 bool is_not_found(const io::FileError& error)
 {
@@ -83,15 +69,16 @@ bool is_not_found(const io::FileError& error)
 
 } // namespace
 
-TEST_CASE("AMOIT storages are available only for RGB8 payloads", "[raster_store][storage][TileCodec]")
+TEST_CASE("image tile storages are available only for RGB8 payloads", "[raster_store][storage]")
 {
-    CHECK(REQUIRE_ERROR(tile_codec::resolve<float>("amoit", 4)).holds<Unsupported>());
-    CHECK(REQUIRE_ERROR(tile_codec::resolve<glm::u8vec4>("amoit", 4)).holds<Unsupported>());
+    const std::string codec_id = GENERATE("amoit", "amojt");
+    CHECK(REQUIRE_ERROR(tile_codec::resolve<float>(codec_id, 4)).holds<Unsupported>());
+    CHECK(REQUIRE_ERROR(tile_codec::resolve<glm::u8vec4>(codec_id, 4)).holds<Unsupported>());
 
-    const TempDirectory directory("amoit-storage");
+    const TempDirectory directory("image-storage");
     write_table(directory.path());
     storage::CreateOptions options = small_options();
-    options.codec_id = "amoit";
+    options.codec_id = codec_id;
     CHECK(REQUIRE_ERROR(storage::create<float>(directory.path() / "scalar", options)).holds<Unsupported>());
     const std::filesystem::path final_path = directory.path() / "colour";
     storage::Draft<glm::u8vec3> draft = REQUIRE_VALUE(storage::create<glm::u8vec3>(final_path, options));
@@ -100,11 +87,59 @@ TEST_CASE("AMOIT storages are available only for RGB8 payloads", "[raster_store]
     tile.attribution.fill(1);
     REQUIRE_VALUE(draft.save({ 0, { 0, 0 } }, tile));
     REQUIRE_VALUE(storage::publish(std::move(draft)));
-    CHECK(REQUIRE_VALUE(io::filesystem::exists(final_path / "0/0/0.amoit")));
+    CHECK(REQUIRE_VALUE(io::filesystem::exists(final_path / ("0/0/0." + codec_id))));
 
     const storage::Storage<glm::u8vec3> opened = REQUIRE_VALUE(storage::open<glm::u8vec3>(final_path));
-    CHECK(REQUIRE_VALUE(storage::read_metadata(final_path)).ids.codec_id == "amoit");
+    CHECK(REQUIRE_VALUE(storage::read_metadata(final_path)).ids.codec_id == codec_id);
     check_bytes(REQUIRE_VALUE(opened.load({ 0, { 0, 0 } })).attribution, tile.attribution);
+}
+
+TEST_CASE("AMOFT storages require Float32 and reopen with exact data", "[raster_store][storage]")
+{
+    CHECK(REQUIRE_ERROR(tile_codec::resolve<double>("amoft", 4)).holds<Unsupported>());
+    CHECK(REQUIRE_ERROR(tile_codec::resolve<uint32_t>("amoft", 4)).holds<Unsupported>());
+    CHECK(REQUIRE_ERROR(tile_codec::resolve<glm::vec3>("amoft", 4)).holds<Unsupported>());
+    CHECK(REQUIRE_ERROR(tile_codec::resolve<glm::u8vec3>("amoft", 4)).holds<Unsupported>());
+
+    const TempDirectory directory("amoft-storage");
+    write_table(directory.path());
+    storage::CreateOptions options = small_options();
+    options.codec_id = "amoft";
+    const std::filesystem::path final_path = directory.path() / "storage";
+    storage::Draft<float> draft = REQUIRE_VALUE(storage::create<float>(final_path, options));
+    raster_store::Tile<float> tile(4);
+    tile.data.fill(-1.25f);
+    REQUIRE_VALUE(draft.save({ 0, { 0, 0 } }, tile));
+    REQUIRE_VALUE(storage::publish(std::move(draft)));
+
+    CHECK(REQUIRE_VALUE(storage::read_metadata(final_path)).ids.codec_id == "amoft");
+    const storage::Storage<float> opened = REQUIRE_VALUE(storage::open<float>(final_path));
+    check_bytes(REQUIRE_VALUE(opened.load({ 0, { 0, 0 } })).data, tile.data);
+}
+
+TEST_CASE("vertex storages include the overlap in their stored tiles", "[raster_store][storage]")
+{
+    const TempDirectory directory("raster-vertex");
+    write_table(directory.path());
+    storage::CreateOptions options = small_options();
+    options.halo_width = 1;
+    options.placement = raster_store::pixel::Placement::Vertex;
+    options.overlap = 1;
+    const std::filesystem::path final_path = directory.path() / "storage";
+    storage::Draft<float> draft = REQUIRE_VALUE(storage::create<float>(final_path, options));
+    raster_store::Tile<float> tile(7);
+    tile.data.fill(3.5f);
+    REQUIRE_VALUE(draft.save({ 0, { 0, 0 } }, tile));
+    REQUIRE_VALUE(storage::publish(std::move(draft)));
+
+    const storage::Metadata metadata = REQUIRE_VALUE(storage::read_metadata(final_path));
+    CHECK(metadata.nominal_tile_size == 4);
+    CHECK(metadata.halo_width == 1);
+    CHECK(metadata.overlap == 1);
+    CHECK(metadata.stored_tile_size == 7);
+    CHECK(metadata.placement == raster_store::pixel::Placement::Vertex);
+    const storage::Storage<float> opened = REQUIRE_VALUE(storage::open<float>(final_path));
+    check_bytes(REQUIRE_VALUE(opened.load({ 0, { 0, 0 } })).data, tile.data);
 }
 
 TEST_CASE("raster storages checkpoint metadata dimensions and publish explicitly", "[raster_store][storage]")
@@ -266,7 +301,7 @@ TEST_CASE("raster opening retains metadata and index errors without creating a d
     }
     SECTION("rectangular metadata")
     {
-        v1::Metadata metadata = REQUIRE_VALUE(io::envelope::read<MetadataSchema>(final_path / storage::metadata_file_name));
+        raster_store_test::v2::Metadata metadata = REQUIRE_VALUE(io::envelope::read<MetadataSchema>(final_path / storage::metadata_file_name));
         metadata.stored_tile_size = 2;
         REQUIRE_VALUE(io::envelope::write<MetadataSchema>(metadata, final_path / storage::metadata_file_name, { .mode = io::WriteMode::Overwrite }));
         CHECK(REQUIRE_ERROR(storage::open<float>(final_path)).holds<store::CorruptMetadata>());
@@ -337,6 +372,13 @@ TEST_CASE("storage geometry and mapping validation precede creation", "[raster_s
         options.halo_width = 1u << 31;
     }
     SECTION("unknown mapping") { options.value_mapping = static_cast<raster_store::pixel::Mapping>(99); }
+    SECTION("area overlap") { options.overlap = 1; }
+    SECTION("double vertex overlap")
+    {
+        options.placement = raster_store::pixel::Placement::Vertex;
+        options.overlap = 2;
+    }
+    SECTION("unknown placement") { options.placement = static_cast<raster_store::pixel::Placement>(99); }
     CHECK(REQUIRE_ERROR(storage::create<float>(directory.path() / "storage", options)).holds<storage::InvalidOptions>());
     CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(directory.path() / "storage.part")));
 }

@@ -27,6 +27,7 @@
 
 #include <fmt/format.h>
 #include <glm/gtx/component_wise.hpp>
+#include <libassert/assert.hpp>
 #include <tbb/concurrent_vector.h>
 
 #include "build.h"
@@ -41,6 +42,7 @@
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
+#include "fmt_impls.h"
 #include "merge/clusterings.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
@@ -386,7 +388,7 @@ std::vector<octree::Id> find_relevant_input_nodes(
             const std::vector<octree::Id> &input_nodes = input_by_level[level];
             for (const octree::Id& input_id : input_nodes) {
                 const radix::geometry::Aabb3d input_bounds = space.get_node_bounds(input_id);
-                if (radix::geometry::intersect(target_bounds, input_bounds)) {
+                if (radix::geometry::intersect_inclusive(target_bounds, input_bounds)) {
                     result.push_back(input_id);
                 }
             }
@@ -400,8 +402,13 @@ radix::geometry::Aabb3d find_cluster_search_bounds(
     const octree::Id &target_id,
     const octree::OddLevelShifted &shifted_space) {
     // We cannot rely on the intersecting nodes on the next level, since some neighbours clusters may has a centroid in this node's bounds. This can happen when the groups is split at the end of the pipeline.
-    const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(shifted_space.get_node_bounds(target_id), 0.5 - 1e-6);
-    return radix::geometry::intersection(padded_bounds, shifted_space.bounds());
+    const radix::geometry::Aabb3d node_bounds = shifted_space.get_node_bounds(target_id);
+    ASSERT(geometry::is_finite(node_bounds) && !geometry::is_empty(node_bounds), target_id, node_bounds);
+    const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(node_bounds, 0.5 - 1e-6);
+    const std::optional<radix::geometry::Aabb3d> search_bounds_opt = radix::geometry::intersection_inclusive(padded_bounds, shifted_space.bounds());
+    // The padded bounds contain the node's own, which OddLevelShifted clips to the space.
+    ASSERT(search_bounds_opt.has_value(), target_id);
+    return *search_bounds_opt;
 }
 
 // Nodes one level finer that may hold data belonging to the given node.
@@ -486,12 +493,12 @@ std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
     hierarchy::traverse(
         index.map(),
         [&](const octree::Id &id, const hierarchy::NodeStatus status) {
-            if (status == hierarchy::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
+            if (status == hierarchy::NodeStatus::Leaf && radix::geometry::intersect_inclusive(root_bounds, space.get_node_bounds(id))) {
                 result[id.level()].push_back(id);
             }
         },
         [&](const octree::Id &id) {
-            return radix::geometry::intersect(root_bounds, space.get_node_bounds(id));
+            return radix::geometry::intersect_inclusive(root_bounds, space.get_node_bounds(id));
         },
         start);
     return result;

@@ -19,6 +19,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <concepts>
 #include <cstdint>
@@ -29,9 +30,24 @@
 
 #include <glm/glm.hpp>
 
+#include "detail.h"
+
 namespace raster::algorithm {
 
 namespace detail {
+    inline const std::array<float, 256>& srgb_to_linear_table()
+    {
+        static const auto table = [] {
+            std::array<float, 256> values {};
+            for (unsigned i = 0; i < values.size(); ++i) {
+                const float value = float(i) / 255.f;
+                values[i] = value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
+            }
+            return values;
+        }();
+        return table;
+    }
+
     template <typename T>
     struct PixelTraits {
         using Scalar = T;
@@ -83,7 +99,8 @@ namespace detail {
     using DecodedPixel = std::invoke_result_t<const std::tuple_element_t<0, Conversion>&, const T&>;
 
     template <typename Conversion, typename T>
-    concept PixelConversion = IsConversionTuple<Conversion>::value && std::invocable<const std::tuple_element_t<0, Conversion>&, const T&>
+    concept PixelConversion = IsConversionTuple<Conversion>::value && InlinableCallable<std::tuple_element_t<0, Conversion>>
+        && InlinableCallable<std::tuple_element_t<1, Conversion>> && std::invocable<const std::tuple_element_t<0, Conversion>&, const T&>
         && NumericPixel<DecodedPixel<Conversion, T>> && std::invocable<const std::tuple_element_t<1, Conversion>&, const DecodedPixel<Conversion, T>&>
         && std::same_as<std::invoke_result_t<const std::tuple_element_t<1, Conversion>&, const DecodedPixel<Conversion, T>&>, T>;
 
@@ -138,13 +155,15 @@ requires detail::srgb_pixel<T>
 auto srgb_conversion()
 {
     using W = detail::LinearPixel<T>;
-    return std::tuple { [](const T& pixel) {
+    const auto& table = detail::srgb_to_linear_table();
+    return std::tuple { [&table](const T& pixel) {
                            W result(pixel);
                            for (unsigned i = 0; i < detail::PixelTraits<T>::components; ++i) {
                                auto& value = detail::PixelTraits<W>::component(result, i);
-                               value /= 255.f;
                                if (i < 3) {
-                                   value = value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
+                                   value = table[detail::PixelTraits<T>::component(pixel, i)];
+                               } else {
+                                   value /= 255.f;
                                }
                            }
                            return result;

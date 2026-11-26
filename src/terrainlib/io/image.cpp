@@ -19,7 +19,10 @@
 
 #include "io/image.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
+#include <memory>
 #include <new>
 #include <optional>
 #include <ranges>
@@ -34,6 +37,7 @@
 #include <libassert/assert.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
+#include <turbojpeg.h>
 
 #include "error/try.h"
 #include "error/utils.h"
@@ -41,9 +45,12 @@
 #include "io/OpenCvError.h"
 #include "io/conversion.h"
 #include "io/image/JxlError.h"
+#include "io/image/TurboJpegError.h"
 #include "io/mat.h"
 
 namespace io::image {
+
+// TODO: split into one file per backend (TurboJPEG, libjxl, OpenCV), leaving only the dispatch here.
 namespace {
 
     // The error for a failure on the OpenCV path, with a failure OpenCV reported as Unknown and the OpenCvError as its source.
@@ -152,6 +159,43 @@ namespace {
         return alp::make_error(OutOfMemory{}, "encoding an image as JPEG XL");
     }
 
+    using TurboJpeg = std::unique_ptr<void, decltype(&tj3Destroy)>;
+    using TurboJpegBuffer = std::unique_ptr<uint8_t, decltype(&tj3Free)>;
+
+    // Encodes `image` as a baseline 4:2:0 JPEG.
+    alp::Result<bytes::vector, EncodeError> encode_jpeg(const RGB8 &image, const EncodeOptions options) {
+        ASSERT(options.jpeg_quality >= 0 && options.jpeg_quality <= 100);
+        constexpr auto context = "encoding an image as JPEG";
+        if (!std::in_range<int>(image.width()) || !std::in_range<int>(image.height())) {
+            return alp::make_error(Unsupported{}, fmt::format("TurboJPEG cannot encode an image of {}x{} pixels", image.width(), image.height()));
+        }
+
+        try {
+            const TurboJpeg compressor(tj3Init(TJINIT_COMPRESS), &tj3Destroy);
+            if (!compressor) {
+                return alp::make_error(OutOfMemory{}, "creating the JPEG encoder");
+            }
+            // libjpeg maps quality 0 to 1; TurboJPEG rejects it.
+            // No restart markers: any restart interval switches off libjpeg-turbo's fast Huffman decoder for the whole image (about 13% slower decoding).
+            if (tj3Set(compressor.get(), TJPARAM_QUALITY, std::max(options.jpeg_quality, 1)) != 0 || tj3Set(compressor.get(), TJPARAM_SUBSAMP, TJSAMP_420) != 0) {
+                PANIC("TurboJPEG rejected the encoder setup", TurboJpegError::get_last_error(compressor.get()));
+            }
+
+            uint8_t *output = nullptr;
+            size_t output_size = 0;
+            const auto *pixels = reinterpret_cast<const uint8_t *>(image.bytes().data());
+            const int result = tj3Compress8(compressor.get(), pixels, static_cast<int>(image.width()), 0, static_cast<int>(image.height()), TJPF_RGB, &output, &output_size);
+            const TurboJpegBuffer encoded(output, &tj3Free);
+            if (result != 0) {
+                return alp::make_error(Unknown{}, context, TurboJpegError::get_last_error(compressor.get()));
+            }
+
+            return bytes::vector(encoded.get(), encoded.get() + output_size);
+        } catch (const std::bad_alloc &) {
+            return alp::make_error(OutOfMemory{}, context);
+        }
+    }
+
     template <typename Pixel>
     alp::Result<radix::Raster<Pixel>, DecodeError> decode_opencv(const bytes::span bytes, const DecodeOptions options) {
         // Unchanged, so that the depth and channel count of the file are visible.
@@ -202,6 +246,76 @@ namespace {
             return to_image_error(std::move(split_result).error());
         }
         return std::move(raster_result).value();
+    }
+
+    // The format whose signature `bytes` start with, or nothing for a format other than JPEG, PNG and JPEG XL.
+    std::optional<Format> detect_format(const bytes::span bytes) {
+        if (bytes.size() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+            return Format::Jpeg;
+        }
+        constexpr std::array<uint8_t, 8> png_signature = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+        if (bytes.size() >= png_signature.size() && std::ranges::equal(bytes.first(png_signature.size()), png_signature)) {
+            return Format::Png;
+        }
+        const JxlSignature signature = JxlSignatureCheck(bytes.data(), bytes.size());
+        if (signature == JXL_SIG_CODESTREAM || signature == JXL_SIG_CONTAINER) {
+            return Format::JpegXl;
+        }
+        return std::nullopt;
+    }
+
+    // Decodes the JPEG image in `bytes`; TurboJPEG adds opaque alpha and expands grey to RGB.
+    template <typename Pixel>
+    alp::Result<radix::Raster<Pixel>, DecodeError> decode_jpeg(const bytes::span bytes, const DecodeOptions options) {
+        constexpr auto context = "decoding a JPEG image";
+        try {
+            const TurboJpeg decompressor(tj3Init(TJINIT_DECOMPRESS), &tj3Destroy);
+            if (!decompressor) {
+                return alp::make_error(OutOfMemory{}, "creating the JPEG decoder");
+            }
+            // Warnings, such as for truncated data, are errors.
+            if (tj3Set(decompressor.get(), TJPARAM_STOPONWARNING, 1) != 0) {
+                PANIC("TurboJPEG rejected the decoder setup", TurboJpegError::get_last_error(decompressor.get()));
+            }
+
+            if (tj3DecompressHeader(decompressor.get(), bytes.data(), bytes.size()) != 0) {
+                return alp::make_error(CorruptData{}, "reading the JPEG header", TurboJpegError::get_last_error(decompressor.get()));
+            }
+            const int width = tj3Get(decompressor.get(), TJPARAM_JPEGWIDTH);
+            const int height = tj3Get(decompressor.get(), TJPARAM_JPEGHEIGHT);
+            if (width <= 0 || height <= 0) {
+                return alp::make_error(CorruptData{}, "the JPEG image has no pixels");
+            }
+            const glm::uvec2 size(width, height);
+            if (options.expected_size && size != *options.expected_size) {
+                return alp::make_error(CorruptData{}, fmt::format("the image is {}x{}, not the expected {}x{}", size.x, size.y, options.expected_size->x, options.expected_size->y));
+            }
+
+            const int colour_space = tj3Get(decompressor.get(), TJPARAM_COLORSPACE);
+            if (colour_space == TJCS_CMYK || colour_space == TJCS_YCCK) {
+                return alp::make_error(Unsupported{}, "CMYK JPEG images are not supported");
+            }
+            const int precision = tj3Get(decompressor.get(), TJPARAM_PRECISION);
+            if (precision != 8) {
+                return alp::make_error(Unsupported{}, fmt::format("the image has {}-bit samples, not 8-bit ones", precision));
+            }
+
+            // The header alone can claim up to 65535 x 65535 pixels.
+            const uint64_t pixel_bytes = uint64_t{size.x} * size.y * sizeof(Pixel);
+            if (pixel_bytes > max_buffer_size) {
+                return alp::make_error(BufferLimitExceeded(max_buffer_size, pixel_bytes));
+            }
+            radix::Raster<Pixel> raster(size, radix::uninitialised);
+
+            constexpr int pixel_format = Pixel::length() == 4 ? TJPF_RGBA : TJPF_RGB;
+            auto *pixels = reinterpret_cast<uint8_t *>(raster.bytes().data());
+            if (tj3Decompress8(decompressor.get(), bytes.data(), bytes.size(), pixels, 0, pixel_format) != 0) {
+                return alp::make_error(CorruptData{}, context, TurboJpegError::get_last_error(decompressor.get()));
+            }
+            return raster;
+        } catch (const std::bad_alloc &) {
+            return alp::make_error(OutOfMemory{}, context);
+        }
     }
 
     // Reads the first frame. libjxl drops or adds opaque alpha and expands grey to RGB.
@@ -269,6 +383,13 @@ alp::Result<bytes::vector, EncodeError> encode(const Image &image, const Format 
     if (image.width() == 0 || image.height() == 0) {
         return alp::make_error(Unsupported{}, "an image without pixels has no encoding");
     }
+    if (format == Format::Jpeg) {
+        if constexpr (std::same_as<Image, RGB8>) {
+            return encode_jpeg(image, options);
+        } else {
+            return alp::make_error(Unsupported{}, "JPEG cannot store an alpha channel");
+        }
+    }
     if (format == Format::JpegXl) {
         return encode_jpegxl(image, options);
     }
@@ -278,8 +399,11 @@ alp::Result<bytes::vector, EncodeError> encode(const Image &image, const Format 
 template <ImageRaster Image>
 alp::Result<Image, DecodeError> decode(const bytes::span bytes, const DecodeOptions options) {
     using Pixel = std::ranges::range_value_t<Image>;
-    const JxlSignature signature = JxlSignatureCheck(bytes.data(), bytes.size());
-    if (signature == JXL_SIG_CODESTREAM || signature == JXL_SIG_CONTAINER) {
+    const std::optional<Format> format_opt = detect_format(bytes);
+    if (format_opt == Format::Jpeg) {
+        return decode_jpeg<Pixel>(bytes, options);
+    }
+    if (format_opt == Format::JpegXl) {
         return decode_jpegxl<Pixel>(bytes, options);
     }
     return decode_opencv<Pixel>(bytes, options);
