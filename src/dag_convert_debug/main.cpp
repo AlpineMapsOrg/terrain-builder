@@ -31,13 +31,13 @@
 #include "error/try.h"
 #include "io/UnknownExtension.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 #include "path_utils.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
 #include "cli_support/ProgressIndicator.h"
 #include "storage.h"
 #include "store/open.h"
-#include "store/storage_paths.h"
 #include "utils.h"
 
 namespace {
@@ -54,7 +54,7 @@ alp::Result<void> export_node(const cli::Args &args) {
 
     const mesh::Simple mesh = clustering_to_mesh(node.clustering);
 
-    ALP_TRY(store::require_absent(args.output_path));
+    ALP_TRY(io::filesystem::require_absent(args.output_path));
     ALP_TRY(mesh::io::save_to_path(mesh, args.output_path));
     return {};
 }

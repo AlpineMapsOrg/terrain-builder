@@ -18,11 +18,6 @@
 
 #include "store/storage_paths.h"
 
-#include <system_error>
-
-#include "error/try.h"
-#include "error/utils.h"
-#include "io/filesystem.h"
 #include "path_utils.h"
 
 namespace store {
@@ -35,19 +30,6 @@ std::filesystem::path make_draft_path(const std::filesystem::path& final_path) {
 
 bool is_draft(const std::filesystem::path& path) {
     return paths::normalized(path).extension() == draft_suffix;
-}
-
-alp::Result<void, io::FileError> require_absent(const std::filesystem::path& path) {
-    const io::FileError exists_error(std::errc::file_exists, path);
-    ALP_TRY(const bool symlink, io::filesystem::is_symlink(path));
-    if (symlink) {
-        return alp::make_error(exists_error, "the path is a symlink");
-    }
-    ALP_TRY(const bool exists, io::filesystem::exists(path));
-    if (exists) {
-        return alp::make_error(exists_error);
-    }
-    return {};
 }
 
 } // namespace store

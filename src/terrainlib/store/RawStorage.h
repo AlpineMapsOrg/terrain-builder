@@ -37,6 +37,7 @@
 #include "error/utils.h"
 #include "io/FileError.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 #include "store/Codec.h"
 #include "store/KeyTraits.h"
 #include "store/path_layout.h"

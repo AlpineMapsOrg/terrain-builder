@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include <concepts>
 #include <cstdint>
 #include <filesystem>
 #include <system_error>
@@ -123,59 +122,6 @@ inline alp::Result<bool, FileError> is_empty(const std::filesystem::path &path) 
     return empty;
 }
 
-// Whether `path` is an empty directory; false if nothing exists at `path`.
-[[nodiscard]]
-inline alp::Result<bool, FileError> is_empty_directory(const std::filesystem::path &path) {
-    ALP_TRY(const bool directory, filesystem::is_directory(path));
-    if (!directory) {
-        return false;
-    }
-    return filesystem::is_empty(path);
-}
-
-// Whether nothing exists at `path`, or `path` names an empty directory.
-[[nodiscard]]
-inline alp::Result<bool, FileError> is_missing_or_empty_directory(const std::filesystem::path &path) {
-    ALP_TRY(const bool exists, filesystem::exists(path));
-    if (!exists) {
-        return true;
-    }
-    return filesystem::is_empty_directory(path);
-}
-
-// Calls `visit` with each regular file and symlink below `path`, stopping early once `visit` returns false.
-template <std::predicate<const std::filesystem::path &> Visit>
-[[nodiscard]]
-alp::Result<void, FileError> visit_files_recursively(const std::filesystem::path &path, Visit &&visit) {
-    const auto context = alp::make_context("listing files at {}", path);
-
-    std::error_code code;
-    std::filesystem::recursive_directory_iterator iterator(path, code);
-    if (code) {
-        return alp::make_error(FileError(code, path), context);
-    }
-
-    const std::filesystem::recursive_directory_iterator end;
-    while (iterator != end) {
-        const std::filesystem::directory_entry &entry = *iterator;
-        const std::filesystem::file_status status = entry.symlink_status(code);
-        if (status.type() == std::filesystem::file_type::none) {
-            return alp::make_error(FileError(code, entry.path()), context);
-        }
-        if (std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status)) {
-            if (!visit(entry.path())) {
-                return {};
-            }
-        }
-
-        iterator.increment(code);
-        if (code) {
-            return alp::make_error(FileError(code, path), context);
-        }
-    }
-    return {};
-}
-
 // Creates the directory at `path`, whose parent must exist; true if it was created.
 [[nodiscard]]
 inline alp::Result<bool, FileError> create_directory(const std::filesystem::path &path) {
@@ -196,39 +142,6 @@ inline alp::Result<bool, FileError> create_directories(const std::filesystem::pa
         return alp::make_error(FileError(code, path), "creating directories");
     }
     return created;
-}
-
-// Creates an empty directory at `path`, along with its missing parents.
-[[nodiscard]]
-inline alp::Result<void, FileError> create_empty_directory(const std::filesystem::path &path) {
-    constexpr auto context = "creating an empty directory";
-
-    ALP_TRY_CONTEXT(const bool exists, filesystem::exists(path), context);
-    if (!exists) {
-        ALP_TRY_CONTEXT(filesystem::create_directories(path), context);
-        return {};
-    }
-
-    ALP_TRY_CONTEXT(const bool is_directory, filesystem::is_directory(path), context);
-    if (!is_directory) {
-        return alp::make_error(FileError(std::make_error_code(std::errc::not_a_directory), path), context);
-    }
-
-    ALP_TRY_CONTEXT(const bool empty, filesystem::is_empty(path), context);
-    if (!empty) {
-        return alp::make_error(FileError(std::make_error_code(std::errc::directory_not_empty), path), context);
-    }
-    return {};
-}
-
-// Creates the missing parent directories of `path`; true if any directory was created.
-[[nodiscard]]
-inline alp::Result<bool, FileError> create_parent_directories(const std::filesystem::path &path) {
-    const std::filesystem::path parent_path = path.parent_path();
-    if (parent_path.empty()) {
-        return false;
-    }
-    return filesystem::create_directories(parent_path);
 }
 
 // Removes the file or empty directory at `path`; true if there was one to remove.
@@ -321,14 +234,6 @@ inline alp::Result<void, FileError> rename(const std::filesystem::path &source, 
     return {};
 }
 
-// Renames `source` to `destination`, failing if anything is already at `destination`.
-[[nodiscard]]
-alp::Result<void, FileError> rename_no_replace(const std::filesystem::path &source, const std::filesystem::path &destination);
-
-// Flushes the data and metadata of the file at `path` to the storage device.
-[[nodiscard]]
-alp::Result<void, FileError> sync_file(const std::filesystem::path &path);
-
 // Whether `first` and `second` name the same file, following symlinks; fails if either does not exist.
 [[nodiscard]]
 inline alp::Result<bool, FileError> equivalent(const std::filesystem::path &first, const std::filesystem::path &second) {
@@ -340,10 +245,6 @@ inline alp::Result<bool, FileError> equivalent(const std::filesystem::path &firs
     return is_equivalent;
 }
 
-// Whether `first` and `second` are on the same filesystem, following symlinks; fails if either does not exist.
-[[nodiscard]]
-alp::Result<bool, FileError> on_same_filesystem(const std::filesystem::path &first, const std::filesystem::path &second);
-
 // The canonical form of `path`, which must exist: absolute, with symlinks, dot and dot-dot resolved.
 [[nodiscard]]
 inline alp::Result<std::filesystem::path, FileError> canonicalize(const std::filesystem::path &path) {
@@ -353,17 +254,6 @@ inline alp::Result<std::filesystem::path, FileError> canonicalize(const std::fil
         return alp::make_error(FileError(code, path), "resolving the canonical path");
     }
     return canonical_path;
-}
-
-// The canonical form of `path`, or `path` as given if it cannot be made canonical.
-[[nodiscard]]
-inline std::filesystem::path canonicalize_best_effort(const std::filesystem::path &path) {
-    std::error_code code;
-    std::filesystem::path canonical = std::filesystem::weakly_canonical(path, code);
-    if (code) {
-        return path;
-    }
-    return canonical;
 }
 
 // The absolute form of `path`, relative to the current directory.

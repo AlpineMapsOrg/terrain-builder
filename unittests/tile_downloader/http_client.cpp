@@ -30,7 +30,7 @@
 #include "error/Infallible.h"
 #include "error/MessageCode.h"
 #include "io/bytes.h"
-#include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 #include "stop.h"
 
 using namespace tile_downloader;

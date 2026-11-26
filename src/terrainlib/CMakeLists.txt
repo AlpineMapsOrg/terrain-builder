@@ -147,7 +147,8 @@ add_library(terrainlib
     io/compression.h io/compression.cpp
     io/conversion.h
     io/envelope.h io/envelope.cpp
-    io/filesystem.h io/filesystem.cpp
+    io/filesystem.h
+    io/filesystem_utils.h io/filesystem_utils.cpp
     io/glm_serialization.h
     io/hash.h io/hash.cpp
     io/image.h io/image.cpp
@@ -332,7 +333,7 @@ add_library(terrainlib
     store/envelope_utils.h
     store/fingerprint.h
     store/index_checks.h
-    store/inputs.h store/inputs.cpp
+    store/inputs.h
     store/open.h
     store/path_layout.h
     store/publish.h store/publish.cpp

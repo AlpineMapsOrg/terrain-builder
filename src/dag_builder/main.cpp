@@ -31,13 +31,13 @@
 #include "error/log.h"
 #include "error/try.h"
 #include "inputs.h"
+#include "io/filesystem_utils.h"
 #include "mesh/storage.h"
 #include "octree/storage/index_format.h"
 #include "stop.h"
 #include "storage.h"
 #include "store/inputs.h"
 #include "store/open.h"
-#include "store/storage_paths.h"
 
 namespace {
 
@@ -74,7 +74,7 @@ alp::Result<void> run(const cli::Args &args) {
     }
 
     if (args.write_debug_meshes) {
-        ALP_TRY(store::require_absent(dag::make_debug_mesh_path(args.output_path)));
+        ALP_TRY(io::filesystem::require_absent(dag::make_debug_mesh_path(args.output_path)));
     }
     ALP_TRY(dag::storage::Draft output_storage, dag::storage::create(args.output_path, octree::storage::default_layout()));
     ALP_TRY(store::inputs::write<dag::inputs::Schema>(output_storage.base_path(), inputs));

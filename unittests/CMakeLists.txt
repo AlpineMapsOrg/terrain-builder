@@ -92,6 +92,7 @@ add_executable(unittests_terrainlib
     terrainlib/io_conversion.cpp
     terrainlib/io_envelope.cpp
     terrainlib/io_filesystem.cpp
+    terrainlib/io_filesystem_utils.cpp
     terrainlib/io_hash.cpp
     terrainlib/io_image.cpp
     terrainlib/io_json_file.cpp
