@@ -20,6 +20,7 @@
 
 #include <libassert/assert.hpp>
 
+#include "earth.h"
 #include "fmt_impls.h"
 #include "geometry/geometry.h"
 
@@ -46,8 +47,7 @@ Space::Space(Bounds bounds) : _bounds(bounds) {
 }
 
 Space Space::earth() {
-    constexpr float max_radius = 6384400; // from https://en.wikipedia.org/wiki/Summits_farthest_from_the_Earth%27s_center#:~:text=Dormant%20Volcano,6%2C267%20metres%20(20%2C561%20ft)
-    constexpr float extends = max_radius * 1.1;
+    constexpr float extends = earth::largest_radius * 1.1;
     return Space(Bounds(glm::dvec3(-extends), glm::dvec3(extends)));
 }
 std::optional<Id> Space::find_smallest_node_encompassing_bounds(

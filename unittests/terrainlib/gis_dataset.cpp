@@ -24,6 +24,7 @@
 #include <cpl_error.h>
 #include <gdal_priv.h>
 
+#include <array>
 #include <filesystem>
 #include <limits>
 #include <optional>
@@ -210,6 +211,38 @@ TEST_CASE("bounds rejects GCP, RPC and geolocation-array georeferencing", "[gis]
     SECTION("geolocation arrays") { REQUIRE(dataset.as_gdal()->SetMetadataItem("X_DATASET", "longitudes.tif", "GEOLOCATION") == CE_None); }
 
     const auto error = REQUIRE_ERROR(dataset.bounds());
+
+    CHECK(error.holds<Unsupported>());
+}
+
+TEST_CASE("bounds3d contains every height of the band", "[gis][Dataset]") {
+    auto dataset = memory_raster({ 10, 2, 0, 50, 0, -4 }, { 4, 2 }, 4326);
+    GDALRasterBand *band = dataset.as_gdal()->GetRasterBand(1);
+    std::array<float, 8> heights = { -3.5f, 0, 1, 2, 3, 4, 5, 12.25f };
+    REQUIRE(band->RasterIO(GF_Write, 0, 0, 4, 2, heights.data(), 4, 2, GDT_Float32, 0, 0) == CE_None);
+    SECTION("without statistics") {}
+    SECTION("with computed statistics") { REQUIRE(band->ComputeStatistics(false, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == CE_None); }
+
+    const radix::tile::SrsAndHeightBounds bounds = REQUIRE_VALUE(dataset.bounds3d());
+
+    // The first pixel holds the lowest height and the last one the highest.
+    CHECK(bounds.contains_inclusive(glm::dvec3(11, 48, -3.5)));
+    CHECK(bounds.contains_inclusive(glm::dvec3(17, 44, 12.25)));
+}
+
+TEST_CASE("bounds3d accepts a band in metres or without a unit", "[gis][Dataset]") {
+    auto dataset = memory_raster({ 10, 2, 0, 50, 0, -4 }, { 4, 2 }, 4326);
+    SECTION("metres") { REQUIRE(dataset.as_gdal()->GetRasterBand(1)->SetUnitType("m") == CE_None); }
+    SECTION("no unit") {}
+
+    REQUIRE_VALUE(dataset.bounds3d());
+}
+
+TEST_CASE("bounds3d rejects a band whose height unit is not metres", "[gis][Dataset]") {
+    auto dataset = memory_raster({ 10, 2, 0, 50, 0, -4 }, { 4, 2 }, 4326);
+    REQUIRE(dataset.as_gdal()->GetRasterBand(1)->SetUnitType("ft") == CE_None);
+
+    const auto error = REQUIRE_ERROR(dataset.bounds3d());
 
     CHECK(error.holds<Unsupported>());
 }

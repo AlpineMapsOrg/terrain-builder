@@ -36,6 +36,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_precision.hpp>
 
+#include "../assertion_helpers.h"
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
 #include "../temp_directory.h"
@@ -282,7 +283,7 @@ TEST_CASE("AMOFT rejects wrong dimensions, byte counts and envelope classes", "[
     REQUIRE_VALUE(io::envelope::write<tile_codec::TileSchema>(encoded, file, { .mode = io::WriteMode::Overwrite }));
     CHECK(REQUIRE_ERROR(amoft.read(path)).holds<store::CorruptData>());
 
-    CHECK_THROWS(amoft.write(directory.path() / "other", raster_store::Tile<float>(4)));
+    CHECK_ASSERTS(amoft.write(directory.path() / "other", raster_store::Tile<float>(4)));
 }
 
 TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster_store][io][TileCodec]")

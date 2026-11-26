@@ -24,31 +24,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
-#include <string>
-#include <string_view>
 #include <thread>
 #include <utility>
-#include <variant>
 
-#include <curl/curl.h>
-#include <fmt/core.h>
 #include <radix/tile.h>
 
 #include "cli_support/ProgressIndicator.h"
-#include "cli_support/log.h"
 
-struct TileResult {
-    struct Downloaded {};
-    struct ChildrenPending {};
-    struct Skipped {};
-    struct Absent {};
-    struct HttpError { long status_code; };
-    struct BadContentType {};
-    struct CurlError { CURLcode code; };
-    struct TimedOut {};
-
-    using Status = std::variant<Downloaded, ChildrenPending, Skipped, Absent, HttpError, BadContentType, CurlError, TimedOut>;
-};
+namespace tile_downloader {
 
 class TileLogger {
 public:
@@ -59,7 +42,7 @@ public:
 
     [[nodiscard]] Session start();
 
-    // The tile turned out not to exist (or errored out), so its branch stops here.
+    // The tile turned out not to exist, so its branch stops here.
     void missing(const radix::tile::Id &tile) {
         this->close_branch(tile);
     }
@@ -67,21 +50,6 @@ public:
     // We chose not to descend into this tile's branch (already on disk, or past --max-zoom-level).
     void skipped(const radix::tile::Id &tile) {
         this->close_branch(tile);
-    }
-
-    void report_error(const radix::tile::Id &tile, const TileResult::Status &status) const {
-        std::visit([&](const auto &r) {
-            using T = std::decay_t<decltype(r)>;
-            if constexpr (std::is_same_v<T, TileResult::HttpError>) {
-                LOG_WARN("{}: HTTP error [{}]", format(tile), r.status_code);
-            } else if constexpr (std::is_same_v<T, TileResult::BadContentType>) {
-                LOG_WARN("{}: bad content type", format(tile));
-            } else if constexpr (std::is_same_v<T, TileResult::CurlError>) {
-                LOG_WARN("{}: cURL error [{}] {}", format(tile), unsigned(r.code), curl_easy_strerror(r.code));
-            } else if constexpr (std::is_same_v<T, TileResult::TimedOut>) {
-                LOG_WARN("{}: failed after 100 attempts", format(tile));
-            }
-        }, status);
     }
 
 private:
@@ -118,10 +86,6 @@ private:
         } catch (...) {
             // Session cleanup must not replace the active exception.
         }
-    }
-
-    static std::string format(const radix::tile::Id &tile) {
-        return fmt::format("Tile[Zoom={}, X={}, Y={}]", tile.zoom_level, tile.coords.x, tile.coords.y);
     }
 
     // Every tile at `level` covers an equal 4^-(level - root) share of the whole
@@ -183,3 +147,5 @@ private:
 inline TileLogger::Session TileLogger::start() {
     return Session(*this);
 }
+
+} // namespace tile_downloader

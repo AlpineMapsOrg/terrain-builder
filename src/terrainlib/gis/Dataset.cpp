@@ -26,7 +26,9 @@
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 #include <cpl_error.h>
@@ -36,12 +38,14 @@
 #include <ogrsf_frmts.h>
 
 #include "cli_support/log.h"
+#include "earth.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "gis/OgrError.h"
 #include "gis/gdal.h"
 #include "gis/srs/System.h"
+#include "gis/srs/Unit.h"
 #include "gis/srs/classify.h"
 #include "gis/srs/coverage.h"
 #include "gis/srs/well_known.h"
@@ -223,13 +227,25 @@ alp::Result<radix::tile::SrsBounds, Dataset::ComputeBoundsError> Dataset::bounds
 alp::Result<radix::tile::SrsAndHeightBounds, Dataset::ComputeBoundsError> Dataset::bounds3d(bool approx_ok) const {
     const auto band = this->m_gdal_dataset->GetRasterBand(1);
 
+    // GDAL reports a band without unit metadata as an empty unit type.
+    const std::string_view unit_name = band->GetUnitType();
+    if (unit_name.empty()) {
+        LOG_WARN("Dataset {} does not declare a height unit, assuming metres", this->name());
+    } else {
+        const std::optional<srs::Unit> unit_opt = srs::parse_length_unit(unit_name);
+        if (!unit_opt.has_value() || !unit_opt->is_approx(srs::units::metre)) {
+            const auto message = alp::make_context("the height unit '{}' is not metres", unit_name);
+            const auto context = alp::make_context("computing the 3D bounds of {}", this->name());
+            return alp::make_error(Unsupported{}, message).context(context);
+        }
+    }
+
     glm::dvec2 height_range;
     const auto result = band->GetStatistics(approx_ok, false, &height_range.x, &height_range.y, nullptr, nullptr);
     if (result != CE_None) {
-        const char *unit = band->GetUnitType();
-        ASSERT(unit != nullptr);
-        ASSERT(strcmp(unit, "m") == 0 || strcmp(unit, "meters") == 0);
-        height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
+        // Twice the geoid's largest departure covers heights above the ellipsoid as well as above the geoid.
+        const double margin = 2 * earth::largest_geoid_undulation;
+        height_range = earth::elevation_range + glm::dvec2(-margin, margin);
     }
 
     ALP_TRY(const radix::tile::SrsBounds bounds2d, this->bounds());

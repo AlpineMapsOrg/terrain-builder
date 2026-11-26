@@ -113,7 +113,7 @@ TEST_CASE("clip_on_mask without components uses empty-union semantics", "[sf_mer
 
 TEST_CASE("clip_mask_on_bounds keeps the Tirol mask components valid", "[sf_merger][utils]") {
     const std::filesystem::path path = std::filesystem::path(ALP_TEST_DATA_DIR) / "sf_builder_merge_border/mask/tirol.shp";
-    const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2.0);
+    const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range, 2.0);
     const MeshMask loaded = REQUIRE_VALUE(mask::load_from_path(path, radius_range));
     REQUIRE(loaded.components.size() == 3);
     for (const SimpleMesh &component : loaded.components) {

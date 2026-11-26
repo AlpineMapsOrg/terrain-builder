@@ -16,16 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <stdexcept>
-
 #include <catch2/reporters/catch_reporter_event_listener.hpp>
 #include <catch2/reporters/catch_reporter_registrars.hpp>
 #include <libassert/assert.hpp>
 
+#include "assertion_helpers.h"
+
 namespace {
 
 [[noreturn]] void throw_assertion_failure(const libassert::assertion_info &info) {
-    throw std::logic_error(info.to_string(0, libassert::color_scheme::blank));
+    throw AssertionFailure(info.to_string(0, libassert::color_scheme::blank));
 }
 
 // Makes a failed assertion throw, so a test can expect it and any other test reports it instead of aborting the run.

@@ -19,12 +19,17 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
+#include <optional>
+#include <string_view>
+#include <utility>
 
 #include <libassert/assert.hpp>
 
 #include "geometry/geometry.h"
+#include "string_utils.h"
 
 namespace gis::srs {
 
@@ -55,6 +60,8 @@ namespace units {
 inline constexpr Unit metre{Quantity::Length, 1.0};
 inline constexpr Unit radian{Quantity::Angle, 1.0};
 inline constexpr Unit degree{Quantity::Angle, std::numbers::pi / 180};
+inline constexpr Unit foot{Quantity::Length, 0.3048};
+inline constexpr Unit us_survey_foot{Quantity::Length, 1200.0 / 3937.0};
 
 }
 
@@ -63,6 +70,28 @@ inline constexpr Unit degree{Quantity::Angle, std::numbers::pi / 180};
 constexpr double convert(const double value, const Unit &from, const Unit &to) {
     ASSERT(from.quantity == to.quantity);
     return value * from.si_size / to.si_size;
+}
+
+// The length unit `name` spells, if it is a known spelling.
+[[nodiscard]]
+inline std::optional<Unit> parse_length_unit(const std::string_view name) {
+    constexpr auto spellings = std::to_array<std::pair<std::string_view, Unit>>({
+        {"m", units::metre},
+        {"metre", units::metre},
+        {"meter", units::metre},
+        {"metres", units::metre},
+        {"meters", units::metre},
+        {"ft", units::foot},
+        {"foot", units::foot},
+        {"feet", units::foot},
+        {"US survey foot", units::us_survey_foot},
+        {"ftUS", units::us_survey_foot},
+    });
+    const auto it = std::ranges::find_if(spellings, [&](const auto &s) { return equals_ignore_ascii_case(s.first, name); });
+    if (it == spellings.end()) {
+        return std::nullopt;
+    }
+    return it->second;
 }
 
 }

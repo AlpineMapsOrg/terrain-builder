@@ -29,6 +29,7 @@ add_library(terrainlib
     array_utils.h
     build_config.h
     common_error_codes.h
+    earth.h
     enumerate.h
     expected_utils.h
     fmt_impls.h

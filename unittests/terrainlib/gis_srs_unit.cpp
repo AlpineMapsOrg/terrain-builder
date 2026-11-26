@@ -17,6 +17,7 @@
  *****************************************************************************/
 
 #include <numbers>
+#include <optional>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -42,4 +43,15 @@ TEST_CASE("Unit::is_approx rejects another quantity of the same size", "[gis][sr
 TEST_CASE("convert expresses a value in another unit of the same quantity", "[gis][srs][Unit]") {
     CHECK_THAT(gis::srs::convert(2 * std::numbers::pi, gis::srs::units::radian, gis::srs::units::degree), WithinEpsilon(360));
     CHECK_THAT(gis::srs::convert(180, gis::srs::units::degree, gis::srs::units::radian), WithinEpsilon(std::numbers::pi));
+}
+
+TEST_CASE("parse_length_unit maps a spelling to its unit", "[gis][srs][Unit]") {
+    SECTION("each unit") {
+        CHECK(gis::srs::parse_length_unit("metre") == gis::srs::units::metre);
+        CHECK(gis::srs::parse_length_unit("ft") == gis::srs::units::foot);
+        CHECK(gis::srs::parse_length_unit("US survey foot") == gis::srs::units::us_survey_foot);
+    }
+    SECTION("unknown") {
+        CHECK(gis::srs::parse_length_unit("furlong") == std::nullopt);
+    }
 }
