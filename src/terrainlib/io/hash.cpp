@@ -37,7 +37,7 @@ namespace {
 
 } // namespace
 
-bytes::vector data(const bytes::span bytes, const Algorithm algorithm) {
+bytes::vector compute(const bytes::span bytes, const Algorithm algorithm) {
     switch (algorithm) {
     case Algorithm::None:
         return {};

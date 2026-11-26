@@ -77,14 +77,14 @@ TEST_CASE("XXH3-64 matches the xxHash sanity test vectors in canonical byte orde
     const auto buffer = sanity_buffer(vectors.back().size);
     for (const auto& vector : vectors) {
         CAPTURE(vector.size);
-        CHECK(io::hash::data(std::span(buffer).first(vector.size), io::hash::Algorithm::Xxh3_64) == big_endian(vector.hash));
+        CHECK(io::hash::compute(std::span(buffer).first(vector.size), io::hash::Algorithm::Xxh3_64) == big_endian(vector.hash));
     }
 }
 
-TEST_CASE("the None hash algorithm produces no bytes", "[io][hash]") { CHECK(io::hash::data(sanity_buffer(16), io::hash::Algorithm::None).empty()); }
+TEST_CASE("the None hash algorithm produces no bytes", "[io][hash]") { CHECK(io::hash::compute(sanity_buffer(16), io::hash::Algorithm::None).empty()); }
 
 TEST_CASE("XXH3-64 throughput over 1 GiB", "[!benchmark][io][hash]")
 {
     const auto buffer = sanity_buffer(size_t { 1 } << 30);
-    BENCHMARK("XXH3-64, 1 GiB") { return io::hash::data(buffer, io::hash::Algorithm::Xxh3_64); };
+    BENCHMARK("XXH3-64, 1 GiB") { return io::hash::compute(buffer, io::hash::Algorithm::Xxh3_64); };
 }

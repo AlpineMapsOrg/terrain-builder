@@ -158,7 +158,7 @@ TEST_CASE("Envelope round trips the latest payload version", "[io][envelope]")
     CHECK(envelope.header.class_name == Schema::class_name);
     CHECK(envelope.header.class_version == 3);
     CHECK(envelope.header.hash_algorithm == io::hash::Algorithm::Xxh3_64);
-    CHECK(envelope.header.hash == io::hash::data(encode_value(expected), io::hash::Algorithm::Xxh3_64));
+    CHECK(envelope.header.hash == io::hash::compute(encode_value(expected), io::hash::Algorithm::Xxh3_64));
     CHECK(envelope.header.compression_algorithm == io::compression::Algorithm::ZstdDefault);
     CHECK(envelope.header.uncompressed_size == encode_value(expected).size());
 
@@ -254,7 +254,7 @@ TEST_CASE("Envelope round trips every compression and hash combination", "[io][e
             const auto envelope = decode_envelope(bytes);
             CHECK(envelope.header.compression_algorithm == compression_algorithm);
             CHECK(envelope.header.hash_algorithm == hash_algorithm);
-            CHECK(envelope.header.hash == io::hash::data(encode_value(expected), hash_algorithm));
+            CHECK(envelope.header.hash == io::hash::compute(encode_value(expected), hash_algorithm));
 
             const auto deserialized = REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes));
             CHECK(deserialized == expected);
@@ -485,7 +485,7 @@ TEST_CASE("Envelope headers are read without the payload", "[io][envelope]")
 
         const auto full = REQUIRE_VALUE(io::envelope::read<Schema>(path));
         CHECK(header.uncompressed_size == encode_value(full).size());
-        CHECK(header.hash == io::hash::data(encode_value(full), io::hash::Algorithm::Xxh3_64));
+        CHECK(header.hash == io::hash::compute(encode_value(full), io::hash::Algorithm::Xxh3_64));
     }
 
     SECTION("the class name is not checked")
@@ -577,7 +577,7 @@ TEST_CASE("Envelope files return and verify their payload hash", "[io][envelope]
     const v3::Payload payload { .id = 5, .label = "identity", .enabled = true, .samples = { 4, 5 } };
     const auto hash = REQUIRE_VALUE(io::envelope::write<Schema>(payload, path, {.mode = io::WriteMode::Overwrite}));
     CHECK(hash == REQUIRE_VALUE(io::envelope::read_header(path)).hash);
-    CHECK(hash == io::hash::data(encode_value(payload), io::hash::Algorithm::Xxh3_64));
+    CHECK(hash == io::hash::compute(encode_value(payload), io::hash::Algorithm::Xxh3_64));
     CHECK(REQUIRE_VALUE(io::envelope::read<Schema>(path, {.expected_hash = hash})) == payload);
 
     SECTION("a different expected hash")
