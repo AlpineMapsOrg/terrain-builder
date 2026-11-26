@@ -118,6 +118,7 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_manifold.cpp
     terrainlib/mesh_merge.cpp
     terrainlib/mesh_merge_mapping.cpp
+    terrainlib/mesh_primitives.cpp
     terrainlib/mesh_reindex.cpp
     terrainlib/mesh_split.cpp
     terrainlib/mesh_storage.cpp

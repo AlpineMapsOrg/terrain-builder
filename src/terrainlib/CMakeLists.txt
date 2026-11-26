@@ -217,6 +217,7 @@ add_library(terrainlib
     mesh/merging/mapping.h mesh/merging/mapping.cpp
     mesh/non_manifold_result.h
     mesh/normalize.h
+    mesh/primitives.h
     mesh/reindex.h
     mesh/split.h
     mesh/storage.h

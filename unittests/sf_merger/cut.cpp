@@ -31,6 +31,7 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/bounds.h"
 #include "mesh/geometry.h"
+#include "mesh/primitives.h"
 #include "mesh/storage.h"
 #include "octree/Id.h"
 #include "octree/path_layout.h"
@@ -39,28 +40,6 @@
 namespace {
 
 mesh::Simple sample_mesh() { return mesh::Simple({ { 0, 1, 2 } }, { { 0.0, 0.0, 0.0 }, { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 } }); }
-
-SimpleMesh make_box(const glm::dvec3 min, const glm::dvec3 max) {
-    return SimpleMesh(
-        {
-            {0, 2, 1}, {0, 3, 2},
-            {4, 5, 6}, {4, 6, 7},
-            {0, 1, 5}, {0, 5, 4},
-            {1, 2, 6}, {1, 6, 5},
-            {2, 3, 7}, {2, 7, 6},
-            {3, 0, 4}, {3, 4, 7},
-        },
-        {
-            {min.x, min.y, min.z},
-            {max.x, min.y, min.z},
-            {max.x, max.y, min.z},
-            {min.x, max.y, min.z},
-            {min.x, min.y, max.z},
-            {max.x, min.y, max.z},
-            {max.x, max.y, max.z},
-            {min.x, max.y, max.z},
-        });
-}
 
 } // namespace
 
@@ -109,7 +88,7 @@ TEST_CASE("cut_dataset links, clips or drops each leaf", "[sf_merger][cut]")
 
     SECTION("clipped")
     {
-        const MeshMask mask { .components = { make_box({ 0.0, -1.0, -1.0 }, { 2.0, 3.0, 1.0 }) } };
+        const MeshMask mask { .components = { mesh::make_box(radix::geometry::Aabb<3, double>{ { 0.0, -1.0, -1.0 }, { 2.0, 3.0, 1.0 } }) } };
 
         REQUIRE_VALUE(cut_dataset(input, mask, output_path, true));
 
@@ -124,7 +103,7 @@ TEST_CASE("cut_dataset links, clips or drops each leaf", "[sf_merger][cut]")
 
     SECTION("dropped")
     {
-        const MeshMask mask { .components = { make_box({ 5.0, -1.0, -1.0 }, { 7.0, 3.0, 1.0 }) } };
+        const MeshMask mask { .components = { mesh::make_box(radix::geometry::Aabb<3, double>{ { 5.0, -1.0, -1.0 }, { 7.0, 3.0, 1.0 } }) } };
 
         REQUIRE_VALUE(cut_dataset(input, mask, output_path, true));
 

@@ -40,7 +40,7 @@
 
 namespace {
 
-Polygon2 make_square(const glm::dvec2 min, const glm::dvec2 max) {
+Polygon2 make_rect(const glm::dvec2 min, const glm::dvec2 max) {
     Polygon2 polygon;
     polygon.push_back(Point2(min.x, min.y));
     polygon.push_back(Point2(max.x, min.y));
@@ -70,8 +70,8 @@ TEST_CASE("triangulate and extrude preserve polygon components", "[sf_merger][ma
         second_min = glm::dvec2(-0.02, 0.02);
     }
     MultipolygonWithHoles2 polygons;
-    polygons.add_polygon(make_square(glm::dvec2(-0.04, -0.02), glm::dvec2(-0.02, 0.02)));
-    polygons.add_polygon(make_square(second_min, glm::dvec2(0.04, 0.06)));
+    polygons.add_polygon(make_rect(glm::dvec2(-0.04, -0.02), glm::dvec2(-0.02, 0.02)));
+    polygons.add_polygon(make_rect(second_min, glm::dvec2(0.04, 0.06)));
 
     const SphereMeshMask triangulated = mask::triangulate(SpherePolygonMask{std::move(polygons), projector});
 
@@ -117,8 +117,8 @@ TEST_CASE("extrude turns a patch into a closed volume between the two radii", "[
 
 TEST_CASE("masks split at the antimeridian are projected around their centre", "[sf_merger][mask]") {
     MultipolygonWithHoles2 polygons;
-    polygons.add_polygon(make_square(glm::dvec2(170, -20), glm::dvec2(180, -15)));
-    polygons.add_polygon(make_square(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
+    polygons.add_polygon(make_rect(glm::dvec2(170, -20), glm::dvec2(180, -15)));
+    polygons.add_polygon(make_rect(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
     const SpherePolygonMask mask = REQUIRE_VALUE(mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), gis::srs::wgs84() }, earth::radius));
     REQUIRE(mask.polygons.number_of_polygons_with_holes() == 2);
     radix::geometry::Aabb2d projected_bounds;
