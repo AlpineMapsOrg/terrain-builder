@@ -19,6 +19,7 @@
 
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
+#include "../temp_directory.h"
 
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cpl_error.h>
@@ -33,6 +34,7 @@
 #include "gis/Dataset.h"
 #include "gis/GeoTransform.h"
 #include "gis/gdal.h"
+#include "gis/srs/well_known.h"
 #include "gis/webmercator.h"
 
 using namespace radix;
@@ -392,4 +394,37 @@ TEST_CASE("open_raster, open_vector and open_shared_raster keep GDAL's message f
 
     CPLErrorReset();
     CHECK(error->message() != gis::CplError::get_last_error().message());
+}
+
+TEST_CASE("reopen opens the dataset again as the same kind", "[gis][Dataset]") {
+    gis::gdal::initialize_once();
+    GDALDriver *driver = GetGDALDriverManager()->GetDriverByName("GPKG");
+    REQUIRE(driver != nullptr);
+    const TempDirectory directory;
+    const std::filesystem::path path = directory.path() / "raster_and_layer.gpkg";
+    {
+        // A GeoPackage registers its raster table once the raster has a geotransform and a system.
+        gis::Dataset raster(driver->Create(path.c_str(), 4, 4, 1, GDT_Byte, nullptr));
+        std::array<double, 6> geotransform{0, 1, 0, 4, 0, -1};
+        REQUIRE(raster.as_gdal()->SetGeoTransform(geotransform.data()) == CE_None);
+        REQUIRE(raster.as_gdal()->SetSpatialRef(&gis::srs::webmercator().as_gdal()) == CE_None);
+    }
+    {
+        gis::Dataset layers(GDALDataset::Open(path.c_str(), GDAL_OF_VECTOR | GDAL_OF_UPDATE));
+        REQUIRE(layers.as_gdal()->CreateLayer("points", nullptr, wkbPoint, nullptr) != nullptr);
+    }
+
+    SECTION("raster") {
+        const gis::Dataset original = REQUIRE_VALUE(gis::Dataset::open_raster(path));
+        gis::Dataset reopened = REQUIRE_VALUE(original.reopen());
+        CHECK(reopened.band_count() != 0);
+        CHECK(reopened.as_gdal()->GetLayerCount() == 0);
+    }
+
+    SECTION("vector") {
+        const gis::Dataset original = REQUIRE_VALUE(gis::Dataset::open_vector(path));
+        gis::Dataset reopened = REQUIRE_VALUE(original.reopen());
+        CHECK(reopened.band_count() == 0);
+        CHECK(reopened.as_gdal()->GetLayerCount() == 1);
+    }
 }

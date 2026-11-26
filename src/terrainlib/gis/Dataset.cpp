@@ -72,17 +72,20 @@ static alp::Result<GDALDataset *, CplError> open_gdal_dataset(const std::filesys
 }
 
 alp::Result<Dataset, CplError> Dataset::open_raster(std::filesystem::path path) {
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, GDAL_OF_RASTER));
-    return Dataset(path, dataset);
+    constexpr uint32_t open_flags = GDAL_OF_RASTER;
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, open_flags));
+    return Dataset(path, dataset, open_flags);
 }
 alp::Result<Dataset, CplError> Dataset::open_vector(std::filesystem::path path) {
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, GDAL_OF_VECTOR));
-    return Dataset(path, dataset);
+    constexpr uint32_t open_flags = GDAL_OF_VECTOR;
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, open_flags));
+    return Dataset(path, dataset, open_flags);
 }
 // TODO: investigate GDAL_OF_THREAD_SAFE again (see 7455f47b)
 alp::Result<std::shared_ptr<Dataset>, CplError> Dataset::open_shared_raster(std::filesystem::path path) {
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, GDAL_OF_RASTER));
-    return std::make_shared<Dataset>(Dataset(path, dataset));
+    constexpr uint32_t open_flags = GDAL_OF_RASTER;
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, open_flags));
+    return std::make_shared<Dataset>(Dataset(path, dataset, open_flags));
 }
 
 Dataset::Dataset(std::filesystem::path path) {
@@ -103,16 +106,16 @@ Dataset::Dataset(GDALDataset *dataset) {
         throw std::runtime_error("Dataset is null.");
     }
 }
-Dataset::Dataset(const std::filesystem::path path, GDALDataset *dataset) : Dataset(dataset) {
+Dataset::Dataset(const std::filesystem::path path, GDALDataset *dataset, const uint32_t open_flags) : Dataset(dataset) {
     m_path = path;
+    m_open_flags = open_flags;
 }
 
-// TODO: rename to reopen and fix flag mismatch
-alp::Result<Dataset, CplError> Dataset::clone() const {
-    LOG_TRACE("Cloning dataset {}.", m_path.has_value() ? m_path->string() : "unknown");
-    ASSERT(m_path.has_value(), "only a dataset opened from a path can be cloned");
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(this->m_path.value(), 0));
-    return Dataset(this->m_path.value(), dataset);
+alp::Result<Dataset, CplError> Dataset::reopen() const {
+    LOG_TRACE("Reopening dataset {}.", m_path.has_value() ? m_path->string() : "unknown");
+    ASSERT(m_path.has_value(), "only a dataset opened from a path can be reopened");
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(this->m_path.value(), this->m_open_flags));
+    return Dataset(this->m_path.value(), dataset, this->m_open_flags);
 }
 
 std::vector<GeoreferencingKind> Dataset::georeferencing_kinds() const {

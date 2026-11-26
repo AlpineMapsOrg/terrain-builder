@@ -323,7 +323,7 @@ alp::Result<void, Stopped, gis::CplError, mesh::storage::Draft::LinkError, Build
         } else {
             std::optional<gis::Dataset> &thread_dataset = thread_datasets.local();
             if (!thread_dataset.has_value()) {
-                ALP_TRY(thread_dataset, dataset.clone());
+                ALP_TRY(thread_dataset, dataset.reopen());
             }
             ALP_TRY(build_and_save_node(thread_dataset.value(), space, node, ecef_srs.get(), tile_provider, mesh_srs.get(), output));
         }

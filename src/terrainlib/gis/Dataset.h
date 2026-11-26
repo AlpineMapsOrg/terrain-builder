@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -85,10 +86,10 @@ public:
     static alp::Result<Dataset, CplError> open_vector(std::filesystem::path path);
     [[nodiscard]]
     static alp::Result<std::shared_ptr<Dataset>, CplError> open_shared_raster(std::filesystem::path path);
-    // Opens the dataset's file again, as a dataset of its own.
+    // Opens the dataset's file again, as a dataset of its own of the same kind.
     // May be called from several threads at once.
     [[nodiscard]]
-    alp::Result<Dataset, CplError> clone() const;
+    alp::Result<Dataset, CplError> reopen() const;
 
     [[nodiscard]] std::string name() const;
 
@@ -123,9 +124,10 @@ public:
     [[nodiscard]] const GDALDataset *as_gdal() const;
 
 private:
-    Dataset(const std::filesystem::path path, GDALDataset *dataset);
+    Dataset(std::filesystem::path path, GDALDataset *dataset, uint32_t open_flags);
     UniquePointer<GDALDataset, DatasetDeleter> m_gdal_dataset;
     std::optional<std::filesystem::path> m_path;
+    uint32_t m_open_flags = 0;
 };
 
 } // namespace gis
