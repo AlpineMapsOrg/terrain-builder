@@ -39,7 +39,7 @@ function(alp_setup_gdal)
             -DBUILD_TESTING=OFF
             -DGEOS_BUILD_DEVELOPER=OFF
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-        )
+    )
 
     alp_setup_cmake_project(gdal
         URL https://github.com/OSGeo/gdal.git
@@ -57,6 +57,7 @@ function(alp_setup_gdal)
             -DBUILD_CSHARP_BINDINGS=OFF
             -DGDAL_USE_ICONV=OFF
             -DGDAL_USE_EXTERNAL_LIBS=OFF
+            -DGDAL_USE_CURL=ON
             -DGDAL_USE_GEOS=ON
             -DGDAL_USE_SQLITE3=ON
             "-DCMAKE_INSTALL_RPATH=\$ORIGIN/../../proj/lib"

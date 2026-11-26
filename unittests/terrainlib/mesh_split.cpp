@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <cstdint>
 #include <vector>
 
@@ -5,7 +23,7 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 #include "mesh/split.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 
 namespace {
 
@@ -114,8 +132,8 @@ TEST_CASE("mesh::split_by_vertex") {
 
         CHECK(result.groups[0].positions.size() == 3);
 
-        mesh::validate_basic(result.groups[0]);
-        mesh::validate_basic(result.groups[1]);
+        mesh::debug_assert_valid_basic(result.groups[0]);
+        mesh::debug_assert_valid_basic(result.groups[1]);
     }
 
     SECTION("triangles spanning multiple vertex groups are dropped") {
@@ -157,8 +175,8 @@ TEST_CASE("mesh::split_by_vertex") {
         CHECK(result.groups[0].triangles.size() == 1);
         CHECK(result.groups[1].triangles.empty());
         
-        mesh::validate_basic(result.groups[0]);
-        mesh::validate_basic(result.groups[1]);
+        mesh::debug_assert_valid_basic(result.groups[0]);
+        mesh::debug_assert_valid_basic(result.groups[1]);
     }
 
     SECTION("shared edge quad split by vertex drops all crossing triangles") {
@@ -228,8 +246,8 @@ TEST_CASE("mesh::split_by_triangle") {
         CHECK(result.groups[0].positions.size() == 3);
         CHECK(result.groups[1].positions.size() == 3);
 
-        mesh::validate_basic(result.groups[0]);
-        mesh::validate_basic(result.groups[1]);
+        mesh::debug_assert_valid_basic(result.groups[0]);
+        mesh::debug_assert_valid_basic(result.groups[1]);
     }
 
     SECTION("triangle fan split by triangle creates one local mesh per assigned group") {
@@ -244,7 +262,7 @@ TEST_CASE("mesh::split_by_triangle") {
         for (uint32_t group_index = 0; group_index < 3; ++group_index) {
             CHECK(result.groups[group_index].triangles.size() == 1);
             CHECK(result.groups[group_index].positions.size() == 3);
-            mesh::validate_basic(result.groups[group_index]);
+            mesh::debug_assert_valid_basic(result.groups[group_index]);
         }
     }
 
@@ -260,8 +278,8 @@ TEST_CASE("mesh::split_by_triangle") {
         CHECK(result.groups[0].triangles.size() == 2);
         CHECK(result.groups[1].triangles.size() == 1);
 
-        mesh::validate_basic(result.groups[0]);
-        mesh::validate_basic(result.groups[1]);
+        mesh::debug_assert_valid_basic(result.groups[0]);
+        mesh::debug_assert_valid_basic(result.groups[1]);
 
         // Group 0 contains triangles (0,1,2) and (0,2,3), so it needs 4 local vertices.
         CHECK(result.groups[0].positions.size() == 4);
@@ -282,7 +300,7 @@ TEST_CASE("mesh::split_by_triangle") {
             CHECK(group.positions.size() == group.uvs.size());
             CHECK(group.positions.size() == 3);
             CHECK(group.triangles.size() == 1);
-            mesh::validate_basic(group);
+            mesh::debug_assert_valid_basic(group);
         }
     }
 }

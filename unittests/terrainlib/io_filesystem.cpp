@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
@@ -8,16 +26,16 @@
 #include "../result_helpers.h"
 #include "../temp_directory.h"
 #include "error/prelude.h"
-#include "io/DirectoryNotEmpty.h"
 #include "io/FileError.h"
 #include "io/bytes.h"
 #include "io/filesystem.h"
+#include "io/text.h"
 
 namespace {
 
 // Writes a one-byte file at `path`.
 void write_file(const std::filesystem::path &path) {
-    REQUIRE_VALUE(io::write_bytes_to_path(std::vector<uint8_t>{1}, path));
+    REQUIRE_VALUE(io::bytes::write(std::vector<uint8_t>{1}, path));
 }
 
 } // namespace
@@ -40,6 +58,7 @@ TEST_CASE("A regular file is reported as an existing regular file only", "[io][f
     CHECK(!REQUIRE_VALUE(io::filesystem::is_directory(file)));
     CHECK(REQUIRE_VALUE(io::filesystem::is_regular_file(file)));
     CHECK(!REQUIRE_VALUE(io::filesystem::is_symlink(file)));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_character_file(file)));
 }
 
 TEST_CASE("A symlink to a regular file is reported as a symlink and, followed, as a regular file", "[io][filesystem]") {
@@ -47,7 +66,7 @@ TEST_CASE("A symlink to a regular file is reported as a symlink and, followed, a
     const std::filesystem::path file = directory.path() / "file";
     const std::filesystem::path link = directory.path() / "link";
     write_file(file);
-    std::filesystem::create_symlink(file.filename(), link);
+    REQUIRE_VALUE(io::filesystem::create_symlink(file.filename(), link));
 
     CHECK(REQUIRE_VALUE(io::filesystem::exists(link)));
     CHECK(!REQUIRE_VALUE(io::filesystem::is_directory(link)));
@@ -58,7 +77,7 @@ TEST_CASE("A symlink to a regular file is reported as a symlink and, followed, a
 TEST_CASE("A broken symlink is reported as a symlink to nothing", "[io][filesystem]") {
     const TempDirectory directory("io_filesystem_broken_symlink");
     const std::filesystem::path link = directory.path() / "link";
-    std::filesystem::create_symlink("missing", link);
+    REQUIRE_VALUE(io::filesystem::create_symlink("missing", link));
 
     CHECK(!REQUIRE_VALUE(io::filesystem::exists(link)));
     CHECK(!REQUIRE_VALUE(io::filesystem::is_directory(link)));
@@ -74,7 +93,20 @@ TEST_CASE("A missing path is reported as nothing", "[io][filesystem]") {
     CHECK(!REQUIRE_VALUE(io::filesystem::is_directory(missing)));
     CHECK(!REQUIRE_VALUE(io::filesystem::is_regular_file(missing)));
     CHECK(!REQUIRE_VALUE(io::filesystem::is_symlink(missing)));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_character_file(missing)));
 }
+
+#if defined(__linux__)
+TEST_CASE("A character device is reported as an existing character file only", "[io][filesystem]") {
+    const std::filesystem::path device = "/dev/null";
+
+    CHECK(REQUIRE_VALUE(io::filesystem::exists(device)));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_directory(device)));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_regular_file(device)));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_character_file(device)));
+    CHECK(!REQUIRE_VALUE(io::filesystem::is_symlink(device)));
+}
+#endif
 
 TEST_CASE("A directory is reported as empty until it holds a file", "[io][filesystem]") {
     const TempDirectory directory("io_filesystem_empty");
@@ -106,7 +138,7 @@ TEST_CASE("A missing path is reported as missing, not as an empty directory", "[
     CHECK(!REQUIRE_VALUE(io::filesystem::is_empty_directory(missing)));
     CHECK(REQUIRE_VALUE(io::filesystem::is_missing_or_empty_directory(missing)));
 
-    const alp::Error<io::FileError> error = REQUIRE_ERROR(io::filesystem::is_empty(missing));
+    const auto error = REQUIRE_ERROR(io::filesystem::is_empty(missing));
     CHECK(error.holds_code(io::make_file_not_found(missing)));
 }
 
@@ -126,9 +158,9 @@ TEST_CASE("Creating an empty directory fails where one holds something, naming i
     const std::filesystem::path used = directory.path() / "used";
     write_file(used / "file");
 
-    const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(io::filesystem::create_empty_directory(used));
+    const auto error = REQUIRE_ERROR(io::filesystem::create_empty_directory(used));
 
-    CHECK(error.holds_code(io::DirectoryNotEmpty{used}));
+    CHECK(error.holds_code(io::FileError(std::make_error_code(std::errc::directory_not_empty), used)));
     CHECK(REQUIRE_VALUE(io::filesystem::is_regular_file(used / "file")));
 }
 
@@ -137,7 +169,7 @@ TEST_CASE("Creating an empty directory fails where a regular file is in the way,
     const std::filesystem::path file = directory.path() / "file";
     write_file(file);
 
-    const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(io::filesystem::create_empty_directory(file));
+    const auto error = REQUIRE_ERROR(io::filesystem::create_empty_directory(file));
 
     CHECK(error.holds_and<io::FileError>([&](const io::FileError &e) { return e.path() == file; }));
 }
@@ -181,7 +213,7 @@ TEST_CASE("Visiting files below a missing path fails, naming the path", "[io][fi
     const TempDirectory directory("io_filesystem_visit_missing");
     const std::filesystem::path missing = directory.path() / "missing";
 
-    const alp::Error<io::FileError> error = REQUIRE_ERROR(io::filesystem::visit_files_recursively(missing, [](const std::filesystem::path &) {
+    const auto error = REQUIRE_ERROR(io::filesystem::visit_files_recursively(missing, [](const std::filesystem::path &) {
         return true;
     }));
 
@@ -208,13 +240,23 @@ TEST_CASE("create_directory fails below a missing parent", "[io][filesystem]") {
     REQUIRE_ERROR(io::filesystem::create_directory(directory.path() / "missing" / "created"));
 }
 
+TEST_CASE("create_parent_directories creates missing parents and accepts existing ones", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_create_parent_directories");
+    const std::filesystem::path path = directory.path() / "parent" / "nested" / "file";
+
+    CHECK(REQUIRE_VALUE(io::filesystem::create_parent_directories(path)));
+    CHECK(REQUIRE_VALUE(io::filesystem::is_directory(path.parent_path())));
+    CHECK(!REQUIRE_VALUE(io::filesystem::exists(path)));
+    CHECK(!REQUIRE_VALUE(io::filesystem::create_parent_directories(path)));
+}
+
 TEST_CASE("remove deletes the file at a path and reports that there was one", "[io][filesystem]") {
     const TempDirectory directory("io_filesystem_remove");
     const std::filesystem::path file = directory.path() / "file";
     write_file(file);
 
     CHECK(REQUIRE_VALUE(io::filesystem::remove(file)));
-    CHECK(!std::filesystem::exists(file));
+    CHECK(!REQUIRE_VALUE(io::filesystem::exists(file)));
 }
 
 TEST_CASE("remove reports that there was nothing to remove at a missing path", "[io][filesystem]") {
@@ -238,7 +280,7 @@ TEST_CASE("remove_all deletes a directory with everything in it and reports how 
     write_file(non_empty / "file");
 
     CHECK(REQUIRE_VALUE(io::filesystem::remove_all(non_empty)) == 2);
-    CHECK(!std::filesystem::exists(non_empty));
+    CHECK(!REQUIRE_VALUE(io::filesystem::exists(non_empty)));
 }
 
 TEST_CASE("remove_all reports that there was nothing to remove at a missing path", "[io][filesystem]") {
@@ -291,4 +333,100 @@ TEST_CASE("equivalent fails for a missing path", "[io][filesystem]") {
     write_file(file);
 
     REQUIRE_ERROR(io::filesystem::equivalent(file, directory.path() / "missing"));
+}
+
+TEST_CASE("rename_no_replace moves the source to a free destination", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_rename_no_replace");
+    const std::filesystem::path source = directory.path() / "source";
+    const std::filesystem::path destination = directory.path() / "destination";
+    REQUIRE_VALUE(io::text::write("source", source));
+
+    REQUIRE_VALUE(io::filesystem::rename_no_replace(source, destination));
+
+    CHECK(!REQUIRE_VALUE(io::filesystem::exists(source)));
+    CHECK(REQUIRE_VALUE(io::text::read(destination)) == "source");
+}
+
+TEST_CASE("rename_no_replace fails onto an existing destination, naming it and leaving both alone", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_rename_no_replace_existing");
+    const std::filesystem::path source = directory.path() / "source";
+    const std::filesystem::path destination = directory.path() / "destination";
+
+    SECTION("file onto a file") {
+        REQUIRE_VALUE(io::text::write("source", source));
+        REQUIRE_VALUE(io::text::write("destination", destination));
+
+        const auto error = REQUIRE_ERROR(io::filesystem::rename_no_replace(source, destination));
+
+        CHECK(error.holds_code(io::FileError(std::make_error_code(std::errc::file_exists), destination)));
+        CHECK(REQUIRE_VALUE(io::text::read(source)) == "source");
+        CHECK(REQUIRE_VALUE(io::text::read(destination)) == "destination");
+    }
+
+    SECTION("directory onto an empty directory") {
+        REQUIRE_VALUE(io::text::write("source", source / "file"));
+        REQUIRE_VALUE(io::filesystem::create_directory(destination));
+
+        const auto error = REQUIRE_ERROR(io::filesystem::rename_no_replace(source, destination));
+
+        CHECK(error.holds_code(io::FileError(std::make_error_code(std::errc::file_exists), destination)));
+        CHECK(REQUIRE_VALUE(io::text::read(source / "file")) == "source");
+        CHECK(REQUIRE_VALUE(io::filesystem::is_empty_directory(destination)));
+    }
+}
+
+TEST_CASE("rename_no_replace fails as not found for a missing source or destination parent", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_rename_no_replace_missing");
+    const std::filesystem::path source = directory.path() / "source";
+    std::filesystem::path destination = directory.path() / "destination";
+
+    SECTION("missing source") {
+    }
+
+    SECTION("missing destination parent") {
+        write_file(source);
+        destination = directory.path() / "missing" / "destination";
+    }
+
+    const auto error = REQUIRE_ERROR(io::filesystem::rename_no_replace(source, destination));
+
+    CHECK(error.holds_and<io::FileError>([](const io::FileError &e) { return e.is_not_found(); }));
+}
+
+TEST_CASE("sync_file accepts a file", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_sync_file");
+    const std::filesystem::path file = directory.path() / "file";
+    write_file(file);
+
+    REQUIRE_VALUE(io::filesystem::sync_file(file));
+}
+
+TEST_CASE("sync_file fails for a missing path, naming it", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_sync_file_missing");
+    const std::filesystem::path missing = directory.path() / "missing";
+
+    const auto error = REQUIRE_ERROR(io::filesystem::sync_file(missing));
+
+    CHECK(error.holds_code(io::make_file_not_found(missing)));
+}
+
+TEST_CASE("resize_file truncates a file and extends it with zeros", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_resize_file");
+    const std::filesystem::path file = directory.path() / "file";
+    REQUIRE_VALUE(io::bytes::write(io::bytes::vector{1, 2, 3}, file));
+
+    REQUIRE_VALUE(io::filesystem::resize_file(file, 2));
+    CHECK(REQUIRE_VALUE(io::bytes::read(file)) == io::bytes::vector{1, 2});
+
+    REQUIRE_VALUE(io::filesystem::resize_file(file, 4));
+    CHECK(REQUIRE_VALUE(io::bytes::read(file)) == io::bytes::vector{1, 2, 0, 0});
+}
+
+TEST_CASE("resize_file fails for a missing path, naming it", "[io][filesystem]") {
+    const TempDirectory directory("io_filesystem_resize_file_missing");
+    const std::filesystem::path missing = directory.path() / "missing";
+
+    const auto error = REQUIRE_ERROR(io::filesystem::resize_file(missing, 1));
+
+    CHECK(error.holds_code(io::make_file_not_found(missing)));
 }

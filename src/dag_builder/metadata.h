@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <cstdint>
@@ -9,10 +28,6 @@
 #include "cluster.h"
 #include "dag_id.h"
 #include "utils.h"
-#include "zpp_bits_utils.h"
-#include "octree/storage/defaults.h"
-#include "octree/storage/codec/ZppBitsCodec.h"
-#include "octree/storage/codec/ReadOnlyCodec.h"
 
 
 namespace dag {
@@ -21,12 +36,16 @@ struct Group {
     std::vector<Id> children; // higher-detail clusters sharing this group's boundary
     double error; // absolute error compared to the original mesh
     radix::geometry::Aabb3d bounds; // union of the children's bounds
+
+    bool operator==(const Group &) const = default;
 };
 
 struct NodeMetadata {
     std::vector<uint32_t> group_assignment; // cluster index -> group id
     std::vector<uint32_t> triangle_counts; // cluster index -> triangle count
     std::vector<Group> groups;
+
+    bool operator==(const NodeMetadata &) const = default;
 
     uint32_t group_count() const {
         return this->groups.size();
@@ -80,33 +99,3 @@ inline const radix::geometry::Aabb3d &get_group_bounds(const NodeMetadata &metad
 }
 
 } // namespace dag
-
-// Set default codec for metadata.
-namespace octree {
-template <>
-struct DefaultCodec<dag::NodeMetadata> {
-    using type = ReadOnlyCodec<ZppBitsCodec<dag::NodeMetadata>>;
-};
-}
-
-namespace zpp::bits {
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::Group &group) {
-    return archive(group.children, group.error, group.bounds);
-}
-template <typename Archive>
-auto serialize(Archive &archive, dag::Group &group) {
-    return archive(group.children, group.error, group.bounds);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::NodeMetadata &metadata) {
-    return archive(metadata.group_assignment, metadata.triangle_counts, metadata.groups);
-}
-template <typename Archive>
-auto serialize(Archive &archive, dag::NodeMetadata &metadata) {
-    return archive(metadata.group_assignment, metadata.triangle_counts, metadata.groups);
-}
-
-} // namespace zpp::bits

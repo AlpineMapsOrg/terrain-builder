@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdlib>
@@ -34,7 +53,7 @@ int build_sf(
         " --min-texture-level 12 --max-texture-level 17"
         " --mesh-srs EPSG:4978 --verbosity warn"
         " batch --target-level 15 --output " + shell_quote(output) +
-        " --format .terrain --threads 1";
+        " --format .sfmesh --threads 1";
     return std::system(command.c_str());
 }
 
@@ -66,8 +85,8 @@ TEST_CASE("SF builders preserve geometry at regular and point-touching mask bord
         " --verbosity warn";
     REQUIRE(std::system(merge_command.c_str()) == 0);
 
-    const std::filesystem::path working_relative = "15/26291/18610/27235.terrain";
-    const std::filesystem::path regression_relative = "15/26290/18610/27235.terrain";
+    const std::filesystem::path working_relative = "15/26291/18610/27235.sfmesh";
+    const std::filesystem::path regression_relative = "15/26290/18610/27235.sfmesh";
     const std::filesystem::path working_path = merged_output / working_relative;
     const std::filesystem::path regression_path = merged_output / regression_relative;
 

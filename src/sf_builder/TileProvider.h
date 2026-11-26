@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2024 Martin Braunsperger
+ * Copyright (C) 2024 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <filesystem>
@@ -9,8 +28,12 @@
 
 #include "error/Error.h"
 #include "error/Result.h"
+#include "error/log.h"
+#include "error/try.h"
 #include "error/utils.h"
-#include "texture/io.h"
+#include "io/FileError.h"
+#include "io/filesystem.h"
+#include "io/mat.h"
 #include "tile_path.h"
 
 // A tile that a provider does not have.
@@ -24,8 +47,19 @@ inline std::string format_as(const MissingTile &error) {
     return fmt::format("the provider has no tile {}", radix::tile::to_string(error.tile));
 }
 
+// A tile that a provider has, but whose image it cannot read.
+struct UnreadableTile {
+    radix::tile::Id tile;
+
+    bool operator==(const UnreadableTile&) const = default;
+};
+
+inline std::string format_as(const UnreadableTile& error) {
+    return fmt::format("the provider cannot read the image of tile {}", radix::tile::to_string(error.tile));
+}
+
 // An error from getting a tile from a provider.
-using TileError = alp::Error<MissingTile, texture::io::ReadError>;
+using TileError = alp::Error<MissingTile, UnreadableTile>;
 
 class TileProvider {
 public:
@@ -40,19 +74,36 @@ public:
 
     alp::Result<cv::Mat, TileError> get_tile(const radix::tile::Id tile) const override {
         const std::optional<std::filesystem::path> tile_path = this->get_tile_path(tile);
-        if (!tile_path.has_value() || !TilePathProvider::is_usable_tile_path(tile_path.value())) {
+        if (!tile_path.has_value()) {
             return alp::make_error(MissingTile{tile});
         }
-        return texture::io::read_from_path(tile_path.value());
+
+        auto usable_result = TilePathProvider::is_usable_tile_path(tile_path.value());
+        ALP_TRY(const bool usable, alp::map_error<io::FileError>(std::move(usable_result), UnreadableTile{tile}));
+        if (!usable) {
+            return alp::make_error(MissingTile{tile});
+        }
+
+        auto image_result = io::mat::read(tile_path.value());
+        ALP_TRY(cv::Mat image, alp::map_error<io::mat::ReadError>(std::move(image_result), UnreadableTile{tile}));
+        return image;
     }
     virtual bool has_tile(const radix::tile::Id tile) const override {
         const std::optional<std::filesystem::path> tile_path = this->get_tile_path(tile);
-        return tile_path.has_value() && TilePathProvider::is_usable_tile_path(tile_path.value());
+        if (!tile_path.has_value()) {
+            return false;
+        }
+        const alp::Result<bool, io::FileError> usable_result = TilePathProvider::is_usable_tile_path(tile_path.value());
+        LOG_WARN_IF_ERROR(usable_result, "checking for a tile file, treating it as missing");
+        return usable_result.value_or(false);
     }
 
 private:
-    static bool is_usable_tile_path(const std::filesystem::path &tile_path) {
-        return !tile_path.empty() && std::filesystem::is_regular_file(tile_path);
+    static alp::Result<bool, io::FileError> is_usable_tile_path(const std::filesystem::path &tile_path) {
+        if (tile_path.empty()) {
+            return false;
+        }
+        return io::filesystem::is_regular_file(tile_path);
     }
 };
 

@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "../catch2_helpers.h"
 
 #include <vector>
@@ -36,6 +54,13 @@ struct ReleaseNode {
 struct IgnoreNode {
     void operator()(Node *&) const noexcept {}
 };
+
+struct IgnoreVoid {
+    void operator()(void *&) const noexcept {}
+};
+
+template <typename T>
+concept Dereferenceable = requires(const T &value) { *value; };
 
 } // namespace
 
@@ -142,6 +167,11 @@ TEST_CASE("UniquePointer reaches the resource through the pointer") {
 
 TEST_CASE("UniquePointer costs no more than the pointer it holds") {
     STATIC_REQUIRE(sizeof(UniquePointer<Node, IgnoreNode>) == sizeof(Node *));
+}
+
+TEST_CASE("UniquePointer to void cannot be dereferenced") {
+    STATIC_REQUIRE(!Dereferenceable<UniquePointer<void, IgnoreVoid>>);
+    STATIC_REQUIRE(Dereferenceable<UniquePointer<Node, IgnoreNode>>);
 }
 
 TEST_CASE("every storage models the storage concept") {

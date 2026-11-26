@@ -1,3 +1,24 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
+#include <list>
 #include <numeric>
 #include <string>
 #include <unordered_map>
@@ -10,22 +31,21 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
+#include "cli_support/log.h"
+#include "error/log.h"
 #include "error/try.h"
-#include "error/unwrap.h"
-#include "io/Error.h"
 #include "io/filesystem.h"
-#include "log.h"
 #include "octree/Id.h"
-#include "octree/NodeStatus.h"
-#include "octree/NodeStatusOrMissing.h"
-#include "octree/Storage.h"
-#include "octree/traverse.h"
+#include "mesh/storage.h"
+#include "octree/storage/Index.h"
+#include "store/open.h"
 #include "cli.h"
+#include "hierarchy/NodeStatusOrMissing.h"
 
 namespace {
 struct IndexNode {
     octree::Id id;
-    octree::NodeStatusOrMissing status;
+    hierarchy::NodeStatusOrMissing status;
     bool expanded = false;
 };
 struct MeshNode {
@@ -45,8 +65,8 @@ public:
     using iterator = std::list<DisplayEntry>::iterator;
     using const_iterator = std::list<DisplayEntry>::const_iterator;
 
-    explicit TreeView(const octree::IndexedStorage &storage, const octree::Id root) : root(root), _storage(storage) {
-        const octree::NodeStatusOrMissing status = this->_storage.index().get(root);
+    explicit TreeView(const mesh::storage::Storage &storage, const octree::Id root) : root(root), _storage(storage) {
+        const hierarchy::NodeStatusOrMissing status(this->_storage.index().status(root));
         this->_view.emplace_back(IndexNode{root, status, false});
     }
 
@@ -82,10 +102,10 @@ public:
         }
         parent.expanded = true;
 
-        if (parent.status == octree::NodeStatusOrMissing::Leaf) {
+        if (parent.status == hierarchy::NodeStatusOrMissing::Leaf) {
             auto result = this->_storage.load(parent.id);
             DisplayEntry entry;
-            if (result.has_value()) {
+            if (result) {
                 const auto &mesh = result.value();
                 entry = MeshNode{parent.id, mesh.vertex_count(), mesh.face_count()};
             } else {
@@ -101,12 +121,11 @@ public:
         }
         const auto children = parent.id.children().value();
         for (const auto &child_id : children) {
-            auto status_opt = this->_storage.index().get(child_id);
+            const std::optional<hierarchy::NodeStatus> status_opt = this->_storage.index().status(child_id);
             if (!status_opt.has_value()) {
                 continue;
             }
-            const octree::NodeStatus status = status_opt.value();
-            IndexNode child_node{child_id, status, false};
+            IndexNode child_node{child_id, *status_opt, false};
             it++;
             it = this->_view.emplace(it, child_node);
         }
@@ -127,7 +146,7 @@ public:
         }
         parent.expanded = false;
 
-        if (parent.status == octree::NodeStatusOrMissing::Leaf) {
+        if (parent.status == hierarchy::NodeStatusOrMissing::Leaf) {
             it++;
             it = this->_view.erase(it);
             return;
@@ -149,14 +168,16 @@ public:
 
 private:
     std::list<DisplayEntry> _view;
-    const octree::IndexedStorage& _storage;
+    const mesh::storage::Storage& _storage;
 };
 
-const octree::Id find_deepest_root(const octree::IndexMap &index, const octree::Id &root = octree::Id::root()) {
-    switch (octree::NodeStatusOrMissing(index.get(root))) {
-    case octree::NodeStatusOrMissing::Missing:
+const octree::Id find_deepest_root(
+    const octree::storage::Index &index,
+    const octree::Id &root = octree::Id::root()) {
+    switch (hierarchy::NodeStatusOrMissing(index.status(root))) {
+    case hierarchy::NodeStatusOrMissing::Missing:
         return octree::Id::root();
-    case octree::NodeStatusOrMissing::Leaf:
+    case hierarchy::NodeStatusOrMissing::Leaf:
         return root;
     default:
         break;
@@ -167,7 +188,7 @@ const octree::Id find_deepest_root(const octree::IndexMap &index, const octree::
         const auto children = current.children().value();
         std::optional<octree::Id> next;
         for (const octree::Id &child_id : children) {
-            if (!index.get(child_id).has_value()) {
+            if (!index.status(child_id).has_value()) {
                 continue;
             }
             if (next.has_value()) {
@@ -187,13 +208,12 @@ const octree::Id find_deepest_root(const octree::IndexMap &index, const octree::
 
 } // namespace
 
-alp::Result<octree::IndexedStorage, octree::OpenError> open_path_indexed(const std::filesystem::path& path) {
+// Opens the mesh storage at `path`, or the one whose index file `path` names.
+alp::Result<mesh::storage::Storage, io::FileError, mesh::storage::OpenError> open_path_indexed(const std::filesystem::path& path) {
     ALP_TRY(const bool is_directory, io::filesystem::is_directory(path));
-    if (is_directory) {
-        return octree::open_folder_indexed(path);
-    } else {
-        return octree::open_index(path);
-    }
+    const std::filesystem::path storage_path = is_directory ? path : path.parent_path();
+    ALP_TRY(mesh::storage::Storage storage, mesh::storage::open(storage_path, store::Accept::PublishedOrDraft));
+    return storage;
 }
 
 std::string render_line_content(const DisplayEntry &entry) {
@@ -224,8 +244,13 @@ ftxui::Element render_line(const DisplayEntry &entry, size_t base_level, bool is
 }
 
 int run(const cli::Args &args) {
-    const octree::IndexedStorage storage = alp::unwrap(open_path_indexed(args.dataset_path));
-    const octree::IndexMap &index = storage.index();
+    auto storage_result = open_path_indexed(args.dataset_path);
+    if (!storage_result.has_value()) {
+        LOG_REPORT(storage_result.error(), "opening the dataset {}", args.dataset_path);
+        return EXIT_FAILURE;
+    }
+    const mesh::storage::Storage storage = std::move(storage_result).value();
+    const octree::storage::Index &index = storage.index();
     const octree::Id root_id = args.full_view ? octree::Id::root() : find_deepest_root(index);
 
     TreeView tree_view(storage, root_id);
@@ -298,7 +323,7 @@ int run(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    Log::init(args.log_level);
+    cli_support::Log::init(args.log_level);
 
     const std::string arg_str = std::accumulate(argv, argv + argc, std::string(),
                                                 [](const std::string &acc, const char *arg) {

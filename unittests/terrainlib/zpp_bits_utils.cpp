@@ -1,10 +1,27 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "../catch2_helpers.h"
-#include "zpp_bits_utils.h"
 
 #include <cstdint>
 #include <vector>
 
-#include "io/serialize.h"
+#include "io/serde.h"
 #include "numeric/number_types.h"
 
 namespace {
@@ -16,14 +33,14 @@ struct Holder {
 
 template <typename T>
 std::vector<uint8_t> serialized(const T &value) {
-    auto bytes = io::write_to_bytes(Holder<T>{.value = value});
+    auto bytes = io::serde::serialize(Holder<T>{.value = value});
     REQUIRE(bytes.has_value());
     return bytes.value();
 }
 
 template <typename T>
 T deserialized(const std::vector<uint8_t> &bytes) {
-    auto holder = io::read_from_bytes<Holder<T>>(bytes);
+    auto holder = io::serde::deserialize<Holder<T>>(bytes);
     REQUIRE(holder.has_value());
     return holder.value().value;
 }

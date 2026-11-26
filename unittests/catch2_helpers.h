@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 alpinemaps.org
- * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
+ * AlpineMaps.org
+ * Copyright (C) 2022 Adam Celarek-Litofcenko
+ * Copyright (C) 2022 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@
 
 #include "fmt_impls.h"
 #include "geometry/geometry.h"
-#include "type_utils.h"
+#include "type_name.h"
 
 namespace Catch {
 template <glm::length_t N, typename T>
@@ -46,11 +46,7 @@ struct StringMaker<glm::vec<N, T>> {
 template <glm::length_t N, typename T>
 struct StringMaker<radix::geometry::Aabb<N, T>> {
     static std::string convert(const radix::geometry::Aabb<N, T> &value) {
-        return fmt::format("Aabb{}{}(({}, {}, {}) - ({}, {}, {}))", 
-            N,
-            type_name<T>()[0], 
-            value.min.x, value.min.y, value.min.z,
-            value.max.x, value.max.y, value.max.z);
+        return fmt::format("Aabb{}{}({} - {})", N, type_name<T>()[0], value.min, value.max);
     }
 };
 }
@@ -73,6 +69,11 @@ bool is_within_epsilon(const glm::vec<N, double> &actual, const glm::vec<N, doub
         }
     }
     return true;
+}
+
+template <glm::length_t N>
+bool is_within_epsilon(const radix::geometry::Aabb<N, double> &actual, const radix::geometry::Aabb<N, double> &expected) {
+    return is_within_epsilon(actual.min, expected.min) && is_within_epsilon(actual.max, expected.max);
 }
 } // namespace detail
 

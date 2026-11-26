@@ -1,6 +1,26 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <algorithm>
 #include <cstdint>
 #include <optional>
+#include <stop_token>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -15,12 +35,12 @@
 #include "cluster.h"
 #include "clusterize.h"
 #include "compact.h"
-#include "encoded.h"
 #include "geometry/geometry.h"
 #include "numeric/int_math.h"
+#include "cli_support/log.h"
 #include "error/log.h"
-#include "error/unwrap.h"
-#include "log.h"
+#include "error/try.h"
+#include "error/utils.h"
 #include "merge/clusterings.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
@@ -28,39 +48,32 @@
 #include "octree/IdRect.h"
 #include "octree/OddLevelShifted.h"
 #include "octree/Space.h"
-#include "octree/Storage.h"
-#include "octree/storage/open.h"
-#include "octree/traverse.h"
-#include "ProgressIndicator.h"
+#include "mesh/storage.h"
+#include "hierarchy/traverse.h"
+#include "cli_support/ProgressIndicator.h"
 #include "partition.h"
 #include "simplify.h"
 #include "slice.h"
+#include "stop.h"
+#include "store/Checkpointer.h"
 #include "range_utils.h"
 #include "storage.h"
-#include "thread_safe_storage.h"
 #include "utils.h"
 #include "vertex_lock.h"
 #include "parallel.h"
-#include "ContinuationMode.h"
+#include "path_utils.h"
+#include "store/storage_paths.h"
+#include "sf/validate_index.h"
 
 namespace dag {
 
 namespace {
 
-// Load a mesh from storage and clusterize it.
-std::optional<Clustering> load_and_clusterize_mesh(
-    const octree::MeshStorage &storage,
-    const octree::Id &id) {
-    const auto result = storage.load(id);
-
-    if (!result) {
-        if (!result.error().holds_and<::io::FileError>(&::io::FileError::is_not_found)) {
-            LOG_UNEXPECTED(result.error());
-        }
-        return std::nullopt;
-    }
-
-    const mesh::Simple &mesh = result.value();
+// Loads a node's mesh and clusterizes it.
+alp::Result<Clustering, mesh::storage::Storage::LoadError> load_and_clusterize_mesh(
+    const mesh::storage::Storage& storage,
+    const octree::Id& id) {
+    ALP_TRY(const mesh::Simple mesh, storage.load(id));
 
     LOG_DEBUG(
         "Clustering mesh for node {} with {} vertices and {} triangles",
@@ -122,17 +135,17 @@ LodResult build_lod(
 // Load input meshes, clusterize, and filter them to the target region.
 std::vector<Clustering> load_input_clusters(
     const std::span<const octree::Id> input_ids,
-    const octree::MeshStorage &input_storage,
+    const mesh::storage::Storage &input_storage,
     const RegionFilter& filter) {
     std::vector<Clustering> result;
 
     for (const octree::Id &id : input_ids) {
-        auto opt = load_and_clusterize_mesh(input_storage, id);
-        if (!opt) {
-            LOG_WARN("Failed to load or clusterize {}, skipping", id);
+        auto clustering_result = load_and_clusterize_mesh(input_storage, id);
+        if (!clustering_result.has_value()) {
+            LOG_REPORT(clustering_result.error(), "skipping the input node");
             continue;
         }
-        Clustering clustering = std::move(*opt);
+        Clustering clustering = std::move(clustering_result).value();
         if (clustering.is_empty()) {
             LOG_WARN("Loaded clustering was empty for {}, skipping", id);
             continue;
@@ -149,12 +162,16 @@ std::vector<Clustering> load_input_clusters(
 
 // Dependencies shared across the whole dag building pipeline.
 struct BuildContext {
-    const octree::IndexedMeshStorage &input_storage;
-    ThreadSafeStorage<octree::IndexedDagStorage> output_storage;
-    const BuildOptions &options;
-    const octree::Space &space;
-    const octree::OddLevelShifted &shifted_space;
-    const radix::geometry::Aabb3d &root_bounds;
+    const mesh::storage::Storage& input_storage;
+    dag::storage::Draft& output_storage;
+    const BuildOptions& options;
+    const octree::Space& space;
+    const octree::OddLevelShifted& shifted_space;
+    const radix::geometry::Aabb3d& root_bounds;
+    const dag::storage::Checkpoint& checkpoint;
+    mesh::storage::Draft* debug_output;
+    const std::stop_token& stop;
+    mutable store::Checkpointer checkpointer{};
 };
 
 // Assemble a node's metadata from a build_lod result.
@@ -210,7 +227,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
         // Load dag node clusters
         auto dag_node = ctx.output_storage.load(id);
         if (!dag_node) {
-            LOG_UNEXPECTED(dag_node.error());
+            LOG_REPORT(dag_node.error());
             continue;
         }
         auto &[metadata, clustering] = dag_node.value();
@@ -460,16 +477,16 @@ LevelWorkplan build_level_workplan(
 
 // Pre-filter input nodes to only those that intersect the target root bounds.
 std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
-    const octree::IndexMap &index,
+    const octree::storage::Index &index,
     const octree::Space &space,
     const radix::geometry::Aabb3d &root_bounds) {
     const auto start = space.find_smallest_node_encompassing_bounds(root_bounds)
         .value_or(octree::Id::root());
     std::vector<std::vector<octree::Id>> result(octree::Id::max_level() + 1);
-    octree::traverse(
-        index,
-        [&](const octree::Id &id, const octree::NodeStatus status) {
-            if (status == octree::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
+    hierarchy::traverse(
+        index.map(),
+        [&](const octree::Id &id, const hierarchy::NodeStatus status) {
+            if (status == hierarchy::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
                 result[id.level()].push_back(id);
             }
         },
@@ -493,8 +510,18 @@ std::optional<uint32_t> find_max_input_level(const std::vector<std::vector<octre
 
 } // namespace
 
-// Build a single level of the DAG, returning the set of nodes that were built.
-std::unordered_set<octree::Id> build_level(
+std::filesystem::path make_debug_mesh_path(const std::filesystem::path& output_path)
+{
+    auto path = paths::normalized(output_path);
+    if (store::is_draft(path)) {
+        path.replace_extension();
+    }
+    path += "-debug";
+    return path;
+}
+
+// Build a single level of the DAG, returning the set of nodes that were built or the first failure.
+alp::Result<std::unordered_set<octree::Id>, BuildError> build_level(
     const uint32_t level,
     const std::vector<std::vector<octree::Id>> &input_by_level,
     const std::unordered_set<octree::Id> &prev_level_built,
@@ -508,87 +535,81 @@ std::unordered_set<octree::Id> build_level(
 
     LOG_INFO("Building level {} ({} targets)", level, targets.size());
 
-    std::unordered_set<octree::Id> already_built;
-    if (ctx.options.continuation_mode != ContinuationMode::Overwrite) {
-        for (const octree::Id &target : targets) {
-            if (ctx.output_storage.has(target)) {
-                already_built.insert(target);
-            }
-        }
-    }
+    tbb::concurrent_vector<octree::Id> built_ids;
 
-    if (ctx.options.continuation_mode == ContinuationMode::Error && !already_built.empty()) {
-        LOG_ERROR_AND_EXIT("Found some of target nodes already in built in the output directory, use --resume or --overwrite");
-    }
-
-    // Initialize debug storage if requested (contains .glb meshes)
-    std::optional<octree::MeshStorage> debug_storage;
-    if (ctx.options.write_debug_meshes) {
-        debug_storage = alp::unwrap(octree::open_folder(
-            ctx.output_storage.base_path().string() + "-debug",
-            false,
-            octree::OpenOptions{.preferred_extension_with_dot = ".glb"}));
-    }
-
-    tbb::concurrent_vector<octree::Id> saved_ids;
-
-    ProgressIndicator progress(targets.size());
+    cli_support::ProgressIndicator progress(targets.size());
     auto progress_thread = progress.start_monitoring();
 
-    parallel_foreach(targets, [&](const octree::Id &target) {
-        if (already_built.contains(target)) {
-            progress.task_finished();
-            return;
+    // Links the target from the checkpoint, or builds and saves it.
+    const auto process_target = [&](const octree::Id& target) -> alp::Result<void, BuildError> {
+        ALP_TRY(check_not_stopped(ctx.stop));
+        if (ctx.checkpoint.has(target)) {
+            auto link_result = ctx.output_storage.link_from(target, ctx.checkpoint);
+            ALP_TRY(alp::wrap_error(std::move(link_result), BuildIoError::IncompatibleCheckpoint));
+            built_ids.push_back(target);
+            return {};
         }
 
         const auto dag_ids = find_value(inner_nodes, target).value_or(std::vector<octree::Id>{});
         const auto target_input_ids = find_value(input_sources, target).value_or(std::vector<octree::Id>{});
 
-        auto result = build_node(target, target_input_ids, dag_ids, ctx);
-        if (result) {
-            const auto save_result = ctx.output_storage.save(target, *result);
-            if (save_result) {
-                if (debug_storage) {
-                    const auto debug_save_result = debug_storage->save(target, clustering_to_mesh(result->clustering));
-                    LOG_UNEXPECTED_OF(debug_save_result);
-                }
-                saved_ids.push_back(target);
-            } else {
-                LOG_UNEXPECTED(save_result.error());
+        const std::optional<dag::ClusterBatch> batch_opt = build_node(target, target_input_ids, dag_ids, ctx);
+        if (batch_opt.has_value()) {
+            auto save_result = ctx.output_storage.save(target, *batch_opt);
+            ALP_TRY(alp::wrap_error(std::move(save_result), BuildIoError::UnwritableOutput));
+            if (ctx.debug_output != nullptr) {
+                const auto debug_mesh = clustering_to_mesh(batch_opt->clustering);
+                auto debug_save_result = ctx.debug_output->save(target, debug_mesh);
+                ALP_TRY(alp::wrap_error(std::move(debug_save_result), BuildIoError::UnwritableOutput));
             }
+            built_ids.push_back(target);
         }
+
+        // One task at a time saves the index once the checkpoint interval has passed.
+        ctx.checkpointer.save_if_due_or_warn(ctx.output_storage);
+        return {};
+    };
+
+    const parallel::Execution execution = ctx.options.parallelize ? parallel::Execution::Parallel : parallel::Execution::Serial;
+    // A failure stops the level like a stop request: active tasks finish their nodes, queued ones are skipped.
+    auto level_result = parallel::try_for_each(targets, [&](const octree::Id& target) {
+        auto target_result = process_target(target);
         progress.task_finished();
-    }, ctx.options.parallelize);
+        return target_result;
+    }, execution);
 
+    // Targets skipped after a failure never finish, so the monitor has to be stopped rather than waited for.
+    progress_thread.request_stop();
     progress_thread.join();
+    ALP_TRY(std::move(level_result));
 
-    std::unordered_set<octree::Id> built = std::move(already_built);
-    for (const octree::Id &id : saved_ids) {
-        built.insert(id);
-    }
-
-    return built;
+    return std::unordered_set<octree::Id>(built_ids.begin(), built_ids.end());
 }
 
 // Builds the DAG from input_storage into output_storage, restricted to levels within level_range.
 // Iterates octree levels from finest to coarsest, simplifying and re-clustering geometry at each
 // level from its children.
-void build_levels(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
-    const BuildOptions &options,
-    const AnyRange<uint32_t> &level_range) {
+alp::Result<void, BuildError> build_levels(
+    const mesh::storage::Storage& input_storage,
+    dag::storage::Draft& output_storage,
+    const BuildOptions& options,
+    const AnyRange<uint32_t>& level_range,
+    const dag::storage::Checkpoint& checkpoint,
+    mesh::storage::Draft* debug_output,
+    const std::stop_token& stop) {
+    auto validation_result = sf::validate_index(input_storage.index());
+    ALP_TRY(alp::wrap_error(std::move(validation_result), BuildIoError::InvalidIndex));
     const octree::OddLevelShifted shifted_space = octree::OddLevelShifted::earth();
     const octree::Space space = octree::Space::earth();
     const octree::Id root_node = options.root_node;
     const auto root_bounds = shifted_space.get_node_bounds_with_children(root_node);
-    auto input_by_level = gather_relevant_input_leaves(input_storage.index(), space, root_bounds);
+    const auto input_by_level = gather_relevant_input_leaves(input_storage.index(), space, root_bounds);
 
     // Find the maximum input level that has any nodes
     auto max_input_level_opt = find_max_input_level(input_by_level);
     if (!max_input_level_opt.has_value()) {
         LOG_WARN("No input nodes found for root {}", root_node);
-        return;
+        return {};
     }
     const uint32_t max_input_level = max_input_level_opt.value();
 
@@ -596,42 +617,38 @@ void build_levels(
     const Range<uint32_t> range = valid_range.intersect(level_range).to_range(max_input_level + 1);
     if (range.is_empty()) {
         LOG_WARN("Requested level range does not overlap with buildable levels {}-{}", root_node.level(), max_input_level);
-        return;
+        return {};
     }
 
-    // Seed prev_level_built with any already-built nodes one level finer than the first level.
-    // TODO: use hierachical lookup here based on root_bounds and IdRect
     std::unordered_set<octree::Id> prev_level_built;
-    for (const auto &[id, status] : output_storage.index()) {
-        if (id.level() == range.end && status != octree::NodeStatus::Virtual) {
-            prev_level_built.insert(id);
-        }
-    }
-
-    BuildContext ctx{input_storage, ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds};
+    BuildContext ctx{input_storage, output_storage, options, space, shifted_space, root_bounds, checkpoint, debug_output, stop};
 
     for (uint32_t level = range.end; level-- > range.start;) {
-        prev_level_built = build_level(
-            level,
-            input_by_level,
-            prev_level_built,
-            ctx);
+        auto level_context = alp::make_context("building level {}", level);
 
-        // Persist per level so a finished level can be read back before the whole run completes
-        if (const auto result = ctx.output_storage.save_or_create_index(); !result.has_value()) {
-            LOG_UNEXPECTED(result.error(), "building level {}", level);
+        auto level_result = build_level(level, input_by_level, prev_level_built, ctx);
+
+        // Persist per level so a finished level can be read back before the whole run completes,
+        // and after a failure so the nodes committed before it are kept
+        const auto index_result = ctx.output_storage.save_index();
+        LOG_WARN_IF_ERROR(index_result, "saving the index after level {}", level);
+        if (ctx.debug_output != nullptr) {
+            LOG_WARN_IF_ERROR(ctx.debug_output->save_index(), "saving the debug index after level {}", level);
         }
+        ALP_TRY_CONTEXT(prev_level_built, std::move(level_result), level_context);
     }
-
-    output_storage = std::move(ctx.output_storage).release();
+    return {};
 }
 
 // Builds the complete DAG from input_storage into output_storage.
-void build_full(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
-    const BuildOptions &options) {
-    build_levels(input_storage, output_storage, options, RangeFull{});
+alp::Result<void, BuildError> build_full(
+    const mesh::storage::Storage& input_storage,
+    dag::storage::Draft& output_storage,
+    const BuildOptions& options,
+    const dag::storage::Checkpoint& checkpoint,
+    mesh::storage::Draft* debug_output,
+    const std::stop_token& stop) {
+    return build_levels(input_storage, output_storage, options, RangeFull{}, checkpoint, debug_output, stop);
 }
 
 } // namespace dag

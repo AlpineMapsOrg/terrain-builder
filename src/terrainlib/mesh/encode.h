@@ -1,19 +1,38 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <ostream>
 #include <vector>
 
-#include <meshoptimizer.h>
-
+#include "cli_support/log.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
-#include "io/UnsupportedFormat.h"
-#include "log.h"
+#include "io/alloc.h"
+#include "io/image/Format.h"
+#include "io/mat.h"
 #include "mesh/EncodedMesh.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/encode_error.h"
-#include "texture/io.h"
+#include "meshopt/encode.h"
 
 namespace mesh {
 
@@ -52,8 +71,7 @@ constexpr uint32_t component_type_id() {
 }
 
 struct EncodeOptions {
-    // Texture format
-    std::string texture_format = ".jpeg";
+    ::io::image::Format texture_format = ::io::image::Format::Jpeg;
 };
 
 template <glm::length_t n_dims, typename T>
@@ -61,59 +79,35 @@ template <glm::length_t n_dims, typename T>
 alp::Result<Encoded, EncodeError> encode(const Simple_<n_dims, T>& mesh, const EncodeOptions options = {}) {
     using Mesh = Simple_<n_dims, T>;
 
-    const size_t vertex_count = mesh.vertex_count();
-    const size_t position_size = sizeof(typename Mesh::Position);
-    const size_t uv_size = sizeof(typename Mesh::Uv);
-    const size_t face_count = mesh.face_count();
-    const size_t index_count = face_count * 3;
-
     // Encode positions
     std::vector<uint8_t> position_buf;
-    if (vertex_count > 0) {
-        position_buf.resize(meshopt_encodeVertexBufferBound(vertex_count, position_size));
-        const size_t pos_written = meshopt_encodeVertexBuffer(position_buf.data(), position_buf.size(), mesh.positions.data(), vertex_count, position_size);
-        if (pos_written == 0) {
-            return alp::make_error(GeometryEncodeError::Positions);
-        }
-        position_buf.resize(pos_written);
+    if (mesh.vertex_count() > 0) {
+        position_buf = meshopt::encode_vertex_buffer(std::span<const typename Mesh::Position>(mesh.positions));
     }
 
     // Encode uvs
     std::vector<uint8_t> uv_buf;
     if (mesh.has_uvs()) {
-        uv_buf.resize(meshopt_encodeVertexBufferBound(vertex_count, uv_size));
-        const size_t uv_written = meshopt_encodeVertexBuffer(uv_buf.data(), uv_buf.size(), mesh.uvs.data(), vertex_count, uv_size);
-        if (uv_written == 0) {
-            return alp::make_error(GeometryEncodeError::Uvs);
-        }
-        uv_buf.resize(uv_written);
+        uv_buf = meshopt::encode_vertex_buffer(std::span<const typename Mesh::Uv>(mesh.uvs));
     }
 
     // Encode triangles
     std::vector<uint8_t> index_buf;
-    if (face_count > 0) {
-        index_buf.resize(meshopt_encodeIndexBufferBound(index_count, vertex_count));
-        const size_t index_written = meshopt_encodeIndexBuffer(
-            index_buf.data(), index_buf.size(),
-            reinterpret_cast<const unsigned int *>(mesh.triangles.data()),
-            index_count);
-        if (index_written == 0) {
-            return alp::make_error(GeometryEncodeError::Triangles);
-        }
-        index_buf.resize(index_written);
+    if (mesh.face_count() > 0) {
+        index_buf = meshopt::encode_index_buffer(std::span<const typename Mesh::Triangle>(mesh.triangles));
     }
 
     // Encode texture
     std::vector<uint8_t> texture_buf;
     if (mesh.has_texture()) {
-        ALP_TRY_CONTEXT(texture_buf, texture::io::encode_to_bytes(mesh.texture.value(), options.texture_format), "encoding the texture");
+        ALP_TRY_CONTEXT(texture_buf, ::io::mat::encode(mesh.texture.value(), options.texture_format), "encoding the texture");
     }
 
     const Encoded::Header header{
         .version = 1,
         .n_dims = n_dims,
         .component_type = component_type_id<T>(),
-        .vertex_count = static_cast<uint32_t>(vertex_count),
+        .vertex_count = static_cast<uint32_t>(mesh.vertex_count()),
         .face_count = static_cast<uint32_t>(mesh.face_count())};
 
     return Encoded{
@@ -141,46 +135,39 @@ alp::Result<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, cons
 
     using Mesh = Simple_<n_dims, T>;
     Mesh mesh;
-    int result;
 
     // Decode positions
-    const size_t position_size = sizeof(typename Mesh::Position);
     const size_t vertex_count = header.vertex_count;
     if (vertex_count > 0) {
-        mesh.positions.resize(vertex_count);
-
-        result = meshopt_decodeVertexBuffer(mesh.positions.data(), vertex_count, position_size, encoded.positions.data(), encoded.positions.size());
-        if (result != 0) {
-            return alp::make_error(GeometryDecodeError::Positions);
+        ALP_TRY(::io::try_resize(mesh.positions, vertex_count));
+        auto positions_result = meshopt::try_decode_vertex_buffer(std::span(mesh.positions), encoded.positions);
+        if (!positions_result) {
+            return alp::make_error(GeometryDecodeError::Positions, std::move(positions_result).error());
         }
     }
 
     // Decode uvs
     if (!encoded.uvs.empty()) {
-        const size_t uv_size = sizeof(typename Mesh::Uv);
-        mesh.uvs.resize(vertex_count);
-        result = meshopt_decodeVertexBuffer(mesh.uvs.data(), vertex_count, uv_size, encoded.uvs.data(), encoded.uvs.size());
-        if (result != 0) {
-            return alp::make_error(GeometryDecodeError::Uvs);
+        ALP_TRY(::io::try_resize(mesh.uvs, vertex_count));
+        auto uvs_result = meshopt::try_decode_vertex_buffer(std::span(mesh.uvs), encoded.uvs);
+        if (!uvs_result) {
+            return alp::make_error(GeometryDecodeError::Uvs, std::move(uvs_result).error());
         }
     }
 
     // Decode triangles
     const size_t face_count = header.face_count;
-    const size_t index_count = face_count * 3;
-    const size_t index_size = sizeof(typename Mesh::Triangle::value_type);
     if (face_count > 0) {
-        mesh.triangles.resize(face_count);
-        
-        result = meshopt_decodeIndexBuffer(mesh.triangles.data(), index_count, index_size, encoded.triangles.data(), encoded.triangles.size());
-        if (result != 0) {
-            return alp::make_error(GeometryDecodeError::Triangles);
+        ALP_TRY(::io::try_resize(mesh.triangles, face_count));
+        auto triangles_result = meshopt::try_decode_index_buffer(std::span(mesh.triangles), encoded.triangles);
+        if (!triangles_result) {
+            return alp::make_error(GeometryDecodeError::Triangles, std::move(triangles_result).error());
         }
     }
 
     // Decode texture
     if (!encoded.texture.empty()) {
-        ALP_TRY_CONTEXT(mesh.texture, texture::io::decode_bytes(encoded.texture, cv::IMREAD_UNCHANGED), "decoding the texture");
+        ALP_TRY_CONTEXT(mesh.texture, ::io::mat::decode(encoded.texture, {.mode = cv::IMREAD_UNCHANGED}), "decoding the texture");
     }
 
     return mesh;

@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <algorithm>
@@ -78,6 +96,14 @@ std::optional<size_t> find_single_index(const Range &range, const T &value) {
     return std::distance(begin, it);
 }
 
+// Whether `range` starts with the elements of `prefix`, compared after projecting each.
+// TODO: replace with std::ranges::starts_with once libstdc++ provides it
+template <std::ranges::input_range Range, std::ranges::input_range Prefix, typename Predicate = std::ranges::equal_to,
+          typename RangeProjection = std::identity, typename PrefixProjection = std::identity>
+bool starts_with(Range &&range, Prefix &&prefix, Predicate predicate = {}, RangeProjection range_projection = {}, PrefixProjection prefix_projection = {}) {
+    return std::ranges::mismatch(range, prefix, std::ref(predicate), std::ref(range_projection), std::ref(prefix_projection)).in2 == std::ranges::end(prefix);
+}
+
 namespace detail {
 template <typename T>
 concept tuple_like =
@@ -120,13 +146,12 @@ auto transform_vector(Range &&range, Op&& op) {
 
 template <std::ranges::input_range Range>
 auto to_vector(Range &&range) {
-    using T = std::ranges::range_value_t<Range>;
-    std::vector<T> result;
-    if constexpr (std::ranges::sized_range<Range>) {
-        result.reserve(std::ranges::size(range));
-    }
-    std::ranges::copy(range, std::back_inserter(result));
-    return result;
+    return std::ranges::to<std::vector>(std::forward<Range>(range));
+}
+
+template <typename T, std::ranges::input_range Range>
+std::vector<T> to_vector(Range &&range) {
+    return std::ranges::to<std::vector<T>>(std::forward<Range>(range));
 }
 
 template <std::ranges::input_range Range, typename T, typename F>
@@ -209,4 +234,14 @@ std::optional<typename Map::mapped_type> find_value(const Map &map, const Key &k
         return std::nullopt;
     }
     return it->second;
+}
+
+// Lookup by key in an associative container (map/unordered_map), without copying the value. Returns nullopt if not found.
+template <typename Map, typename Key>
+std::optional<std::reference_wrapper<const typename Map::mapped_type>> find_value_ref(const Map &map, const Key &key) {
+    const auto it = map.find(key);
+    if (it == map.end()) {
+        return std::nullopt;
+    }
+    return std::cref(it->second);
 }

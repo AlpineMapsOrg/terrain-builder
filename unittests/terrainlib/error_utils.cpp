@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_range_equals.hpp>
 
@@ -274,6 +292,67 @@ TEST_CASE("with_context builds its message only for a failed result", "[error][u
     REQUIRE(!failed.has_value());
     REQUIRE(failed.error().frames().size() == 2);
     CHECK(failed.error().frames()[1].message == "loading the configuration");
+}
+
+TEST_CASE("map_error applies BasicError::map to the error of a failed result", "[error][utils]") {
+    SECTION("callable") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const auto to_config_error = [](const alp::Error<FileError> error) { return alp::make_error(ConfigError::Missing, error); };
+        const auto result = alp::map_error<FileError>(std::move(failed), to_config_error);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+    }
+
+    SECTION("code") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const std::source_location location = std::source_location::current();
+        const auto result = alp::map_error<FileError>(std::move(failed), ConfigError::Missing, location);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+        CHECK(is_same_location(result.error().origin(), location));
+    }
+}
+
+TEST_CASE("map_code applies BasicError::map_code to the error of a failed result", "[error][utils]") {
+    SECTION("callable") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const auto to_config_error = [](const alp::Error<FileError> error) { return alp::make_error(ConfigError::Missing, error); };
+        const auto result = alp::map_code(std::move(failed), FileError::NotFound, to_config_error);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+    }
+
+    SECTION("code") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const std::source_location location = std::source_location::current();
+        const auto result = alp::map_code(std::move(failed), FileError::NotFound, ConfigError::Missing, location);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+        CHECK(is_same_location(result.error().origin(), location));
+    }
+}
+
+TEST_CASE("wrap_error creates an error with its code from the whole error of a failed result, which it keeps as its source", "[error][utils]") {
+    alp::Result<int, FileError, ConfigError> failed = alp::make_error(FileError::NotFound);
+    const std::source_location location = std::source_location::current();
+    const alp::Result<int, ConfigError> result = alp::wrap_error(std::move(failed), ConfigError::Missing, location);
+
+    REQUIRE(!result.has_value());
+    CHECK(result.error().code() == ConfigError::Missing);
+    CHECK(is_same_location(result.error().origin(), location));
+    REQUIRE(result.error().source() != nullptr);
+    CHECK(result.error().source()->holds_code(FileError::NotFound));
+}
+
+TEST_CASE("wrap_error passes the value of a succeeded result through", "[error][utils]") {
+    const alp::Result<int, ConfigError> result = alp::wrap_error(alp::Result<int, FileError>(3), ConfigError::Missing);
+
+    REQUIRE(result.has_value());
+    CHECK(*result == 3);
 }
 
 TEST_CASE("A body run with a context that fails gets the context", "[error][utils]") {

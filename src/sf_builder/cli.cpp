@@ -1,12 +1,33 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "cli.h"
 
 #include <cstdlib>
-#include <map>
 #include <string>
 
 #include <CLI/CLI.hpp>
 #include <libassert/assert.hpp>
 #include <spdlog/spdlog.h>
+
+#include "cli_support/log.h"
+#include "mesh/io.h"
+#include "mesh/io/sf_mesh.h"
 
 using namespace cli;
 
@@ -22,15 +43,6 @@ Args cli::parse(int argc, char **argv) {
     BaseArgs base_args;
     base_args.log_level = spdlog::level::level_enum::trace;
 
-    const std::map<std::string, spdlog::level::level_enum> log_level_names{
-        {"off", spdlog::level::level_enum::off},
-        {"critical", spdlog::level::level_enum::critical},
-        {"error", spdlog::level::level_enum::err},
-        {"warn", spdlog::level::level_enum::warn},
-        {"info", spdlog::level::level_enum::info},
-        {"debug", spdlog::level::level_enum::debug},
-        {"trace", spdlog::level::level_enum::trace}};
-
     app.add_option("--dataset", base_args.dataset_path, "Path to a heightmap dataset file")
         ->required()
         ->check(CLI::ExistingFile);
@@ -43,7 +55,7 @@ Args cli::parse(int argc, char **argv) {
     app.add_option("--max-texture-level", base_args.max_texture_level, "Maximum texture zoom level to use for assembling textures.")
         ->needs("--textures");
     app.add_option("--verbosity", base_args.log_level, "Verbosity level of logging")
-        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case));
+        ->transform(CLI::CheckedTransformer(cli_support::log_level_names(), CLI::ignore_case));
 
     // === SINGLE COMMAND ===
     auto *single = app.add_subcommand("single", "Build a single reference mesh")
@@ -59,7 +71,7 @@ Args cli::parse(int argc, char **argv) {
         ->expected(2, 4);
     target->require_option(1);
 
-    single->add_option("--output", single_args.output_path, "Output path were the mesh is written to (.terrain, .gltf or .glb)")
+    single->add_option("--output", single_args.output_path, "Output path were the mesh is written to (.sfmesh, .gltf or .glb)")
         ->required();
 
     single->add_option("--srs", single_args.target_srs_input, "EPSG code of the srs of the target bounds or id");
@@ -82,16 +94,15 @@ Args cli::parse(int argc, char **argv) {
 
     batch->add_option("--target-level", batch_args.target_level, "Level of detail for batch generation")
         ->required();
-    batch->add_option("--output", batch_args.output_base_path, "Output path were the meshes are written to.")
+    batch->add_option("--output", batch_args.output_path, "Output directory for the meshes, written as <output>.part until complete")
         ->required();
     batch->add_option("--format", batch_args.output_format, "Output mesh format")
-        ->check(CLI::IsMember({".glb", ".gltf", ".terrain"}))
-        ->default_val(".terrain");
-    batch_args.num_threads = 0;
+        ->check(CLI::IsMember(mesh::io::extensions))
+        ->default_val(mesh::io::sf_mesh::extension);
     batch->add_option("--threads", batch_args.num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);
-    batch_args.overwrite_existing = false;
-    batch->add_flag("--overwrite", batch_args.overwrite_existing, "Overwrite existing mesh files");
+    batch->add_option("--checkpoint", batch_args.checkpoint_path, "Draft of an earlier build with the same inputs, whose nodes are reused")
+        ->check(CLI::ExistingDirectory);
 
     try {
         app.parse(argc, argv);

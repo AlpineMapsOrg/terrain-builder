@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 Adam Celarek <last name at cg dot tuwien dot ac dot at>
- * Copyright (C) 2022 alpinemaps.org
+ * AlpineMaps.org
+ * Copyright (C) 2022 Adam Celarek-Litofcenko
+ * Copyright (C) 2022 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "ProgressIndicator.h"
+#include "cli_support/ProgressIndicator.h"
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <condition_variable>
@@ -32,18 +32,18 @@ using namespace std::literals;
 TEST_CASE("progress indicator") {
     SECTION("throws on overflow") {
         {
-            auto pi = ProgressIndicator(0);
+            auto pi = cli_support::ProgressIndicator(0);
             CHECK_THROWS(pi.task_finished());
         }
         {
-            auto pi = ProgressIndicator(1);
+            auto pi = cli_support::ProgressIndicator(1);
             pi.task_finished();
             CHECK_THROWS(pi.task_finished());
         }
     }
 
     SECTION("message") {
-        ProgressIndicator pi(4);
+        cli_support::ProgressIndicator pi(4);
         // Step 0
         CHECK(pi.x_of_y_done_message() == "0/4");
 
@@ -65,7 +65,7 @@ TEST_CASE("progress indicator") {
     }
 
     SECTION("bar small") {
-        ProgressIndicator pi(2);
+        cli_support::ProgressIndicator pi(2);
         // Step 0
         CHECK(pi.progress_bar(2) == "[]");
         CHECK(pi.progress_bar(3) == "[ ]");
@@ -83,7 +83,7 @@ TEST_CASE("progress indicator") {
 
     SECTION("task_finished is thread safe") {
         const auto tasks = std::vector<int>(1000000);
-        auto pi = ProgressIndicator(tasks.size());
+        auto pi = cli_support::ProgressIndicator(tasks.size());
         std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { pi.task_finished(); });
         CHECK_THROWS(pi.task_finished());
     }
@@ -91,7 +91,7 @@ TEST_CASE("progress indicator") {
     SECTION("thread parallel reporting") {
         // no real test, because console output can't be easily tested. but at least we are test compiling the interface.
         const auto tasks = std::vector<int>(151);
-        auto pi = ProgressIndicator(tasks.size());
+        auto pi = cli_support::ProgressIndicator(tasks.size());
         auto monitoring_thread = pi.start_monitoring();
         std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { std::this_thread::sleep_for(10ms); pi.task_finished(); });
         monitoring_thread.join();
@@ -99,7 +99,7 @@ TEST_CASE("progress indicator") {
     }
 
     SECTION("monitoring can be stopped before all tasks finish") {
-        ProgressIndicator pi(1);
+        cli_support::ProgressIndicator pi(1);
         auto monitoring_thread = pi.start_monitoring();
 
         std::condition_variable_any fallback_condition;

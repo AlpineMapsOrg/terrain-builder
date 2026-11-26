@@ -1,5 +1,25 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adrian Gawor
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstdio>
@@ -29,6 +49,25 @@ inline std::optional<std::string_view> to_string_view(const char *text) {
         return std::nullopt;
     }
     return std::string_view(text);
+}
+
+// `c` with ASCII letters in lower case.
+inline constexpr char to_lower_ascii(const char c) {
+    if (c >= 'A' && c <= 'Z') {
+        return static_cast<char>(c + ('a' - 'A'));
+    } else {
+        return c;
+    }
+}
+
+// Whether `text` starts with `prefix`, ignoring the case of ASCII letters.
+inline bool starts_with_case_insensitive(const std::string_view text, const std::string_view prefix) {
+    return text.size() >= prefix.size() && std::ranges::equal(text.substr(0, prefix.size()), prefix, {}, to_lower_ascii, to_lower_ascii);
+}
+
+// Whether `a` and `b` are equal, ignoring the case of ASCII letters.
+inline constexpr bool equals_ignore_ascii_case(const std::string_view a, const std::string_view b) {
+    return std::ranges::equal(a, b, {}, to_lower_ascii, to_lower_ascii);
 }
 
 template <typename T, typename CharT>

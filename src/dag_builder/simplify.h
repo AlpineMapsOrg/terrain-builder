@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <algorithm>
@@ -16,7 +34,7 @@
 #include "cluster.h"
 #include "meshopt.h"
 #include "utils.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "mesh/connectivity/boundary.h"
 #include "validate.h"
 #include "range_utils.h"
@@ -278,13 +296,13 @@ inline Clustering simplify(
             .texture_id = original_cluster.texture_id,
             .absolute_error = combined_error
         };
-        validate(simplified_cluster, simplified_clustering.positions);
+        assert_valid(simplified_cluster, simplified_clustering.positions);
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));
     }
 
     if (options.preserve_cluster_count) {
         DEBUG_ASSERT(original_clustering.cluster_count() == simplified_clustering.cluster_count());
     }
-    validate(simplified_clustering);
+    assert_valid(simplified_clustering);
     return simplified_clustering;
 }

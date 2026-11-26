@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -19,15 +38,15 @@
 #include "build_config.h"
 #include "error/utils.h"
 #include "hash_utils.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "mesh/cgal.h"
 #include "mesh/clip.h"
 #include "mesh/convert.h"
 #include "mesh/geometry.h"
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/normalize.h"
-#include "mesh/validate.h"
-#include "mesh/validate_cgal.h"
+#include "mesh/validate/debug_assert.h"
+#include "mesh/validate/cgal.h"
 #include "containers/FixedVector.h"
 #include "vector_utils.h"
 
@@ -294,7 +313,7 @@ private:
 } // namespace
 
 Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
-    validate(mesh);
+    debug_assert_valid(mesh);
 
     if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
         return Cow(SimpleMesh());
@@ -612,7 +631,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
     }
 
     SimpleMesh clipped_mesh(new_triangles, new_positions, new_uvs, mesh.texture);
-    validate(clipped_mesh);
+    debug_assert_valid(clipped_mesh);
     return Cow(std::move(clipped_mesh));
 }
 

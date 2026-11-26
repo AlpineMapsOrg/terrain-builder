@@ -1,0 +1,119 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
+#pragma once
+
+#include "detail.h"
+#include <cmath>
+#include <vector>
+
+namespace raster::algorithm {
+
+/// Normalized one-dimensional Gaussian weights for an odd window; size one is identity.
+[[nodiscard]] inline Expected<std::vector<double>> gaussian_kernel(unsigned size)
+{
+    if (size == 0 || size % 2 == 0) {
+        return Error::fail(Error::Code::InvalidInput, "Gaussian kernel size must be positive and odd");
+    }
+    if (size == 1) {
+        return std::vector<double> { 1 };
+    }
+    const double sigma = double(size - 1) / 4;
+    std::vector<double> weights(size);
+    double sum = 0;
+    for (unsigned i = 0; i < size; ++i) {
+        const double distance = (double(i) - double(size / 2)) / sigma;
+        weights[i] = std::exp(-0.5 * distance * distance);
+        sum += weights[i];
+    }
+    std::ranges::transform(weights, weights.begin(), [sum](double weight) { return weight / sum; });
+    return weights;
+}
+
+namespace detail {
+    inline Expected<glm::uvec2> window_output_size(glm::uvec2 input_size, glm::uvec2 kernel_size, glm::uvec2 stride = glm::uvec2(1))
+    {
+        if (kernel_size.x == 0 || kernel_size.y == 0 || stride.x == 0 || stride.y == 0 || kernel_size.x > input_size.x || kernel_size.y > input_size.y) {
+            return Error::fail(Error::Code::InvalidInput, "window size and stride must be positive, and the window must fit the input view");
+        }
+        return (input_size - kernel_size) / stride + glm::uvec2(1);
+    }
+
+    template <typename InputView, typename Function, typename T>
+    requires(!std::is_const_v<T>) && PixelFunction<Function, T, InputView>
+    Expected<void> window_transform_views(
+        const InputView& source, glm::uvec2 kernel_size, glm::uvec2 stride, const Function& function, const View<T>& destination)
+    {
+        auto size = window_output_size(source.size(), kernel_size, stride);
+        if (!size) {
+            return Error::propagate(std::move(size));
+        }
+        if (destination.size() != *size) {
+            return Error::fail(Error::Code::InvalidInput, "window transform output dimensions do not match the input and kernel");
+        }
+        if (auto valid = validate_view_overlap(source, destination, false); !valid) {
+            return valid;
+        }
+        for (unsigned y = 0; y < destination.height(); ++y) {
+            for (unsigned x = 0; x < destination.width(); ++x) {
+                const auto window = window_view(source, glm::uvec2(x, y) * stride, kernel_size);
+                destination.pixel({ x, y }) = std::invoke(function, window);
+            }
+        }
+        return {};
+    }
+} // namespace detail
+
+/// Applies complete rectangular windows at the given positive stride, without border handling.
+template <detail::ViewSource Source, typename Function, detail::WritableViewDestination Destination>
+requires detail::PixelFunction<Function, detail::SourcePixel<Destination>, detail::ReadOnlyView<Source>>
+[[nodiscard]] Expected<void> window_transform(Source&& source, glm::uvec2 kernel_size, glm::uvec2 stride, const Function& function, Destination&& destination)
+{
+    return detail::window_transform_views(detail::read_only_view(raster::make_view(source)), kernel_size, stride, function, raster::make_view(destination));
+}
+
+template <detail::ViewSource Source, typename Function>
+requires detail::RasterFunction<Function, detail::ReadOnlyView<Source>>
+[[nodiscard]] auto window_transform(Source&& source, glm::uvec2 kernel_size, glm::uvec2 stride, const Function& function)
+    -> Expected<radix::Raster<detail::FunctionOutput<Function, detail::ReadOnlyView<Source>>>>
+{
+    const auto input = detail::read_only_view(raster::make_view(source));
+    auto size = detail::window_output_size(input.size(), kernel_size, stride);
+    if (!size) {
+        return Error::propagate(std::move(size));
+    }
+    return detail::produce_raster<detail::FunctionOutput<Function, detail::ReadOnlyView<Source>>>(
+        *size, [&](const auto& destination) { return detail::window_transform_views(input, kernel_size, stride, function, destination); });
+}
+
+/// Existing call forms use stride one.
+template <detail::ViewSource Source, typename Function, detail::WritableViewDestination Destination>
+requires detail::PixelFunction<Function, detail::SourcePixel<Destination>, detail::ReadOnlyView<Source>>
+[[nodiscard]] Expected<void> window_transform(Source&& source, glm::uvec2 kernel_size, const Function& function, Destination&& destination)
+{
+    return window_transform(std::forward<Source>(source), kernel_size, glm::uvec2(1), function, std::forward<Destination>(destination));
+}
+
+template <detail::ViewSource Source, typename Function>
+requires detail::RasterFunction<Function, detail::ReadOnlyView<Source>>
+[[nodiscard]] auto window_transform(Source&& source, glm::uvec2 kernel_size, const Function& function)
+{
+    return window_transform(std::forward<Source>(source), kernel_size, glm::uvec2(1), function);
+}
+
+} // namespace raster::algorithm

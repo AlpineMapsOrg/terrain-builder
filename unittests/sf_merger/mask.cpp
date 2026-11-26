@@ -1,23 +1,42 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
 #include "../temp_directory.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <filesystem>
-#include <numbers>
 
 #include <CGAL/Polygon_mesh_processing/orientation.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 
 #include "mask.h"
-#include "gdal/CplError.h"
+#include "earth.h"
+#include "gis/CplError.h"
+#include "gis/srs/well_known.h"
 #include "io/text.h"
 #include "mesh/cgal.h"
 #include "mesh/connectivity/manifold.h"
 #include "mesh/convert.h"
-#include "srs/System.h"
-#include "srs/well_known.h"
 
 namespace {
 
@@ -40,49 +59,6 @@ void check_closed_volume(const SimpleMesh &mesh) {
 }
 
 } // namespace
-
-TEST_CASE("simplification_tolerance is a fixed tenth of a metre", "[sf_merger][mask]") {
-    SECTION("projected") {
-        const std::optional<double> tolerance = mask::simplification_tolerance(REQUIRE_VALUE(srs::from_epsg(31287)));
-        REQUIRE(tolerance);
-        CHECK_THAT(*tolerance, WithinEpsilon(0.1));
-    }
-    SECTION("geographic") {
-        const srs::System geographic = srs::wgs84();
-        const std::optional<double> tolerance = mask::simplification_tolerance(geographic);
-        REQUIRE(tolerance);
-        // WGS 84 has a semi-major axis of 6378137 m, and its unit is the degree.
-        CHECK_THAT(*tolerance, WithinEpsilon(0.1 / 6378137.0 / (std::numbers::pi / 180)));
-    }
-}
-
-TEST_CASE("simplify_geometry preserves polygon topology", "[sf_merger][mask]") {
-    OGRLinearRing outer;
-    outer.addPoint(0.0, 0.0);
-    outer.addPoint(1.0, 0.01);
-    outer.addPoint(2.0, 0.0);
-    outer.addPoint(2.0, 2.0);
-    outer.addPoint(0.0, 2.0);
-    outer.addPoint(0.0, 0.0);
-
-    OGRLinearRing hole;
-    hole.addPoint(0.5, 0.5);
-    hole.addPoint(1.0, 0.51);
-    hole.addPoint(1.5, 0.5);
-    hole.addPoint(1.5, 1.5);
-    hole.addPoint(0.5, 1.5);
-    hole.addPoint(0.5, 0.5);
-
-    OGRPolygon polygon;
-    REQUIRE(polygon.addRing(&outer) == OGRERR_NONE);
-    REQUIRE(polygon.addRing(&hole) == OGRERR_NONE);
-    REQUIRE(polygon.IsValid());
-
-    const std::unique_ptr<OGRGeometry> simplified = mask::simplify_geometry(polygon, 0.1);
-
-    REQUIRE(simplified);
-    CHECK(simplified->exportToWkt() == "POLYGON ((0 0,2 0,2 2,0 2,0 0),(0.5 0.5,1.5 0.5,1.5 1.5,0.5 1.5,0.5 0.5))");
-}
 
 TEST_CASE("triangulate and extrude preserve polygon components", "[sf_merger][mask]") {
     const SphereProjector projector(glm::dvec3(100.0, 0.0, 0.0));
@@ -122,20 +98,41 @@ TEST_CASE("triangulate and extrude preserve polygon components", "[sf_merger][ma
     check_closed_volume(extruded.components[1]);
 }
 
+TEST_CASE("masks split at the antimeridian are projected around their centre", "[sf_merger][mask]") {
+    MultipolygonWithHoles2 polygons;
+    polygons.add_polygon(make_square(glm::dvec2(170, -20), glm::dvec2(180, -15)));
+    polygons.add_polygon(make_square(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
+    const SpherePolygonMask mask = REQUIRE_VALUE(mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), gis::srs::wgs84() }, earth::radius()));
+    REQUIRE(mask.polygons.number_of_polygons_with_holes() == 2);
+    radix::geometry::Aabb2d projected_bounds;
+    for (const auto& polygon : mask.polygons.polygons_with_holes()) {
+        for (const auto& point : polygon.outer_boundary()) {
+            const glm::dvec2 projected = convert::to_glm_point(point);
+            REQUIRE(std::isfinite(projected.x));
+            REQUIRE(std::isfinite(projected.y));
+            projected_bounds.expand_by(projected);
+        }
+    }
+    // In radians; the mask spans 20 by 5 degrees. A tangent point far from the mask would spread
+    // it over the projection, or, at a pole, make it degenerate.
+    CHECK(projected_bounds.width() < 0.5);
+    CHECK(projected_bounds.height() < 0.5);
+}
+
 TEST_CASE("load_referenced_from_path fails for a missing mask", "[sf_merger][mask]") {
     const TempDirectory directory("mask_missing");
 
-    const mask::LoadError error = REQUIRE_ERROR(mask::load_referenced_from_path(directory.path() / "missing.geojson"));
+    const mask::LoadReferencedError error = REQUIRE_ERROR(mask::load_referenced_from_path(directory.path() / "missing.geojson"));
 
-    CHECK(error.holds<gdal::CplError>());
+    CHECK(error.holds<gis::CplError>());
 }
 
-TEST_CASE("load_referenced_from_path fails for a mask without polygons", "[sf_merger][mask]") {
-    const TempDirectory directory("mask_without_polygons");
+TEST_CASE("load_referenced_from_path fails for a mask of points", "[sf_merger][mask]") {
+    const TempDirectory directory("mask_of_points");
     const std::filesystem::path path = directory.path() / "point.geojson";
-    REQUIRE_VALUE(io::write_text_to_path(R"({"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Point", "coordinates": [11.0, 47.0]}}]})", path));
+    REQUIRE_VALUE(io::text::write(R"({"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Point", "coordinates": [11.0, 47.0]}}]})", path));
 
-    const mask::LoadError error = REQUIRE_ERROR(mask::load_referenced_from_path(path));
+    const mask::LoadReferencedError error = REQUIRE_ERROR(mask::load_referenced_from_path(path));
 
-    CHECK(error.holds_code(mask::MaskError::NoPolygons));
+    CHECK(error.holds_code(gis::vector_mask::InvalidMask::UnsupportedGeometry));
 }

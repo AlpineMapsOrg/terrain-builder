@@ -1,173 +1,288 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
-#include "io/compression.h"
-
 #include <algorithm>
-#include <compare>
-#include <cstddef>
 #include <cstdint>
-#include <span>
+#include <filesystem>
+#include <optional>
 #include <string>
-#include <string_view>
-#include <tuple>
-#include <type_traits>
 #include <utility>
 
+#include <libassert/assert.hpp>
+
+#include "common_error_codes.h"
+#include "error/Error.h"
+#include "error/MessageCode.h"
 #include "error/Result.h"
-#include "io/SerdeError.h"
+#include "error/try.h"
+#include "error/utils.h"
+#include "fmt_impls.h"
+#include "io/PayloadSchema.h"
+#include "io/WriteMode.h"
+#include "io/bytes.h"
+#include "io/compression.h"
+#include "io/glm_serialization.h"
+#include "io/hash.h"
+#include "io/limits.h"
+#include "io/serde.h"
 
 namespace io::envelope {
 
-using Bytes = compression::Bytes;
+inline constexpr uint64_t magic = 0xA6EFA707D12E4404ULL;
+inline constexpr size_t max_class_name_size = 128;
+inline constexpr size_t max_hash_size = 64;
 
-inline constexpr std::uint64_t magic = 0xF5FBD3EF919428CAULL;
-
-// A failure to read an envelope, apart from decompressing or deserializing its parts.
-enum class Error : std::uint8_t {
-    InvalidMagic,
-    WrongClassName,
-    UnsupportedClassVersion,
-    SizeLimitExceeded,
-    UncompressedSizeMismatch,
-    TrailingData,
-};
-
-inline std::string_view format_as(const Error error) {
-    switch (error) {
-    case Error::InvalidMagic:
-        return "the data does not start with the envelope magic number";
-    case Error::WrongClassName:
-        return "the envelope holds a different class";
-    case Error::UnsupportedClassVersion:
-        return "the envelope's class version is not supported";
-    case Error::SizeLimitExceeded:
-        return "the declared uncompressed size is larger than the size limit";
-    case Error::UncompressedSizeMismatch:
-        return "the uncompressed payload does not have the declared size";
-    case Error::TrailingData:
-        return "the data continues after the value";
-    default:
-        return "an unknown envelope failure";
-    }
-}
-
-struct Envelope {
-    std::uint64_t magic;
+struct Header {
+    uint64_t magic;
     std::string class_name;
-    std::uint32_t class_version;
-    compression::ChecksumAlgorithm checksum_algorithm;
-    std::string checksum;
+    uint32_t class_version;
+    hash::Algorithm hash_algorithm;
+    // hash::data of the uncompressed payload.
+    bytes::vector hash;
     compression::Algorithm compression_algorithm;
-    std::uint64_t uncompressed_size;
-    Bytes compressed_data;
+    uint64_t uncompressed_size;
 };
 
-template <std::size_t Size>
-struct FixedString {
-    char value[Size];
-
-    constexpr FixedString(const char (&text)[Size]) {
-        std::copy_n(text, Size, value);
-    }
-
-    constexpr auto operator<=>(const FixedString &) const = default;
+// The payload is the last field, so a file prefix of max_header_size bytes contains the header.
+struct Envelope {
+    Header header;
+    bytes::vector compressed_data;
 };
 
-template <std::uint32_t Number, typename VersionedPayloadType>
-struct Version {
-    static constexpr std::uint32_t number = Number;
-    using Payload = VersionedPayloadType;
+// zpp_bits prefixes strings and vectors with their 32-bit size.
+inline constexpr size_t max_header_size = sizeof(uint64_t) + sizeof(uint32_t) + max_class_name_size + sizeof(uint32_t)
+    + sizeof(hash::Algorithm) + sizeof(uint32_t) + max_hash_size + sizeof(compression::Algorithm) + sizeof(uint64_t);
+
+struct CorruptData : alp::MessageCode<"the data is not a valid envelope"> {};
+
+using HeaderError = alp::Error<CorruptData, Unsupported>;
+
+// How `serialize` encodes the payload.
+struct SerializeOptions {
+    compression::Algorithm compression_algorithm = compression::Algorithm::ZstdDefault;
+    hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64;
 };
+
+// What `deserialize` accepts.
+struct DeserializeOptions {
+    // The hash the header must record, if given.
+    std::optional<bytes::span> expected_hash = std::nullopt;
+    // The largest payload, at most `max_buffer_size`.
+    size_t max_decompressed_size = max_buffer_size;
+};
+
+// What `read` accepts.
+using ReadOptions = DeserializeOptions;
+
+// How `write` encodes the payload and treats an existing file and missing parent directories.
+struct WriteOptions {
+    WriteMode mode = default_write_mode;
+    bool make_dirs = default_make_dirs;
+    compression::Algorithm compression_algorithm = compression::Algorithm::ZstdDefault;
+    hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64;
+};
+
+using SerializeError = alp::Error<serde::SerializeError, compression::CompressError>;
+
+// Encodes `payload` as version `VersionNumber` of `Schema`.
+template <typename Schema, uint32_t VersionNumber>
+[[nodiscard]]
+alp::Result<bytes::vector, SerializeError> serialize(const typename Schema::template Payload<VersionNumber> &payload, SerializeOptions options = {});
+
+// Encodes `payload` as the latest version of `Schema`.
+template <typename Schema>
+[[nodiscard]]
+alp::Result<bytes::vector, SerializeError> serialize(const typename Schema::Latest &payload, SerializeOptions options = {});
+
+using DeserializeError = alp::Error<HeaderError, BufferLimitExceeded, compression::DecompressError>;
+
+// Decodes an envelope of `Schema` and upgrades its payload to the latest version.
+template <typename Schema>
+[[nodiscard]]
+alp::Result<typename Schema::Latest, DeserializeError> deserialize(bytes::span bytes, DeserializeOptions options = {});
+
+using ReadError = alp::Error<bytes::ReadError, DeserializeError>;
+
+// Reads the envelope of `Schema` in the file at `path`.
+template <typename Schema>
+[[nodiscard]]
+alp::Result<typename Schema::Latest, ReadError> read(const std::filesystem::path &path, ReadOptions options = {});
+
+using WriteError = alp::Error<SerializeError, bytes::WriteError>;
+
+// Writes `payload` as an envelope of `Schema` to the file at `path`, and returns the hash its header records.
+template <typename Schema>
+[[nodiscard]]
+alp::Result<bytes::vector, WriteError> write(const typename Schema::Latest &payload, const std::filesystem::path &path, WriteOptions options = {});
+
+using ReadHeaderError = alp::Error<bytes::ReadError, HeaderError>;
+
+// Reads the header of the envelope in the file at `path`, without its payload.
+// Checks neither its class nor its hash.
+[[nodiscard]]
+alp::Result<Header, ReadHeaderError> read_header(const std::filesystem::path &path);
 
 namespace detail {
 
-template <std::uint32_t Number, typename... Versions>
-struct FindVersion;
+// Checks the magic number, the field limits and the algorithms of `header`.
+[[nodiscard]]
+alp::Result<void, HeaderError> validate_header(const Header &header);
 
-template <std::uint32_t Number, typename First, typename... Rest>
-struct FindVersion<Number, First, Rest...> {
-    using type = std::conditional_t<First::number == Number, First, typename FindVersion<Number, Rest...>::type>;
-};
-
-template <std::uint32_t Number>
-struct FindVersion<Number> {
-    using type = void;
-};
-
-template <typename... Versions>
-consteval bool versions_are_strictly_increasing() {
-    constexpr std::uint32_t numbers[] = {Versions::number...};
-    for (std::size_t index = 1; index < sizeof...(Versions); ++index) {
-        if (numbers[index - 1] >= numbers[index]) {
-            return false;
-        }
+// The envelope's error for a failure decoding its data: running out of memory passes through, any other failure means the data is not a valid envelope.
+[[nodiscard]]
+alp::Error<CorruptData, OutOfMemory> to_envelope_error(serde::DeserializeError error, alp::Context auto &&context) {
+    auto split_result = std::move(error).split<OutOfMemory>();
+    if (split_result.has_value()) {
+        return std::move(split_result).value().context(std::forward<decltype(context)>(context));
     }
-    return true;
+    return alp::make_error(CorruptData{}, std::forward<decltype(context)>(context), std::move(split_result).error());
 }
 
-template <typename From, typename To>
-concept ConvertsFromPrevious = requires(From previous) {
-    { To::from_previous(std::move(previous)) } -> std::same_as<To>;
-};
+template <typename Schema, size_t Index, typename Current>
+typename Schema::Latest convert_to_latest(Current current) {
+    if constexpr (Index + 1 == Schema::version_count) {
+        return current;
+    } else {
+        using Next = typename Schema::template VersionAt<Index + 1>::Payload;
+        return convert_to_latest<Schema, Index + 1>(Next::from_previous(std::move(current)));
+    }
+}
 
-template <typename VersionTuple, std::size_t... Indices>
-consteval bool conversions_are_valid(std::index_sequence<Indices...>) {
-    return (ConvertsFromPrevious<
-                typename std::tuple_element_t<Indices, VersionTuple>::Payload,
-                typename std::tuple_element_t<Indices + 1, VersionTuple>::Payload>
-            && ...);
+// Decodes a payload of version `class_version`, which the schema must have, and upgrades it to the latest version.
+template <typename Schema, size_t Index = 0>
+alp::Result<typename Schema::Latest, serde::DeserializeError> deserialize_version(const uint32_t class_version, const bytes::span payload_bytes) {
+    using CurrentVersion = typename Schema::template VersionAt<Index>;
+    if (class_version == CurrentVersion::number) {
+        ALP_TRY(auto payload, serde::deserialize<typename CurrentVersion::Payload>(payload_bytes));
+        return convert_to_latest<Schema, Index>(std::move(payload));
+    }
+
+    if constexpr (Index + 1 < Schema::version_count) {
+        return deserialize_version<Schema, Index + 1>(class_version, payload_bytes);
+    } else {
+        UNREACHABLE("the schema has no payload version", class_version);
+    }
+}
+
+template <typename Schema, uint32_t VersionNumber>
+alp::Result<Envelope, SerializeError> make_envelope(const typename Schema::template Payload<VersionNumber> &payload, const SerializeOptions options) {
+    static_assert(Schema::template supports_version<VersionNumber>, "the requested payload version is not part of the schema");
+    static_assert(Schema::class_name.size() <= max_class_name_size, "the class name exceeds the envelope limit");
+
+    ALP_TRY(bytes::vector payload_bytes, serde::serialize(payload));
+    ALP_TRY(bytes::vector compressed_data, compression::compress(payload_bytes, options.compression_algorithm));
+
+    Envelope envelope{
+        .header = {
+            .magic = magic,
+            .class_name = std::string{Schema::class_name},
+            .class_version = VersionNumber,
+            .hash_algorithm = options.hash_algorithm,
+            .hash = hash::data(payload_bytes, options.hash_algorithm),
+            .compression_algorithm = options.compression_algorithm,
+            .uncompressed_size = payload_bytes.size(),
+        },
+        .compressed_data = std::move(compressed_data),
+    };
+    ASSERT(envelope.header.hash.size() <= max_hash_size);
+    return envelope;
 }
 
 } // namespace detail
 
-template <FixedString ClassName, typename... Versions>
-struct PayloadSchema {
-    static_assert(sizeof...(Versions) > 0, "a payload schema requires at least one version");
-    static_assert(detail::versions_are_strictly_increasing<Versions...>(),
-                  "payload versions must be strictly increasing");
-
-    using VersionTuple = std::tuple<Versions...>;
-    static constexpr std::size_t version_count = sizeof...(Versions);
-
-    template <std::size_t Index>
-    using VersionAt = std::tuple_element_t<Index, VersionTuple>;
-
-    using LatestVersion = VersionAt<version_count - 1>;
-    using Latest = typename LatestVersion::Payload;
-
-    static constexpr std::string_view class_name{ClassName.value, sizeof(ClassName.value) - 1};
-    static constexpr std::uint32_t latest_version = LatestVersion::number;
-
-    template <std::uint32_t Number>
-    static constexpr bool supports_version =
-        !std::is_void_v<typename detail::FindVersion<Number, Versions...>::type>;
-
-    static constexpr bool supports_version_number(const std::uint32_t number) {
-        return ((number == Versions::number) || ...);
-    }
-
-    template <std::uint32_t Number>
-    using Payload = typename detail::FindVersion<Number, Versions...>::type::Payload;
-
-    static_assert(version_count == 1
-                      || detail::conversions_are_valid<VersionTuple>(
-                          std::make_index_sequence<version_count - 1>{}),
-                  "each payload version must provide from_previous for the preceding version");
-};
-
-template <typename Schema, std::uint32_t VersionNumber>
-[[nodiscard]]
-alp::Result<Bytes, compression::Error, SerdeError> serialize(
-    const typename Schema::template Payload<VersionNumber> &payload,
-    compression::Algorithm compression_algorithm = compression::Algorithm::ZstdBestCompressionWithChecksum,
-    compression::ChecksumAlgorithm checksum_algorithm = compression::ChecksumAlgorithm::HandledByCompressionLib);
+template <typename Schema, uint32_t VersionNumber>
+alp::Result<bytes::vector, SerializeError> serialize(const typename Schema::template Payload<VersionNumber> &payload, const SerializeOptions options) {
+    const auto context = alp::make_context("encoding {} version {}", Schema::class_name, VersionNumber);
+    ALP_TRY_CONTEXT(const Envelope envelope, (detail::make_envelope<Schema, VersionNumber>(payload, options)), context);
+    ALP_TRY_CONTEXT(bytes::vector bytes, serde::serialize(envelope), context);
+    return bytes;
+}
 
 template <typename Schema>
-[[nodiscard]]
-alp::Result<typename Schema::Latest, Error, compression::Error, SerdeError> deserialize(
-    std::span<const std::uint8_t> bytes,
-    std::size_t max_decompressed_size = compression::default_max_decompressed_size);
+alp::Result<bytes::vector, SerializeError> serialize(const typename Schema::Latest &payload, const SerializeOptions options) {
+    return serialize<Schema, Schema::latest_version>(payload, options);
+}
+
+template <typename Schema>
+alp::Result<typename Schema::Latest, DeserializeError> deserialize(const bytes::span bytes, const DeserializeOptions options) {
+    const auto context = alp::make_context("decoding {}", Schema::class_name);
+
+    auto envelope_result = serde::deserialize<Envelope>(bytes);
+    if (!envelope_result.has_value()) {
+        return detail::to_envelope_error(std::move(envelope_result).error(), context);
+    }
+    const Envelope &envelope = envelope_result.value();
+    const Header &header = envelope.header;
+    ALP_TRY_CONTEXT(detail::validate_header(header), context);
+    if (header.class_name != Schema::class_name) {
+        return alp::make_error(CorruptData{}, fmt::format("the envelope holds the class \"{}\"", header.class_name)).context(context);
+    }
+    if (!Schema::supports_version_number(header.class_version)) {
+        return alp::make_error(Unsupported{}, fmt::format("the envelope holds the class version {}", header.class_version)).context(context);
+    }
+
+    const size_t max_decompressed_size = std::min(options.max_decompressed_size, max_buffer_size);
+    if (header.uncompressed_size > max_decompressed_size) {
+        return alp::make_error(BufferLimitExceeded(max_decompressed_size, header.uncompressed_size), context);
+    }
+
+    auto payload_bytes_result = compression::decompress(envelope.compressed_data, header.compression_algorithm, header.uncompressed_size);
+    // The limit is the declared size, so a payload beyond it is larger than declared.
+    if (!payload_bytes_result.has_value() && payload_bytes_result.error().holds<BufferLimitExceeded>()) {
+        return alp::make_error(CorruptData{}, fmt::format("the payload is larger than the {} bytes the header declares", header.uncompressed_size), std::move(payload_bytes_result).error()).context(context);
+    }
+    ALP_TRY_CONTEXT(const bytes::vector payload_bytes, std::move(payload_bytes_result), context);
+    if (payload_bytes.size() != header.uncompressed_size) {
+        return alp::make_error(CorruptData{}, fmt::format("the payload has {} bytes, not the {} bytes the header declares", payload_bytes.size(), header.uncompressed_size)).context(context);
+    }
+    if (hash::data(payload_bytes, header.hash_algorithm) != header.hash) {
+        return alp::make_error(CorruptData{}, "the payload does not have the hash the header records").context(context);
+    }
+    if (options.expected_hash.has_value() && !std::ranges::equal(header.hash, *options.expected_hash)) {
+        return alp::make_error(CorruptData{}, "the header records a different hash than expected").context(context);
+    }
+
+    auto latest_result = detail::deserialize_version<Schema>(header.class_version, payload_bytes);
+    if (!latest_result.has_value()) {
+        return detail::to_envelope_error(std::move(latest_result).error(), "decoding the payload").context(context);
+    }
+    return std::move(latest_result).value();
+}
+
+template <typename Schema>
+alp::Result<typename Schema::Latest, ReadError> read(const std::filesystem::path &path, const ReadOptions options) {
+    const auto context = alp::make_context("reading {} from {}", Schema::class_name, path);
+    ALP_TRY_CONTEXT(const bytes::vector bytes, bytes::read(path), context);
+    ALP_TRY_CONTEXT(typename Schema::Latest latest, deserialize<Schema>(bytes, options), context);
+    return latest;
+}
+
+template <typename Schema>
+alp::Result<bytes::vector, WriteError> write(const typename Schema::Latest &payload, const std::filesystem::path &path, const WriteOptions options) {
+    const auto context = alp::make_context("writing {} to {}", Schema::class_name, path);
+    const SerializeOptions serialize_options{.compression_algorithm = options.compression_algorithm, .hash_algorithm = options.hash_algorithm};
+    ALP_TRY_CONTEXT(Envelope envelope, (detail::make_envelope<Schema, Schema::latest_version>(payload, serialize_options)), context);
+    ALP_TRY_CONTEXT(const bytes::vector bytes, serde::serialize(envelope), context);
+    ALP_TRY_CONTEXT(bytes::write(bytes, path, {.mode = options.mode, .make_dirs = options.make_dirs}), context);
+    return std::move(envelope.header.hash);
+}
 
 } // namespace io::envelope
-
-#include "io/envelope.inl"

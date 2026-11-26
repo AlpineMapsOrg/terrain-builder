@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 Adam Celarek <last name at cg tuwien ac at>
- * Copyright (C) 2022 alpinemaps.org
+ * AlpineMaps.org
+ * Copyright (C) 2022 Adam Celarek-Litofcenko
+ * Copyright (C) 2022 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <cmath>
 #include <filesystem>
 #include <limits>
 #include <unordered_set>
@@ -32,8 +33,13 @@
 
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
-#include "gdal/Dataset.h"
+#include "../temp_directory.h"
 #include "error/format.h"
+#include "gis/Dataset.h"
+#include "gis/srs/System.h"
+#include "gis/srs/Transform.h"
+#include "gis/srs/coverage.h"
+#include "gis/srs/well_known.h"
 #include "mesh/merge.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh_builder.h"
@@ -44,11 +50,9 @@
 #include "mesh/connectivity/connected_components.h"
 #include "octree/Id.h"
 #include "octree/Space.h"
-#include "srs/System.h"
-#include "srs/transform.h"
-#include "srs/well_known.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
+#include "test_raster.h"
 
 void check_mesh_basics(const SimpleMesh &mesh) {
     const cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
@@ -119,24 +123,24 @@ radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
     return radix::geometry::Aabb3d(min, max);
 }
 
-TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuilder]") {
+TEST_CASE("can build reference mesh patches for various datasets", "[mesh_builder]") {
     struct TestData {
         std::string path_suffix;
         radix::geometry::Aabb3d target_bounds;
-        srs::System target_srs;
-        srs::System mesh_srs;
+        gis::srs::System target_srs;
+        gis::srs::System mesh_srs;
         double resolution; // in m
     };
 
-    const auto mgi_srs = srs::mgi();
-    const auto ecef_srs = srs::ecef();
-    const auto wgs84_srs = srs::wgs84();
-    const auto webmercator_srs = srs::webmercator();
+    const auto mgi_srs = gis::srs::mgi();
+    const auto ecef_srs = gis::srs::ecef();
+    const auto wgs84_srs = gis::srs::wgs84();
+    const auto webmercator_srs = gis::srs::webmercator();
 
     const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
-    const glm::dvec3 pizbuin_summit_ecef = REQUIRE_VALUE(srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84));
+    const glm::dvec3 pizbuin_summit_ecef = REQUIRE_VALUE(gis::srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84));
     const glm::dvec3 steffl_wgs84(16.3735655, 48.2083264, 204);
-    const glm::dvec3 steffl_ecef = REQUIRE_VALUE(srs::transform_point(wgs84_srs, ecef_srs, steffl_wgs84));
+    const glm::dvec3 steffl_ecef = REQUIRE_VALUE(gis::srs::transform_point(wgs84_srs, ecef_srs, steffl_wgs84));
 
     const std::vector<TestData> test_data{
         {"/austria/pizbuin_1m_epsg4326.tif",
@@ -162,23 +166,20 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
 
     for (const auto &data : test_data) {
         DYNAMIC_SECTION(data.path_suffix) {
-            gdal::Dataset dataset(std::filesystem::path(ALP_TEST_DATA_DIR).concat(data.path_suffix));
-            const auto source_srs = dataset.srs();
+            const std::filesystem::path dataset_path = std::filesystem::path(ALP_TEST_DATA_DIR).concat(data.path_suffix);
+            gis::Dataset dataset = REQUIRE_VALUE(gis::Dataset::open_raster(dataset_path));
+            const gis::srs::System source_srs = REQUIRE_VALUE(dataset.srs());
             const auto &mesh_srs = data.mesh_srs;
             const auto &target_srs = data.target_srs;
             const auto &target_bounds = data.target_bounds;
             const auto resolution = data.resolution;
 
             radix::tile::SrsBounds texture_bounds;
-            const auto result = terrainbuilder::build_reference_mesh_patch(
+            const SimpleMesh mesh = REQUIRE_VALUE(sf::build_reference_mesh_patch(
                 dataset,
                 mesh_srs,
                 target_srs, target_bounds,
-                source_srs, texture_bounds);
-            if (!result) {
-                FAIL(fmt::to_string(result.error()));
-            }
-            const SimpleMesh mesh = result.value();
+                source_srs, texture_bounds));
 
             SECTION("Basic mesh properties") {
                 check_non_empty(mesh);
@@ -188,7 +189,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
                 check_mesh_basics(mesh);
             }
 
-            const std::vector<glm::dvec3> positions_in_target_srs = REQUIRE_VALUE(srs::transform_points(mesh_srs, target_srs, mesh.positions));
+            const std::vector<glm::dvec3> positions_in_target_srs = REQUIRE_VALUE(gis::srs::transform_points(mesh_srs, target_srs, mesh.positions));
             SECTION("Vertices within target bounds") {
                 for (const auto &position : positions_in_target_srs) {
                     REQUIRE(radix::geometry::Aabb2d(target_bounds).contains_inclusive(glm::dvec2(position)));
@@ -207,12 +208,12 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
             }
 
             SECTION("Matches dataset resolution") {
-                const auto positions_in_source_srs = REQUIRE_VALUE(srs::transform_points(mesh_srs, source_srs, mesh.positions));
+                const auto positions_in_source_srs = REQUIRE_VALUE(gis::srs::transform_points(mesh_srs, source_srs, mesh.positions));
                 auto flat_positions_in_source_srs = positions_in_source_srs;
                 for (auto &pos : flat_positions_in_source_srs) {
                     pos.z = 0.0;
                 }
-                const auto flat_positions_in_ecef_srs = REQUIRE_VALUE(srs::transform_points(source_srs, ecef_srs, flat_positions_in_source_srs));
+                const auto flat_positions_in_ecef_srs = REQUIRE_VALUE(gis::srs::transform_points(source_srs, ecef_srs, flat_positions_in_source_srs));
 
                 const auto target_bounds_2d = radix::geometry::Aabb2d(target_bounds);
                 const auto padding = target_bounds_2d.size() * 0.1;
@@ -244,14 +245,14 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
     }
 }
 
-TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
-    const auto mgi_srs = srs::mgi();
-    const auto ecef_srs = srs::ecef();
-    const auto wgs84_srs = srs::wgs84();
-    const auto webmercator_srs = srs::webmercator();
+TEST_CASE("neighbouring patches fit together", "[mesh_builder]") {
+    const auto mgi_srs = gis::srs::mgi();
+    const auto ecef_srs = gis::srs::ecef();
+    const auto wgs84_srs = gis::srs::wgs84();
+    const auto webmercator_srs = gis::srs::webmercator();
 
     const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
-    const glm::dvec3 pizbuin_summit_ecef = REQUIRE_VALUE(srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84));
+    const glm::dvec3 pizbuin_summit_ecef = REQUIRE_VALUE(gis::srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84));
     const octree::Space space = octree::Space::earth();
     const octree::Id summit_node = space.find_node_at_level_containing_point(pizbuin_summit_ecef, 17).value();
     std::vector<octree::Id> nodes = summit_node.neighbours();
@@ -259,13 +260,13 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
 
     const std::string dataset_suffix = "/austria/pizbuin_1m_mgi.tif";
     const std::filesystem::path dataset_path = std::filesystem::path(ALP_TEST_DATA_DIR).concat(dataset_suffix);
-    gdal::Dataset dataset(dataset_path);
+    gis::Dataset dataset = REQUIRE_VALUE(gis::Dataset::open_raster(dataset_path));
 
     std::vector<SimpleMesh> node_meshes;
     for (const octree::Id &node : nodes) {
         const octree::Bounds node_bounds = space.get_node_bounds(node);
         radix::tile::SrsBounds output_texture_bounds;
-        const auto result = terrainbuilder::build_reference_mesh_patch(
+        const auto result = sf::build_reference_mesh_patch(
             dataset,
             ecef_srs,
             ecef_srs, node_bounds,
@@ -285,35 +286,76 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     CHECK(mesh::count_connected_components(merged_mesh) == 1);
 }
 
-TEST_CASE("Building a mesh for a region beside the dataset fails, holding both regions", "[mesh_builder]") {
-    gdal::Dataset dataset(std::filesystem::path(ALP_TEST_DATA_DIR) / "austria/at_mgi.tif");
-    const srs::System srs = dataset.srs();
-    const radix::tile::SrsBounds available = dataset.bounds();
+TEST_CASE("Building a mesh for a region beside the dataset fails", "[mesh_builder]") {
+    const std::filesystem::path dataset_path = std::filesystem::path(ALP_TEST_DATA_DIR) / "austria/at_mgi.tif";
+    gis::Dataset dataset = REQUIRE_VALUE(gis::Dataset::open_raster(dataset_path));
+    const gis::srs::System srs = REQUIRE_VALUE(dataset.srs());
+    const radix::tile::SrsBounds available = REQUIRE_VALUE(dataset.bounds());
     const double infinity = std::numeric_limits<double>::infinity();
     const glm::dvec2 offset(10 * available.width(), 0);
     const radix::geometry::Aabb3d requested(glm::dvec3(available.min + offset, -infinity), glm::dvec3(available.max + offset, infinity));
 
     radix::tile::SrsBounds texture_bounds;
-    const auto result = terrainbuilder::build_reference_mesh_patch(dataset, srs, srs, requested, srs, texture_bounds);
+    const auto error = REQUIRE_ERROR(sf::build_reference_mesh_patch(dataset, srs, srs, requested, srs, texture_bounds));
 
-    REQUIRE(!result.has_value());
-    const terrainbuilder::OutOfBounds *error = result.error().get_if<terrainbuilder::OutOfBounds>();
-    REQUIRE(error != nullptr);
-    CHECK(error->available == available);
-    CHECK(error->requested.min.x > available.max.x);
+    CHECK(error.holds<sf::OutOfBounds>());
 }
 
-TEST_CASE("Building a mesh for heights the terrain does not reach fails as an empty region", "[mesh_builder]") {
-    gdal::Dataset dataset(std::filesystem::path(ALP_TEST_DATA_DIR) / "austria/at_mgi.tif");
-    const srs::System srs = dataset.srs();
-    const radix::tile::SrsBounds available = dataset.bounds();
+TEST_CASE("Building a mesh for heights the terrain does not reach fails", "[mesh_builder]") {
+    const std::filesystem::path dataset_path = std::filesystem::path(ALP_TEST_DATA_DIR) / "austria/at_mgi.tif";
+    gis::Dataset dataset = REQUIRE_VALUE(gis::Dataset::open_raster(dataset_path));
+    const gis::srs::System srs = REQUIRE_VALUE(dataset.srs());
+    const radix::tile::SrsBounds available = REQUIRE_VALUE(dataset.bounds());
     const glm::dvec2 centre = (available.min + available.max) * 0.5;
     const glm::dvec2 half_size(5000, 5000);
     const radix::geometry::Aabb3d requested(glm::dvec3(centre - half_size, -2000), glm::dvec3(centre + half_size, -1000));
 
     radix::tile::SrsBounds texture_bounds;
-    const auto result = terrainbuilder::build_reference_mesh_patch(dataset, srs, srs, requested, srs, texture_bounds);
+    const auto error = REQUIRE_ERROR(sf::build_reference_mesh_patch(dataset, srs, srs, requested, srs, texture_bounds));
 
-    REQUIRE(!result.has_value());
-    CHECK(result.error().holds<terrainbuilder::EmptyRegion>());
+    CHECK(error.holds<sf::EmptyRegion>());
+}
+
+// ECEF bounds of the given longitude/latitude bounds in degrees, between heights 0 and 200 m.
+radix::geometry::Aabb3d ecef_bounds(const glm::dvec2 &longitudes, const glm::dvec2 &latitudes) {
+    return REQUIRE_VALUE(gis::srs::coverage::compute_ecef(gis::srs::wgs84(), {{longitudes.x, latitudes.x, 0}, {longitudes.y, latitudes.y, 200}}));
+}
+
+double longitude(const glm::dvec3 &ecef_position) {
+    return glm::degrees(std::atan2(ecef_position.y, ecef_position.x));
+}
+
+TEST_CASE("reference meshes are built across longitude seams", "[mesh_builder]") {
+    TempDirectory directory("sf-coverage");
+    const auto wgs84 = gis::srs::wgs84();
+    const auto ecef = gis::srs::ecef();
+    const auto webmercator = gis::srs::webmercator();
+    radix::tile::SrsBounds texture_bounds;
+
+    SECTION("dataset stored at [180, 190]") {
+        const std::filesystem::path dataset_path = write_raster(directory.path(), wgs84, {{180, -5}, {190, 5}}, {1000, 1000});
+        gis::Dataset dataset = REQUIRE_VALUE(gis::Dataset::open_raster(dataset_path));
+        const radix::geometry::Aabb3d clip_bounds = ecef_bounds({-175.2, -174.8}, {-0.2, 0.2});
+        const SimpleMesh mesh = REQUIRE_VALUE(sf::build_reference_mesh_patch(dataset, ecef, ecef, clip_bounds, webmercator, texture_bounds));
+        CHECK(mesh.face_count() > 100);
+        for (const glm::dvec3 &position : mesh.positions) {
+            REQUIRE(longitude(position) > -175.25);
+            REQUIRE(longitude(position) < -174.75);
+        }
+    }
+
+    SECTION("dataset across the antimeridian") {
+        const std::filesystem::path dataset_path = write_raster(directory.path(), wgs84, {{-180, -5}, {180, 5}}, {3600, 100});
+        gis::Dataset dataset = REQUIRE_VALUE(gis::Dataset::open_raster(dataset_path));
+        const radix::geometry::Aabb3d clip_bounds = ecef_bounds({179.5, 180.5}, {-0.5, 0.5});
+        const SimpleMesh mesh = REQUIRE_VALUE(sf::build_reference_mesh_patch(dataset, ecef, ecef, clip_bounds, webmercator, texture_bounds));
+        size_t east = 0;
+        size_t west = 0;
+        for (const glm::dvec3 &position : mesh.positions) {
+            REQUIRE(std::abs(longitude(position)) > 179.4);
+            (longitude(position) > 0 ? east : west)++;
+        }
+        CHECK(east > 10);
+        CHECK(west > 10);
+    }
 }

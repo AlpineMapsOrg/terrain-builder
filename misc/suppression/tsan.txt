@@ -1,0 +1,15 @@
+# Preserve the oneTBB suppressions previously used by CI.
+# Possible data race during ittnotify initialization. Low impact.
+race:__itt_nullify_all_pointers
+race:__itt_init_ittlib
+
+# GDAL's unlocked poNewest comparison in Touch() races with cache-head updates.
+# The cache lock protects list changes; accept this data race instead of carrying
+# a dependency patch. TSan matches stack frames, so other races through Touch()
+# are also excluded by this rule.
+race:GDALRasterBlock::Touch()
+
+# Q12 accepts GDAL 3.10's same-value MEM creation callback race. Independent
+# RF fill datasets still share the registered driver. This stack suppression
+# also excludes other races reached through Create(); no fill-wide lock is used.
+race:GDALDriver::Create(

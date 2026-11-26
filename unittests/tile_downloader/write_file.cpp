@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "write_file.h"
 
 #include <filesystem>
@@ -24,7 +43,7 @@ TEST_CASE("checked file writer persists the complete response") {
     CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(partial_path)));
     REQUIRE(REQUIRE_VALUE(io::filesystem::exists(pending_path)));
 
-    CHECK(REQUIRE_VALUE(io::read_text_from_path(pending_path)) == expected);
+    CHECK(REQUIRE_VALUE(io::text::read(pending_path)) == expected);
 
     mark_tile_children_complete(path);
     CHECK(REQUIRE_VALUE(io::filesystem::exists(path)));

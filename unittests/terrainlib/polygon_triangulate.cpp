@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "../catch2_helpers.h"
 
 #include <optional>
@@ -7,7 +25,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "polygon/triangulate.h"
 #include "mesh/connectivity/triangle_compare.h"
 
@@ -77,7 +95,7 @@ TEST_CASE("triangulate handles a square") {
 
     CHECK(mesh.triangles.size() == 2); // A square should produce 2 triangles
     check_every_vertex_used_at_least_once(mesh);
-    mesh::validate(mesh);
+    mesh::debug_assert_valid(mesh);
 }
 
 TEST_CASE("triangulate works with UVs") {
@@ -140,7 +158,7 @@ TEST_CASE("triangulate handles U-shaped polygon") {
     polygon::triangulate(mesh, indices);
     CHECK(!mesh.triangles.empty());
     check_every_vertex_used_at_least_once(mesh);
-    mesh::validate(mesh);
+    mesh::debug_assert_valid(mesh);
 
     // Check that all boundary edges are present in the triangulation
     const std::vector<glm::uvec2> boundary_edges = {
