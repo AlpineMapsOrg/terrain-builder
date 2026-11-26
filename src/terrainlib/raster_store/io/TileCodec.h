@@ -124,6 +124,7 @@ public:
         ASSERT(side > 0u);
     }
 
+    // TODO: include the tile side, so that link_from rejects tiles of another size (needs a metadata version step).
     std::string_view id() const override { return codec_id; }
 
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { this->file_path(node_path) }; }
