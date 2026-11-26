@@ -98,7 +98,7 @@ TEST_CASE("try_for_each returns the error of the body that failed", "[parallel]"
     const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
     const std::vector<uint32_t> items = {3, 5, 8, 13};
 
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         if (item == 8) {
             return alp::make_error(FailedItem{item});
         }
@@ -114,7 +114,7 @@ TEST_CASE("try_for_each runs no item after the first failure of a serial run", "
     const std::vector<uint32_t> items = {3, 5, 8, 13};
 
     std::vector<uint32_t> seen;
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         seen.push_back(item);
         if (item == 5 || item == 13) {
             return alp::make_error(FailedItem{item});
@@ -131,7 +131,7 @@ TEST_CASE("try_for_each runs no item after the first failure of a serial run", "
 TEST_CASE("try_for_each returns one of the errors when several bodies of a parallel run fail", "[parallel]") {
     const std::vector<uint32_t> items = {3, 5, 8, 13};
 
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         if (item == 5 || item == 13) {
             return alp::make_error(FailedItem{item});
         }
@@ -169,7 +169,7 @@ TEST_CASE("try_for_each returns the error of an item that was added through the 
     const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
     const std::vector<uint32_t> items = {1};
 
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) -> alp::Result<void, FailedItem> {
         if (item == 6) {
             return alp::make_error(FailedItem{item});
         }
