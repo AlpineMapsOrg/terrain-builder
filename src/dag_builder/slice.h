@@ -84,7 +84,7 @@ inline ClusteringAndMap slice_clusters_with_map(const Clustering &clustering, co
             }
             return remapped;
         });
-        
+
         Cluster new_cluster{
             .id = cluster.id,
             .vertex_indices = new_vertex_indices,

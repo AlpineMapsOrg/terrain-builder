@@ -230,7 +230,7 @@ public:
         Completed,
         Aborted,
     };
-    
+
     ChunkedRingBuffer(const size_t chunk_size, const size_t num_chunks, const size_t padding) :
         _ring(chunk_size, num_chunks, padding),
         _slot_state(num_chunks, SlotState::Empty) {

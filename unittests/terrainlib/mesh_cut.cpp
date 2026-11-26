@@ -82,7 +82,7 @@ TEST_CASE("cuts_to_edge_mask multiple single edges") {
 }
 
 TEST_CASE("cut shared edge in open quad") {
-    mesh::Simple mesh({ 
+    mesh::Simple mesh({
         {0, 1, 2},
         {2, 1, 3}
     }, {

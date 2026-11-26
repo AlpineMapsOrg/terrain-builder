@@ -260,11 +260,11 @@ TEST_CASE("square frame with two holes sharing a vertex") {
             {5, 8},
             {8, 6}};
         const std::unordered_set<glm::uvec2> expected_edges_set(expected_edges.begin(), expected_edges.end());
-        
+
         // actual
         const std::unordered_set<glm::uvec2> actual_edges_set = find_boundary_edges(mesh);
         std::vector<glm::uvec2> actual_edges(actual_edges_set.begin(), actual_edges_set.end());
-        
+
         // missing edges
         std::vector<glm::uvec2> missing;
         for (auto const& e : expected_edges) {

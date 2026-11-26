@@ -316,7 +316,7 @@ std::optional<dag::ClusterBatch> build_node(
     const auto node_bounds = ctx.shifted_space.get_node_bounds(target_id);
     const double epsilon = compute_epsilon(node_bounds);
 
-    // Prepare filter to only include clusters inside the target_id bounds. 
+    // Prepare filter to only include clusters inside the target_id bounds.
     // In CurrentAndCoarser mode, input regions represented by the relevant DAG nodes are excluded as well.
     RegionFilter input_filter;
     input_filter.include = {node_bounds};

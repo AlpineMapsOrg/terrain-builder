@@ -69,7 +69,7 @@ TEST_CASE("progress indicator") {
         // Step 0
         CHECK(pi.progress_bar(2) == "[]");
         CHECK(pi.progress_bar(3) == "[ ]");
-        
+
         // Step 1
         pi.task_finished();
         CHECK(pi.progress_bar(2) == "[]");

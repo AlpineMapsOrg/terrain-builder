@@ -55,7 +55,7 @@ bool is_planar(const Polygon3d &polygon, const double epsilon) {
             return false;
         }
     }
-    
+
     return true;
 }
 }

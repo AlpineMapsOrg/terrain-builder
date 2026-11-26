@@ -65,7 +65,7 @@ namespace sf {
 
 namespace {
 using PixelBounds = radix::geometry::Aabb2i;
-    
+
 glm::dvec3 convert_pixel_to_vertex(const float height, const glm::uvec2 pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
     const glm::dvec2 point_offset_in_raster(0.5); // Convert pixel coordinates into a point in the dataset's srs.
     const glm::dvec2 coords_raster_relative = glm::dvec2(pixel_coords) + point_offset_in_raster;

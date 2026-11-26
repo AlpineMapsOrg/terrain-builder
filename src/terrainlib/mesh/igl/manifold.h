@@ -45,7 +45,7 @@ void make_manifold(
     std::vector<glm::vec<n_dims, Position>> &positions) {
     const auto [new_triangles, backwards] = make_manifold(triangles);
     triangles = new_triangles;
-    
+
     const size_t old_position_count = positions.size();
     positions.reserve(backwards.size());
     for (const auto [i, original_index] : enumerate(backwards)) {

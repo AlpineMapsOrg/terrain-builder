@@ -42,7 +42,7 @@ alp::Result<IntersectionAndDifference, NonManifoldResult> intersection_and_diffe
     cgal_out[intersection_index] = &cgal_intersection;
     cgal_out[difference_index] = &cgal_difference;
 
-    const std::array<bool, 4> cgal_result = 
+    const std::array<bool, 4> cgal_result =
         CGAL::Polygon_mesh_processing::corefine_and_compute_boolean_operations(cgal_a, cgal_b, cgal_out);
     if (!cgal_result[intersection_index] || !cgal_result[difference_index]) {
         return alp::make_error(NonManifoldResult{});
@@ -50,7 +50,7 @@ alp::Result<IntersectionAndDifference, NonManifoldResult> intersection_and_diffe
 
     IntersectionAndDifference result;
     result.intersection = convert::to_simple_mesh(cgal_intersection);
-    result.difference = convert::to_simple_mesh(cgal_difference);   
+    result.difference = convert::to_simple_mesh(cgal_difference);
     return result;
 }
 

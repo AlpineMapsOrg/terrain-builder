@@ -110,7 +110,7 @@ namespace sf {
     const uint32_t effective_min_zoom_level_to_examine = alp::value_or_else(min_zoom_level_to_examine, [&] {
         return estimate_zoom_level(root_tile.zoom_level, gis::webmercator::compute_tile_bounds(root_tile), target_bounds) + 1;
     });
-    
+
     // A list of tiles determined to be relevant for the target bounds.
     std::vector<radix::tile::Id> tiles_to_splatter;
 
@@ -212,7 +212,7 @@ inline TargetImageRegion calculate_target_image_region(
     const glm::u64vec2 root_tile_image_size = glm::u64vec2(tile_image_pixel_size) * full_image_size_factor;
     const glm::u64vec2 target_pixel_offset_min(glm::floor(relative_min * glm::dvec2(root_tile_image_size)));
     const glm::u64vec2 target_pixel_offset_max(glm::ceil(relative_max * glm::dvec2(root_tile_image_size)));
-    
+
     // Map from bottom-left origin to top-left origin
     const radix::geometry::Aabb2<uint64_t> requested(
         glm::u64vec2(target_pixel_offset_min.x, root_tile_image_size.y - target_pixel_offset_max.y),
@@ -462,7 +462,7 @@ inline alp::Result<AssembledTexture, TileError> splatter_tiles_to_texture(
 
         // Resize current tile image and copy into image buffer.
         copy_paste_image(image, tile_image, target_pixel_tile_bounds, true /* allows und handles overflow */, rescale_filter);
-        
+
     }
 
     cv::flip(image, image, 0);

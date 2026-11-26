@@ -36,4 +36,3 @@ void orient_inplace(mesh::Simple_<n_dims, T> &mesh) {
 }
 
 } // namespace mesh
-

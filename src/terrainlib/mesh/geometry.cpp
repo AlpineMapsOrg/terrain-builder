@@ -29,7 +29,7 @@
 #include "optional_utils.h"
 
 namespace mesh {
-    
+
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size) {
     const auto &triangles = mesh.triangles;
     const auto &positions = mesh.positions;

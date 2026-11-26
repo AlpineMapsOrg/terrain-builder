@@ -83,7 +83,7 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
     if (indices.size() < 3) {
         return;
     }
-    
+
     DEBUG_ASSERT(indices.size() <= mesh.positions.size());
 
     // Build the 3D points of the polygon

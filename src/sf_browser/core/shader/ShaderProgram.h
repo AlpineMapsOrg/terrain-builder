@@ -27,9 +27,9 @@ public:
 	ShaderProgram();
 
 	void attach(Shader shader);
-	
+
 	void link();
-	
+
 	GLuint handle();
 
 	GLint get_uniform_location(std::string name);
@@ -38,7 +38,7 @@ public:
 	Uniform<T> get_uniform(std::string name) {
 		return Uniform<T>(get_uniform_location(name));
 	}
-	
+
 	void use();
 
 	~ShaderProgram();

@@ -195,7 +195,7 @@ void duplicate_non_manifold_vertices(
                     change_vertex_inplace(triangle, vertex_index, duplicated_index);
                 }
             }
-            
+
             changed = true;
             break;
         }

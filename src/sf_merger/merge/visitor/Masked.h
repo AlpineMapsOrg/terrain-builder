@@ -210,7 +210,7 @@ private:
         };
         std::vector<size_t> vertex_offsets;
         SimpleMesh result_mesh = mesh::combine(meshes, vertex_offsets);
-        
+
         LOG_TRACE("Creating texture atlas");
         const atlas::HorizontalStripLayoutPlanner planner = {};
         const atlas::Layout layout = planner.plan(meshes);

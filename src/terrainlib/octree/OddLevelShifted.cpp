@@ -137,7 +137,7 @@ Bounds OddLevelShifted::get_node_bounds(const Id &id) const {
     if (id.level() % 2 == 0) {
         return node_bounds;
     } else {
-        // Shift odd levels by half a node size 
+        // Shift odd levels by half a node size
         const glm::dvec3 shift = node_bounds.size() / 2.0;
         Bounds shifted_bounds(node_bounds.min - shift, node_bounds.max - shift);
 

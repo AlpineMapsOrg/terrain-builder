@@ -274,4 +274,3 @@ if(TARGET sfmergerlib)
     endif()
     atb_configure_test(unittests_sfmerger)
 endif()
-

@@ -181,7 +181,7 @@ alp::Result<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm 
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerCircularBorder(), bhd, uv_map);
         } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerSquareBorder(), bhd, uv_map);
-        } 
+        }
     } else if (algorithm == Algorithm::LeastSquaresConformalMap) {
         // free border
         result = CGAL::Surface_mesh_parameterization::parameterize(mesh,
@@ -232,7 +232,7 @@ alp::Result<Map, UnwrapError> unwrap(
     const mesh::View mesh(triangles, positions);
     mesh::debug_assert_valid_manifold(mesh);
     DEBUG_ASSERT(mesh::compute_topology(mesh).is_disk(true));
-    
+
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
     ALP_TRY_CONTEXT(const CgalMap &cgal_map, parameterize_mesh(cgal_mesh, algorithm, border), "unwrapping a mesh");
     Uvs uvs = decode_uv_map(cgal_map.uvs, mesh.vertex_count());

@@ -41,7 +41,7 @@
 #include "vector_utils.h"
 
 namespace mesh {
-    
+
 namespace {
 using Edge = glm::uvec2;
 using VertexIndex = uint32_t;

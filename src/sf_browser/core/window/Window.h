@@ -53,7 +53,7 @@ public:
 	bool is_mouse_captured();
 	void toggle_capture_mouse();
 	void set_capture_mouse(bool captured);
-	
+
 	glm::dvec2 get_accumulated_cursor_delta();
 	void clear_accumulated_cursor_delta();
 

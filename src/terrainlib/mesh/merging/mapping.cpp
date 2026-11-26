@@ -262,7 +262,7 @@ SimpleMesh apply_mapping(
     if (max_vertex_index == 0) {
         return {};
     }
-    
+
     DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {

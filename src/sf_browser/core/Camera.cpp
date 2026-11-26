@@ -20,14 +20,14 @@
 #include "Camera.h"
 #include <cli_support/log.h>
 
-Camera::Camera(CameraConfig config) : 
-	m_fov_deg(config.fov_deg), 
-	m_aspect_ratio(config.aspect_ratio), 
-	m_near_plane(config.near_plane), 
+Camera::Camera(CameraConfig config) :
+	m_fov_deg(config.fov_deg),
+	m_aspect_ratio(config.aspect_ratio),
+	m_near_plane(config.near_plane),
 	m_far_plane(config.far_plane),
 	m_up(glm::normalize(config.up)),
 	m_position(config.position){
-	
+
 	glm::dvec3 forward = glm::normalize(config.target - m_position);
 	m_rotation = glm::quatLookAt(forward, m_up);
 

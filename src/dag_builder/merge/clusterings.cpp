@@ -412,7 +412,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
 
         switch (matches.size()) {
         case 0:
-            // Found no other vertex nearby -> unique 
+            // Found no other vertex nearby -> unique
             break;
 
         case 1: {

@@ -154,7 +154,7 @@ public:
             }
             return parts->second <=> other.parts->second;
         }
-        
+
         bool operator==(const Inside& other) const {
             if (plane_index != other.plane_index) {
                 return false;
@@ -425,7 +425,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
         }
 
         // Slow path: Clip triangle against all planes
-        
+
         // Prepare vertex provenance
         const std::array<VertexProvenance, 3> source_provenance = {
             VertexProvenance::make_original(source_triangle[0]),
@@ -643,10 +643,10 @@ struct HasIntersectionsVisitor : public CGAL::Polygon_mesh_processing::Corefinem
     bool has_intersections = false;
 
     // called when a new intersection point is detected.
-    // The intersection is detected using a face of tm_f and an edge of tm_e. 
+    // The intersection is detected using a face of tm_f and an edge of tm_e.
     void intersection_point_detected(
         size_t /*i_id*/, int /*sdim*/,
-        HalfedgeDescriptor /*h_e*/, HalfedgeDescriptor /*h_f*/, 
+        HalfedgeDescriptor /*h_e*/, HalfedgeDescriptor /*h_f*/,
         const TriangleMesh& /*tm_e*/, const TriangleMesh& /*tm_f*/, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
         this->has_intersections = true;
     }
@@ -679,7 +679,7 @@ alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_bounds_and_cap(con
     if (!remesh_planar_patches) {
         return Cow(convert::to_simple_mesh(cgal_mesh));
     }
-    
+
     cgal::Mesh remeshed_cgal_mesh;
     const auto remesh_params = CGAL::Polygon_mesh_processing::parameters::cosine_of_maximum_angle(0.999);
     CGAL::Polygon_mesh_processing::remesh_planar_patches(cgal_mesh, remeshed_cgal_mesh, remesh_params);
@@ -715,10 +715,10 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
     std::vector<std::variant<EdgeIntersection, FaceIntersection>> intersections;
 
     // called when a new intersection point is detected.
-    // The intersection is detected using a face of tm_f and an edge of tm_e. 
+    // The intersection is detected using a face of tm_f and an edge of tm_e.
     void intersection_point_detected(
         size_t i_id, int /*sdim*/,
-        HalfedgeDescriptor h_e, HalfedgeDescriptor h_f, 
+        HalfedgeDescriptor h_e, HalfedgeDescriptor h_f,
         const TriangleMesh& tm_e, const TriangleMesh& tm_f, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
         DEBUG_ASSERT(i_id == intersections.size());
         ALP_UNUSED(i_id);
@@ -795,14 +795,14 @@ alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_mesh(const SimpleM
             return Cow<const SimpleMesh>::from_ref(mesh);
         }
     }
-    
+
     // If we want to keep everything outside the clip_mesh we simply invert it and recurse
     if (!keep_inside) {
         SimpleMesh clip_mesh_inv(clip_mesh.triangles, clip_mesh.positions);
         flip_orientation(clip_mesh_inv);
         return mesh::clip_on_mesh(mesh, clip_mesh_inv, !keep_inside);
     }
-    
+
     // Convert both meshes to cgal and use their clipping logic.
     using UvMap = cgal::Mesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
@@ -836,7 +836,7 @@ alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_mesh(const SimpleM
     if (!has_intersections && cgal_mesh.number_of_faces() == mesh.face_count()) {
         return Cow(mesh);
     }
-    
+
     cgal_mesh.collect_garbage();
     cgal::validate(cgal_mesh);
     SimpleMesh result = convert::to_simple_mesh(cgal_mesh);

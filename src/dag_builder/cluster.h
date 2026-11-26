@@ -36,7 +36,7 @@ struct Cluster {
     uint32_t id = std::numeric_limits<uint32_t>::max();
     std::vector<uint32_t> vertex_indices; // indices into Clustering::positions
     std::vector<glm::uvec3> local_triangles; // indices into this->vertex_indices
-    std::vector<glm::dvec2> uvs; // per local vertex 
+    std::vector<glm::dvec2> uvs; // per local vertex
 
     std::optional<uint32_t> texture_id; // index into Clustering::textures
     double absolute_error = 0.0; // absolute error of this cluster compared to original mesh
