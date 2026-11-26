@@ -56,7 +56,7 @@ public:
         if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Leaf) {
             ALP_TRY(const SimpleMesh &left_mesh, left.mesh());
             ALP_TRY(const SimpleMesh &right_mesh, right.mesh());
-            return merge_meshes(right_mesh, left_mesh);
+            return merge_meshes(left_mesh, right_mesh);
         }
 
         return Recurse{ctx};
