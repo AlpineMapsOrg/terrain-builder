@@ -86,10 +86,6 @@ alp_add_git_repository(cgltf URL https://github.com/AlpineMapsOrgDependencies/cg
 add_library(cgltf INTERFACE)
 target_include_directories(cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
 
-alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
-add_library(stb INTERFACE)
-target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
-
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
 alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.17.0)
 add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
