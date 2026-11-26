@@ -19,12 +19,12 @@
 
 #include <filesystem>
 #include <future>
-#include <stdexcept>
 #include <system_error>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../assertion_helpers.h"
 #include "../result_helpers.h"
 #include "../temp_directory.h"
 #include "codec.h"
@@ -106,8 +106,7 @@ TEST_CASE("DAG codec rejects invalid batches and inconsistent files", "[dag_buil
         auto batch = sample_batch();
         batch.metadata.group_assignment.clear();
 
-        // In tests a failed assertion throws a std::logic_error instead of aborting; see unittests/throwing_assertions.cpp.
-        CHECK_THROWS_AS(codec.write(node_path, batch), std::logic_error);
+        CHECK_ASSERTS(codec.write(node_path, batch));
         CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(node_paths[0])));
         CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(node_paths[1])));
     }
@@ -116,8 +115,7 @@ TEST_CASE("DAG codec rejects invalid batches and inconsistent files", "[dag_buil
         auto batch = sample_batch();
         batch.metadata.group_assignment = { 1 };
 
-        // In tests a failed assertion throws a std::logic_error instead of aborting; see unittests/throwing_assertions.cpp.
-        CHECK_THROWS_AS(codec.write(node_path, batch), std::logic_error);
+        CHECK_ASSERTS(codec.write(node_path, batch));
         CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(node_paths[0])));
         CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(node_paths[1])));
     }

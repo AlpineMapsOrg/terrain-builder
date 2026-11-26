@@ -23,6 +23,7 @@
 
 #include <glm/glm.hpp>
 
+#include "../assertion_helpers.h"
 #include "../catch2_helpers.h"
 
 #include "numeric/checked_cast.h"
@@ -67,7 +68,7 @@ TEST_CASE("checked_cast keeps a value the target type can hold", "[numeric][chec
 }
 
 TEST_CASE("checked_cast rejects a value the target type cannot hold", "[numeric][checked_cast]") {
-    CHECK_THROWS(checked_cast<int32_t>(0.5));
+    CHECK_ASSERTS(checked_cast<int32_t>(0.5));
 }
 
 TEST_CASE("try_cast keeps a value the target type can hold", "[numeric][checked_cast]") {
@@ -84,7 +85,7 @@ TEST_CASE("debug_checked_cast keeps a value the target type can hold", "[numeric
 
 #ifndef NDEBUG
 TEST_CASE("debug_checked_cast rejects a value the target type cannot hold", "[numeric][checked_cast]") {
-    CHECK_THROWS(debug_checked_cast<int32_t>(0.5));
+    CHECK_ASSERTS(debug_checked_cast<int32_t>(0.5));
 }
 #endif
 
@@ -94,8 +95,8 @@ TEST_CASE("checked_cast converts a vector whose components all fit", "[numeric][
 }
 
 TEST_CASE("checked_cast rejects a vector with a single component that does not fit", "[numeric][checked_cast]") {
-    CHECK_THROWS(checked_cast<uint8_t>(glm::i64vec3{-1, 0, 0}));
-    CHECK_THROWS(checked_cast<uint8_t>(glm::i64vec3{0, 0, 256}));
+    CHECK_ASSERTS(checked_cast<uint8_t>(glm::i64vec3{-1, 0, 0}));
+    CHECK_ASSERTS(checked_cast<uint8_t>(glm::i64vec3{0, 0, 256}));
 }
 
 TEST_CASE("debug_checked_cast converts a vector whose components all fit", "[numeric][checked_cast]") {
@@ -105,7 +106,7 @@ TEST_CASE("debug_checked_cast converts a vector whose components all fit", "[num
 
 #ifndef NDEBUG
 TEST_CASE("debug_checked_cast rejects a vector with a single component that does not fit", "[numeric][checked_cast]") {
-    CHECK_THROWS(debug_checked_cast<uint8_t>(glm::i64vec3{-1, 0, 0}));
-    CHECK_THROWS(debug_checked_cast<uint8_t>(glm::i64vec3{0, 0, 256}));
+    CHECK_ASSERTS(debug_checked_cast<uint8_t>(glm::i64vec3{-1, 0, 0}));
+    CHECK_ASSERTS(debug_checked_cast<uint8_t>(glm::i64vec3{0, 0, 256}));
 }
 #endif

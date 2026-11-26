@@ -31,7 +31,6 @@
 #include <numeric>
 #include <numbers>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -42,6 +41,7 @@
 #include <fmt/core.h>
 #include <gdal_priv.h>
 
+#include "../assertion_helpers.h"
 #include "../result_helpers.h"
 #include "../temp_directory.h"
 #include "gis/Dataset.h"
@@ -504,7 +504,7 @@ TEST_CASE("make rejects a default pixel that is not finite", "[gis][DatasetReade
     const auto dataset = make_raster({}, glm::uvec2(16), 1, GDT_Float32, geo_transform_for(bounds, glm::uvec2(16)));
     const float default_pixel = GENERATE(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity());
 
-    REQUIRE_THROWS_AS(gis::DatasetReader<float>::make(dataset, gis::Projection::WebMercator, {1}, default_pixel), std::logic_error);
+    REQUIRE_ASSERTS(gis::DatasetReader<float>::make(dataset, gis::Projection::WebMercator, {1}, default_pixel));
 }
 
 TEST_CASE("make fails as missing srs for a raster without one", "[gis][DatasetReader]") {
@@ -586,12 +586,12 @@ TEST_CASE("read rejects an empty or oversized size and bounds that are not finit
             {{{-DBL_MAX, 0}, {DBL_MAX, 1}}, {16, 16}},
         }));
 
-        REQUIRE_THROWS_AS(reader.read(request_bounds, size), std::logic_error);
+        REQUIRE_ASSERTS(reader.read(request_bounds, size));
     }
     SECTION("RGB") {
         auto reader = make_reader(raster(GDT_Byte), gis::Projection::WebMercator, {1, 2, 3}, glm::u8vec3(0));
 
-        REQUIRE_THROWS_AS(reader.read(bounds, {INT_MAX, INT_MAX}), std::logic_error);
+        REQUIRE_ASSERTS(reader.read(bounds, {INT_MAX, INT_MAX}));
     }
 }
 

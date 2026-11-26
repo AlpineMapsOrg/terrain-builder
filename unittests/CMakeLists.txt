@@ -32,6 +32,7 @@ function(atb_configure_test target)
 endfunction()
 
 add_executable(unittests_terrainlib
+    assertion_helpers.h
     catch2_helpers.h
     opencv_helpers.h
     result_helpers.h
@@ -192,6 +193,7 @@ target_link_libraries(unittests_glm_serialization_aligned PRIVATE glm::glm zpp_b
 
 if(TARGET sfbuilderlib)
     add_executable(unittests_sfbuilder
+        assertion_helpers.h
         catch2_helpers.h
         opencv_helpers.h
         result_helpers.h
@@ -211,6 +213,7 @@ endif()
 if(TARGET tile-downloader)
     find_package(CURL REQUIRED)
     add_executable(unittests_tile_downloader
+        assertion_helpers.h
         result_helpers.h
         temp_directory.h
         throwing_assertions.cpp
@@ -252,6 +255,7 @@ endif()
 
 if(TARGET sfmergerlib)
     add_executable(unittests_sfmerger
+        assertion_helpers.h
         catch2_helpers.h
         result_helpers.h
         temp_directory.h
