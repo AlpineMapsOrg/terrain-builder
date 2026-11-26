@@ -47,6 +47,7 @@
 #include "io/image/JxlError.h"
 #include "io/image/TurboJpegError.h"
 #include "io/mat.h"
+#include "numeric/checked_cast.h"
 
 namespace io::image {
 
@@ -166,7 +167,9 @@ namespace {
     alp::Result<bytes::vector, EncodeError> encode_jpeg(const RGB8 &image, const EncodeOptions options) {
         ASSERT(options.jpeg_quality >= 0 && options.jpeg_quality <= 100);
         constexpr auto context = "encoding an image as JPEG";
-        if (!std::in_range<int>(image.width()) || !std::in_range<int>(image.height())) {
+        const std::optional<int> width_opt = try_cast<int>(image.width());
+        const std::optional<int> height_opt = try_cast<int>(image.height());
+        if (!width_opt || !height_opt) {
             return alp::make_error(Unsupported{}, fmt::format("TurboJPEG cannot encode an image of {}x{} pixels", image.width(), image.height()));
         }
 
@@ -184,7 +187,7 @@ namespace {
             uint8_t *output = nullptr;
             size_t output_size = 0;
             const auto *pixels = reinterpret_cast<const uint8_t *>(image.bytes().data());
-            const int result = tj3Compress8(compressor.get(), pixels, static_cast<int>(image.width()), 0, static_cast<int>(image.height()), TJPF_RGB, &output, &output_size);
+            const int result = tj3Compress8(compressor.get(), pixels, *width_opt, 0, *height_opt, TJPF_RGB, &output, &output_size);
             const TurboJpegBuffer encoded(output, &tj3Free);
             if (result != 0) {
                 return alp::make_error(Unknown{}, context, TurboJpegError::get_last_error(compressor.get()));

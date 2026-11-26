@@ -41,6 +41,7 @@
 #include "error/try.h"
 #include "error/utils.h"
 #include "gis/CplError.h"
+#include "numeric/checked_cast.h"
 
 namespace gis {
 
@@ -133,9 +134,7 @@ public:
 
     // Maps coordinate arrays in place with GDAL's transformer function, forwards or, if `inverse` is set, backwards.
     bool operator()(const bool inverse, const size_t count, double *xs, double *ys, double *zs, int *successes) const {
-        // TODO: switch to a checked cast
-        ASSERT(std::in_range<int>(count));
-        return this->_function(this->_argument.get(), inverse, static_cast<int>(count), xs, ys, zs, successes) != FALSE;
+        return this->_function(this->_argument.get(), inverse, checked_cast<int>(count), xs, ys, zs, successes) != FALSE;
     }
 
     std::string_view source_name() const {
