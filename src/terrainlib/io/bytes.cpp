@@ -26,6 +26,7 @@
 
 #include "cli_support/log.h"
 #include "error/Context.h"
+#include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "fmt_impls.h"
@@ -59,9 +60,17 @@ alp::Result<void, WriteError> write(const span bytes, const std::filesystem::pat
         const auto replace_context = alp::make_context("replacing {}", path);
         const std::filesystem::path temporary_path = paths::with_added_extension(path, "tmp");
         ALP_TRY_CONTEXT(bytes::write(bytes, temporary_path, {.mode = WriteMode::Overwrite, .make_dirs = false}), replace_context);
-        ALP_TRY_CONTEXT(filesystem::sync_file(temporary_path), replace_context);
-        ALP_TRY_CONTEXT(filesystem::rename(temporary_path, path), replace_context);
-        return {};
+
+        // Once written, the temporary file is ours, so a failure from here on removes it.
+        auto finish_result = alp::run_with_context(replace_context, [&]() -> alp::Result<void, WriteError> {
+            ALP_TRY(filesystem::sync_file(temporary_path));
+            ALP_TRY(filesystem::rename(temporary_path, path));
+            return {};
+        });
+        if (!finish_result.has_value()) {
+            LOG_WARN_IF_ERROR(filesystem::remove(temporary_path), "cleaning up after a failed replace");
+        }
+        return finish_result;
     }
 
     const std::ios::openmode open_mode = std::ios::binary | (options.mode == WriteMode::CreateNew ? std::ios::noreplace : std::ios::trunc);
