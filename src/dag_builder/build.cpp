@@ -54,7 +54,6 @@
 #include "partition.h"
 #include "simplify.h"
 #include "slice.h"
-#include "stop.h"
 #include "store/Checkpointer.h"
 #include "range_utils.h"
 #include "storage.h"
@@ -542,7 +541,6 @@ alp::Result<std::unordered_set<octree::Id>, BuildError> build_level(
 
     // Links the target from the checkpoint, or builds and saves it.
     const auto process_target = [&](const octree::Id& target) -> alp::Result<void, BuildError> {
-        ALP_TRY(check_not_stopped(ctx.stop));
         if (ctx.checkpoint.has(target)) {
             auto link_result = ctx.output_storage.link_from(target, ctx.checkpoint);
             ALP_TRY(alp::wrap_error(std::move(link_result), BuildIoError::IncompatibleCheckpoint));
@@ -576,7 +574,7 @@ alp::Result<std::unordered_set<octree::Id>, BuildError> build_level(
         auto target_result = process_target(target);
         progress.task_finished();
         return target_result;
-    }, execution);
+    }, ctx.stop, execution);
 
     // Targets skipped after a failure never finish, so the monitor has to be stopped rather than waited for.
     progress_thread.request_stop();
