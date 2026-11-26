@@ -38,6 +38,7 @@
 #include <ogrsf_frmts.h>
 
 #include "cli_support/log.h"
+#include "earth.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -242,8 +243,9 @@ alp::Result<radix::tile::SrsAndHeightBounds, Dataset::ComputeBoundsError> Datase
     glm::dvec2 height_range;
     const auto result = band->GetStatistics(approx_ok, false, &height_range.x, &height_range.y, nullptr, nullptr);
     if (result != CE_None) {
-        // TODO: move these extremes to earth.h
-        height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
+        // Twice the geoid's largest departure covers heights above the ellipsoid as well as above the geoid.
+        const double margin = 2 * earth::largest_geoid_undulation;
+        height_range = earth::elevation_range + glm::dvec2(-margin, margin);
     }
 
     ALP_TRY(const radix::tile::SrsBounds bounds2d, this->bounds());

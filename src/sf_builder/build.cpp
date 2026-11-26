@@ -44,6 +44,7 @@
 #include "cli_support/ProgressIndicator.h"
 #include "cli_support/log.h"
 #include "common_error_codes.h"
+#include "earth.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "geometry/geometry.h"
@@ -209,8 +210,8 @@ alp::Result<void, BuildError> build_and_save_node(
     return {};
 }
 
-// Nodes within this radius contain no terrain: it is 100 km below the earth's mean radius.
-constexpr double terrain_free_radius = 6371008 - 100000;
+// Nodes within this radius contain no terrain: it is the smallest distance from the earth's centre to its surface.
+constexpr double terrain_free_radius = earth::smallest_radius;
 
 // Whether the bounds lie so close to the earth's centre that they hold no terrain.
 bool lies_within_terrain_free_radius(const radix::geometry::Aabb3d &bounds) {

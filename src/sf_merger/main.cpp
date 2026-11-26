@@ -44,7 +44,7 @@
 [[nodiscard]]
 alp::Result<MeshMask, mask::LoadError> load_mask_from_path(const std::filesystem::path& path) {
     LOG_INFO("Loading mask file from {}", path);
-    const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2);
+    const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range, 2);
     ALP_TRY(MeshMask mask, mask::load_from_path(path, radius_range));
     LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)", mask.vertex_count(), mask.face_count());
     return mask;
