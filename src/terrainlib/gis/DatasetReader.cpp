@@ -44,7 +44,6 @@
 #include <radix/raster.h>
 #include <vrtdataset.h>
 
-#include "enumerate.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "geometry/geometry.h"
@@ -398,13 +397,19 @@ alp::Result<glm::dvec2, typename DatasetReader<Pixel>::PixelSizeError> DatasetRe
     // The geotransform maps pixels into this system, so the samples are measured in it.
     ALP_TRY_CONTEXT(const srs::System source_srs, this->m_dataset->srs(GeoreferencingKind::GeoTransform), fmt::format("reading the spatial reference of dataset {}", this->m_dataset->name()));
     ALP_TRY_CONTEXT(const srs::Transform transform, srs::get_transform(target_srs(this->m_projection), source_srs), "getting the transform into the dataset's system");
-    // TODO: skip samples that cannot be mapped instead of failing, so that bounds overlapping only the coverage's guard band do not fail
-    ALP_TRY_CONTEXT(transform.apply_inplace(&points), "transforming the pixel size samples into the dataset's system");
+    ALP_TRY_CONTEXT(const SuccessMask mapped, transform.apply_inplace_partial(&points), "transforming the pixel size samples into the dataset's system");
+    // A sample needs all three of its points; in the guard band of the coverage, some can lie where the dataset's system has no image.
+    const auto is_sample_mapped = [&mapped](const size_t i) { return mapped.is_mapped(3 * i) && mapped.is_mapped(3 * i + 1) && mapped.is_mapped(3 * i + 2); };
+    auto mapped_samples = std::views::iota(size_t{0}, steps.size()) | std::views::filter(is_sample_mapped);
+    if (mapped_samples.empty()) {
+        return alp::make_error(UntransformablePoint{}, "no pixel size sample has an image in the dataset's system");
+    }
 
     ALP_TRY(const GeoTransform geo_transform, this->m_dataset->geo_transform());
     const glm::dvec2 source_pixel_size = geo_transform.pixel_size();
     glm::dvec2 result(std::numeric_limits<double>::infinity());
-    for (const auto [i, step] : enumerate(steps)) {
+    for (const size_t i : mapped_samples) {
+        const glm::dvec2 step = steps[i];
         // Source pixels traversed per target unit along target x and y.
         const glm::dvec2 along_x = glm::abs((points[3 * i + 1] - points[3 * i]) / (step.x * source_pixel_size));
         const glm::dvec2 along_y = glm::abs((points[3 * i + 2] - points[3 * i]) / (step.y * source_pixel_size));

@@ -51,6 +51,7 @@
 #include "gis/srs/Transform.h"
 #include "gis/srs/well_known.h"
 #include "gis/webmercator.h"
+#include "glm_utils.h"
 #include "io/image.h"
 
 using namespace radix;
@@ -408,6 +409,18 @@ TEST_CASE("min_pixel_size is the finest source pixel size within the bounds", "[
         CHECK(size.x < 155);
         CHECK(size.y > 130);
         CHECK(size.y < 155);
+    }
+
+    SECTION("bounds reaching where the dataset's system has no image") {
+        // An orthographic system has no image behind its horizon, 90 degrees from its centre, and the guard band of a dataset at its eastern limb reaches beyond that.
+        auto dataset = make_bare_raster({}, {64, 64}, 1, GDT_Float32);
+        const gis::srs::System orthographic = REQUIRE_VALUE(gis::srs::from_user_input("+proj=ortho +lat_0=0 +lon_0=0 +R=6378137 +units=m +no_defs"));
+        REQUIRE(dataset->as_gdal()->SetSpatialRef(&orthographic.as_gdal()) == CE_None);
+        std::array<double, 6> geo_transform = geo_transform_for({{6.2e6, -1e5}, {std::sqrt(6378137.0 * 6378137.0 - 1e5 * 1e5), 1e5}}, {64, 64});
+        REQUIRE(dataset->as_gdal()->SetGeoTransform(geo_transform.data()) == CE_None);
+        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::Geographic).min_pixel_size({{80.0, -1.0}, {100.0, 1.0}}));
+        CHECK(is_finite(size));
+        CHECK(glm::all(glm::greaterThan(size, glm::dvec2(0))));
     }
 
     SECTION("bounds outside the coverage") {

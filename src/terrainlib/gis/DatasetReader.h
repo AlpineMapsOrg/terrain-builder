@@ -142,7 +142,7 @@ public:
 
     // Computes the smallest source pixel size within `bounds`, per axis, in units of the projection.
     // Approximate: sampled on a grid within the dataset coverage.
-    // Fails if the bounds lie outside the coverage or a sample cannot be mapped into the dataset's system.
+    // Fails if the bounds lie outside the coverage or no sample can be mapped into the dataset's system.
     [[nodiscard]]
     alp::Result<glm::dvec2, PixelSizeError> min_pixel_size(const radix::tile::SrsBounds &bounds) const;
 
