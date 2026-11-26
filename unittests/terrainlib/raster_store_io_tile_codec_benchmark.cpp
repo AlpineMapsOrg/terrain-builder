@@ -51,7 +51,9 @@ using Compression = io::compression::Algorithm;
 TEST_CASE("AMORT versus AMOFT on identical Float32 tiles", "[raster_store][io][TileCodec][!benchmark][.]")
 {
     const char *input = std::getenv("AMOFT_BENCHMARK_TILE");
-    REQUIRE(input != nullptr);
+    if (input == nullptr) {
+        SKIP("AMOFT_BENCHMARK_TILE names no tile to benchmark");
+    }
     const tile_codec::detail::v1::RasterTile source = REQUIRE_VALUE(io::envelope::read<tile_codec::TileSchema>(input));
     REQUIRE(source.width > 0);
     REQUIRE(source.width == source.height);
