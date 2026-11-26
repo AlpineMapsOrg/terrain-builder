@@ -29,6 +29,7 @@
 #include "error/utils.h"
 #include "io/FileError.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 #include "path_utils.h"
 #include "store/Codec.h"
 #include "store/Index.h"
@@ -66,9 +67,9 @@ alp::Result<Draft<IndexType, Payload>, CreateError> create(
     }
 
     // Check directories
-    ALP_TRY_CONTEXT(require_absent(destination), context);
+    ALP_TRY_CONTEXT(io::filesystem::require_absent(destination), context);
     const std::filesystem::path draft_path = make_draft_path(destination);
-    ALP_TRY_CONTEXT(require_absent(draft_path), context);
+    ALP_TRY_CONTEXT(io::filesystem::require_absent(draft_path), context);
 
     // Create dirs
     ALP_TRY_CONTEXT(io::filesystem::create_parent_directories(draft_path), context);

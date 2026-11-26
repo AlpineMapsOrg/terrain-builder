@@ -19,10 +19,14 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
+#include <utility>
+
+#include <libassert/assert.hpp>
 
 #include "NodeLoader.h"
-#include "cli_support/log.h"
+#include "error/prelude.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"
 #include "optional_utils.h"
@@ -44,33 +48,30 @@ public:
     }
 
     // Status::Leaf or Status::Inner guarantuess a node is present
-    template <hierarchy::NodeStatusOrMissing S = Status>
-    std::enable_if_t<S == hierarchy::NodeStatusOrMissing::Leaf || S == hierarchy::NodeStatusOrMissing::Inner, const SimpleMesh &>
-    mesh() const {
-        auto mesh = this->load_mesh();
-        if (mesh.has_value()) {
-            return this->_mesh.value();
-        } else {
-            LOG_ERROR_AND_EXIT("Failed to read node from loader that should be present");
-        }
+    [[nodiscard]]
+    alp::Result<std::reference_wrapper<const SimpleMesh>, NodeLoader::LoadError> mesh() const
+    requires(Status == hierarchy::NodeStatusOrMissing::Leaf || Status == hierarchy::NodeStatusOrMissing::Inner)
+    {
+        ALP_TRY(const auto mesh_opt, this->load_mesh());
+        return *ASSERT_VAL(mesh_opt);
     }
 
     // Status::Missing and Status::Virtual do not exist on disk, but may be the child of a leaf or inner node
-    template <hierarchy::NodeStatusOrMissing S = Status>
-    std::enable_if_t<S == hierarchy::NodeStatusOrMissing::Missing || S == hierarchy::NodeStatusOrMissing::Virtual, std::optional<std::reference_wrapper<SimpleMesh>>>
-    mesh() const {
+    [[nodiscard]]
+    alp::Result<std::optional<std::reference_wrapper<const SimpleMesh>>, NodeLoader::LoadError> mesh() const
+    requires(Status == hierarchy::NodeStatusOrMissing::Missing || Status == hierarchy::NodeStatusOrMissing::Virtual)
+    {
         return this->load_mesh();
     }
 
 private:
-    std::optional<std::reference_wrapper<SimpleMesh>> load_mesh() const {
-        if (!_mesh.has_value()) {
-            auto result = this->_loader.load_node(this->_id);
-            if (result.has_value()) {
-                this->_mesh = result.value();
-            }
+    alp::Result<std::optional<std::reference_wrapper<const SimpleMesh>>, NodeLoader::LoadError> load_mesh() const {
+        if (this->_mesh.has_value()) {
+            return alp::ref(std::as_const(this->_mesh));
+        } else {
+            ALP_TRY(this->_mesh, this->_loader.load_node(this->_id));
+            return alp::ref(std::as_const(this->_mesh));
         }
-        return alp::ref(this->_mesh);
     }
 
     octree::Id _id;

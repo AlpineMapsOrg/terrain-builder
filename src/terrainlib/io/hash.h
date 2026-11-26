@@ -33,6 +33,6 @@ enum class Algorithm : uint8_t {
 };
 
 // Hashes `bytes` with `algorithm`.
-bytes::vector data(bytes::span bytes, Algorithm algorithm);
+bytes::vector compute(bytes::span bytes, Algorithm algorithm);
 
 } // namespace io::hash

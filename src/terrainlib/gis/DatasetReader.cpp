@@ -365,7 +365,7 @@ alp::Result<typename DatasetReader<Pixel>::Samples, typename DatasetReader<Pixel
 }
 
 template <typename Pixel>
-alp::Result<glm::dvec2, typename DatasetReader<Pixel>::PixelSizeError> DatasetReader<Pixel>::min_pixel_size(const radix::tile::SrsBounds &bounds) const {
+alp::Result<glm::dvec2, typename DatasetReader<Pixel>::PixelSizeError> DatasetReader<Pixel>::estimate_min_pixel_size(const radix::tile::SrsBounds &bounds) const {
     constexpr uint32_t samples_per_axis = 5;
     constexpr double step_fraction = 1e-3;
 

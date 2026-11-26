@@ -24,7 +24,6 @@
 
 #include <fmt/format.h>
 
-#include "cli_support/log.h"
 #include "error/Context.h"
 #include "error/log.h"
 #include "error/try.h"
@@ -33,6 +32,8 @@
 #include "io/alloc.h"
 #include "io/bytes.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
+#include "log.h"
 #include "path_utils.h"
 
 namespace io::bytes {

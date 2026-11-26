@@ -30,9 +30,9 @@
 
 #include <libassert/assert.hpp>
 
-#include "cli_support/log.h"
 #include "containers/FixedArray.h"
 #include "containers/UniqueResource.h"
+#include "log.h"
 
 
 // A run of elements with some of its neighbours kept on either side.

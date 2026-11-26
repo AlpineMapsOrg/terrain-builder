@@ -74,7 +74,7 @@ void require_projection_available(const gis::Dataset &dataset, const gis::srs::S
     const gis::srs::System dataset_srs = REQUIRE_VALUE(dataset.srs());
     const radix::tile::SrsBounds source_bounds = REQUIRE_VALUE(dataset.bounds());
     const gis::srs::Transform transform = REQUIRE_VALUE(gis::srs::get_transform(dataset_srs, target_srs));
-    REQUIRE(transform.apply((source_bounds.min + source_bounds.max) / 2.0).has_value());
+    REQUIRE_VALUE(transform.apply((source_bounds.min + source_bounds.max) / 2.0));
 }
 
 template <typename Pixel>
@@ -356,7 +356,7 @@ TEST_CASE("read keeps the height range and matches the reference render", "[gis]
     }
 }
 
-TEST_CASE("min_pixel_size is the finest source pixel size within the bounds", "[gis][DatasetReader]") {
+TEST_CASE("estimate_min_pixel_size is the finest source pixel size within the bounds", "[gis][DatasetReader]") {
     using Projection = gis::Projection;
     const auto open = [](const char *name) { return REQUIRE_VALUE(gis::Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(name))); };
     const auto reader = [](const std::shared_ptr<gis::Dataset> &dataset, const Projection projection) { return make_reader(dataset, projection, {1}, 0.0F); };
@@ -373,12 +373,12 @@ TEST_CASE("min_pixel_size is the finest source pixel size within the bounds", "[
 
     SECTION("same srs as the dataset") {
         const auto mercator = open("/austria/at_100m_epsg3857.tif");
-        const glm::dvec2 mercator_size = REQUIRE_VALUE(reader(mercator, Projection::WebMercator).min_pixel_size(mercator_bounds));
+        const glm::dvec2 mercator_size = REQUIRE_VALUE(reader(mercator, Projection::WebMercator).estimate_min_pixel_size(mercator_bounds));
         CHECK(mercator_size.x == Catch::Approx(pixel_size(mercator).x));
         CHECK(mercator_size.y == Catch::Approx(pixel_size(mercator).y));
 
         const auto anisotropic = open("/austria/at_x149m_y100m_epsg4326.tif");
-        const glm::dvec2 geographic_size = REQUIRE_VALUE(reader(anisotropic, Projection::Geographic).min_pixel_size(geographic_bounds));
+        const glm::dvec2 geographic_size = REQUIRE_VALUE(reader(anisotropic, Projection::Geographic).estimate_min_pixel_size(geographic_bounds));
         CHECK(geographic_size.x == Catch::Approx(pixel_size(anisotropic).x));
         CHECK(geographic_size.y == Catch::Approx(pixel_size(anisotropic).y));
     }
@@ -386,7 +386,7 @@ TEST_CASE("min_pixel_size is the finest source pixel size within the bounds", "[
     SECTION("geographic dataset in web mercator") {
         // Web Mercator stretches y by 1 / cos(latitude), the minimum is at the southern edge.
         const auto dataset = open("/austria/at_100m_epsg4326.tif");
-        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::WebMercator).min_pixel_size(mercator_bounds));
+        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::WebMercator).estimate_min_pixel_size(mercator_bounds));
         const double south = geographic_bounds.min.y * std::numbers::pi / 180;
         CHECK(size.x == Catch::Approx(pixel_size(dataset).x * metres_per_degree).epsilon(1e-3));
         CHECK(size.y == Catch::Approx(pixel_size(dataset).y * metres_per_degree / std::cos(south)).epsilon(1e-3));
@@ -395,7 +395,7 @@ TEST_CASE("min_pixel_size is the finest source pixel size within the bounds", "[
     SECTION("bounds larger than the dataset are clipped to its coverage") {
         const auto dataset = open("/austria/at_100m_epsg4326.tif");
         const radix::tile::SrsBounds world{glm::dvec2(-gis::webmercator::half_extent), glm::dvec2(gis::webmercator::half_extent)};
-        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::WebMercator).min_pixel_size(world));
+        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::WebMercator).estimate_min_pixel_size(world));
         const radix::tile::SrsBounds dataset_bounds = REQUIRE_VALUE(dataset->bounds());
         const double south = dataset_bounds.min.y * std::numbers::pi / 180;
         CHECK(size.y == Catch::Approx(pixel_size(dataset).y * metres_per_degree / std::cos(south)).epsilon(1e-3));
@@ -404,7 +404,7 @@ TEST_CASE("min_pixel_size is the finest source pixel size within the bounds", "[
     SECTION("projected dataset in web mercator") {
         // About 100 m on the ground, i.e. 1 / cos(47°) * 100 m in Web Mercator, reduced slightly by the grid rotation.
         const auto dataset = open("/austria/at_100m_mgi.tif");
-        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::WebMercator).min_pixel_size(mercator_bounds));
+        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::WebMercator).estimate_min_pixel_size(mercator_bounds));
         CHECK(size.x > 130);
         CHECK(size.x < 155);
         CHECK(size.y > 130);
@@ -418,14 +418,14 @@ TEST_CASE("min_pixel_size is the finest source pixel size within the bounds", "[
         REQUIRE(dataset->as_gdal()->SetSpatialRef(&orthographic.as_gdal()) == CE_None);
         std::array<double, 6> geo_transform = geo_transform_for({{6.2e6, -1e5}, {std::sqrt(6378137.0 * 6378137.0 - 1e5 * 1e5), 1e5}}, {64, 64});
         REQUIRE(dataset->as_gdal()->SetGeoTransform(geo_transform.data()) == CE_None);
-        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::Geographic).min_pixel_size({{80.0, -1.0}, {100.0, 1.0}}));
+        const glm::dvec2 size = REQUIRE_VALUE(reader(dataset, Projection::Geographic).estimate_min_pixel_size({{80.0, -1.0}, {100.0, 1.0}}));
         CHECK(is_finite(size));
         CHECK(glm::all(glm::greaterThan(size, glm::dvec2(0))));
     }
 
     SECTION("bounds outside the coverage") {
         const auto dataset = open("/austria/at_100m_epsg4326.tif");
-        const auto error = REQUIRE_ERROR(reader(dataset, Projection::Geographic).min_pixel_size({{0.0, 0.0}, {1.0, 1.0}}));
+        const auto error = REQUIRE_ERROR(reader(dataset, Projection::Geographic).estimate_min_pixel_size({{0.0, 0.0}, {1.0, 1.0}}));
         CHECK(error.holds<gis::OutsideCoverage>());
     }
 }

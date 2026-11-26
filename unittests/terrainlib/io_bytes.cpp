@@ -147,7 +147,7 @@ TEST_CASE("read fails as not found for a missing file, naming it", "[io][bytes]"
 TEST_CASE("read fails for a directory", "[io][bytes]") {
     const TempDirectory directory("io_byte_read_directory");
 
-    CHECK(!io::bytes::read(directory.path()).has_value());
+    REQUIRE_ERROR(io::bytes::read(directory.path()));
 }
 
 TEST_CASE("read_prefix reads at most max_size bytes", "[io][bytes]") {

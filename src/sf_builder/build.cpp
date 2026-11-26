@@ -42,7 +42,7 @@
 
 #include "build.h"
 #include "cli_support/ProgressIndicator.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "common_error_codes.h"
 #include "earth.h"
 #include "error/try.h"

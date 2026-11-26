@@ -64,6 +64,61 @@ TEST_CASE("for_each runs the body once for every item", "[parallel]") {
     CHECK(seen == std::vector<uint32_t>{3, 5, 8, 13});
 }
 
+// Every item below 8 adds its two children in a binary heap numbering, so the root 1 reaches 1 to 15.
+TEST_CASE("for_each runs the items a body adds through its feeder", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {1};
+
+    std::mutex seen_mutex;
+    std::vector<uint32_t> seen;
+    parallel::for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) {
+        if (item < 8) {
+            feeder.add(2 * item);
+            feeder.add(2 * item + 1);
+        }
+        const std::lock_guard lock(seen_mutex);
+        seen.push_back(item);
+    }, execution);
+
+    std::ranges::sort(seen);
+    CHECK(seen == std::vector<uint32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
+}
+
+TEST_CASE("for_each with a stop token starts no item after a body requested the stop in a serial run", "[parallel]") {
+    const std::vector<uint32_t> items = {3, 5, 8, 13};
+    std::stop_source stop;
+
+    std::vector<uint32_t> seen;
+    parallel::for_each(items, [&](const uint32_t &item) {
+        seen.push_back(item);
+        if (item == 5) {
+            stop.request_stop();
+        }
+    }, stop.get_token(), parallel::Execution::Serial);
+
+    CHECK(seen == std::vector<uint32_t>{3, 5});
+}
+
+TEST_CASE("for_each with a stop token starts no item that a body adds after it requested the stop", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {1};
+    std::stop_source stop;
+
+    std::mutex seen_mutex;
+    std::vector<uint32_t> seen;
+    parallel::for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) {
+        if (item == 1) {
+            stop.request_stop();
+            feeder.add(2);
+            feeder.add(3);
+        }
+        const std::lock_guard lock(seen_mutex);
+        seen.push_back(item);
+    }, stop.get_token(), execution);
+
+    CHECK(seen == std::vector<uint32_t>{1});
+}
+
 TEST_CASE("try_for_each runs the body once for every item", "[parallel]") {
     const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
     const std::vector<uint32_t> items = {3, 5, 8, 13};

@@ -46,7 +46,7 @@
 
 #include "error/try.h"
 #include "TileProvider.h"
-#include "cli_support/log.h"
+#include "log.h"
 
 namespace sf {
 

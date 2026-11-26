@@ -57,7 +57,7 @@
 #include <zpp_bits.h>
 
 // Internal headers
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/prelude.h"
 #include "hash_utils.h"
 #include "mesh/SimpleMesh.h"

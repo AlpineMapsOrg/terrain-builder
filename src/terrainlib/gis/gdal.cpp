@@ -24,7 +24,7 @@
 
 #include "build_config.h"
 #include "gis/gdal.h"
-#include "cli_support/log.h"
+#include "log.h"
 
 namespace gis::gdal {
 
@@ -55,7 +55,7 @@ inline void GdalErrorHandler(CPLErr eErrClass, int err_no, const char *msg) {
             break;
     }
 
-    cli_support::Log::get_logger().get()->log(level, "GDAL({}): {}", err_no, msg);
+    logging::Log::get_logger().get()->log(level, "GDAL({}): {}", err_no, msg);
 }
 
 } // namespace

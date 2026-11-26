@@ -34,6 +34,7 @@
 #include "mesh/connectivity/manifold.h"
 #include "mesh/convert.h"
 #include "mesh/geometry.h"
+#include "mesh/primitives.h"
 #include "octree/Id.h"
 #include "octree/Space.h"
 
@@ -48,47 +49,14 @@ void check_closed_volume(const SimpleMesh &mesh) {
     CHECK(CGAL::Polygon_mesh_processing::does_bound_a_volume(cgal_mesh));
 }
 
-SimpleMesh make_box(const glm::dvec3 min, const glm::dvec3 max) {
-    return SimpleMesh(
-        {
-            {0, 2, 1}, {0, 3, 2},
-            {4, 5, 6}, {4, 6, 7},
-            {0, 1, 5}, {0, 5, 4},
-            {1, 2, 6}, {1, 6, 5},
-            {2, 3, 7}, {2, 7, 6},
-            {3, 0, 4}, {3, 4, 7},
-        },
-        {
-            {min.x, min.y, min.z},
-            {max.x, min.y, min.z},
-            {max.x, max.y, min.z},
-            {min.x, max.y, min.z},
-            {min.x, min.y, max.z},
-            {max.x, min.y, max.z},
-            {max.x, max.y, max.z},
-            {min.x, max.y, max.z},
-        });
-}
-
-SimpleMesh make_plane(const glm::dvec2 min, const glm::dvec2 max) {
-    return SimpleMesh(
-        {{0, 1, 2}, {0, 2, 3}},
-        {
-            {min.x, min.y, 0.0},
-            {max.x, min.y, 0.0},
-            {max.x, max.y, 0.0},
-            {min.x, max.y, 0.0},
-        });
-}
-
 } // namespace
 
 TEST_CASE("clip_on_mask uses union semantics", "[sf_merger][utils]") {
-    const SimpleMesh source = make_plane(glm::dvec2(-3.0, -1.0), glm::dvec2(3.0, 1.0));
+    const SimpleMesh source = mesh::make_rect(radix::geometry::Aabb<2, double>{{-3.0, -1.0}, {3.0, 1.0}});
     const MeshMask mask{
         .components = {
-            make_box(glm::dvec3(-2.0, -2.0, -1.0), glm::dvec3(-1.0, 2.0, 1.0)),
-            make_box(glm::dvec3(1.0, -2.0, -1.0), glm::dvec3(2.0, 2.0, 1.0)),
+            mesh::make_box(radix::geometry::Aabb<3, double>{{-2.0, -2.0, -1.0}, {-1.0, 2.0, 1.0}}),
+            mesh::make_box(radix::geometry::Aabb<3, double>{{1.0, -2.0, -1.0}, {2.0, 2.0, 1.0}}),
         }};
 
     const Cow<const SimpleMesh> inside = clip_on_mask(source, mask, true);
@@ -99,7 +67,7 @@ TEST_CASE("clip_on_mask uses union semantics", "[sf_merger][utils]") {
 }
 
 TEST_CASE("clip_on_mask without components uses empty-union semantics", "[sf_merger][utils]") {
-    const SimpleMesh source = make_plane(glm::dvec2(-3.0, -1.0), glm::dvec2(3.0, 1.0));
+    const SimpleMesh source = mesh::make_rect(radix::geometry::Aabb<2, double>{{-3.0, -1.0}, {3.0, 1.0}});
     const MeshMask mask;
 
     const Cow<const SimpleMesh> inside = clip_on_mask(source, mask, true);

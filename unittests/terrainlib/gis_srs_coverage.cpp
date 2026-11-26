@@ -70,7 +70,7 @@ size_t count_uncovered(const std::vector<Bounds>& coverage, const std::vector<gl
 
 glm::dvec3 ecef_point(double longitude, double latitude, double height)
 {
-    return gis::srs::transform_point(gis::srs::wgs84(), gis::srs::ecef(), glm::dvec3(longitude, latitude, height)).value();
+    return REQUIRE_VALUE(gis::srs::transform_point(gis::srs::wgs84(), gis::srs::ecef(), glm::dvec3(longitude, latitude, height)));
 }
 
 Bounds cube(const glm::dvec3& centre, double half_size) { return { centre - half_size, centre + half_size }; }
@@ -95,20 +95,19 @@ TEST_CASE("ECEF coverage encloses the transformed box", "[gis][srs][coverage]")
         { "near_pole", gis::srs::wgs84(), { { 10, 89.0, 0 }, { 20, 89.9, 500 } } },
         { "antimeridian", gis::srs::wgs84(), { { 170, -5, 0 }, { 190, 5, 100 } } },
         { "mercator_10km", gis::srs::webmercator(), { { 1810000, 6130000, 0 }, { 1820000, 6140000, 1000 } } },
-        { "austria_lambert", gis::srs::from_epsg(31287).value(), { { 400000, 400000, 0 }, { 500000, 480000, 3000 } } },
-        { "utm_33n", gis::srs::from_epsg(32633).value(), { { 500000, 5300000, 0 }, { 600000, 5400000, 3000 } } },
+        { "austria_lambert", REQUIRE_VALUE(gis::srs::from_epsg(31287)), { { 400000, 400000, 0 }, { 500000, 480000, 3000 } } },
+        { "utm_33n", REQUIRE_VALUE(gis::srs::from_epsg(32633)), { { 500000, 5300000, 0 }, { 600000, 5400000, 3000 } } },
     };
     for (const auto& scenario : cases) {
         CAPTURE(scenario.name);
-        const auto coverage = gis::srs::coverage::compute_ecef(scenario.srs, scenario.bounds);
-        REQUIRE(coverage);
-        const auto samples = gis::srs::transform_points(scenario.srs, gis::srs::ecef(), box_samples(scenario.bounds)).value();
-        CHECK(count_uncovered({ *coverage }, samples) == 0);
+        const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_ecef(scenario.srs, scenario.bounds));
+        const auto samples = REQUIRE_VALUE(gis::srs::transform_points(scenario.srs, gis::srs::ecef(), box_samples(scenario.bounds)));
+        CHECK(count_uncovered({ coverage }, samples) == 0);
         // Going through a longitude/latitude box loosens projected boxes by their rotation
         // against the meridians, a few percent here.
         const auto sampled = bounds_of(samples);
-        CAPTURE(coverage->size() / sampled.size());
-        CHECK(glm::all(glm::lessThanEqual(coverage->size(), sampled.size() * 1.05 + 0.01)));
+        CAPTURE(coverage.size() / sampled.size());
+        CHECK(glm::all(glm::lessThanEqual(coverage.size(), sampled.size() * 1.05 + 0.01)));
     }
 }
 
@@ -125,24 +124,21 @@ TEST_CASE("ECEF coverage of geographic boxes is exact", "[gis][srs][coverage]")
                 }
             }
         }
-        const auto coverage = gis::srs::coverage::compute_ecef(gis::srs::wgs84(), austria);
-        REQUIRE(coverage);
+        const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_ecef(gis::srs::wgs84(), austria));
         for (int axis = 0; axis < 3; ++axis) {
-            CHECK(coverage->min[axis] == Approx(corners.min[axis]).margin(0.01));
-            CHECK(coverage->max[axis] == Approx(corners.max[axis]).margin(0.01));
+            CHECK(coverage.min[axis] == Approx(corners.min[axis]).margin(0.01));
+            CHECK(coverage.max[axis] == Approx(corners.max[axis]).margin(0.01));
         }
     }
     SECTION("extremum inside the top face, at the equator and the prime meridian")
     {
-        const auto coverage = gis::srs::coverage::compute_ecef(gis::srs::wgs84(), { { -0.37, -0.28, 0 }, { 0.59, 0.44, 1000 } });
-        REQUIRE(coverage);
-        CHECK(coverage->max.x == Approx(6378137.0 + 1000).margin(0.01));
+        const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_ecef(gis::srs::wgs84(), { { -0.37, -0.28, 0 }, { 0.59, 0.44, 1000 } }));
+        CHECK(coverage.max.x == Approx(6378137.0 + 1000).margin(0.01));
     }
     SECTION("extremum inside an edge, at the prime meridian")
     {
-        const auto coverage = gis::srs::coverage::compute_ecef(gis::srs::wgs84(), { { -1, 10, 0 }, { 1, 11, 100 } });
-        REQUIRE(coverage);
-        CHECK(coverage->max.x == Approx(ecef_point(0, 10, 100).x).margin(0.01));
+        const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_ecef(gis::srs::wgs84(), { { -1, 10, 0 }, { 1, 11, 100 } }));
+        CHECK(coverage.max.x == Approx(ecef_point(0, 10, 100).x).margin(0.01));
     }
 }
 
@@ -153,22 +149,21 @@ TEST_CASE("Coverage of ECEF boxes encloses the transformed box", "[gis][srs][cov
         { "wgs84", gis::srs::wgs84() },
         { "webmercator", gis::srs::webmercator() },
         { "mgi", gis::srs::mgi() },
-        { "austria_lambert", gis::srs::from_epsg(31287).value() },
-        { "utm_33n", gis::srs::from_epsg(32633).value() },
+        { "austria_lambert", REQUIRE_VALUE(gis::srs::from_epsg(31287)) },
+        { "utm_33n", REQUIRE_VALUE(gis::srs::from_epsg(32633)) },
     };
     for (const auto& [box_name, box] :
         { std::pair { "1km", cube(vienna, 500) }, std::pair { "100km", cube(vienna, 50000) }, std::pair { "1000km", cube(vienna, 500000) } }) {
         for (const auto& reference : references) {
             CAPTURE(box_name, reference.name);
-            const auto coverage = gis::srs::coverage::compute_from_ecef(box, reference.srs);
-            REQUIRE(coverage);
-            REQUIRE(coverage->size() == 1);
-            const auto samples = gis::srs::transform_points(gis::srs::ecef(), reference.srs, box_samples(box)).value();
-            CHECK(count_uncovered(*coverage, samples) == 0);
+            const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_from_ecef(box, reference.srs));
+            REQUIRE(coverage.size() == 1);
+            const auto samples = REQUIRE_VALUE(gis::srs::transform_points(gis::srs::ecef(), reference.srs, box_samples(box)));
+            CHECK(count_uncovered(coverage, samples) == 0);
             // The longitude/latitude box is rotated against the projected axes by the meridian
             // convergence, about 2 degrees at Vienna for UTM 33N and Austria Lambert.
             const auto sampled = bounds_of(samples);
-            const auto looseness = (coverage->front().size() - sampled.size()) / sampled.size();
+            const auto looseness = (coverage.front().size() - sampled.size()) / sampled.size();
             CAPTURE(looseness);
             CHECK(glm::all(glm::lessThanEqual(looseness, glm::dvec3(0.1))));
         }
@@ -180,23 +175,21 @@ TEST_CASE("Coverage of ECEF boxes is exact in WGS84", "[gis][srs][coverage]")
     SECTION("extrema at corners")
     {
         const auto box = cube(ecef_point(16.37, 48.21, 250), 50000);
-        const auto coverage = gis::srs::coverage::compute_from_ecef(box, gis::srs::wgs84());
-        REQUIRE(coverage);
-        REQUIRE(coverage->size() == 1);
+        const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_from_ecef(box, gis::srs::wgs84()));
+        REQUIRE(coverage.size() == 1);
         // The extrema are at corners of the box, which are among the samples.
-        const auto sampled = bounds_of(gis::srs::transform_points(gis::srs::ecef(), gis::srs::wgs84(), box_samples(box)).value());
+        const auto sampled = bounds_of(REQUIRE_VALUE(gis::srs::transform_points(gis::srs::ecef(), gis::srs::wgs84(), box_samples(box))));
         for (int axis = 0; axis < 3; ++axis) {
             const double margin = axis < 2 ? 1e-8 : 0.01;
-            CHECK(coverage->front().min[axis] == Approx(sampled.min[axis]).margin(margin));
-            CHECK(coverage->front().max[axis] == Approx(sampled.max[axis]).margin(margin));
+            CHECK(coverage.front().min[axis] == Approx(sampled.min[axis]).margin(margin));
+            CHECK(coverage.front().max[axis] == Approx(sampled.max[axis]).margin(margin));
         }
     }
     SECTION("height minimum inside a face, at the equator")
     {
-        const auto coverage = gis::srs::coverage::compute_from_ecef(cube({ 6378137, 0, 0 }, 50000), gis::srs::wgs84());
-        REQUIRE(coverage);
-        REQUIRE(coverage->size() == 1);
-        CHECK(coverage->front().min.z == Approx(-50000).margin(0.01));
+        const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_from_ecef(cube({ 6378137, 0, 0 }, 50000), gis::srs::wgs84()));
+        REQUIRE(coverage.size() == 1);
+        CHECK(coverage.front().min.z == Approx(-50000).margin(0.01));
     }
 }
 
@@ -206,31 +199,28 @@ TEST_CASE("Coverage of ECEF boxes stays within the bounds of the SRS", "[gis][sr
     {
         const auto box = cube({ -6378137, 0, 0 }, 50000);
         for (const auto& reference : { gis::srs::wgs84(), gis::srs::webmercator() }) {
-            const auto coverage = gis::srs::coverage::compute_from_ecef(box, reference);
-            REQUIRE(coverage);
-            REQUIRE(coverage->size() == 2);
+            const auto coverage = REQUIRE_VALUE(gis::srs::coverage::compute_from_ecef(box, reference));
+            REQUIRE(coverage.size() == 2);
             const double half_width = reference.kind() == gis::srs::Kind::Geographic ? 180 : gis::webmercator::half_extent;
-            for (const auto& bounds : *coverage) {
+            for (const auto& bounds : coverage) {
                 CHECK(bounds.min.x >= -half_width);
                 CHECK(bounds.max.x <= half_width);
             }
-            const auto samples = gis::srs::transform_points(gis::srs::ecef(), reference, box_samples(box)).value();
-            CHECK(count_uncovered(*coverage, samples) == 0);
+            const auto samples = REQUIRE_VALUE(gis::srs::transform_points(gis::srs::ecef(), reference, box_samples(box)));
+            CHECK(count_uncovered(coverage, samples) == 0);
         }
     }
     SECTION("north pole")
     {
         const auto box = cube({ 0, 0, 6356752.3 }, 50000);
-        const auto geographic = gis::srs::coverage::compute_from_ecef(box, gis::srs::wgs84());
-        REQUIRE(geographic);
-        REQUIRE(geographic->size() == 1);
-        CHECK(geographic->front().min.x == -180);
-        CHECK(geographic->front().max.x == 180);
-        CHECK(geographic->front().max.y == 90);
-        CHECK(count_uncovered(*geographic, gis::srs::transform_points(gis::srs::ecef(), gis::srs::wgs84(), box_samples(box)).value()) == 0);
-        const auto mercator = gis::srs::coverage::compute_from_ecef(box, gis::srs::webmercator());
-        REQUIRE(mercator);
-        CHECK(mercator->empty());
+        const auto geographic = REQUIRE_VALUE(gis::srs::coverage::compute_from_ecef(box, gis::srs::wgs84()));
+        REQUIRE(geographic.size() == 1);
+        CHECK(geographic.front().min.x == -180);
+        CHECK(geographic.front().max.x == 180);
+        CHECK(geographic.front().max.y == 90);
+        CHECK(count_uncovered(geographic, REQUIRE_VALUE(gis::srs::transform_points(gis::srs::ecef(), gis::srs::wgs84(), box_samples(box)))) == 0);
+        const auto mercator = REQUIRE_VALUE(gis::srs::coverage::compute_from_ecef(box, gis::srs::webmercator()));
+        CHECK(mercator.empty());
     }
     SECTION("centre of the earth")
     {
@@ -243,17 +233,15 @@ TEST_CASE("Coverage allows for height-dependent datum shifts", "[gis][srs][cover
 {
     // MGI shifts by about 0.3 m between heights 0 and 20 km at Vienna. Degenerate boxes in
     // Austria Lambert get a tiny guard band, which would hide less than that.
-    const auto lambert = gis::srs::from_epsg(31287).value();
+    const auto lambert = REQUIRE_VALUE(gis::srs::from_epsg(31287));
     for (const double height : { -20000.0, 20000.0 }) {
         CAPTURE(height);
         const auto ecef = ecef_point(16.37, 48.21, height);
-        const auto projected = gis::srs::transform_point(gis::srs::ecef(), lambert, ecef).value();
-        const auto backward = gis::srs::coverage::compute_from_ecef({ ecef, ecef }, lambert);
-        REQUIRE(backward);
-        CHECK(count_uncovered(*backward, { projected }) == 0);
-        const auto forward = gis::srs::coverage::compute_ecef(lambert, { projected, projected });
-        REQUIRE(forward);
-        CHECK(forward->contains_inclusive(gis::srs::transform_point(lambert, gis::srs::ecef(), projected).value()));
+        const auto projected = REQUIRE_VALUE(gis::srs::transform_point(gis::srs::ecef(), lambert, ecef));
+        const auto backward = REQUIRE_VALUE(gis::srs::coverage::compute_from_ecef({ ecef, ecef }, lambert));
+        CHECK(count_uncovered(backward, { projected }) == 0);
+        const auto forward = REQUIRE_VALUE(gis::srs::coverage::compute_ecef(lambert, { projected, projected }));
+        CHECK(forward.contains_inclusive(REQUIRE_VALUE(gis::srs::transform_point(lambert, gis::srs::ecef(), projected))));
     }
 }
 
@@ -265,7 +253,7 @@ TEST_CASE("Coverage functions handle ECEF and compound SRSes", "[gis][srs][cover
     REQUIRE(unchanged.size() == 1);
     CHECK(unchanged.front() == box);
 
-    const auto compound = gis::srs::from_user_input("EPSG:4326+3855").value();
+    const auto compound = REQUIRE_VALUE(gis::srs::from_user_input("EPSG:4326+3855"));
     REQUIRE(compound.is_compound());
     const auto forward = REQUIRE_ERROR(gis::srs::coverage::compute_ecef(compound, { { 16.36, 48.20, 0 }, { 16.37, 48.21, 1000 } }));
     CHECK(forward.holds<gis::srs::coverage::CompoundSystem>());

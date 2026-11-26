@@ -32,7 +32,6 @@
 #include <radix/geometry.h>
 #include <radix/raster.h>
 
-#include "cli_support/log.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -40,6 +39,7 @@
 #include "gis/CplError.h"
 #include "gis/Dataset.h"
 #include "gis/GeoTransform.h"
+#include "log.h"
 
 namespace sf {
 

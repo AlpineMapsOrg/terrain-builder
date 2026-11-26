@@ -22,8 +22,6 @@
 #include <string_view>
 
 #include "error/MessageCode.h"
-#include "error/Result.h"
-#include "io/FileError.h"
 
 namespace store {
 
@@ -37,9 +35,5 @@ std::filesystem::path make_draft_path(const std::filesystem::path& final_path);
 
 // Whether `path` names a draft.
 bool is_draft(const std::filesystem::path& path);
-
-// Requires that nothing exists at `path`, not even a symlink.
-[[nodiscard]]
-alp::Result<void, io::FileError> require_absent(const std::filesystem::path& path);
 
 } // namespace store

@@ -93,6 +93,7 @@ add_executable(unittests_terrainlib
     terrainlib/io_conversion.cpp
     terrainlib/io_envelope.cpp
     terrainlib/io_filesystem.cpp
+    terrainlib/io_filesystem_utils.cpp
     terrainlib/io_hash.cpp
     terrainlib/io_image.cpp
     terrainlib/io_json_file.cpp
@@ -116,6 +117,7 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_manifold.cpp
     terrainlib/mesh_merge.cpp
     terrainlib/mesh_merge_mapping.cpp
+    terrainlib/mesh_primitives.cpp
     terrainlib/mesh_reindex.cpp
     terrainlib/mesh_split.cpp
     terrainlib/mesh_storage.cpp

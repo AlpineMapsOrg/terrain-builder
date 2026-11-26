@@ -25,19 +25,19 @@
 #include "cli.h"
 #include "codec.h"
 #include "dag_node.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/Result.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "io/UnknownExtension.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 #include "path_utils.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
 #include "cli_support/ProgressIndicator.h"
 #include "storage.h"
 #include "store/open.h"
-#include "store/storage_paths.h"
 #include "utils.h"
 
 namespace {
@@ -54,7 +54,7 @@ alp::Result<void> export_node(const cli::Args &args) {
 
     const mesh::Simple mesh = clustering_to_mesh(node.clustering);
 
-    ALP_TRY(store::require_absent(args.output_path));
+    ALP_TRY(io::filesystem::require_absent(args.output_path));
     ALP_TRY(mesh::io::save_to_path(mesh, args.output_path));
     return {};
 }
@@ -117,7 +117,7 @@ alp::Result<void> run(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    cli_support::Log::init(args.log_level);
+    logging::Log::init(args.log_level);
 
     const alp::Result<void> result = run(args);
     if (!result.has_value()) {

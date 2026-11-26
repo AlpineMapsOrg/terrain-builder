@@ -138,7 +138,7 @@ io::envelope::Envelope decode_envelope(const io::bytes::vector& bytes)
     return envelope;
 }
 
-void write_file(const std::filesystem::path& path, const io::bytes::span bytes) { REQUIRE(io::bytes::write(bytes, path, {.mode = io::WriteMode::Overwrite})); }
+void write_file(const std::filesystem::path& path, const io::bytes::span bytes) { REQUIRE_VALUE(io::bytes::write(bytes, path, {.mode = io::WriteMode::Overwrite})); }
 
 } // namespace
 
@@ -151,21 +151,19 @@ TEST_CASE("Envelope round trips the latest payload version", "[io][envelope]")
         .samples = { 1, 2, 3 },
     };
 
-    const auto bytes = io::envelope::serialize<Schema, 3>(expected);
-    REQUIRE(bytes.has_value());
+    const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(expected));
 
-    const auto envelope = decode_envelope(*bytes);
+    const auto envelope = decode_envelope(bytes);
     CHECK(envelope.header.magic == io::envelope::magic);
     CHECK(envelope.header.class_name == Schema::class_name);
     CHECK(envelope.header.class_version == 3);
     CHECK(envelope.header.hash_algorithm == io::hash::Algorithm::Xxh3_64);
-    CHECK(envelope.header.hash == io::hash::data(encode_value(expected), io::hash::Algorithm::Xxh3_64));
+    CHECK(envelope.header.hash == io::hash::compute(encode_value(expected), io::hash::Algorithm::Xxh3_64));
     CHECK(envelope.header.compression_algorithm == io::compression::Algorithm::ZstdDefault);
     CHECK(envelope.header.uncompressed_size == encode_value(expected).size());
 
-    const auto result = io::envelope::deserialize<Schema>(*bytes);
-    REQUIRE(result.has_value());
-    CHECK(*result == expected);
+    const auto deserialized = REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes));
+    CHECK(deserialized == expected);
 }
 
 TEST_CASE("Envelope round trips payloads containing GLM types", "[io][envelope]")
@@ -182,11 +180,9 @@ TEST_CASE("Envelope round trips payloads containing GLM types", "[io][envelope]"
         .transform = glm::mat4(2.0f),
         .texture_coordinates = { { 0.0f, 0.5f }, { 1.0f, 0.75f } },
     };
-    const auto bytes = io::envelope::serialize<GlmSchema>(expected);
-    REQUIRE(bytes.has_value());
-    const auto result = io::envelope::deserialize<GlmSchema>(*bytes);
-    REQUIRE(result.has_value());
-    CHECK(*result == expected);
+    const auto bytes = REQUIRE_VALUE(io::envelope::serialize<GlmSchema>(expected));
+    const auto deserialized = REQUIRE_VALUE(io::envelope::deserialize<GlmSchema>(bytes));
+    CHECK(deserialized == expected);
 }
 
 TEST_CASE("Envelope upgrades older payload versions", "[io][envelope]")
@@ -194,12 +190,10 @@ TEST_CASE("Envelope upgrades older payload versions", "[io][envelope]")
     SECTION("version 1 is upgraded through every subsequent version")
     {
         const v1::Payload original { .id = 7, .name = "version one" };
-        const auto bytes = io::envelope::serialize<Schema, 1>(original);
-        REQUIRE(bytes.has_value());
+        const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 1>(original));
 
-        const auto result = io::envelope::deserialize<Schema>(*bytes);
-        REQUIRE(result.has_value());
-        CHECK(*result
+        const auto deserialized = REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes));
+        CHECK(deserialized
             == v3::Payload {
                 .id = 7,
                 .label = "version one",
@@ -211,12 +205,10 @@ TEST_CASE("Envelope upgrades older payload versions", "[io][envelope]")
     SECTION("version 2 is upgraded to the latest version")
     {
         const v2::Payload original { .id = 9, .name = "version two", .enabled = false };
-        const auto bytes = io::envelope::serialize<Schema, 2>(original);
-        REQUIRE(bytes.has_value());
+        const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 2>(original));
 
-        const auto result = io::envelope::deserialize<Schema>(*bytes);
-        REQUIRE(result.has_value());
-        CHECK(*result
+        const auto deserialized = REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes));
+        CHECK(deserialized
             == v3::Payload {
                 .id = 9,
                 .label = "version two",
@@ -234,18 +226,16 @@ TEST_CASE("Envelope supports uncompressed data without a hash", "[io][envelope]"
         .enabled = true,
         .samples = { 5, 8 },
     };
-    const auto bytes = io::envelope::serialize<Schema, 3>(expected, {.compression_algorithm = io::compression::Algorithm::None, .hash_algorithm = io::hash::Algorithm::None});
-    REQUIRE(bytes.has_value());
+    const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(expected, {.compression_algorithm = io::compression::Algorithm::None, .hash_algorithm = io::hash::Algorithm::None}));
 
-    const auto envelope = decode_envelope(*bytes);
+    const auto envelope = decode_envelope(bytes);
     CHECK(envelope.header.compression_algorithm == io::compression::Algorithm::None);
     CHECK(envelope.header.hash_algorithm == io::hash::Algorithm::None);
     CHECK(envelope.header.hash.empty());
     CHECK(envelope.header.uncompressed_size == envelope.compressed_data.size());
 
-    const auto result = io::envelope::deserialize<Schema>(*bytes);
-    REQUIRE(result.has_value());
-    CHECK(*result == expected);
+    const auto deserialized = REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes));
+    CHECK(deserialized == expected);
 }
 
 TEST_CASE("Envelope round trips every compression and hash combination", "[io][envelope]")
@@ -259,17 +249,15 @@ TEST_CASE("Envelope round trips every compression and hash combination", "[io][e
     for (const auto compression_algorithm : compression_algorithms) {
         for (const auto hash_algorithm : hash_algorithms) {
             CAPTURE(compression_algorithm, hash_algorithm);
-            const auto bytes = io::envelope::serialize<Schema, 3>(expected, {.compression_algorithm = compression_algorithm, .hash_algorithm = hash_algorithm});
-            REQUIRE(bytes.has_value());
+            const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(expected, {.compression_algorithm = compression_algorithm, .hash_algorithm = hash_algorithm}));
 
-            const auto envelope = decode_envelope(*bytes);
+            const auto envelope = decode_envelope(bytes);
             CHECK(envelope.header.compression_algorithm == compression_algorithm);
             CHECK(envelope.header.hash_algorithm == hash_algorithm);
-            CHECK(envelope.header.hash == io::hash::data(encode_value(expected), hash_algorithm));
+            CHECK(envelope.header.hash == io::hash::compute(encode_value(expected), hash_algorithm));
 
-            const auto result = io::envelope::deserialize<Schema>(*bytes);
-            REQUIRE(result.has_value());
-            CHECK(*result == expected);
+            const auto deserialized = REQUIRE_VALUE(io::envelope::deserialize<Schema>(bytes));
+            CHECK(deserialized == expected);
         }
     }
 }
@@ -280,9 +268,8 @@ TEST_CASE("XXH3-64 detects corrupted envelope payloads", "[io][envelope]")
 
     SECTION("without compression")
     {
-        const auto bytes = io::envelope::serialize<Schema, 3>(payload, {.compression_algorithm = io::compression::Algorithm::None});
-        REQUIRE(bytes.has_value());
-        auto envelope = decode_envelope(*bytes);
+        const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, {.compression_algorithm = io::compression::Algorithm::None}));
+        auto envelope = decode_envelope(bytes);
         envelope.compressed_data.back() ^= uint8_t { 0x01 };
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
@@ -291,9 +278,8 @@ TEST_CASE("XXH3-64 detects corrupted envelope payloads", "[io][envelope]")
     {
         for (const auto compression_algorithm : zstd_compression_algorithms) {
             CAPTURE(compression_algorithm);
-            const auto bytes = io::envelope::serialize<Schema, 3>(payload, {.compression_algorithm = compression_algorithm});
-            REQUIRE(bytes.has_value());
-            auto envelope = decode_envelope(*bytes);
+            const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, {.compression_algorithm = compression_algorithm}));
+            auto envelope = decode_envelope(bytes);
             envelope.compressed_data.back() ^= uint8_t { 0x01 };
             CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
         }
@@ -302,10 +288,9 @@ TEST_CASE("XXH3-64 detects corrupted envelope payloads", "[io][envelope]")
     SECTION("older version")
     {
         const v1::Payload original { .id = 16, .name = "xxh3 version one" };
-        const auto bytes = io::envelope::serialize<Schema, 1>(original, {.compression_algorithm = io::compression::Algorithm::None});
-        REQUIRE(bytes.has_value());
-        auto envelope = decode_envelope(*bytes);
-        REQUIRE(io::envelope::deserialize<Schema>(encode_envelope(envelope)).has_value());
+        const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 1>(original, {.compression_algorithm = io::compression::Algorithm::None}));
+        auto envelope = decode_envelope(bytes);
+        REQUIRE_VALUE(io::envelope::deserialize<Schema>(encode_envelope(envelope)));
         envelope.compressed_data.front() ^= uint8_t { 0x01 };
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
@@ -314,117 +299,116 @@ TEST_CASE("XXH3-64 detects corrupted envelope payloads", "[io][envelope]")
 TEST_CASE("Envelope rejects incompatible metadata", "[io][envelope]")
 {
     const v3::Payload payload { .id = 1, .label = "metadata", .enabled = true, .samples = {} };
-    const auto serialized = io::envelope::serialize<Schema, 3>(payload);
-    REQUIRE(serialized.has_value());
+    const auto serialized = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload));
 
     SECTION("magic")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         ++envelope.header.magic;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("magic of the previous format")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.magic = 0xF5FBD3EF919428CAULL;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("class name")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.class_name = "other.Payload";
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("class name exceeds its limit")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.class_name = std::string(io::envelope::max_class_name_size + 1, 'x');
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("class version")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.class_version = 99;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<Unsupported>());
     }
 
     SECTION("hash algorithm")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.hash_algorithm = static_cast<io::hash::Algorithm>(99);
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<Unsupported>());
     }
 
     SECTION("compression algorithm")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.compression_algorithm = static_cast<io::compression::Algorithm>(99);
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<Unsupported>());
     }
 
     SECTION("hash for the None algorithm")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.hash_algorithm = io::hash::Algorithm::None;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("incorrect hash")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.hash.front() ^= uint8_t { 0x01 };
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("hash with the wrong length")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.hash.pop_back();
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("hash exceeds its limit")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.hash.resize(io::envelope::max_hash_size + 1);
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("uncompressed size is smaller than the payload")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         --envelope.header.uncompressed_size;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("uncompressed size is larger than the payload")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         ++envelope.header.uncompressed_size;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("zero uncompressed size does not mean unspecified")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.uncompressed_size = 0;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("uncompressed size exceeds the hard limit")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         envelope.header.uncompressed_size = io::max_buffer_size + 1;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::BufferLimitExceeded>());
     }
 
     SECTION("uncompressed size exceeds a caller limit")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope), {.max_decompressed_size = static_cast<size_t>(envelope.header.uncompressed_size - 1)})).holds<io::BufferLimitExceeded>());
     }
 }
@@ -432,19 +416,18 @@ TEST_CASE("Envelope rejects incompatible metadata", "[io][envelope]")
 TEST_CASE("Envelope validates the size of uncompressed data", "[io][envelope]")
 {
     const v3::Payload payload { .id = 2, .label = "plain", .enabled = true, .samples = { 1 } };
-    const auto serialized = io::envelope::serialize<Schema, 3>(payload, {.compression_algorithm = io::compression::Algorithm::None, .hash_algorithm = io::hash::Algorithm::None});
-    REQUIRE(serialized.has_value());
+    const auto serialized = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload, {.compression_algorithm = io::compression::Algorithm::None, .hash_algorithm = io::hash::Algorithm::None}));
 
     SECTION("declared size is smaller")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         --envelope.header.uncompressed_size;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
 
     SECTION("declared size is larger")
     {
-        auto envelope = decode_envelope(*serialized);
+        auto envelope = decode_envelope(serialized);
         ++envelope.header.uncompressed_size;
         CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(encode_envelope(envelope))).holds<io::envelope::CorruptData>());
     }
@@ -461,10 +444,9 @@ TEST_CASE("Envelope reports malformed serialized data", "[io][envelope]")
     SECTION("trailing bytes")
     {
         const v3::Payload payload { .id = 3, .label = "trailing", .enabled = true, .samples = {} };
-        auto serialized = io::envelope::serialize<Schema, 3>(payload);
-        REQUIRE(serialized.has_value());
-        serialized->push_back(uint8_t { 0 });
-        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(*serialized)).holds<io::envelope::CorruptData>());
+        auto serialized = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>(payload));
+        serialized.push_back(uint8_t { 0 });
+        CHECK(REQUIRE_ERROR(io::envelope::deserialize<Schema>(serialized)).holds<io::envelope::CorruptData>());
     }
 
     SECTION("payload")
@@ -493,44 +475,40 @@ TEST_CASE("Envelope headers are read without the payload", "[io][envelope]")
     SECTION("the header matches a full read")
     {
         const v3::Payload payload { .id = 21, .label = std::string(4096, 'h'), .enabled = true, .samples = { 1, 2, 3 } };
-        REQUIRE(io::envelope::write<Schema>(payload, path, {.mode = io::WriteMode::Overwrite}));
-        const auto header = io::envelope::read_header(path);
-        REQUIRE(header.has_value());
-        CHECK(header->magic == io::envelope::magic);
-        CHECK(header->class_name == Schema::class_name);
-        CHECK(header->class_version == Schema::latest_version);
-        CHECK(header->hash_algorithm == io::hash::Algorithm::Xxh3_64);
-        CHECK(header->compression_algorithm == io::compression::Algorithm::ZstdDefault);
+        REQUIRE_VALUE(io::envelope::write<Schema>(payload, path, {.mode = io::WriteMode::Overwrite}));
+        const auto header = REQUIRE_VALUE(io::envelope::read_header(path));
+        CHECK(header.magic == io::envelope::magic);
+        CHECK(header.class_name == Schema::class_name);
+        CHECK(header.class_version == Schema::latest_version);
+        CHECK(header.hash_algorithm == io::hash::Algorithm::Xxh3_64);
+        CHECK(header.compression_algorithm == io::compression::Algorithm::ZstdDefault);
 
-        const auto full = io::envelope::read<Schema>(path);
-        REQUIRE(full.has_value());
-        CHECK(header->uncompressed_size == encode_value(*full).size());
-        CHECK(header->hash == io::hash::data(encode_value(*full), io::hash::Algorithm::Xxh3_64));
+        const auto full = REQUIRE_VALUE(io::envelope::read<Schema>(path));
+        CHECK(header.uncompressed_size == encode_value(full).size());
+        CHECK(header.hash == io::hash::compute(encode_value(full), io::hash::Algorithm::Xxh3_64));
     }
 
     SECTION("the class name is not checked")
     {
-        io::envelope::Envelope envelope = decode_envelope(io::envelope::serialize<Schema, 3>({}).value());
+        io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>({})));
         envelope.header.class_name = "other.Payload";
         write_file(path, encode_envelope(envelope));
-        const auto header = io::envelope::read_header(path);
-        REQUIRE(header.has_value());
-        CHECK(header->class_name == "other.Payload");
+        const auto header = REQUIRE_VALUE(io::envelope::read_header(path));
+        CHECK(header.class_name == "other.Payload");
     }
 
     SECTION("a header of the maximum size")
     {
-        io::envelope::Envelope envelope = decode_envelope(io::envelope::serialize<Schema, 3>({}).value());
+        io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>({})));
         envelope.header.class_name = std::string(io::envelope::max_class_name_size, 'n');
         envelope.header.hash = io::bytes::vector(io::envelope::max_hash_size, uint8_t { 0x5a });
         envelope.compressed_data = io::bytes::vector(1024, uint8_t { 0x11 });
         const auto bytes = encode_envelope(envelope);
         CHECK(encode_value(envelope.header).size() == io::envelope::max_header_size);
         write_file(path, bytes);
-        const auto header = io::envelope::read_header(path);
-        REQUIRE(header.has_value());
-        CHECK(header->class_name == envelope.header.class_name);
-        CHECK(header->hash == envelope.header.hash);
+        const auto header = REQUIRE_VALUE(io::envelope::read_header(path));
+        CHECK(header.class_name == envelope.header.class_name);
+        CHECK(header.hash == envelope.header.hash);
     }
 
     SECTION("a file shorter than the maximum header")
@@ -550,22 +528,21 @@ TEST_CASE("Envelope headers are read without the payload", "[io][envelope]")
         const auto bytes = encode_envelope(envelope);
         REQUIRE(bytes.size() < io::envelope::max_header_size);
         write_file(path, bytes);
-        const auto header = io::envelope::read_header(path);
-        REQUIRE(header.has_value());
-        CHECK(header->class_name == "a");
-        CHECK(header->hash.empty());
+        const auto header = REQUIRE_VALUE(io::envelope::read_header(path));
+        CHECK(header.class_name == "a");
+        CHECK(header.hash.empty());
     }
 
     SECTION("a truncated header")
     {
-        const auto bytes = io::envelope::serialize<Schema, 3>({}).value();
+        const auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>({}));
         write_file(path, std::span(bytes).first(20));
         CHECK(REQUIRE_ERROR(io::envelope::read_header(path)).holds<io::envelope::CorruptData>());
     }
 
     SECTION("a corrupt class name length is rejected")
     {
-        auto bytes = io::envelope::serialize<Schema, 3>({}).value();
+        auto bytes = REQUIRE_VALUE(io::envelope::serialize<Schema, 3>({}));
         // The class name length follows the 8-byte magic.
         std::fill_n(bytes.begin() + 8, 4, uint8_t { 0xff });
         write_file(path, bytes);
@@ -575,7 +552,7 @@ TEST_CASE("Envelope headers are read without the payload", "[io][envelope]")
 
     SECTION("an invalid magic")
     {
-        io::envelope::Envelope envelope = decode_envelope(io::envelope::serialize<Schema, 3>({}).value());
+        io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>({})));
         envelope.header.magic = 0xF5FBD3EF919428CAULL;
         write_file(path, encode_envelope(envelope));
         CHECK(REQUIRE_ERROR(io::envelope::read_header(path)).holds<io::envelope::CorruptData>());
@@ -583,7 +560,7 @@ TEST_CASE("Envelope headers are read without the payload", "[io][envelope]")
 
     SECTION("unknown enumerators")
     {
-        io::envelope::Envelope envelope = decode_envelope(io::envelope::serialize<Schema, 3>({}).value());
+        io::envelope::Envelope envelope = decode_envelope(REQUIRE_VALUE(io::envelope::serialize<Schema, 3>({})));
         SECTION("hash algorithm") { envelope.header.hash_algorithm = static_cast<io::hash::Algorithm>(2); }
         SECTION("compression algorithm") { envelope.header.compression_algorithm = static_cast<io::compression::Algorithm>(3); }
         write_file(path, encode_envelope(envelope));
@@ -598,26 +575,24 @@ TEST_CASE("Envelope files return and verify their payload hash", "[io][envelope]
     TempDirectory directory("envelope-hash");
     const auto path = directory.path() / "payload.envelope";
     const v3::Payload payload { .id = 5, .label = "identity", .enabled = true, .samples = { 4, 5 } };
-    const auto hash = io::envelope::write<Schema>(payload, path, {.mode = io::WriteMode::Overwrite});
-    REQUIRE(hash.has_value());
-    CHECK(*hash == io::envelope::read_header(path)->hash);
-    CHECK(*hash == io::hash::data(encode_value(payload), io::hash::Algorithm::Xxh3_64));
-    CHECK(io::envelope::read<Schema>(path, {.expected_hash = *hash}).value() == payload);
+    const auto hash = REQUIRE_VALUE(io::envelope::write<Schema>(payload, path, {.mode = io::WriteMode::Overwrite}));
+    CHECK(hash == REQUIRE_VALUE(io::envelope::read_header(path)).hash);
+    CHECK(hash == io::hash::compute(encode_value(payload), io::hash::Algorithm::Xxh3_64));
+    CHECK(REQUIRE_VALUE(io::envelope::read<Schema>(path, {.expected_hash = hash})) == payload);
 
     SECTION("a different expected hash")
     {
-        auto different = *hash;
+        auto different = hash;
         different.front() ^= uint8_t { 1 };
         CHECK(REQUIRE_ERROR(io::envelope::read<Schema>(path, {.expected_hash = different})).holds<io::envelope::CorruptData>());
     }
 
     SECTION("a hashless payload with an expected hash")
     {
-        const auto hashless = io::envelope::write<Schema>(payload, path,
-            {.mode = io::WriteMode::Overwrite, .make_dirs = true, .compression_algorithm = io::compression::Algorithm::ZstdDefault, .hash_algorithm = io::hash::Algorithm::None});
-        REQUIRE(hashless.has_value());
-        CHECK(hashless->empty());
-        CHECK(io::envelope::read<Schema>(path).has_value());
-        CHECK(REQUIRE_ERROR(io::envelope::read<Schema>(path, {.expected_hash = *hash})).holds<io::envelope::CorruptData>());
+        const auto hashless = REQUIRE_VALUE(io::envelope::write<Schema>(payload, path,
+            {.mode = io::WriteMode::Overwrite, .make_dirs = true, .compression_algorithm = io::compression::Algorithm::ZstdDefault, .hash_algorithm = io::hash::Algorithm::None}));
+        CHECK(hashless.empty());
+        REQUIRE_VALUE(io::envelope::read<Schema>(path));
+        CHECK(REQUIRE_ERROR(io::envelope::read<Schema>(path, {.expected_hash = hash})).holds<io::envelope::CorruptData>());
     }
 }

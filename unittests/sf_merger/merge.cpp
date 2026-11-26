@@ -130,6 +130,50 @@ TEST_CASE("merge_datasets links unchanged nodes and writes merged nodes", "[sf_m
         CHECK_FALSE(REQUIRE_VALUE(io::filesystem::equivalent(left.paths(root).front(), output.paths(root).front())));
         CHECK_FALSE(REQUIRE_VALUE(io::filesystem::equivalent(right.paths(root).front(), output.paths(root).front())));
     }
+
+    SECTION("an empty left leaf keeps the right mesh")
+    {
+        {
+            mesh::storage::Draft draft = REQUIRE_VALUE(mesh::storage::create(left_path, octree::path_layout::flat::layout(), ".sfmesh"));
+            REQUIRE_VALUE(draft.save(root, mesh::Simple()));
+            REQUIRE_VALUE(mesh::storage::publish(std::move(draft)));
+        }
+        {
+            mesh::storage::Draft draft = REQUIRE_VALUE(mesh::storage::create(right_path, octree::path_layout::flat::layout(), ".sfmesh"));
+            REQUIRE_VALUE(draft.save(root, sample_mesh()));
+            REQUIRE_VALUE(mesh::storage::publish(std::move(draft)));
+        }
+        const mesh::storage::Storage left = REQUIRE_VALUE(mesh::storage::open(left_path));
+        const mesh::storage::Storage right = REQUIRE_VALUE(mesh::storage::open(right_path));
+        const sf_merger::inputs::Merge inputs = REQUIRE_VALUE(sf_merger::inputs::make_merge(left_path, right_path, std::nullopt));
+
+        REQUIRE_VALUE(merge_datasets(left, right, output_path, std::nullopt, inputs));
+
+        const mesh::storage::Storage output = REQUIRE_VALUE(mesh::storage::open(output_path));
+        CHECK(REQUIRE_VALUE(io::filesystem::equivalent(right.paths(root).front(), output.paths(root).front())));
+    }
+
+    SECTION("an empty right leaf keeps the left mesh")
+    {
+        {
+            mesh::storage::Draft draft = REQUIRE_VALUE(mesh::storage::create(left_path, octree::path_layout::flat::layout(), ".sfmesh"));
+            REQUIRE_VALUE(draft.save(root, sample_mesh()));
+            REQUIRE_VALUE(mesh::storage::publish(std::move(draft)));
+        }
+        {
+            mesh::storage::Draft draft = REQUIRE_VALUE(mesh::storage::create(right_path, octree::path_layout::flat::layout(), ".sfmesh"));
+            REQUIRE_VALUE(draft.save(root, mesh::Simple()));
+            REQUIRE_VALUE(mesh::storage::publish(std::move(draft)));
+        }
+        const mesh::storage::Storage left = REQUIRE_VALUE(mesh::storage::open(left_path));
+        const mesh::storage::Storage right = REQUIRE_VALUE(mesh::storage::open(right_path));
+        const sf_merger::inputs::Merge inputs = REQUIRE_VALUE(sf_merger::inputs::make_merge(left_path, right_path, std::nullopt));
+
+        REQUIRE_VALUE(merge_datasets(left, right, output_path, std::nullopt, inputs));
+
+        const mesh::storage::Storage output = REQUIRE_VALUE(mesh::storage::open(output_path));
+        CHECK(REQUIRE_VALUE(io::filesystem::equivalent(left.paths(root).front(), output.paths(root).front())));
+    }
 }
 
 TEST_CASE("merge_datasets stops on request and reuses a checkpoint", "[sf_merger][merge]")

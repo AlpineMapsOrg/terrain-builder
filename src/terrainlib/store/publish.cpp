@@ -20,9 +20,10 @@
 
 #include <libassert/assert.hpp>
 
-#include "cli_support/log.h"
 #include "error/format.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
+#include "log.h"
 #include "path_utils.h"
 #include "store/inputs.h"
 #include "store/storage_paths.h"
@@ -35,7 +36,7 @@ alp::Result<void, io::FileError> publish_directory(const std::filesystem::path& 
     const std::filesystem::path draft = paths::normalized(draft_path);
     std::filesystem::path destination = draft;
     destination.replace_extension();
-    ALP_TRY_CONTEXT(require_absent(destination), context);
+    ALP_TRY_CONTEXT(io::filesystem::require_absent(destination), context);
     // The record stays until the rename succeeded, so a draft that failed to publish can still be reused.
     ALP_TRY_CONTEXT(io::filesystem::rename_no_replace(draft, destination), context);
     // A leftover record is harmless, as reuse requires a draft.

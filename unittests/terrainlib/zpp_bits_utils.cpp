@@ -17,6 +17,7 @@
  *****************************************************************************/
 
 #include "../catch2_helpers.h"
+#include "../result_helpers.h"
 
 #include <cstdint>
 #include <vector>
@@ -33,16 +34,12 @@ struct Holder {
 
 template <typename T>
 std::vector<uint8_t> serialized(const T &value) {
-    auto bytes = io::serde::serialize(Holder<T>{.value = value});
-    REQUIRE(bytes.has_value());
-    return bytes.value();
+    return REQUIRE_VALUE(io::serde::serialize(Holder<T>{.value = value}));
 }
 
 template <typename T>
 T deserialized(const std::vector<uint8_t> &bytes) {
-    auto holder = io::serde::deserialize<Holder<T>>(bytes);
-    REQUIRE(holder.has_value());
-    return holder.value().value;
+    return REQUIRE_VALUE(io::serde::deserialize<Holder<T>>(bytes)).value;
 }
 
 // The same 128 bit value, built the same way in every representation.

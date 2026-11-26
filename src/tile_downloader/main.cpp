@@ -25,13 +25,13 @@
 #include "HttpClient.h"
 #include "TileUrlBuilder.h"
 #include "cli.h"
-#include "cli_support/log.h"
 #include "common_error_codes.h"
 #include "error/Context.h"
 #include "error/Result.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
+#include "log.h"
 
 [[nodiscard]]
 alp::Result<void> run(const tile_downloader::cli::Args &args) {
@@ -54,7 +54,7 @@ alp::Result<void> run(const tile_downloader::cli::Args &args) {
 
 int main(int argc, char **argv) {
     const tile_downloader::cli::Args args = tile_downloader::cli::parse(argc, argv);
-    cli_support::Log::init(args.log_level);
+    logging::Log::init(args.log_level);
 
     const alp::Result<void> result = run(args);
     if (!result.has_value()) {

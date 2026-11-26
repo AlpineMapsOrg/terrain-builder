@@ -38,7 +38,7 @@
 #include "compact.h"
 #include "geometry/geometry.h"
 #include "numeric/int_math.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
