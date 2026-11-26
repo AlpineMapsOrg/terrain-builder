@@ -21,17 +21,20 @@
 #pragma once
 
 #include <optional>
+#include <utility>
 
 #include <libassert/assert.hpp>
 
-#include "NodeLoader.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/clip.h"
 #include "mesh/texture_trim.h"
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "hierarchy/NodeStatusOrMissing.h"
+#include "error/prelude.h"
 #include "mesh/storage.h"
+#include "store/Codec.h"
+#include "store/index_checks.h"
 
 class NodeLoader {
 public:
@@ -41,13 +44,15 @@ public:
         return this->_storage.index().status(id);
     }
 
-    // Try to retrieve or reconstruct node mesh by ID
-    // TODO: return const ref instead?
-    std::optional<SimpleMesh> load_node(const octree::Id &id) const {
+    using LoadError = store::CodecReadError;
+    // Loads the mesh of the node, or clips the mesh of its nearest ancestor that has one.
+    // Empty if neither the node nor any of its ancestors has a mesh.
+    [[nodiscard]]
+    alp::Result<std::optional<SimpleMesh>, LoadError> load_node(const octree::Id &id) const {
         // Try storage
-        auto mesh_opt = this->_storage.load(id);
-        if (mesh_opt) {
-            return mesh_opt.value();
+        ALP_TRY(std::optional<SimpleMesh> mesh_opt, this->try_load(id));
+        if (mesh_opt.has_value()) {
+            return mesh_opt;
         }
 
         // Try ancestors
@@ -55,11 +60,10 @@ public:
             const auto &parent_id = *parent;
 
             // Try storage
-            auto parent_mesh_opt = this->_storage.load(parent_id);
-            if (parent_mesh_opt) {
-                auto parent_mesh = parent_mesh_opt.value();
+            ALP_TRY(const std::optional<SimpleMesh> parent_mesh_opt, this->try_load(parent_id));
+            if (parent_mesh_opt.has_value()) {
                 const auto bounds = this->_space.get_node_bounds(id);
-                SimpleMesh clipped = mesh::clip_on_bounds(parent_mesh, bounds);
+                SimpleMesh clipped = mesh::clip_on_bounds(*parent_mesh_opt, bounds);
                 trim_texture_inplace(clipped);
                 return clipped;
             }
@@ -74,6 +78,19 @@ public:
     }
 
 private:
+    // Loads the mesh of the node, or nothing if the storage does not have it.
+    [[nodiscard]]
+    alp::Result<std::optional<SimpleMesh>, LoadError> try_load(const octree::Id &id) const {
+        auto load_result = this->_storage.load(id);
+        if (load_result.has_value()) {
+            return std::move(load_result).value();
+        }
+
+        // Only a node the index does not list is absent.
+        ALP_TRY(std::move(load_result).error().split<store::NotFound>());
+        return std::nullopt;
+    }
+
     const mesh::storage::Storage &_storage;
     const octree::Space _space;
 };

@@ -39,7 +39,7 @@ public:
     }
 
     template <Status LeftStatus, Status RightStatus>
-    Result visit(
+    alp::Result<Result, NodeLoader::LoadError> visit(
         const octree::Id &,
         const NodeData<LeftStatus> &left,
         const NodeData<RightStatus> &right,
@@ -54,7 +54,9 @@ public:
         }
 
         if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Leaf) {
-            return merge_meshes(right.mesh(), left.mesh());
+            ALP_TRY(const SimpleMesh &left_mesh, left.mesh());
+            ALP_TRY(const SimpleMesh &right_mesh, right.mesh());
+            return merge_meshes(right_mesh, left_mesh);
         }
 
         return Recurse{ctx};
