@@ -65,15 +65,15 @@ TEST_CASE("datasets are as expected", "[gis][Dataset]") {
 
     SECTION("coverage") {
         {
-            const auto mgi_coverage = d_mgi.mercator_coverage().value();
-            const auto wgs84_coverage = d_wgs84.mercator_coverage().value();
+            const auto mgi_coverage = REQUIRE_VALUE(d_mgi.mercator_coverage());
+            const auto wgs84_coverage = REQUIRE_VALUE(d_wgs84.mercator_coverage());
             REQUIRE(mgi_coverage.size() == 1);
             REQUIRE(wgs84_coverage.size() == 1);
             check_bounds(mgi_coverage.front(), wgs84_coverage.front());
         }
         {
-            const auto mgi_coverage = d_mgi.geographic_coverage().value();
-            const auto wgs84_coverage = d_wgs84.geographic_coverage().value();
+            const auto mgi_coverage = REQUIRE_VALUE(d_mgi.geographic_coverage());
+            const auto wgs84_coverage = REQUIRE_VALUE(d_wgs84.geographic_coverage());
             REQUIRE(mgi_coverage.size() == 1);
             REQUIRE(wgs84_coverage.size() == 1);
             check_bounds(mgi_coverage.front(), wgs84_coverage.front());
@@ -250,30 +250,26 @@ TEST_CASE("bounds3d rejects a band whose height unit is not metres", "[gis][Data
 TEST_CASE("dataset coverage is split at the antimeridian", "[gis][Dataset]") {
     const auto dataset = memory_raster({ 170, 0.625, 0, 5, 0, -0.3125 }, { 32, 32 }, 4326);
 
-    const auto geographic = dataset.geographic_coverage();
-    REQUIRE(geographic);
-    REQUIRE(geographic->size() == 2);
-    check_bounds_near((*geographic)[0], { { 170, -5 }, { 180, 5 } }, 1e-9);
-    check_bounds_near((*geographic)[1], { { -180, -5 }, { -170, 5 } }, 1e-9);
+    const auto geographic = REQUIRE_VALUE(dataset.geographic_coverage());
+    REQUIRE(geographic.size() == 2);
+    check_bounds_near(geographic[0], { { 170, -5 }, { 180, 5 } }, 1e-9);
+    check_bounds_near(geographic[1], { { -180, -5 }, { -170, 5 } }, 1e-9);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    REQUIRE(mercator_bounds->size() == 2);
-    check_bounds_near((*mercator_bounds)[0], { mercator(170, -5), mercator(180, 5) }, 1e-3);
-    check_bounds_near((*mercator_bounds)[1], { mercator(-180, -5), mercator(-170, 5) }, 1e-3);
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    REQUIRE(mercator_bounds.size() == 2);
+    check_bounds_near(mercator_bounds[0], { mercator(170, -5), mercator(180, 5) }, 1e-3);
+    check_bounds_near(mercator_bounds[1], { mercator(-180, -5), mercator(-170, 5) }, 1e-3);
 }
 
 TEST_CASE("dataset coverage beyond the polar limit is empty in web mercator", "[gis][Dataset]") {
     const auto dataset = memory_raster({ 10, 0.1, 0, 89, 0, -0.02 }, { 32, 32 }, 4326);
 
-    const auto geographic = dataset.geographic_coverage();
-    REQUIRE(geographic);
-    REQUIRE(geographic->size() == 1);
-    check_bounds_near(geographic->front(), { { 10, 88.36 }, { 13.2, 89 } }, 1e-9);
+    const auto geographic = REQUIRE_VALUE(dataset.geographic_coverage());
+    REQUIRE(geographic.size() == 1);
+    check_bounds_near(geographic.front(), { { 10, 88.36 }, { 13.2, 89 } }, 1e-9);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    CHECK(mercator_bounds->empty());
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    CHECK(mercator_bounds.empty());
 }
 
 TEST_CASE("web mercator dataset coverage is exact", "[gis][Dataset]") {
@@ -281,26 +277,23 @@ TEST_CASE("web mercator dataset coverage is exact", "[gis][Dataset]") {
     const double side = gis::webmercator::half_extent / 4;
     const auto dataset = memory_raster({ 0, side / 32, 0, side, 0, -side / 32 }, { 32, 32 }, 3857);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    REQUIRE(mercator_bounds->size() == 1);
-    CHECK(mercator_bounds->front().min == glm::dvec2(0, 0));
-    CHECK(mercator_bounds->front().max == glm::dvec2(side, side));
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    REQUIRE(mercator_bounds.size() == 1);
+    CHECK(mercator_bounds.front().min == glm::dvec2(0, 0));
+    CHECK(mercator_bounds.front().max == glm::dvec2(side, side));
 }
 
 TEST_CASE("global dataset coverage is a single world rectangle", "[gis][Dataset]") {
     const auto dataset = memory_raster({ -180, 0.5, 0, 90, 0, -0.5 }, { 720, 360 }, 4326);
 
-    const auto geographic = dataset.geographic_coverage();
-    REQUIRE(geographic);
-    REQUIRE(geographic->size() == 1);
-    check_bounds_near(geographic->front(), { { -180, -90 }, { 180, 90 } }, 1e-9);
+    const auto geographic = REQUIRE_VALUE(dataset.geographic_coverage());
+    REQUIRE(geographic.size() == 1);
+    check_bounds_near(geographic.front(), { { -180, -90 }, { 180, 90 } }, 1e-9);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    REQUIRE(mercator_bounds->size() == 1);
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    REQUIRE(mercator_bounds.size() == 1);
     const double half = gis::webmercator::half_extent;
-    check_bounds_near(mercator_bounds->front(), { { -half, -half }, { half, half } }, 1e-3);
+    check_bounds_near(mercator_bounds.front(), { { -half, -half }, { half, half } }, 1e-3);
 }
 
 TEST_CASE("pixel_transform fails as ambiguous for a raster with a second kind of georeferencing", "[gis][Dataset]") {
@@ -373,21 +366,15 @@ TEST_CASE("open_raster, open_vector and open_shared_raster keep GDAL's message f
     std::optional<gis::CplError> error;
 
     SECTION("raster") {
-        const auto result = gis::Dataset::open_raster(path);
-        REQUIRE(!result.has_value());
-        error = result.error().code();
+        error = REQUIRE_ERROR(gis::Dataset::open_raster(path)).code();
     }
 
     SECTION("vector") {
-        const auto result = gis::Dataset::open_vector(path);
-        REQUIRE(!result.has_value());
-        error = result.error().code();
+        error = REQUIRE_ERROR(gis::Dataset::open_vector(path)).code();
     }
 
     SECTION("shared raster") {
-        const auto result = gis::Dataset::open_shared_raster(path);
-        REQUIRE(!result.has_value());
-        error = result.error().code();
+        error = REQUIRE_ERROR(gis::Dataset::open_shared_raster(path)).code();
     }
 
     CPLErrorReset();

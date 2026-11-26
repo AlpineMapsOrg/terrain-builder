@@ -73,7 +73,7 @@ void require_projection_available(const gis::Dataset &dataset, const gis::srs::S
     const gis::srs::System dataset_srs = REQUIRE_VALUE(dataset.srs());
     const radix::tile::SrsBounds source_bounds = REQUIRE_VALUE(dataset.bounds());
     const gis::srs::Transform transform = REQUIRE_VALUE(gis::srs::get_transform(dataset_srs, target_srs));
-    REQUIRE(transform.apply((source_bounds.min + source_bounds.max) / 2.0).has_value());
+    REQUIRE_VALUE(transform.apply((source_bounds.min + source_bounds.max) / 2.0));
 }
 
 template <typename Pixel>
