@@ -144,7 +144,7 @@ public:
     // Approximate: sampled on a grid within the dataset coverage.
     // Fails if the bounds lie outside the coverage or a sample cannot be mapped into the dataset's system.
     [[nodiscard]]
-    alp::Result<glm::dvec2, PixelSizeError> min_pixel_size(const radix::tile::SrsBounds &bounds) const;
+    alp::Result<glm::dvec2, PixelSizeError> estimate_min_pixel_size(const radix::tile::SrsBounds &bounds) const;
 
     // The projection this reader reads into.
     [[nodiscard]]
