@@ -18,6 +18,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <optional>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -104,5 +105,25 @@ TEST_CASE("axes gives angles for geographic horizontal axes and lengths for the 
         const gis::srs::System system = REQUIRE_VALUE(gis::srs::from_user_input("EPSG:31287+5778"));
         const auto quantities = system.axes() | std::views::transform(&gis::srs::Axis::unit) | std::views::transform(&gis::srs::Unit::quantity) | std::ranges::to<std::vector>();
         CHECK(quantities == std::vector{gis::srs::Quantity::Length, gis::srs::Quantity::Length, gis::srs::Quantity::Length});
+    }
+}
+
+TEST_CASE("format_epsg_code formats the EPSG code of a system, or of both parts of a compound system", "[gis][srs][System]") {
+    SECTION("single") {
+        const gis::srs::System system = REQUIRE_VALUE(gis::srs::from_epsg(4326));
+        CHECK(gis::srs::format_epsg_code(system) == "EPSG:4326");
+    }
+    SECTION("projected compound") {
+        const gis::srs::System system = REQUIRE_VALUE(gis::srs::from_user_input("EPSG:31287+5778"));
+        CHECK(gis::srs::format_epsg_code(system) == "EPSG:31287+5778");
+    }
+    SECTION("geographic compound") {
+        const gis::srs::System system = REQUIRE_VALUE(gis::srs::from_user_input("EPSG:4326+5773"));
+        CHECK(gis::srs::format_epsg_code(system) == "EPSG:4326+5773");
+    }
+    SECTION("without a code") {
+        const gis::srs::System system = REQUIRE_VALUE(gis::srs::from_user_input(
+            R"(GEOGCRS["sphere",DATUM["sphere",ELLIPSOID["sphere",6371000,0]],CS[ellipsoidal,2],AXIS["longitude",east,ANGLEUNIT["degree",0.0174532925199433]],AXIS["latitude",north,ANGLEUNIT["degree",0.0174532925199433]]])"));
+        CHECK(gis::srs::format_epsg_code(system) == std::nullopt);
     }
 }

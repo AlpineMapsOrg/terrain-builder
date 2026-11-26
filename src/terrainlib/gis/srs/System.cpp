@@ -230,13 +230,11 @@ std::optional<std::string> format_epsg_code(const System &srs) {
 
     if (srs.is_compound()) {
         const OGRSpatialReference &gdal_srs = srs.as_gdal();
-        // The search for a node goes depth first, so GEOGCS would find the base of a projected horizontal part. // TODO: use ALP_TRY
+        // The search for a node goes depth first, so GEOGCS would find the base of a projected horizontal part.
         const char *horizontal_node = srs.kind() == Kind::Projected ? "PROJCS" : "GEOGCS";
-        const std::optional<uint32_t> horizontal_opt = get_epsg_code(gdal_srs, horizontal_node);
-        const std::optional<uint32_t> vertical_opt = get_epsg_code(gdal_srs, "VERT_CS");
-        if (horizontal_opt && vertical_opt) {
-            return fmt::format("EPSG:{}+{}", *horizontal_opt, *vertical_opt);
-        }
+        ALP_TRY(const uint32_t horizontal_code, get_epsg_code(gdal_srs, horizontal_node));
+        ALP_TRY(const uint32_t vertical_code, get_epsg_code(gdal_srs, "VERT_CS"));
+        return fmt::format("EPSG:{}+{}", horizontal_code, vertical_code);
     }
 
     return std::nullopt;
