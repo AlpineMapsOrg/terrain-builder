@@ -27,7 +27,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 
-#include "cli_support/log.h"
+#include "log.h"
 #include "enumerate.h"
 #include "error/try.h"
 #include "error/utils.h"

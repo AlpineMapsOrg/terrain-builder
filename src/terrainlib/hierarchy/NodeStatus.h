@@ -23,7 +23,7 @@
 #include <iostream>
 #include <string>
 
-#include "cli_support/log.h"
+#include "log.h"
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 

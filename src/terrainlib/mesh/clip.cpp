@@ -38,7 +38,7 @@
 #include "build_config.h"
 #include "error/utils.h"
 #include "hash_utils.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/cgal.h"
 #include "mesh/clip.h"
 #include "mesh/convert.h"

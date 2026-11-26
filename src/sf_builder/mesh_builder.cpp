@@ -37,7 +37,7 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "fmt_impls.h"

@@ -22,13 +22,13 @@
 #include <ostream>
 #include <vector>
 
-#include "cli_support/log.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "io/alloc.h"
 #include "io/image/Format.h"
 #include "io/mat.h"
+#include "log.h"
 #include "mesh/EncodedMesh.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/encode_error.h"

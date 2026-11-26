@@ -33,7 +33,6 @@
 
 #include "build.h"
 #include "cli.h"
-#include "cli_support/log.h"
 #include "cli_support/octree_id.h"
 #include "cli_support/stop_signal.h"
 #include "error/log.h"
@@ -43,6 +42,7 @@
 #include "gis/srs/well_known.h"
 #include "gis/webmercator.h"
 #include "inputs.h"
+#include "log.h"
 #include "octree/Space.h"
 #include "stop.h"
 
@@ -165,7 +165,7 @@ alp::Result<void> run(const cli::Args &args) {
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
     const auto log_level = std::visit([](const auto &args) { return args.log_level; }, args);
-    cli_support::Log::init(log_level);
+    logging::Log::init(log_level);
 
     const alp::Result<void> result = run(args);
     if (!result.has_value()) {

@@ -21,7 +21,7 @@
 #include <spdlog/spdlog.h>
 
 #include "containers/UniqueResource.h"
-#include "cli_support/log.h"
+#include "log.h"
 
 class LogScope {
 private:
@@ -37,7 +37,7 @@ private:
     };
 
 public:
-    explicit LogScope(spdlog::level::level_enum new_level, spdlog::logger &logger = *cli_support::Log::get_logger(), bool allow_loosen = false) {
+    explicit LogScope(spdlog::level::level_enum new_level, spdlog::logger &logger = *logging::Log::get_logger(), bool allow_loosen = false) {
         const auto original_level = logger.level();
         // Only set to if it's more restrictive than current level
         if (allow_loosen || new_level >= original_level) {

@@ -25,7 +25,7 @@
 #include "cli.h"
 #include "codec.h"
 #include "dag_node.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/Result.h"
 #include "error/log.h"
 #include "error/try.h"
@@ -117,7 +117,7 @@ alp::Result<void> run(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    cli_support::Log::init(args.log_level);
+    logging::Log::init(args.log_level);
 
     const alp::Result<void> result = run(args);
     if (!result.has_value()) {

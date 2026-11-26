@@ -37,7 +37,6 @@
 #include <libassert/assert.hpp>
 #include <ogrsf_frmts.h>
 
-#include "cli_support/log.h"
 #include "earth.h"
 #include "error/log.h"
 #include "error/try.h"
@@ -49,6 +48,7 @@
 #include "gis/srs/classify.h"
 #include "gis/srs/coverage.h"
 #include "gis/srs/well_known.h"
+#include "log.h"
 
 namespace gis {
 

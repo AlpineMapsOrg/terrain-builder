@@ -20,10 +20,10 @@
 
 #include <libassert/assert.hpp>
 
-#include "cli_support/log.h"
 #include "error/format.h"
 #include "io/filesystem.h"
 #include "io/filesystem_utils.h"
+#include "log.h"
 #include "path_utils.h"
 #include "store/inputs.h"
 #include "store/storage_paths.h"

@@ -34,6 +34,7 @@ add_library(terrainlib
     fmt_impls.h
     glm_utils.h
     hash_utils.h
+    log.h log.cpp
     macros.h
     mem.h
     opencv_utils.h

@@ -25,13 +25,13 @@
 
 #include "build.h"
 #include "cli.h"
-#include "cli_support/log.h"
 #include "cli_support/stop_signal.h"
 #include "error/Result.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "inputs.h"
 #include "io/filesystem_utils.h"
+#include "log.h"
 #include "mesh/storage.h"
 #include "octree/storage/index_format.h"
 #include "stop.h"
@@ -102,7 +102,7 @@ alp::Result<void> run(const cli::Args &args) {
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
 
-    cli_support::Log::init(args.log_level);
+    logging::Log::init(args.log_level);
 
     try {
         const alp::Result<void> result = run(args);

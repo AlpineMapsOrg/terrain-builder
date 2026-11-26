@@ -34,7 +34,7 @@
 #include "cluster.h"
 #include "compact.h"
 #include "enumerate.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "Partitioning.h"
 #include "range_utils.h"
 #include "texture_reuse.h"

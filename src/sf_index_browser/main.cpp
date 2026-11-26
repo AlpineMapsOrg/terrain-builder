@@ -31,7 +31,7 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "io/filesystem.h"
@@ -323,7 +323,7 @@ int run(const cli::Args &args) {
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    cli_support::Log::init(args.log_level);
+    logging::Log::init(args.log_level);
 
     const std::string arg_str = std::accumulate(argv, argv + argc, std::string(),
                                                 [](const std::string &acc, const char *arg) {

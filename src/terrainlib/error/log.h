@@ -20,7 +20,7 @@
 
 #include <fmt/format.h>
 
-#include "cli_support/log.h"
+#include "../log.h"
 #include "error/format.h"
 #include "macros.h"
 

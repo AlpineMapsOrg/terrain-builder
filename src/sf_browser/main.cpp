@@ -18,14 +18,14 @@
  *****************************************************************************/
 
 #include "core/Application.h"
-#include <cli_support/log.h>
+#include <log.h>
 
 int main()
 {
 #ifdef DEBUG
-    cli_support::Log::init(spdlog::level::trace);
+    logging::Log::init(spdlog::level::trace);
 #else
-    cli_support::Log::init(spdlog::level::info);
+    logging::Log::init(spdlog::level::info);
 #endif
 
     Application app("Alpenite Browser", 1280, 720);
