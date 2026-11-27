@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
+#include <numbers>
 
 #include <CGAL/Polygon_mesh_processing/orientation.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
@@ -16,6 +17,7 @@
 #include "mesh/connectivity/manifold.h"
 #include "mesh/convert.h"
 #include "srs/System.h"
+#include "srs/well_known.h"
 
 namespace {
 
@@ -49,7 +51,8 @@ TEST_CASE("simplification_tolerance is a fixed tenth of a metre", "[sf_merger][m
         const srs::System geographic = srs::wgs84();
         const std::optional<double> tolerance = mask::simplification_tolerance(geographic);
         REQUIRE(tolerance);
-        CHECK_THAT(*tolerance, WithinEpsilon(0.1 / geographic.GetSemiMajor() / geographic.GetAngularUnits()));
+        // WGS 84 has a semi-major axis of 6378137 m, and its unit is the degree.
+        CHECK_THAT(*tolerance, WithinEpsilon(0.1 / 6378137.0 / (std::numbers::pi / 180)));
     }
 }
 
@@ -134,5 +137,5 @@ TEST_CASE("load_referenced_from_path fails for a mask without polygons", "[sf_me
 
     const mask::LoadError error = REQUIRE_ERROR(mask::load_referenced_from_path(path));
 
-    CHECK(error.holds(mask::MaskError::NoPolygons));
+    CHECK(error.holds_code(mask::MaskError::NoPolygons));
 }

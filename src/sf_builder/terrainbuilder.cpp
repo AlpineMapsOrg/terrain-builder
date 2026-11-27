@@ -27,6 +27,7 @@
 #include "srs/System.h"
 #include "srs/SharedSystem.h"
 #include "srs/transform.h"
+#include "srs/well_known.h"
 #include "srs/transform_bounds.h"
 
 #include "octree/Id.h"
@@ -145,9 +146,9 @@ alp::Result<void, BuildPatchError, mesh::io::Error> build_and_save_patch(
     start = std::chrono::high_resolution_clock::now();
     // TODO: use a JSON libary instead
     std::unordered_map<std::string, std::string> metadata;
-    metadata["mesh_srs"] = srs::friendly_name(mesh_srs);
-    metadata["bounds_srs"] = srs::friendly_name(target_bounds_srs);
-    metadata["texture_srs"] = srs::friendly_name(texture_srs);
+    metadata["mesh_srs"] = fmt::to_string(mesh_srs);
+    metadata["bounds_srs"] = fmt::to_string(target_bounds_srs);
+    metadata["texture_srs"] = fmt::to_string(texture_srs);
     metadata["bounds"] = fmt::format(
         "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
         target_bounds.min.x, target_bounds.min.y, target_bounds.max.x, target_bounds.max.y);
@@ -219,7 +220,7 @@ alp::Result<void> build_all_patches(
     const srs::SharedSystem shared_mesh_srs(mesh_srs);
     ALP_TRY(const auto ecef_bounds, srs::encompassing_bounds_transfer(dataset_srs.get(), ecef_srs.get(), dataset_bounds));
     const auto space = octree::Space::earth();
-    ALP_TRY(const octree::Id root_node, alp::to_expected(
+    ALP_TRY(const octree::Id root_node, alp::to_result(
         space.find_smallest_node_encompassing_bounds(ecef_bounds),
         "the dataset lies outside the octree root node")
     );

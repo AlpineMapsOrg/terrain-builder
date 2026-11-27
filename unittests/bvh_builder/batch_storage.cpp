@@ -40,7 +40,7 @@ TEST_CASE("BatchStorage::create fails in a directory that holds a storage, namin
 
     const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(frontier::Storage::create(path));
 
-    CHECK(error.holds(io::DirectoryNotEmpty{path}));
+    CHECK(error.holds_code(io::DirectoryNotEmpty{path}));
 }
 
 TEST_CASE("BatchStorage::open gives back the batches a saved storage wrote", "[storage][BatchStorage]") {

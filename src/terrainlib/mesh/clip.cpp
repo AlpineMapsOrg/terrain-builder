@@ -646,7 +646,7 @@ alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_bounds_and_cap(con
         .visitor(visitor);
     const bool success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_bounds, clip_params);
     if (!success) {
-        return alp::make_unexpected(NonManifoldResult{});
+        return alp::make_error(NonManifoldResult{});
     }
     if (cgal_mesh.number_of_faces() == 0) {
         return Cow(SimpleMesh());
@@ -809,7 +809,7 @@ alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_mesh(const SimpleM
         has_intersections = visitor.has_intersections;
     }
     if (!success) {
-        return alp::make_unexpected(NonManifoldResult{});
+        return alp::make_error(NonManifoldResult{});
     }
     if (cgal_mesh.number_of_faces() == 0) {
         return Cow(SimpleMesh());

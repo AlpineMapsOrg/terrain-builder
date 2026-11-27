@@ -13,6 +13,8 @@
 #include "error/Error.h"
 #include "error/ErrorCode.h"
 #include "error/Result.h"
+#include "optional_utils.h"
+#include "type_utils.h"
 
 namespace alp {
 
@@ -30,10 +32,29 @@ Error<E> make_error(E code, Context auto &&context, const std::source_location l
     return Error<E>(std::move(code), std::forward<decltype(context)>(context), location);
 }
 
+// Creates an error with `code` that originates at the caller, created from `inner`, or from an error with the code `inner` that originates there too.
+template <ErrorCode E, typename F> requires(ErrorCode<F> || is_specialization_of_v<F, BasicError>)
+[[nodiscard]]
+Error<E> make_error(E code, F inner, const std::source_location location = std::source_location::current()) {
+    if constexpr (ErrorCode<F>) {
+        return Error<E>(std::move(code), Error<F>(std::move(inner), location), location);
+    } else {
+        return Error<E>(std::move(code), std::move(inner), location);
+    }
+}
+
+// Creates an error with `code` that originates at the caller, created from `inner`, or from an error with the code `inner` that originates there too, with `context` added at the caller.
+template <ErrorCode E, typename F> requires(ErrorCode<F> || is_specialization_of_v<F, BasicError>)
+[[nodiscard]]
+Error<E> make_error(E code, Context auto &&context, F inner, const std::source_location location = std::source_location::current()) {
+    return make_error(std::move(code), std::move(inner), location)
+        .context(std::forward<decltype(context)>(context), location);
+}
+
 // Creates an erased error from `message` that originates at the caller.
 [[nodiscard]]
-inline Error<> make_error(std::string message, const std::source_location location = std::source_location::current()) {
-    return Error<>(std::move(message), location);
+inline ErasedError make_error(std::string message, const std::source_location location = std::source_location::current()) {
+    return ErasedError(std::move(message), location);
 }
 
 // Creates an unexpected holding a new error with `code` that originates at the caller.
@@ -59,7 +80,7 @@ inline Unexpected<> make_unexpected(std::string message, const std::source_locat
 // Adds a frame at the caller to `error` and wraps it in an unexpected.
 template <ErrorCode... Es>
 [[nodiscard]]
-BasicUnexpected<BasicError<Es...>> propagate(BasicError<Es...> error,const std::source_location location = std::source_location::current()) {
+BasicUnexpected<BasicError<Es...>> propagate(BasicError<Es...> error, const std::source_location location = std::source_location::current()) {
     return std::unexpected(std::move(error).propagate(location));
 }
 
@@ -86,35 +107,26 @@ std::invoke_result_t<F> run_with_context(Context auto &&context, F &&body, const
 // Turns `value` into a result that fails with `code` when it is empty.
 template <typename T, ErrorCode E>
 [[nodiscard]]
-Result<T, E> to_expected(std::optional<T> value, E code, const std::source_location location = std::source_location::current()) {
-    if (value.has_value()) {
-        return std::move(*value);
-    }
-    return alp::make_unexpected(std::move(code), location);
+Result<T, E> to_result(std::optional<T> value, E code, const std::source_location location = std::source_location::current()) {
+    return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(code), location); });
 }
 
 // Turns `value` into a result that fails with `code` when it is empty, with `context` as the error's first context.
 template <typename T, ErrorCode E>
 [[nodiscard]]
-Result<T, E> to_expected(
+Result<T, E> to_result(
     std::optional<T> value,
     E code,
     Context auto &&context,
     const std::source_location location = std::source_location::current()) {
-    if (value.has_value()) {
-        return std::move(*value);
-    }
-    return alp::make_unexpected(std::move(code), std::forward<decltype(context)>(context), location);
+    return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(code), std::forward<decltype(context)>(context), location); });
 }
 
 // Turns `value` into a result that fails with an erased error from `message` when it is empty.
 template <typename T>
 [[nodiscard]]
-Result<T> to_expected(std::optional<T> value, std::string message, const std::source_location location = std::source_location::current()) {
-    if (value.has_value()) {
-        return std::move(*value);
-    }
-    return alp::make_unexpected(std::move(message), location);
+ErasedResult<T> to_result(std::optional<T> value, std::string message, const std::source_location location = std::source_location::current()) {
+    return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(message), location); });
 }
 
 } // namespace alp

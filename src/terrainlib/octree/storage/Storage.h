@@ -249,7 +249,7 @@ public:
     }
     
     std::optional<std::reference_wrapper<const IndexMap>> index() const noexcept {
-        return as_ref(this->_index.map);
+        return alp::ref(this->_index.map);
     }
 
     std::optional<std::unique_ptr<cache::ICache<T>>> &cache() noexcept {

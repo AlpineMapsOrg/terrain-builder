@@ -52,7 +52,7 @@ private:
                 this->_mesh = result.value();
             }
         }
-        return as_ref(this->_mesh);
+        return alp::ref(this->_mesh);
     }
 
     octree::Id _id;

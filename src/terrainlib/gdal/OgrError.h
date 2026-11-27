@@ -5,6 +5,9 @@
 #include <libassert/assert.hpp>
 #include <ogr_core.h>
 
+#include "error/Result.h"
+#include "error/utils.h"
+
 namespace gdal {
 
 // A failed OGR call, identified by the code it returned.
@@ -49,6 +52,15 @@ inline std::string_view format_as(const OgrError error) {
     default:
         return "an unknown OGR failure";
     }
+}
+
+// Fails with `code` unless it is OGRERR_NONE, otherwise succeeds.
+[[nodiscard]]
+inline alp::Result<void, OgrError> to_result(const OGRErr code) {
+    if (code != OGRERR_NONE) {
+        return alp::make_error(OgrError(code));
+    }
+    return {};
 }
 
 } // namespace gdal

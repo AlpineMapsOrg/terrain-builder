@@ -63,5 +63,5 @@ TEST_CASE("Error codes are unqualified formattable enums and classes other than 
 TEST_CASE("A typed error stands for its codes, but is not a code itself", "[error][ErrorCode]") {
     STATIC_REQUIRE(!alp::ErrorCode<alp::Error<FileError>>);
     STATIC_REQUIRE(alp::ErrorCodes<alp::Error<FileError>>);
-    STATIC_REQUIRE(!alp::ErrorCodes<alp::Error<>>);
+    STATIC_REQUIRE(!alp::ErrorCodes<alp::ErasedError>);
 }

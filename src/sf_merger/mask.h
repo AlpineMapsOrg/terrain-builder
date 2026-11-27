@@ -25,6 +25,7 @@
 #include "srs/System.h"
 #include "srs/transform.h"
 #include "srs/transform_bounds.h"
+#include "srs/well_known.h"
 #include "SphereProjector.h"
 
 #include <CGAL/Boolean_set_operations_2.h>
@@ -123,24 +124,18 @@ using LoadError = alp::Error<gdal::CplError, MaskError>;
 namespace {
 constexpr double simplification_tolerance_metres = 0.1;
 
-std::optional<double> simplification_tolerance(const srs::System &srs) {
-    if (srs.IsProjected()) {
-        const double metres_per_unit = srs.GetLinearUnits();
-        if (metres_per_unit > 0) {
-            return simplification_tolerance_metres / metres_per_unit;
-        }
+std::optional<double> simplification_tolerance(const srs::System &system) {
+    // Both horizontal axes have the unit of the first one.
+    const srs::Unit unit = system.axes().front().unit;
+    switch (system.kind()) {
+    case srs::Kind::Projected:
+        return simplification_tolerance_metres / unit.si_size;
+    case srs::Kind::Geographic:
+        return simplification_tolerance_metres / system.ellipsoid().semi_major_metres / unit.si_size;
+    case srs::Kind::Geocentric:
+        return std::nullopt;
     }
-
-    if (srs.IsGeographic()) {
-        OGRErr error = OGRERR_NONE;
-        const double semi_major_axis_metres = srs.GetSemiMajor(&error);
-        const double radians_per_unit = srs.GetAngularUnits();
-        if (error == OGRERR_NONE && semi_major_axis_metres > 0 && radians_per_unit > 0) {
-            return simplification_tolerance_metres / semi_major_axis_metres / radians_per_unit;
-        }
-    }
-
-    return std::nullopt;
+    UNREACHABLE();
 }
 
 uint64_t point_count(const OGRGeometry &geometry) {
@@ -315,19 +310,20 @@ namespace detail {
 inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_dataset(gdal::Dataset& mask_dataset) {
     GDALDataset *dataset = mask_dataset.as_gdal();
 
-    srs::System srs;
+    std::optional<srs::System> srs_opt;
     // TODO: remove this try catch
     try {
-        srs = mask_dataset.srs();
+        srs_opt = mask_dataset.srs();
     } catch (std::runtime_error &e) {
         LOG_WARN("Mask does not reference an srs, assuming WGS84");
-        srs = srs::wgs84();
+        srs_opt = srs::wgs84();
         // srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT);
     }
+    const srs::System srs = *std::move(srs_opt);
 
     const std::optional<double> tolerance = simplification_tolerance(srs);
     if (!tolerance) {
-        return alp::make_unexpected(MaskError::UnsupportedSpatialReference);
+        return alp::make_error(MaskError::UnsupportedSpatialReference);
     }
 
     MultipolygonWithHoles2 polygons;
@@ -338,7 +334,7 @@ inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_datase
         const uint64_t original_point_count = point_count(*geometry);
         std::unique_ptr<OGRGeometry> simplified = simplify_geometry(*geometry, *tolerance);
         if (!simplified || simplified->IsEmpty() || !simplified->IsValid()) {
-            return alp::make_unexpected(MaskError::SimplificationFailed);
+            return alp::make_error(MaskError::SimplificationFailed);
         }
 
         LOG_DEBUG("Simplified mask with {} m tolerance from {} to {} points",
@@ -347,7 +343,7 @@ inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_datase
     }
 
     if (polygons.is_empty()) {
-        return alp::make_unexpected(MaskError::NoPolygons);
+        return alp::make_error(MaskError::NoPolygons);
     }
 
     return ReferencedPolygonMask{.polygons = std::move(polygons), .srs = std::move(srs)};

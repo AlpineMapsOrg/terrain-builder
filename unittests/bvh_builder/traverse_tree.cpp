@@ -248,7 +248,7 @@ TEST_CASE("a failing visitor fails the walk with its error and visits nothing af
     });
 
     const WalkError error = REQUIRE_ERROR(result);
-    CHECK(error.holds(VisitError::Rejected));
+    CHECK(error.holds_code(VisitError::Rejected));
     CHECK(visited == std::vector{root, first});
 }
 

@@ -55,7 +55,7 @@ TEST_CASE("Creating a scratch directory fails where one holds something, naming 
 
     const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(io::create_scratch_directory(used));
 
-    CHECK(error.holds(io::DirectoryNotEmpty{used}));
+    CHECK(error.holds_code(io::DirectoryNotEmpty{used}));
     CHECK(REQUIRE_VALUE(io::filesystem::is_regular_file(used / "file")));
 }
 

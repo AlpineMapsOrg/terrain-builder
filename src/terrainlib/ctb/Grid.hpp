@@ -27,6 +27,7 @@
 #include <optional>
 
 #include "ogr_spatialref.h"
+#include "srs/System.h"
 
 #include "types.hpp"
 #include <radix/tile.h>
@@ -64,19 +65,18 @@ public:
     /// Initialise a grid tile
     Grid(i_tile gridSize,
          const radix::tile::SrsBounds extent,
-         const OGRSpatialReference &srs,
+         const srs::System &srs,
          int epsgCode,
          std::vector<radix::tile::Id> rootTiles,
          double zoomFactor)
         : mGridSize(gridSize), mExtent(extent), mSRS(srs), mEpsgCode(epsgCode), mInitialResolution((extent.size().x / rootTiles.size()) / gridSize), mXOriginShift(extent.size().x / 2), mYOriginShift(extent.size().y / 2), mZoomFactor(zoomFactor), mRootTiles(rootTiles) {
-        mSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     }
 
     /// Override the equality operator
     bool operator==(const Grid& other) const {
         return mGridSize == other.mGridSize
             && mExtent == other.mExtent
-            && mSRS.IsSame(&(other.mSRS))
+            && mSRS.is_same(other.mSRS)
             && mInitialResolution == other.mInitialResolution
             && mXOriginShift == other.mXOriginShift
             && mYOriginShift == other.mYOriginShift
@@ -294,7 +294,7 @@ public:
     }
 
     /// Get the tile size associated with this grid
-    [[nodiscard]] inline const OGRSpatialReference& getSRS() const {
+    [[nodiscard]] inline const srs::System& getSRS() const {
         return mSRS;
     }
 
@@ -315,7 +315,7 @@ private:
     radix::tile::SrsBounds mExtent;
 
     /// The spatial reference system covered by the grid
-    OGRSpatialReference mSRS;
+    srs::System mSRS;
     int mEpsgCode = -1;
 
     double mInitialResolution; ///< The initial resolution of this particular profile

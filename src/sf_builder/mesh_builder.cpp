@@ -125,7 +125,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     const srs::System &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
     const srs::System &texture_srs, radix::tile::SrsBounds &texture_bounds) {
     const auto context = alp::make_context("building a mesh for {} from {}", clip_bounds, dataset.name());
-    const srs::System &source_srs = dataset.srs();
+    const srs::System source_srs = dataset.srs();
 
     // Translate tile bounds from tile srs into the source srs, so we know what data to read.
     radix::tile::SrsBounds target_bounds_in_source_srs;
@@ -143,7 +143,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
     ALP_TRY_CONTEXT(const HeightMap height_map, reader.read_data_in_pixel_bounds_clamped(pixel_bounds), context);
     if (height_map.buffer().empty()) {
-        return alp::make_unexpected(OutOfBounds{.requested = target_bounds_in_source_srs, .available = dataset.bounds()}, context);
+        return alp::make_error(OutOfBounds{.requested = target_bounds_in_source_srs, .available = dataset.bounds()}, context);
     }
 
     LOG_TRACE("Finding valid pixels");
@@ -162,14 +162,14 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     SimpleMesh mesh_in_source_srs = meshify(source_points, valid_mask);
     // Check if we even have any valid vertices. Can happen if all of the region is padding.
     if (mesh_in_source_srs.vertex_count() == 0 || mesh_in_source_srs.face_count() == 0) {
-        return alp::make_unexpected(EmptyRegion{}, context);
+        return alp::make_error(EmptyRegion{}, context);
     }
 
     // Fast check if all vertices will be clipped
     const radix::geometry::Aabb3d actual_source_bounds = calculate_bounds(mesh_in_source_srs);
     ALP_TRY_CONTEXT(const radix::geometry::Aabb3d approx_clip_bounds, srs::encompassing_bounds_transfer(source_srs, clip_srs, actual_source_bounds), context);
     if (!radix::geometry::intersect(approx_clip_bounds, clip_bounds)) {
-        return alp::make_unexpected(EmptyRegion{}, context);
+        return alp::make_error(EmptyRegion{}, context);
     }
 
     LOG_TRACE("Clipping mesh based on target bounds");
@@ -177,7 +177,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh_in_clip_srs, clip_bounds);
     // Check if there are any vertices left
     if (clipped_mesh.vertex_count() == 0 || clipped_mesh.face_count() == 0) {
-        return alp::make_unexpected(EmptyRegion{}, context);
+        return alp::make_error(EmptyRegion{}, context);
     }
 
     // TODO: move this to another function?

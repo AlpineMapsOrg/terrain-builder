@@ -37,6 +37,7 @@
 #include "ctb/types.hpp"
 #include "gdal/init.h"
 #include "srs/transform_bounds.h"
+#include "srs/well_known.h"
 
 using namespace radix;
 using Catch::Approx;
@@ -67,10 +68,10 @@ TEST_CASE("datasets are as expected", "[gdal][Dataset]") {
     }
 
     SECTION("SRS") {
-        REQUIRE_FALSE(d_mgi.srs().IsEmpty());
-        REQUIRE_FALSE(d_wgs84.srs().IsEmpty());
+        REQUIRE_FALSE(d_mgi.srs().as_gdal().IsEmpty());
+        REQUIRE_FALSE(d_wgs84.srs().as_gdal().IsEmpty());
         const auto wgs84 = d_wgs84.srs();
-        REQUIRE_FALSE(d_mgi.srs().IsSame(&wgs84));
+        REQUIRE_FALSE(d_mgi.srs().is_same(wgs84));
     }
 
     SECTION("bounds") {
@@ -125,11 +126,11 @@ TEST_CASE("vector datasets use the layer spatial reference", "[gdal][Dataset]") 
     REQUIRE(raw_dataset != nullptr);
 
     const srs::System expected_srs = REQUIRE_VALUE(srs::from_epsg(31287));
-    REQUIRE(raw_dataset->CreateLayer("mask", &expected_srs, wkbPolygon, nullptr) != nullptr);
+    REQUIRE(raw_dataset->CreateLayer("mask", &expected_srs.as_gdal(), wkbPolygon, nullptr) != nullptr);
 
     gdal::Dataset dataset(raw_dataset);
     const srs::System actual_srs = dataset.srs();
-    CHECK(actual_srs.IsSame(&expected_srs));
+    CHECK(actual_srs.is_same(expected_srs));
 }
 
 TEST_CASE("bbox width pixels", "[gdal][Dataset]") {

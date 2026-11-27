@@ -104,5 +104,5 @@ TEST_CASE("an output's error comes back from the push that reached it", "[sink][
     const alp::Result<void, OutputError> result = input.push(std::array{1});
 
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().holds(OutputError::Rejected));
+    CHECK(result.error().holds_code(OutputError::Rejected));
 }

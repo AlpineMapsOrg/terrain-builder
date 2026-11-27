@@ -176,7 +176,7 @@ alp::Result<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm 
     }
 
     if (result != CGAL::Surface_mesh_parameterization::OK) {
-        return alp::make_unexpected(result);
+        return alp::make_error(result);
     }
 
     const auto vertex_count = CGAL::num_vertices(mesh);

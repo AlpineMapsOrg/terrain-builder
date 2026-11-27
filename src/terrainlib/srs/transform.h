@@ -19,6 +19,7 @@
 #include "enumerate.h"
 #include "error/Result.h"
 #include "error/try.h"
+#include "error/unwrap.h"
 #include "error/utils.h"
 #include "gdal/CplError.h"
 #include "gdal/init.h"
@@ -48,19 +49,19 @@ using SuccessBuffer = HybridVector<int, 8>;
 
 inline MissingTransform make_missing_transform(const System &source_srs, const System &target_srs, std::optional<gdal::CplError> gdal_error) {
     return MissingTransform{
-        .source = friendly_name(source_srs),
-        .target = friendly_name(target_srs),
+        .source = fmt::to_string(source_srs),
+        .target = fmt::to_string(target_srs),
         .gdal_error = std::move(gdal_error)
     };
 }
 
 // Creates the code for a point that `transform` cannot map.
 inline Untransformable make_untransformable(const OGRCoordinateTransformation *transform, std::optional<gdal::CplError> gdal_error) {
-    const System *source_srs = ASSERT_VAL(transform->GetSourceCS());
-    const System *target_srs = ASSERT_VAL(transform->GetTargetCS());
+    const System source_srs = alp::unwrap(from_gdal(*ASSERT_VAL(transform->GetSourceCS())));
+    const System target_srs = alp::unwrap(from_gdal(*ASSERT_VAL(transform->GetTargetCS())));
     return Untransformable{
-        .source = friendly_name(*source_srs),
-        .target = friendly_name(*target_srs),
+        .source = fmt::to_string(source_srs),
+        .target = fmt::to_string(target_srs),
         .gdal_error = std::move(gdal_error)
     };
 }
@@ -139,7 +140,7 @@ public:
             }
         });
         if (!success || !std::ranges::all_of(successes, std::identity())) {
-            return alp::make_unexpected(detail::make_untransformable(this->_transform.get(), std::move(gdal_error)));
+            return alp::make_error(detail::make_untransformable(this->_transform.get(), std::move(gdal_error)));
         }
 
         for (auto [i, out_point] : enumerate(out)) {
@@ -172,11 +173,11 @@ struct TransformCacheEntry {
 inline alp::Result<Transform, MissingTransform> create_transform(const System &source_srs, const System &target_srs) {
     gdal::initialize_once();
     auto [created, gdal_error] = gdal::capture_error([&] {
-        return OGRCreateCoordinateTransformation(&source_srs, &target_srs);
+        return OGRCreateCoordinateTransformation(&source_srs.as_gdal(), &target_srs.as_gdal());
     });
     std::shared_ptr<OGRCoordinateTransformation> gdal_transform(created);
     if (!gdal_transform) {
-        return alp::make_unexpected(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
+        return alp::make_error(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
     }
     return Transform(std::move(gdal_transform));
 }
@@ -189,20 +190,20 @@ inline alp::Result<Transform, MissingTransform> get_transform(const System &sour
 
     // Check forward
     for (auto &entry : cache) {
-        if (entry.source.IsSame(&source_srs) && entry.target.IsSame(&target_srs)) {
+        if (entry.source.is_same(source_srs) && entry.target.is_same(target_srs)) {
             return entry.transform;
         }
     }
 
     // Check inverse
     for (auto &entry : cache) {
-        if (entry.source.IsSame(&target_srs) && entry.target.IsSame(&source_srs)) {
+        if (entry.source.is_same(target_srs) && entry.target.is_same(source_srs)) {
             auto [inverted, gdal_error] = gdal::capture_error([&] {
                 return entry.transform.as_gdal()->GetInverse();
             });
             std::shared_ptr<OGRCoordinateTransformation> inverse(inverted);
             if (!inverse) {
-                return alp::make_unexpected(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
+                return alp::make_error(detail::make_missing_transform(source_srs, target_srs, std::move(gdal_error)));
             }
             const Transform transform(std::move(inverse));
             cache.push_back({source_srs, target_srs, transform});

@@ -10,6 +10,9 @@
 #include <cpl_error.h>
 #include <libassert/assert.hpp>
 
+#include "error/Result.h"
+#include "error/utils.h"
+
 namespace gdal {
 
 // A failed GDAL call, with the category and message GDAL recorded for it.
@@ -55,6 +58,15 @@ private:
 
 inline std::string_view format_as(const CplError &error) {
     return error.message();
+}
+
+// Fails with the error GDAL last recorded on this thread if `code` is CE_Failure or CE_Fatal, otherwise succeeds.
+[[nodiscard]]
+inline alp::Result<void, CplError> to_result(const CPLErr code) {
+    if (code == CE_Failure || code == CE_Fatal) {
+        return alp::make_error(CplError::get_last_error());
+    }
+    return {};
 }
 
 // Runs `call` with a cleared GDAL error state and returns its result with the error GDAL recorded during it, if it recorded one.

@@ -23,11 +23,11 @@ alp::Result<void, FileError> write_bytes_to_path(const std::span<const uint8_t> 
     // A stream reports no reason for a failure, so we return a general io error.
     std::ofstream file(path, std::ios::binary);
     if (!file.is_open()) {
-        return alp::make_unexpected(FileError(std::make_error_code(std::errc::io_error), path), open_context);
+        return alp::make_error(FileError(std::make_error_code(std::errc::io_error), path), open_context);
     }
     file.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     if (!file.good()) {
-        return alp::make_unexpected(FileError(std::make_error_code(std::errc::io_error), path), write_context);
+        return alp::make_error(FileError(std::make_error_code(std::errc::io_error), path), write_context);
     }
 
     return {};
@@ -41,18 +41,18 @@ alp::Result<std::vector<uint8_t>, FileError> read_bytes_from_path(const std::fil
     std::error_code code;
     const std::uintmax_t size = std::filesystem::file_size(path, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, path), open_context);
+        return alp::make_error(FileError(code, path), open_context);
     }
 
     // A stream reports no reason for a failure, so we return a general io error.
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open()) {
-        return alp::make_unexpected(FileError(std::make_error_code(std::errc::io_error), path), open_context);
+        return alp::make_error(FileError(std::make_error_code(std::errc::io_error), path), open_context);
     }
     std::vector<uint8_t> buffer(static_cast<size_t>(size));
     file.read(reinterpret_cast<char *>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
     if (!file.good()) {
-        return alp::make_unexpected(FileError(std::make_error_code(std::errc::io_error), path), read_context);
+        return alp::make_error(FileError(std::make_error_code(std::errc::io_error), path), read_context);
     }
 
     return buffer;

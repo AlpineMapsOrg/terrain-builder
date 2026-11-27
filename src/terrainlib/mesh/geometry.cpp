@@ -97,11 +97,11 @@ std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh) 
 }
 
 std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh) {
-    return map(calculate_max_edge_length_squared(mesh), [](const double max_len_sq) { return std::sqrt(max_len_sq); });
+    return calculate_max_edge_length_squared(mesh).transform([](const double max_len_sq) { return std::sqrt(max_len_sq); });
 }
 
 std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh) {
-    return map(calculate_min_edge_length_squared(mesh), [](const double min_len_sq) { return std::sqrt(min_len_sq); });
+    return calculate_min_edge_length_squared(mesh).transform([](const double min_len_sq) { return std::sqrt(min_len_sq); });
 }
 
 }

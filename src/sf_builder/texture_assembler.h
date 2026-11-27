@@ -59,7 +59,7 @@ namespace terrainbuilder {
     // It can happen that the root tile is very large because the target tile was (slightly) over the tile border
     // at a high zoom level. So we try to estimate the actual zoom level of the target bounds and recurse at least
     // to that level to find relevant textures.
-    const uint32_t effective_min_zoom_level_to_examine = unwrap_or_else(min_zoom_level_to_examine, [&] {
+    const uint32_t effective_min_zoom_level_to_examine = alp::value_or_else(min_zoom_level_to_examine, [&] {
         return estimate_zoom_level(root_tile.zoom_level, grid.srsBounds(root_tile, false), target_bounds) + 1;
     });
     

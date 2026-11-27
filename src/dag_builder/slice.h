@@ -57,7 +57,7 @@ inline ClusteringAndMap slice_clusters_with_map(const Clustering &clustering, co
             new_vertex_indices.push_back(new_vertex_index);
         }
 
-        std::optional<uint32_t> new_texture_id = map(cluster.texture_id, [&](const uint32_t id) {
+        std::optional<uint32_t> new_texture_id = cluster.texture_id.transform([&](const uint32_t id) {
             uint32_t &remapped = texture_remap[id];
             if (remapped == invalid_remap) {
                 const cv::Mat &texture = clustering.textures[id];

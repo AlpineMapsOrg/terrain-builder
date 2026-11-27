@@ -1,110 +1,95 @@
-/*****************************************************************************
- * AlpineMaps.org
- * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *****************************************************************************/
-
 #pragma once
 
 #include <cstdint>
-#include <cstdlib>
-#include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
-#include <fmt/format.h>
 #include <ogr_spatialref.h>
 
 #include "error/Result.h"
-#include "error/unwrap.h"
-#include "error/utils.h"
 #include "gdal/OgrError.h"
+#include "srs/Axis.h"
+#include "srs/Ellipsoid.h"
+#include "srs/Kind.h"
+#include "srs/error.h"
 
 namespace srs {
 
-// A spatial reference system.
-using System = OGRSpatialReference;
-
-inline std::optional<int> epsg_code(const System &srs) {
-    System tmp = srs;
-    tmp.AutoIdentifyEPSG();
-
-    const char *authName = tmp.GetAuthorityName(nullptr);
-    const char *authCode = tmp.GetAuthorityCode(nullptr);
-
-    if (authName == nullptr || authCode == nullptr) {
-        return std::nullopt;
+// A geodetic spatial reference system, whose data axes are in traditional GIS order.
+// It is never empty, and it must not be used from several threads at once, not even through const methods.
+class System {
+public:
+    // The GDAL spatial reference this wraps, for passing to GDAL calls.
+    [[nodiscard]]
+    const OGRSpatialReference &as_gdal() const {
+        return this->_srs;
     }
 
-    if (std::string(authName) != "EPSG") {
-        return std::nullopt;
+    // Whether coordinates in `other` mean the same as coordinates in this system.
+    [[nodiscard]]
+    bool is_same(const System &other) const {
+        return this->_srs.IsSame(&other._srs);
     }
 
-    return std::atoi(authCode);
-}
+    // The EPSG code of this system, if it has one or matches one.
+    [[nodiscard]]
+    std::optional<uint32_t> epsg_code() const;
 
-inline std::string friendly_name(const System &srs) {
-    if (const auto code = epsg_code(srs)) {
-        return "EPSG:" + std::to_string(*code);
-    }
+    // The kind of this system's coordinates.
+    [[nodiscard]]
+    Kind kind() const;
 
-    const char *name = srs.GetName();
+    // The ellipsoid of this system's datum.
+    [[nodiscard]]
+    Ellipsoid ellipsoid() const;
 
-    if (name != nullptr && *name != '\0') {
-        return std::string(name);
-    }
+    // The prime meridian of this system's datum, in degrees east of Greenwich.
+    [[nodiscard]]
+    double prime_meridian_degrees() const;
 
-    return "unknown";
-}
+    // The axes of this system's data coordinates, in data order.
+    [[nodiscard]]
+    std::vector<Axis> axes() const;
 
-inline System clone(const System &srs) {
-    const std::unique_ptr<System> cloned(srs.Clone());
-    return std::move(*cloned);
-}
+    // Writes this system as WKT2, which from_user_input reads back.
+    [[nodiscard]]
+    alp::Result<std::string, gdal::OgrError> to_wkt() const;
 
+private:
+    explicit System(OGRSpatialReference srs) : _srs(std::move(srs)) {}
+
+    friend alp::Result<System, UnsupportedSystem> from_gdal(OGRSpatialReference srs);
+
+    OGRSpatialReference _srs;
+};
+
+// Converts the GDAL spatial reference `srs`, which must not be empty, into a system.
+// Fails if it is not geodetic or its data axes are not in traditional GIS order.
 [[nodiscard]]
-inline alp::Result<System, gdal::OgrError> from_epsg(const uint32_t epsg) {
-    System srs;
-    if (const OGRErr code = srs.importFromEPSG(epsg); code != OGRERR_NONE) {
-        return alp::make_unexpected(gdal::OgrError(code), fmt::format("importing reference from EPSG code {}", epsg));
-    }
-    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    return srs;
-}
+alp::Result<System, UnsupportedSystem> from_gdal(OGRSpatialReference srs);
 
+// Imports the system with the EPSG code `code`.
+// Fails if the code is unknown or the system is not supported.
 [[nodiscard]]
-inline alp::Result<System, gdal::OgrError> from_user_input(const std::string &user_input) {
-    System srs;
-    if (const OGRErr code = srs.SetFromUserInput(user_input.c_str()); code != OGRERR_NONE) {
-        return alp::make_unexpected(gdal::OgrError(code), fmt::format("parsing a spatial reference from {}", user_input));
-    }
-    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    return srs;
-}
+alp::Result<System, gdal::OgrError, UnsupportedSystem> from_epsg(uint32_t code);
 
-inline System ecef() {
-    return alp::unwrap(from_epsg(4978));
-}
-inline System webmercator() {
-    return alp::unwrap(from_epsg(3857));
-}
-inline System wgs84() {
-    return alp::unwrap(from_epsg(4326));
-}
-inline System mgi() {
-    return alp::unwrap(from_epsg(4312));
-}
+// Parses a system from a definition such as "EPSG:4326", WKT or a PROJ string.
+// Fails if it cannot be parsed or the system is not supported.
+[[nodiscard]]
+alp::Result<System, gdal::OgrError, UnsupportedSystem> from_user_input(const std::string &input);
+
+// The EPSG code of `srs` as "EPSG:<code>", if it has one.
+// A compound system without a code of its own is formatted as "EPSG:<horizontal>+<vertical>".
+[[nodiscard]]
+std::optional<std::string> format_epsg_code(const System &srs);
+
+// The name of `srs`, such as "MGI / Austria Lambert", if it has one.
+[[nodiscard]]
+std::optional<std::string> friendly_name(const System &srs);
+
+// Formats `srs` as "EPSG:<code> (<name>)".
+std::string format_as(const System &srs);
 
 }

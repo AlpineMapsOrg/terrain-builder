@@ -18,10 +18,12 @@
 
 namespace io::envelope {
 
+using Bytes = compression::Bytes;
+
 inline constexpr std::uint64_t magic = 0xF5FBD3EF919428CAULL;
 
 // A failure to read an envelope, apart from decompressing or deserializing its parts.
-enum class EnvelopeError : std::uint8_t {
+enum class Error : std::uint8_t {
     InvalidMagic,
     WrongClassName,
     UnsupportedClassVersion,
@@ -30,19 +32,19 @@ enum class EnvelopeError : std::uint8_t {
     TrailingData,
 };
 
-inline std::string_view format_as(const EnvelopeError error) {
+inline std::string_view format_as(const Error error) {
     switch (error) {
-    case EnvelopeError::InvalidMagic:
+    case Error::InvalidMagic:
         return "the data does not start with the envelope magic number";
-    case EnvelopeError::WrongClassName:
+    case Error::WrongClassName:
         return "the envelope holds a different class";
-    case EnvelopeError::UnsupportedClassVersion:
+    case Error::UnsupportedClassVersion:
         return "the envelope's class version is not supported";
-    case EnvelopeError::SizeLimitExceeded:
+    case Error::SizeLimitExceeded:
         return "the declared uncompressed size is larger than the size limit";
-    case EnvelopeError::UncompressedSizeMismatch:
+    case Error::UncompressedSizeMismatch:
         return "the uncompressed payload does not have the declared size";
-    case EnvelopeError::TrailingData:
+    case Error::TrailingData:
         return "the data continues after the value";
     default:
         return "an unknown envelope failure";
@@ -53,9 +55,9 @@ struct Envelope {
     std::uint64_t magic;
     std::string class_name;
     std::uint32_t class_version;
-    ChecksumAlgorithm checksum_algorithm;
+    compression::ChecksumAlgorithm checksum_algorithm;
     std::string checksum;
-    CompressionAlgorithm compression_algorithm;
+    compression::Algorithm compression_algorithm;
     std::uint64_t uncompressed_size;
     Bytes compressed_data;
 };
@@ -155,16 +157,16 @@ struct PayloadSchema {
 
 template <typename Schema, std::uint32_t VersionNumber>
 [[nodiscard]]
-alp::Result<Bytes, CompressionError, SerdeError> serialize(
+alp::Result<Bytes, compression::Error, SerdeError> serialize(
     const typename Schema::template Payload<VersionNumber> &payload,
-    CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-    ChecksumAlgorithm checksum_algorithm = ChecksumAlgorithm::HandledByCompressionLib);
+    compression::Algorithm compression_algorithm = compression::Algorithm::ZstdBestCompressionWithChecksum,
+    compression::ChecksumAlgorithm checksum_algorithm = compression::ChecksumAlgorithm::HandledByCompressionLib);
 
 template <typename Schema>
 [[nodiscard]]
-alp::Result<typename Schema::Latest, EnvelopeError, CompressionError, SerdeError> deserialize(
-    std::span<const std::byte> bytes,
-    std::size_t max_decompressed_size = default_max_decompressed_size);
+alp::Result<typename Schema::Latest, Error, compression::Error, SerdeError> deserialize(
+    std::span<const std::uint8_t> bytes,
+    std::size_t max_decompressed_size = compression::default_max_decompressed_size);
 
 } // namespace io::envelope
 

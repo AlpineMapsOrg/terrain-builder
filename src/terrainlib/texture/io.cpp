@@ -15,13 +15,13 @@ namespace texture::io {
 
 alp::Result<cv::Mat, DecodeError> decode_bytes(const std::span<const uint8_t> bytes, const cv::ImreadModes mode) {
     if (bytes.empty()) {
-        return alp::make_unexpected(DecodeError{});
+        return alp::make_error(DecodeError{});
     }
 
     const cv::Mat encoded(1, static_cast<int>(bytes.size()), CV_8UC1, const_cast<uint8_t *>(bytes.data()));
     cv::Mat image = cv::imdecode(encoded, mode);
     if (image.empty()) {
-        return alp::make_unexpected(DecodeError{});
+        return alp::make_error(DecodeError{});
     }
     return image;
 }
@@ -30,17 +30,17 @@ alp::Result<std::vector<uint8_t>, ::io::UnsupportedFormat, EncodeError> encode_t
     ASSERT(!image.empty());
     const std::string extension(extension_with_dot);
     if (!cv::haveImageWriter(extension)) {
-        return alp::make_unexpected(::io::UnsupportedFormat{.extension = extension});
+        return alp::make_error(::io::UnsupportedFormat{.extension = extension});
     }
 
     std::vector<uint8_t> bytes;
     try {
         if (!cv::imencode(extension, image, bytes)) {
             // OpenCV reports no reason when it fails without throwing.
-            return alp::make_unexpected(EncodeError{.reason = "OpenCV gave no reason"});
+            return alp::make_error(EncodeError{.reason = "OpenCV gave no reason"});
         }
     } catch (const cv::Exception &exception) {
-        return alp::make_unexpected(EncodeError{.reason = exception.err});
+        return alp::make_error(EncodeError{.reason = exception.err});
     }
     return bytes;
 }

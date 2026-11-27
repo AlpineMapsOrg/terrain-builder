@@ -41,7 +41,7 @@ public:
     alp::Result<cv::Mat, TileError> get_tile(const radix::tile::Id tile) const override {
         const std::optional<std::filesystem::path> tile_path = this->get_tile_path(tile);
         if (!tile_path.has_value() || !TilePathProvider::is_usable_tile_path(tile_path.value())) {
-            return alp::make_unexpected(MissingTile{tile});
+            return alp::make_error(MissingTile{tile});
         }
         return texture::io::read_from_path(tile_path.value());
     }
@@ -69,7 +69,7 @@ public:
         if (tile != this->tiles.end()) {
             return tile->second;
         } else {
-            return alp::make_unexpected(MissingTile{tile_id});
+            return alp::make_error(MissingTile{tile_id});
         }
     }
 
@@ -81,7 +81,7 @@ public:
 class EmptyTileProvider final : public TileProvider {
 public:
     virtual alp::Result<cv::Mat, TileError> get_tile(const radix::tile::Id tile_id) const override {
-        return alp::make_unexpected(MissingTile{tile_id});
+        return alp::make_error(MissingTile{tile_id});
     }
 
     virtual bool has_tile(const radix::tile::Id) const override {
@@ -103,7 +103,7 @@ public:
 
     alp::Result<cv::Mat, TileError> get_tile(const radix::tile::Id tile_id) const override {
         if (!this->is_tile_in_range(tile_id)) {
-            return alp::make_unexpected(MissingTile{tile_id});
+            return alp::make_error(MissingTile{tile_id});
         }
 
         return this->inner().get_tile(tile_id);

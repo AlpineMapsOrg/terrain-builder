@@ -57,7 +57,7 @@ static alp::Result<GDALDataset *, CplError> open_gdal_dataset(const std::filesys
     CPLErrorReset();
     GDALDataset *dataset = static_cast<GDALDataset *>(GDALOpenEx(path_str.c_str(), flags | GDAL_OF_VERBOSE_ERROR, nullptr, nullptr, nullptr));
     if (dataset == nullptr) {
-        return alp::make_unexpected(CplError::get_last_error(), fmt::format("opening a dataset at {}", path_str));
+        return alp::make_error(CplError::get_last_error(), fmt::format("opening a dataset at {}", path_str));
     }
     return dataset;
 }
@@ -178,7 +178,7 @@ radix::tile::SrsBounds Dataset::bounds(const srs::System &targetSrs) const {
 }
 
 srs::System Dataset::srs() const {
-    const srs::System *source_srs = m_gdal_dataset->GetSpatialRef();
+    const OGRSpatialReference *source_srs = m_gdal_dataset->GetSpatialRef();
     for (int layer_index = 0; source_srs == nullptr && layer_index < m_gdal_dataset->GetLayerCount(); ++layer_index) {
         if (OGRLayer *layer = m_gdal_dataset->GetLayer(layer_index)) {
             source_srs = layer->GetSpatialRef();
@@ -187,9 +187,7 @@ srs::System Dataset::srs() const {
     if (source_srs == nullptr) {
         throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
     }
-    auto srs = *source_srs;
-    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    return srs;
+    return alp::unwrap(srs::from_gdal(*source_srs));
 }
 
 unsigned Dataset::widthInPixels() const {

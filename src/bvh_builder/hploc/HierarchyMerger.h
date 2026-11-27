@@ -34,7 +34,7 @@ public:
     alp::Result<void, io::Error> push(const frontier::Entry &entry) {
         // The depth of the node splitting this entry from the one before it is how many leading bits their keys share.
         const Key key{.code = entry.morton, .position = this->_entry_count};
-        const uint32_t depth = map_or(this->_previous_key, 0, [&](const Key &previous) {
+        const uint32_t depth = alp::transform_or(this->_previous_key, 0, [&](const Key &previous) {
             return count_common_key_bits(previous, key);
         });
         this->_previous_key = key;

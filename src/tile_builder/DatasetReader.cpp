@@ -31,18 +31,10 @@
 #include "Exception.h"
 #include <radix/raster.h>
 #include "ctb/types.hpp"
+#include "error/unwrap.h"
 #include "log.h"
 
 namespace {
-std::string toWkt(const srs::System& srs)
-{
-    char* wkt_char_string = nullptr;
-    srs.exportToWkt(&wkt_char_string);
-    std::string wkt_string(wkt_char_string);
-    CPLFree(wkt_char_string);
-    return wkt_string;
-}
-
 std::array<double, 6> computeGeoTransform(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height)
 {
     return { bounds.min.x, bounds.width() / width, 0,
@@ -175,9 +167,9 @@ std::shared_ptr<gdal::Dataset> getOverviewDataset(const std::shared_ptr<gdal::Da
 
 DatasetReader::DatasetReader(const std::shared_ptr<gdal::Dataset>& dataset, const srs::System& targetSRS, unsigned band, bool warn_on_missing_overviews)
     : m_dataset(dataset)
-    , m_dataset_srs_wkt(toWkt(dataset->srs()))
-    , m_target_srs_wkt(toWkt(targetSRS))
-    , m_requires_reprojection(!dataset->srs().IsSame(&targetSRS))
+    , m_dataset_srs_wkt(alp::unwrap(dataset->srs().to_wkt()))
+    , m_target_srs_wkt(alp::unwrap(targetSRS.to_wkt()))
+    , m_requires_reprojection(!dataset->srs().is_same(targetSRS))
     , m_warn_on_missing_overviews(warn_on_missing_overviews)
     , m_band(band)
 {

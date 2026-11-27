@@ -259,7 +259,7 @@ alp::Result<RawMesh, ::io::FileError, GltfError> load_raw_from_path(const std::f
     const char *path_ptr = path_str.c_str();
     cgltf_result result = cgltf_parse(&options, file_data->data(), file_data->size(), &data);
     if (result != cgltf_result::cgltf_result_success) {
-        return alp::make_unexpected(GltfError(result));
+        return alp::make_error(GltfError(result));
     }
 
     // cgltf_free releases the bytes through `release_file`.
@@ -270,13 +270,13 @@ alp::Result<RawMesh, ::io::FileError, GltfError> load_raw_from_path(const std::f
     result = cgltf_load_buffers(&options, data, path_ptr);
     if (result != cgltf_result::cgltf_result_success) {
         cgltf_free(data);
-        return alp::make_unexpected(GltfError(result));
+        return alp::make_error(GltfError(result));
     }
 
     result = cgltf_validate(data);
     if (result != cgltf_result_success) {
         cgltf_free(data);
-        return alp::make_unexpected(GltfError(result));
+        return alp::make_error(GltfError(result));
     }
 
     return RawMesh(data, cgltf_free);
@@ -288,16 +288,16 @@ Result<SimpleMesh> load_from_raw(const RawMesh &raw, const LoadOptions& /* optio
 
     const cgltf_data &data = *raw;
 
-    ALP_TRY(const cgltf_mesh &mesh, alp::to_expected(get_single_element(data.meshes_count, data.meshes), UnsupportedGltf{.reason = "expected exactly one mesh"}));
+    ALP_TRY(const cgltf_mesh &mesh, alp::to_result(get_single_element(data.meshes_count, data.meshes), UnsupportedGltf{.reason = "expected exactly one mesh"}));
 
-    ALP_TRY(const cgltf_primitive &mesh_primitive, alp::to_expected(get_single_element(mesh.primitives_count, mesh.primitives), UnsupportedGltf{.reason = "expected exactly one mesh primitive"}));
+    ALP_TRY(const cgltf_primitive &mesh_primitive, alp::to_result(get_single_element(mesh.primitives_count, mesh.primitives), UnsupportedGltf{.reason = "expected exactly one mesh primitive"}));
     if (mesh_primitive.type != cgltf_primitive_type::cgltf_primitive_type_triangles) {
-        return alp::make_unexpected(UnsupportedGltf{.reason = "the mesh primitive is not made of triangles"});
+        return alp::make_error(UnsupportedGltf{.reason = "the mesh primitive is not made of triangles"});
     }
 
     // indices
     if (mesh_primitive.indices == nullptr) {
-        return alp::make_unexpected(UnsupportedGltf{.reason = "the mesh primitive has no indices"});
+        return alp::make_error(UnsupportedGltf{.reason = "the mesh primitive has no indices"});
     }
     cgltf_accessor &index_accessor = *mesh_primitive.indices;
     std::vector<glm::uvec3> indices;
@@ -312,12 +312,12 @@ Result<SimpleMesh> load_from_raw(const RawMesh &raw, const LoadOptions& /* optio
     // positions
     cgltf_attribute *position_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_position);
     if (position_attr == nullptr) {
-        return alp::make_unexpected(UnsupportedGltf{.reason = "the mesh has no position attribute"});
+        return alp::make_error(UnsupportedGltf{.reason = "the mesh has no position attribute"});
     }
 
     cgltf_accessor &position_accessor = *position_attr->data;
     if (position_accessor.type != cgltf_type_vec3) {
-        return alp::make_unexpected(UnsupportedGltf{.reason = "the mesh positions are not vec3"});
+        return alp::make_error(UnsupportedGltf{.reason = "the mesh positions are not vec3"});
     }
     std::vector<glm::vec3> positions;
     positions.resize(position_accessor.count);
@@ -331,7 +331,7 @@ Result<SimpleMesh> load_from_raw(const RawMesh &raw, const LoadOptions& /* optio
     } else {
         cgltf_accessor &uv_accessor = *uv_attr->data;
         if (uv_accessor.type != cgltf_type_vec2) {
-            return alp::make_unexpected(UnsupportedGltf{.reason = "the mesh uvs are not vec2"});
+            return alp::make_error(UnsupportedGltf{.reason = "the mesh uvs are not vec2"});
         }
         uvs.resize(uv_accessor.count);
         cgltf_accessor_unpack_floats(&uv_accessor, reinterpret_cast<float *>(uvs.data()), uvs.size() * 2);
@@ -707,7 +707,7 @@ Result<void> save_to_path(
     }
     const cgltf_result write_result = cgltf_write_file(&gltf_options, path.string().c_str(), &data);
     if (write_result != cgltf_result_success) {
-        return alp::make_unexpected(GltfError(write_result), context);
+        return alp::make_error(GltfError(write_result), context);
     }
 
     return {};

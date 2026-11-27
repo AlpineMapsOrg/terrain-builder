@@ -11,6 +11,7 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <indirect.h>
 #include <libassert/assert.hpp>
 
 #include "error/CodeStorage.h"
@@ -36,6 +37,9 @@ struct ErrorFor {
 // An error with the codes Es, where a set among Es stands for its codes; each code is kept once, in the order it first appears.
 template <typename... Es>
 using Error = typename detail::ErrorFor<Es...>::type;
+
+// An error with a code of any copyable type.
+using ErasedError = BasicError<>;
 
 // An error with a code of type Es, or an erased error when Es is empty, together with the frames it collected.
 template <typename... Es>
@@ -73,17 +77,37 @@ public:
         : _code(std::move(code)),
           _trace(location, detail::resolve_message(std::forward<decltype(context)>(context))) {}
 
+    // Creates an error with `code` that originates at `location`, created from `inner`.
+    template <OneOf<Es...> E, ErrorCode... Fs> requires std::constructible_from<ErasedError, BasicError<Fs...>>
+    BasicError(E code, BasicError<Fs...> inner, const std::source_location location = std::source_location::current())
+        : _code(std::move(code)),
+          _trace(location),
+          _source(std::in_place, ErasedError(std::move(inner))) {}
+
     // Creates an erased error from `message`.
     explicit BasicError(std::string message, const std::source_location location = std::source_location::current())
         requires(is_erased)
         : _code(detail::Message{.text = std::move(message)}),
           _trace(location) {}
 
-    // Takes over an error whose codes are all among Es, or any error with copyable codes when this error is erased, keeping its frames.
+    // Takes over an error whose codes are all among Es, or any error with copyable codes when this error is erased, keeping its frames and the error it was created from.
     template <typename... Fs> requires std::constructible_from<CodeStorage, alp::CodeStorage<Fs...>>
     BasicError(BasicError<Fs...> other)
         : _code(std::move(other._code)),
-          _trace(std::move(other._trace)) {}
+          _trace(std::move(other._trace)),
+          _source(std::move(other._source)) {}
+
+    // Converts into a failed result holding this error, for a result whose error this error converts to.
+    template <typename T, typename... Fs> requires std::convertible_to<const BasicError &, BasicError<Fs...>>
+    operator std::expected<T, BasicError<Fs...>>() const & {
+        return std::unexpected(BasicError<Fs...>(*this));
+    }
+
+    // Converts into a failed result holding this error, moved there, for a result whose error this error converts to.
+    template <typename T, typename... Fs> requires std::convertible_to<BasicError, BasicError<Fs...>>
+    operator std::expected<T, BasicError<Fs...>>() && {
+        return std::unexpected(BasicError<Fs...>(std::move(*this)));
+    }
 
     // Adds a frame holding `context`.
     [[nodiscard]]
@@ -112,32 +136,38 @@ public:
     }
 
     // Calls `f` with the held code.
-    template <typename F> requires(!is_erased)
-    decltype(auto) visit(F &&f) const {
-        return this->_code.visit(std::forward<F>(f));
+    template <typename F, typename Self> requires(!is_erased)
+    decltype(auto) visit(this Self &&self, F &&f) {
+        return std::forward<Self>(self)._code.visit(std::forward<F>(f));
     }
 
-    // Whether this error holds a code of type E.
-    template <typename E> requires(can_hold<E>)
+    // Calls `visitor` with the held code if it is in Fs, or returns nothing otherwise.
+    template <ErrorCodes... Fs, typename Self, typename Visitor> requires(narrows_to<Fs...>)
+    [[nodiscard]]
+    auto visit_if(this Self &&self, Visitor &&visitor) {
+        return Error<Fs...>::visit_if_from(std::forward<Self>(self), std::forward<Visitor>(visitor));
+    }
+
+    // Whether this error holds a code in Fs.
+    template <ErrorCodes... Fs> requires(narrows_to<Fs...>)
     [[nodiscard]]
     bool holds() const {
-        return this->get_if<E>() != nullptr;
+        return this->holds_and<Fs...>([](const auto &) { return true; });
     }
 
     // Whether this error holds `code`.
     template <typename E> requires(can_hold<E> && std::equality_comparable<E>)
     [[nodiscard]]
-    bool holds(const E &code) const {
+    bool holds_code(const E &code) const {
         const E *held = this->get_if<E>();
         return held != nullptr && *held == code;
     }
 
-    // Whether this error holds a code of type E for which `predicate` is true.
-    template <typename E, std::predicate<const E &> P> requires(can_hold<E>)
+    // Whether this error holds a code in Fs for which `predicate` is true.
+    template <ErrorCodes... Fs, typename P> requires(narrows_to<Fs...>)
     [[nodiscard]]
     bool holds_and(P &&predicate) const {
-        const E *held = this->get_if<E>();
-        return held != nullptr && std::invoke(std::forward<P>(predicate), *held);
+        return this->visit_if<Fs...>(std::forward<P>(predicate)).value_or(false);
     }
 
     // Where the error originated.
@@ -152,25 +182,41 @@ public:
         return this->_trace.frames();
     }
 
+    // The error this one was created from, or null if it was created from none.
+    [[nodiscard]]
+    const ErasedError *source() const {
+        if (!this->_source.has_value()) {
+            return nullptr;
+        }
+        return &**this->_source;
+    }
+
     // This error with only the codes Fs if it holds one of them, otherwise this error unchanged; a set among Fs stands for its codes.
     template <ErrorCodes... Fs, typename Self> requires(narrows_to<Fs...>)
     [[nodiscard]]
     std::expected<Error<Fs...>, BasicError> narrow(this Self &&self) {
-        return Error<Fs...>::narrow_from(std::forward<Self>(self));
+        using Narrowed = Error<Fs...>;
+        using NarrowedCode = typename Narrowed::CodeStorage;
+
+        std::optional<NarrowedCode> code_result = Narrowed::visit_if_from(std::forward<Self>(self), []<typename F>(F &&code) { return NarrowedCode(std::forward<F>(code)); });
+        if (!code_result.has_value()) {
+            return std::unexpected(std::forward<Self>(self));
+        }
+        return {Narrowed(std::move(*code_result), std::forward<Self>(self)._trace, std::forward<Self>(self)._source)};
     }
 
     // This error with only the codes Fs if it holds one of them, otherwise with only its other codes; a set among Fs stands for its codes.
-    template <ErrorCodes... Fs, typename Self> requires(!is_erased && narrows_to<Fs...>)
+    template <ErrorCodes... Fs, typename Self> requires(!is_erased && narrows_to<Fs...> && (!Error<Fs...>::template can_hold<Es> || ...))
     [[nodiscard]]
     std::expected<Error<Fs...>, difference_t<BasicError, Error<Fs...>>> split(this Self &&self) {
         using Others = difference_t<BasicError, Error<Fs...>>;
 
-        std::expected<Error<Fs...>, BasicError> named_result = Error<Fs...>::narrow_from(std::forward<Self>(self));
+        std::expected<Error<Fs...>, BasicError> named_result = std::forward<Self>(self).template narrow<Fs...>();
         if (named_result.has_value()) {
-            return *std::move(named_result);
+            return {*std::move(named_result)};
         }
 
-        std::expected<Others, BasicError> others_result = Others::narrow_from(std::move(named_result).error());
+        std::expected<Others, BasicError> others_result = std::move(named_result).error().template narrow<Others>();
         ASSERT(others_result.has_value(), "the held code belongs to neither side of the split");
         return std::unexpected(*std::move(others_result));
     }
@@ -179,22 +225,24 @@ private:
     template <typename... Fs>
     friend class BasicError;
 
-    BasicError(CodeStorage code, Trace trace) : _code(std::move(code)), _trace(std::move(trace)) {}
+    BasicError(CodeStorage code, Trace trace, std::optional<xyz::indirect<ErasedError>> source)
+        : _code(std::move(code)),
+          _trace(std::move(trace)),
+          _source(std::move(source)) {}
 
-    // Narrows `error` to the codes Es if it holds one of them, otherwise hands it back unchanged.
-    template <typename Source>
-    static std::expected<BasicError, std::remove_cvref_t<Source>> narrow_from(Source &&error) {
-        std::optional<CodeStorage> code_result = std::forward<Source>(error)._code.template narrow<Es...>();
-        if (!code_result.has_value()) {
-            return std::unexpected(std::forward<Source>(error));
-        }
-        return BasicError(std::move(*code_result), std::forward<Source>(error)._trace);
+    // Calls `visitor` with the code `error` holds if it is in Es, or returns nothing otherwise.
+    template <typename Source, typename Visitor>
+    static auto visit_if_from(Source &&error, Visitor &&visitor) {
+        return std::forward<Source>(error)._code.template visit_if<Es...>(std::forward<Visitor>(visitor));
     }
 
     friend struct fmt::formatter<BasicError>;
 
     CodeStorage _code;
     Trace _trace;
+
+    // The error this one was created from, if any.
+    std::optional<xyz::indirect<ErasedError>> _source;
 };
 
 } // namespace alp

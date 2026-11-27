@@ -271,7 +271,7 @@ Clustering rebuild_clustering(
             new_cluster.local_triangles = cluster.local_triangles;
             new_cluster.uvs = cluster.uvs;
             new_cluster.id = cluster.id;
-            new_cluster.texture_id = map(cluster.texture_id, [&](const auto &id) { return texture_id_map[id]; });
+            new_cluster.texture_id = cluster.texture_id.transform([&](const auto &id) { return texture_id_map[id]; });
             new_cluster.absolute_error = cluster.absolute_error;
 
             new_cluster.vertex_indices.reserve(cluster.vertex_count());

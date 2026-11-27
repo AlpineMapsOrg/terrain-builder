@@ -107,19 +107,7 @@ TEST_CASE("A missing path is reported as missing, not as an empty directory", "[
     CHECK(REQUIRE_VALUE(io::filesystem::is_missing_or_empty_directory(missing)));
 
     const alp::Error<io::FileError> error = REQUIRE_ERROR(io::filesystem::is_empty(missing));
-    CHECK(error.holds(io::make_file_not_found(missing)));
-}
-
-TEST_CASE("Removing a path removes everything below it, and nothing if it is missing", "[io][filesystem]") {
-    const TempDirectory directory("io_filesystem_remove_all");
-    const std::filesystem::path tree = directory.path() / "tree";
-    write_file(tree / "a");
-    write_file(tree / "nested" / "b");
-
-    REQUIRE_VALUE(io::filesystem::remove_all(tree));
-    CHECK(!REQUIRE_VALUE(io::filesystem::exists(tree)));
-
-    REQUIRE_VALUE(io::filesystem::remove_all(tree));
+    CHECK(error.holds_code(io::make_file_not_found(missing)));
 }
 
 TEST_CASE("Creating an empty directory creates its missing parents and accepts one that is already empty", "[io][filesystem]") {
@@ -140,7 +128,7 @@ TEST_CASE("Creating an empty directory fails where one holds something, naming i
 
     const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(io::filesystem::create_empty_directory(used));
 
-    CHECK(error.holds(io::DirectoryNotEmpty{used}));
+    CHECK(error.holds_code(io::DirectoryNotEmpty{used}));
     CHECK(REQUIRE_VALUE(io::filesystem::is_regular_file(used / "file")));
 }
 
@@ -197,7 +185,7 @@ TEST_CASE("Visiting files below a missing path fails, naming the path", "[io][fi
         return true;
     }));
 
-    CHECK(error.holds(io::make_file_not_found(missing)));
+    CHECK(error.holds_code(io::make_file_not_found(missing)));
 }
 
 TEST_CASE("create_directory creates a directory and reports that it was created", "[io][filesystem]") {

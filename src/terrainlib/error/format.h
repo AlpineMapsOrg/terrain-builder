@@ -1,19 +1,15 @@
 #pragma once
 
 #include <cstdint>
-#include <source_location>
 #include <span>
 #include <string>
 
-#include <cpptrace/utils.hpp>
 #include <fmt/format.h>
-#include <libassert/assert.hpp>
 
 #include "enumerate.h"
 #include "error/Error.h"
 #include "error/ErrorCode.h"
 #include "error/Trace.h"
-#include "span_utils.h"
 
 template <alp::ErrorCode... Es>
 struct fmt::formatter<alp::BasicError<Es...>> {
@@ -37,8 +33,6 @@ struct fmt::formatter<alp::BasicError<Es...>> {
         const std::string cause = error._code.message();
         fmt::format_context::iterator output = context.out();
 
-        const auto [origin, outer_frames] = *ASSERT_VAL(split_first(frames));
-
         switch (this->_form) {
         case Form::Message:
             return fmt::format_to(output, "{}", cause);
@@ -53,20 +47,11 @@ struct fmt::formatter<alp::BasicError<Es...>> {
             return output;
 
         case Form::Report:
-            if (origin->message.has_value()) {
-                output = fmt::format_to(output, "{}\n    ", *origin->message);
-            }
-            output = fmt::format_to(output, "{}\n    {}", format_location(origin->location), cause);
-            if (outer_frames.empty()) {
-                return output;
-            }
-            output = fmt::format_to(output, "\n\nTrace:");
-            for (const auto [number, frame] : enumerate<uint32_t>(outer_frames)) {
-                output = fmt::format_to(output, "\n    {}: ", number);
-                if (frame.message.has_value()) {
-                    output = fmt::format_to(output, "{}\n       ", *frame.message);
-                }
-                output = fmt::format_to(output, "{}", format_location(frame.location));
+            output = fmt::format_to(output, "{}", cause);
+            output = format_frames(output, frames);
+            for (const alp::ErasedError *source = error.source(); source != nullptr; source = source->source()) {
+                output = fmt::format_to(output, "\n\nCaused by: {}", *source);
+                output = format_frames(output, source->frames());
             }
             return output;
         }
@@ -74,21 +59,25 @@ struct fmt::formatter<alp::BasicError<Es...>> {
     }
 
 private:
+    // Writes each of `frames` on a line of its own, numbered from the origin.
+    static fmt::format_context::iterator format_frames(fmt::format_context::iterator output, const std::span<const alp::Frame> frames) {
+        for (const auto [number, frame] : enumerate<uint32_t>(frames)) {
+            output = fmt::format_to(output, "\n    {}: {}", number, frame);
+        }
+        return output;
+    }
+
     // How an error was asked to format.
     enum class Form {
-        // The cause message
+        // The cause message.
         Message,
 
         // Its cause and all of its messages on one line, innermost first.
         Chain,
 
-        // Every place it was, innermost first, each with what was being done there and the cause at the origin.
+        // Its cause and every place it was, one per line starting at its origin, then the same for each error it was created from, the one it was directly created from first.
         Report,
     };
-
-    static std::string format_location(const std::source_location location) {
-        return fmt::format("{} at {}:{}:{}", cpptrace::prune_symbol(location.function_name()), location.file_name(), location.line(), location.column());
-    }
 
     Form _form = Form::Message;
 };

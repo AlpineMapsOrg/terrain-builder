@@ -45,7 +45,7 @@ void run(const cli::MergeArgs& args) {
     std::filesystem::create_directories(args.output_path);
     octree::Storage output_dataset = alp::unwrap(octree::open_folder(args.output_path, false, octree::OpenOptions{.preferred_extension_with_dot = std::string(base_dataset.layout().extension_with_dot())}));
 
-    std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
+    std::optional<MeshMask> mask = args.mask_path.and_then(load_mask_from_path);
 
     return merge_datasets(base_dataset, new_dataset, output_dataset, mask);
 }

@@ -33,7 +33,7 @@ TEST_CASE("Reading a missing file reports that it does not exist, naming the pat
     const alp::Result<std::vector<uint8_t>, io::FileError> result = io::read_bytes_from_path(path);
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(io::make_file_not_found(path)));
+    CHECK(result.error().holds_code(io::make_file_not_found(path)));
 }
 
 TEST_CASE("Reading a directory fails") {
@@ -62,7 +62,7 @@ TEST_CASE("Reading truncated bytes reports that the data ended early") {
     const alp::Result<std::vector<uint32_t>, io::SerdeError> result = io::read_from_bytes<std::vector<uint32_t>>(truncated);
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(io::SerdeError(std::errc::result_out_of_range)));
+    CHECK(result.error().holds_code(io::SerdeError(std::errc::result_out_of_range)));
 }
 
 TEST_CASE("Reading a value from a missing file fails with a file error") {

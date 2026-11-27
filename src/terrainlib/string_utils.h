@@ -23,6 +23,14 @@ inline std::string human_byte_size(const size_t bytes) {
     return std::string(buffer.data());
 }
 
+// `text` as a view, or nothing if it is null.
+inline std::optional<std::string_view> to_string_view(const char *text) {
+    if (text == nullptr) {
+        return std::nullopt;
+    }
+    return std::string_view(text);
+}
+
 template <typename T, typename CharT>
 std::optional<T> from_chars(const std::basic_string_view<CharT> sv) {
     static_assert(std::is_integral_v<T>, "T must be an integral type");

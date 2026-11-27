@@ -67,24 +67,24 @@ TEST_CASE("ResultFn keeps the value of a succeeded result", "[error][ResultFn]")
 TEST_CASE("ResultFn converts a failed result into the wider error, keeping its code", "[error][ResultFn]") {
     SECTION("with a value") {
         const auto parse = []() -> alp::Result<int, ParseError> {
-            return alp::make_unexpected(ParseError::Malformed);
+            return alp::make_error(ParseError::Malformed);
         };
         auto fn = alp::make_result_fn<WideError>(parse);
 
         const alp::Result<int, WideError> result = fn();
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().holds(ParseError::Malformed));
+        CHECK(result.error().holds_code(ParseError::Malformed));
     }
 
     SECTION("without a value") {
         const auto parse = []() -> alp::Result<void, ParseError> {
-            return alp::make_unexpected(ParseError::Malformed);
+            return alp::make_error(ParseError::Malformed);
         };
         auto fn = alp::make_result_fn<WideError>(parse);
 
         const alp::Result<void, WideError> result = fn();
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().holds(ParseError::Malformed));
+        CHECK(result.error().holds_code(ParseError::Malformed));
     }
 }
 
@@ -99,12 +99,12 @@ TEST_CASE("invoke_fallible wraps a returned value in a succeeded result with the
 
 TEST_CASE("invoke_fallible converts a failed result into the wider error, keeping its code", "[error][ResultFn]") {
     const auto parse = [](const int) -> alp::Result<int, ParseError> {
-        return alp::make_unexpected(ParseError::Malformed);
+        return alp::make_error(ParseError::Malformed);
     };
 
     const alp::Result<int, WideError> result = alp::invoke_fallible<WideError>(parse, 3);
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().holds(ParseError::Malformed));
+    CHECK(result.error().holds_code(ParseError::Malformed));
 }
 
 TEST_CASE("invoke_fallible without codes keeps the callable's error", "[error][ResultFn]") {

@@ -38,5 +38,5 @@ void image::saveImageAsPng(const radix::Raster<glm::u8vec3>& input_image, const 
         }
     }
 
-    alp::unwrap(texture::io::write_to_path(image, path));
+    alp::throwing_unwrap(texture::io::write_to_path(image, path));
 }

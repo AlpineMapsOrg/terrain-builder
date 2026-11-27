@@ -67,7 +67,7 @@ TEST_CASE("An error in a set mentions the code it holds", "[error][format]") {
 }
 
 TEST_CASE("An erased error mentions the code it was erased from", "[error][format]") {
-    const alp::Error<> erased = alp::make_error(ParseError::BadDigit);
+    const alp::ErasedError erased = alp::make_error(ParseError::BadDigit);
 
     CHECK(fmt::to_string(erased).contains("bad digit"));
 }
@@ -84,4 +84,15 @@ TEST_CASE("An error's report mentions every message and the file and line of its
         CHECK(report.contains(frame.location.file_name()));
         CHECK(report.contains(std::to_string(frame.location.line())));
     }
+}
+
+TEST_CASE("An error's report mentions the error it was created from, its messages and the line of its origin", "[error][format]") {
+    const std::source_location origin = std::source_location::current();
+    const alp::Error<ParseError> error = alp::make_error(ParseError::BadDigit, alp::make_error(FileError::NotFound, "opening app.cfg", origin));
+    const std::string report = fmt::format("{:?}", error);
+
+    CHECK(report.contains("bad digit"));
+    CHECK(report.contains("file not found"));
+    CHECK(report.contains("opening app.cfg"));
+    CHECK(report.contains(std::to_string(origin.line())));
 }

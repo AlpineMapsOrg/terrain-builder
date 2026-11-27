@@ -80,7 +80,7 @@ TEST_CASE("try_for_each returns the error of the body that failed", "[parallel]"
 
     const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         if (item == 8) {
-            return alp::make_unexpected(FailedItem{item});
+            return alp::make_error(FailedItem{item});
         }
         return {};
     }, execution));
@@ -97,7 +97,7 @@ TEST_CASE("try_for_each runs no item after the first failure of a serial run", "
     const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         seen.push_back(item);
         if (item == 5 || item == 13) {
-            return alp::make_unexpected(FailedItem{item});
+            return alp::make_error(FailedItem{item});
         }
         return {};
     }, parallel::Execution::Serial));
@@ -113,7 +113,7 @@ TEST_CASE("try_for_each returns one of the errors when several bodies of a paral
 
     const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         if (item == 5 || item == 13) {
-            return alp::make_unexpected(FailedItem{item});
+            return alp::make_error(FailedItem{item});
         }
         return {};
     }, parallel::Execution::Parallel));
@@ -151,7 +151,7 @@ TEST_CASE("try_for_each returns the error of an item that was added through the 
 
     const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) -> alp::Result<void, FailedItem> {
         if (item == 6) {
-            return alp::make_unexpected(FailedItem{item});
+            return alp::make_error(FailedItem{item});
         }
         if (item < 8) {
             feeder.add(2 * item);

@@ -23,7 +23,7 @@ inline alp::Result<bool, FileError> exists(const std::filesystem::path &path) {
     std::error_code code;
     const std::filesystem::file_status status = std::filesystem::status(path, code);
     if (status.type() == std::filesystem::file_type::none) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("reading a file status at {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("reading a file status at {}", path));
     }
     return std::filesystem::exists(status);
 }
@@ -34,7 +34,7 @@ inline alp::Result<bool, FileError> is_directory(const std::filesystem::path &pa
     std::error_code code;
     const std::filesystem::file_status status = std::filesystem::status(path, code);
     if (status.type() == std::filesystem::file_type::none) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("reading a file status at {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("reading a file status at {}", path));
     }
     return std::filesystem::is_directory(status);
 }
@@ -45,7 +45,7 @@ inline alp::Result<bool, FileError> is_regular_file(const std::filesystem::path 
     std::error_code code;
     const std::filesystem::file_status status = std::filesystem::status(path, code);
     if (status.type() == std::filesystem::file_type::none) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("reading a file status at {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("reading a file status at {}", path));
     }
     return std::filesystem::is_regular_file(status);
 }
@@ -56,7 +56,7 @@ inline alp::Result<bool, FileError> is_symlink(const std::filesystem::path &path
     std::error_code code;
     const std::filesystem::file_status status = std::filesystem::symlink_status(path, code);
     if (status.type() == std::filesystem::file_type::none) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("reading a file status at {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("reading a file status at {}", path));
     }
     return std::filesystem::is_symlink(status);
 }
@@ -67,7 +67,7 @@ inline alp::Result<bool, FileError> is_empty(const std::filesystem::path &path) 
     std::error_code code;
     const bool empty = std::filesystem::is_empty(path, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("checking whether {} is empty", path));
+        return alp::make_error(FileError(code, path), alp::make_context("checking whether {} is empty", path));
     }
     return empty;
 }
@@ -101,7 +101,7 @@ alp::Result<void, FileError> visit_files_recursively(const std::filesystem::path
     std::error_code code;
     std::filesystem::recursive_directory_iterator iterator(path, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, path), context);
+        return alp::make_error(FileError(code, path), context);
     }
 
     const std::filesystem::recursive_directory_iterator end;
@@ -109,7 +109,7 @@ alp::Result<void, FileError> visit_files_recursively(const std::filesystem::path
         const std::filesystem::directory_entry &entry = *iterator;
         const std::filesystem::file_status status = entry.symlink_status(code);
         if (status.type() == std::filesystem::file_type::none) {
-            return alp::make_unexpected(FileError(code, entry.path()), context);
+            return alp::make_error(FileError(code, entry.path()), context);
         }
         if (std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status)) {
             if (!visit(entry.path())) {
@@ -119,7 +119,7 @@ alp::Result<void, FileError> visit_files_recursively(const std::filesystem::path
 
         iterator.increment(code);
         if (code) {
-            return alp::make_unexpected(FileError(code, path), context);
+            return alp::make_error(FileError(code, path), context);
         }
     }
     return {};
@@ -131,7 +131,7 @@ inline alp::Result<bool, FileError> create_directory(const std::filesystem::path
     std::error_code code;
     const bool created = std::filesystem::create_directory(path, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("creating a directory at {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("creating a directory at {}", path));
     }
     return created;
 }
@@ -142,9 +142,33 @@ inline alp::Result<bool, FileError> create_directories(const std::filesystem::pa
     std::error_code code;
     const bool created = std::filesystem::create_directories(path, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("creating directories at {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("creating directories at {}", path));
     }
     return created;
+}
+
+// Creates an empty directory at `path`, along with its missing parents.
+// Fails with `DirectoryNotEmpty` when a directory at `path` already holds something.
+[[nodiscard]]
+inline alp::Result<void, FileError, DirectoryNotEmpty> create_empty_directory(const std::filesystem::path &path) {
+    const auto context = alp::make_context("creating an empty directory at {}", path);
+
+    ALP_TRY_CONTEXT(const bool exists, filesystem::exists(path), context);
+    if (!exists) {
+        ALP_TRY_CONTEXT(filesystem::create_directories(path), context);
+        return {};
+    }
+
+    ALP_TRY_CONTEXT(const bool is_directory, filesystem::is_directory(path), context);
+    if (!is_directory) {
+        return alp::make_error(FileError(std::make_error_code(std::errc::not_a_directory), path), context);
+    }
+
+    ALP_TRY_CONTEXT(const bool empty, filesystem::is_empty(path), context);
+    if (!empty) {
+        return alp::make_error(DirectoryNotEmpty{path}, context);
+    }
+    return {};
 }
 
 // Creates the missing parent directories of `path`; true if any directory was created.
@@ -164,7 +188,7 @@ inline alp::Result<bool, FileError> remove(const std::filesystem::path &path) {
     std::error_code code;
     const bool removed = std::filesystem::remove(path, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("removing {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("removing {}", path));
     }
     return removed;
 }
@@ -175,7 +199,7 @@ inline alp::Result<uint64_t, FileError> remove_all(const std::filesystem::path &
     std::error_code code;
     const uint64_t removed_count = std::filesystem::remove_all(path, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, path), alp::make_context("removing everything at {}", path));
+        return alp::make_error(FileError(code, path), alp::make_context("removing everything at {}", path));
     }
     return removed_count;
 }
@@ -186,31 +210,7 @@ inline alp::Result<void, FileError> create_hard_link(const std::filesystem::path
     std::error_code code;
     std::filesystem::create_hard_link(source, target, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, target), alp::make_context("linking {} to {}", target, source));
-    }
-    return {};
-}
-
-// Creates an empty directory at `path`, along with its missing parents.
-// Fails with `DirectoryNotEmpty` when a directory at `path` already holds something.
-[[nodiscard]]
-inline alp::Result<void, FileError, DirectoryNotEmpty> create_empty_directory(const std::filesystem::path &path) {
-    const auto context = alp::make_context("creating an empty directory at {}", path);
-
-    ALP_TRY_CONTEXT(const bool exists, filesystem::exists(path), context);
-    if (!exists) {
-        ALP_TRY_CONTEXT(filesystem::create_directories(path), context);
-        return {};
-    }
-
-    ALP_TRY_CONTEXT(const bool is_directory, filesystem::is_directory(path), context);
-    if (!is_directory) {
-        return alp::make_unexpected(FileError(std::make_error_code(std::errc::not_a_directory), path), context);
-    }
-
-    ALP_TRY_CONTEXT(const bool empty, filesystem::is_empty(path), context);
-    if (!empty) {
-        return alp::make_unexpected(DirectoryNotEmpty{path}, context);
+        return alp::make_error(FileError(code, target), alp::make_context("linking {} to {}", target, source));
     }
     return {};
 }
@@ -221,7 +221,7 @@ inline alp::Result<bool, FileError> equivalent(const std::filesystem::path &firs
     std::error_code code;
     const bool is_equivalent = std::filesystem::equivalent(first, second, code);
     if (code) {
-        return alp::make_unexpected(FileError(code, first), alp::make_context("comparing {} with {}", first, second));
+        return alp::make_error(FileError(code, first), alp::make_context("comparing {} with {}", first, second));
     }
     return is_equivalent;
 }

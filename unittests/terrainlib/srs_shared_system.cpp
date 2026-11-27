@@ -10,7 +10,7 @@ TEST_CASE("SharedSystem::get gives a copy of the system it was made from", "[srs
     const srs::System mercator = REQUIRE_VALUE(srs::from_epsg(3857));
     const srs::SharedSystem shared(mercator);
 
-    CHECK(shared.get().IsSame(&mercator));
+    CHECK(shared.get().is_same(mercator));
 }
 
 TEST_CASE("SharedSystem::get gives the same copy on every call from one thread", "[srs][SharedSystem]") {

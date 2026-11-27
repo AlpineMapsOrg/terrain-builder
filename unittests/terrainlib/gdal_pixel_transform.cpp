@@ -38,7 +38,7 @@ TEST_CASE("A pixel transform maps a pixel into the srs and back", "[gdal][PixelT
 TEST_CASE("A pixel transform with zero sized pixels cannot be created", "[gdal][PixelTransform]") {
     const alp::Error<gdal::PixelTransformError> error = REQUIRE_ERROR(gdal::PixelTransform::from_forward({10, 0, 0, 50, 0, 0}));
 
-    CHECK(error.holds(gdal::PixelTransformError::NotInvertible));
+    CHECK(error.holds_code(gdal::PixelTransformError::NotInvertible));
 }
 
 TEST_CASE("A pixel transform is axis aligned unless it shears or rotates", "[gdal][PixelTransform]") {
@@ -64,5 +64,5 @@ TEST_CASE("Reading the pixel transform of a dataset without one fails as missing
 
     const alp::Error<gdal::PixelTransformError> error = REQUIRE_ERROR(gdal::PixelTransform::from_dataset(*dataset));
 
-    CHECK(error.holds(gdal::PixelTransformError::Missing));
+    CHECK(error.holds_code(gdal::PixelTransformError::Missing));
 }

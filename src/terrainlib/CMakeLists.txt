@@ -46,6 +46,8 @@ add_library(terrainlib
     polygon/utils.cpp
     polygon/clip.cpp
 
+    srs/System.cpp
+
     texture/dilate_colors.cpp
     texture/io.cpp
 
@@ -54,6 +56,7 @@ add_library(terrainlib
 
     log.cpp
     ProgressIndicator.cpp
+    PrunedLocation.cpp
     tile_path.h
 )
 
@@ -76,6 +79,7 @@ target_link_libraries(terrainlib PUBLIC
     spdlog
     fmt
     zpp_bits
+    value_types
     zstd::libzstd_static
     cgltf
     TBB::tbb

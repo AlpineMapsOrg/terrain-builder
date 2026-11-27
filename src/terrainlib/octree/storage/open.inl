@@ -41,7 +41,7 @@ alp::Result<IndexedStorage_<T, Codec>, OpenError> open_index(const std::filesyst
     const auto base_path = index_path.parent_path();
     auto layout_strategy = disk::layout::StrategyRegister::instance().create(index_file.layout_strategy_id);
     if (!layout_strategy) {
-        return alp::make_unexpected(disk::layout::UnknownLayoutStrategy{.id = index_file.layout_strategy_id}, context);
+        return alp::make_error(disk::layout::UnknownLayoutStrategy{.id = index_file.layout_strategy_id}, context);
     }
     disk::Layout layout(base_path, std::move(layout_strategy), index_file.preferred_extension);
     RawStorage_<T, Codec> raw_storage(std::move(layout));
@@ -73,7 +73,7 @@ helpers::LayoutWithoutBase make_default_layout(OpenOptions options) {
         : disk::layout::strategy::make_default();
 
     const std::vector<std::string_view> supported_extensions = Codec::supported_extensions();
-    std::string extension_with_dot = unwrap_or(options.preferred_extension_with_dot, std::string(supported_extensions[0]));
+    std::string extension_with_dot = options.preferred_extension_with_dot.value_or(std::string(supported_extensions[0]));
     ASSERT(contains(supported_extensions, extension_with_dot));
 
     return helpers::LayoutWithoutBase(std::move(strategy), std::move(extension_with_dot));

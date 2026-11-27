@@ -25,7 +25,7 @@ TEST_CASE("Loading a node the index does not list fails as a missing file", "[oc
     const auto result = storage.load(id);
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(io::make_file_not_found(storage.path_for(id))));
+    CHECK(result.error().holds_code(io::make_file_not_found(storage.path_for(id))));
 }
 
 TEST_CASE("Copying a node the source index does not list fails as a missing file", "[octree][storage]") {
@@ -37,7 +37,7 @@ TEST_CASE("Copying a node the source index does not list fails as a missing file
     const auto result = target.copy_from(id, source);
 
     REQUIRE(!result.has_value());
-    CHECK(result.error().holds(io::make_file_not_found(source.path_for(id))));
+    CHECK(result.error().holds_code(io::make_file_not_found(source.path_for(id))));
 }
 
 TEST_CASE("A failed node copy names the file it could not replace", "[octree][storage]") {

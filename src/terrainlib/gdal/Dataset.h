@@ -61,6 +61,7 @@ public:
     [[nodiscard]] radix::tile::SrsBounds bounds() const;
     [[nodiscard]] radix::tile::SrsAndHeightBounds bounds3d(bool approx_ok = false) const;
     [[nodiscard]] radix::tile::SrsBounds bounds(const srs::System &targetSrs) const;
+    // The dataset's srs, else that of its first layer that has one.
     [[nodiscard]] srs::System srs() const;
     [[nodiscard]] unsigned int widthInPixels() const;
     [[nodiscard]] unsigned int heightInPixels() const;

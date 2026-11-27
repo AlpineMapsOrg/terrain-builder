@@ -32,7 +32,7 @@ TEST_CASE("A static provider fails to get a tile it does not have, naming the ti
 
     CHECK(!provider.has_tile(other));
     const TileError error = REQUIRE_ERROR(provider.get_tile(other));
-    CHECK(error.holds(MissingTile{other}));
+    CHECK(error.holds_code(MissingTile{other}));
 }
 
 TEST_CASE("An empty provider fails to get any tile, naming the tile", "[tile_provider]") {
@@ -41,7 +41,7 @@ TEST_CASE("An empty provider fails to get any tile, naming the tile", "[tile_pro
 
     CHECK(!provider.has_tile(tile));
     const TileError error = REQUIRE_ERROR(provider.get_tile(tile));
-    CHECK(error.holds(MissingTile{tile}));
+    CHECK(error.holds_code(MissingTile{tile}));
 }
 
 TEST_CASE("A zoom range provider has only the tiles of its inner provider that are in range", "[tile_provider]") {
@@ -56,7 +56,7 @@ TEST_CASE("A zoom range provider has only the tiles of its inner provider that a
 
     CHECK(!provider.has_tile(below));
     const TileError error = REQUIRE_ERROR(provider.get_tile(below));
-    CHECK(error.holds(MissingTile{below}));
+    CHECK(error.holds_code(MissingTile{below}));
 }
 
 TEST_CASE("A path provider gets the image in a tile's file", "[tile_provider]") {
@@ -78,7 +78,7 @@ TEST_CASE("A path provider fails to get a tile whose file is missing, naming the
 
     CHECK(!provider.has_tile(tile));
     const TileError error = REQUIRE_ERROR(provider.get_tile(tile));
-    CHECK(error.holds(MissingTile{tile}));
+    CHECK(error.holds_code(MissingTile{tile}));
 }
 
 TEST_CASE("A path provider fails to get a tile whose file is not an image with a decode error", "[tile_provider]") {
