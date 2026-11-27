@@ -71,7 +71,7 @@ std::string format_as(const OffsetError error) {
 // A formattable class without equality.
 struct Incomparable {};
 
-std::string_view format_as(const Incomparable) {
+[[maybe_unused]] std::string_view format_as(const Incomparable) {
     return "incomparable";
 }
 
@@ -80,7 +80,7 @@ struct MoveOnlyError {
     std::unique_ptr<int> value;
 };
 
-std::string_view format_as(const MoveOnlyError &) {
+[[maybe_unused]] std::string_view format_as(const MoveOnlyError &) {
     return "move only";
 }
 

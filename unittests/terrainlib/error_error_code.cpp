@@ -33,7 +33,7 @@ enum class FileError {
     NotFound,
 };
 
-std::string_view format_as(const FileError) {
+[[maybe_unused]] std::string_view format_as(const FileError) {
     return "file not found";
 }
 
@@ -42,7 +42,7 @@ struct OffsetError {
     uint32_t offset;
 };
 
-std::string format_as(const OffsetError error) {
+[[maybe_unused]] std::string format_as(const OffsetError error) {
     return fmt::format("bad byte at {}", error.offset);
 }
 
@@ -55,7 +55,7 @@ struct NamedError {
     }
 };
 
-std::string_view format_as(const NamedError error) {
+[[maybe_unused]] std::string_view format_as(const NamedError error) {
     return error.name;
 }
 
