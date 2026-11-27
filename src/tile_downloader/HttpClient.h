@@ -37,7 +37,9 @@
 #include "error/MessageCode.h"
 #include "error/Result.h"
 #include "error/try.h"
+#include "error/unwrap.h"
 #include "error/utils.h"
+#include "io/alloc.h"
 #include "io/bytes.h"
 #include "stop.h"
 #include "type_utils.h"
@@ -65,7 +67,7 @@ struct TimedOut : alp::MessageCode<"the transfer took longer than allowed"> {};
 struct TransportError : alp::MessageCode<"the response could not be received"> {};
 
 // What downloading into memory can fail with.
-using GetError = alp::Error<StatusError, TimedOut, TransportError>;
+using GetError = alp::Error<StatusError, TimedOut, TransportError, io::AllocError>;
 
 // What a finished transfer reported, apart from its body.
 struct TransferInfo {
@@ -83,13 +85,13 @@ struct HttpResponse {
 
 // Takes each chunk of a response body. Failing aborts the transfer.
 template <typename F>
-concept HttpSink = std::invocable<F &, io::bytes::span>
+concept HttpSink = std::is_nothrow_invocable_v<F &, io::bytes::span>
     && is_specialization_of_v<std::invoke_result_t<F &, io::bytes::span>, std::expected>
     && std::is_void_v<typename std::invoke_result_t<F &, io::bytes::span>::value_type>;
 
 // Learns the fraction downloaded, if the total is known. Returning false aborts the transfer.
 template <typename F>
-concept HttpProgress = std::is_invocable_r_v<bool, F &, std::optional<double>>;
+concept HttpProgress = std::is_nothrow_invocable_r_v<bool, F &, std::optional<double>>;
 
 // The error a sink fails with.
 template <HttpSink Sink>
@@ -114,12 +116,11 @@ public:
     [[nodiscard]]
     alp::Result<HttpResponse, GetError> get(const std::string &url) {
         HttpResponse response;
-        const auto append = [&](const io::bytes::span chunk) {
-            response.body.insert(response.body.end(), chunk.begin(), chunk.end());
-            return true;
+        const auto append = [&](const io::bytes::span chunk) noexcept {
+            return io::try_append_range(response.body, chunk);
         };
-        const auto keep_going = [](std::optional<double>) { return true; };
-        ALP_TRY_CONTEXT(response.info, this->perform(url, append, keep_going), fmt::format("downloading {}", url));
+        const auto keep_going = [](std::optional<double>) noexcept { return true; };
+        ALP_TRY(response.info, alp::unwrap_partial<Stopped>(this->stream(url, append, keep_going)));
         return response;
     }
 
@@ -129,12 +130,12 @@ public:
     [[nodiscard]]
     alp::Result<TransferInfo, StreamError<Sink>> stream(const std::string &url, Sink &&sink, Progress &&progress) {
         alp::Result<void, SinkError<Sink>> sink_result;
-        const auto write = [&](const io::bytes::span chunk) {
+        const auto write = [&](const io::bytes::span chunk) noexcept {
             sink_result = sink(chunk);
             return sink_result.has_value();
         };
         alp::Result<void, Stopped> progress_result;
-        const auto report = [&](const std::optional<double> fraction) {
+        const auto report = [&](const std::optional<double> fraction) noexcept {
             if (!progress(fraction)) {
                 progress_result = alp::make_error(Stopped{});
             }
@@ -159,7 +160,7 @@ private:
     // Transfers `url`, passing each chunk of the body to `write` and the progress to `progress`.
     // A transfer that `write` or `progress` aborts fails with TransportError.
     template <typename Write, typename Progress>
-    alp::Result<TransferInfo, GetError> perform(const std::string &url, Write &write, Progress &progress) {
+    alp::Result<TransferInfo, StatusError, TimedOut, TransportError> perform(const std::string &url, Write &write, Progress &progress) {
         std::array<char, CURL_ERROR_SIZE> error_buffer{};
         CURL *const curl = this->_curl.get();
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
