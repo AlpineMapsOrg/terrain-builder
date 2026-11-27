@@ -13,6 +13,7 @@
 #include "error/try.h"
 #include "io/serde.h"
 #include "range_utils.h"
+#include "std_compat.h"
 
 #include "bvh/BatchWriter.h"
 #include "frontier/EntrySink.h"
@@ -74,7 +75,7 @@ public:
     // Takes the next entries, merging every chunk they complete.
     [[nodiscard]]
     alp::Result<void, io::serde::Error> push(const std::span<const frontier::Entry> entries) {
-        this->_pending.append_range(entries);
+        std_compat::append_range(this->_pending, entries);
         return this->merge_pending(false);
     }
 

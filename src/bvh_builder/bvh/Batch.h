@@ -13,6 +13,7 @@
 #include "range/Range.h"
 #include "io/glm_serialization.h"
 #include "io/radix_serialization.h"
+#include "std_compat.h"
 
 #include "bvh/Node.h"
 #include "bvh/NodeInput.h"
@@ -112,7 +113,7 @@ private:
     template <typename T, std::ranges::input_range R>
     static Range<NodeIndex> append_all(std::vector<T> &target, const R &items) {
         const size_t start = target.size();
-        target.append_range(items);
+        std_compat::append_range(target, items);
         return Range<NodeIndex>(Range(start, target.size()));
     }
 

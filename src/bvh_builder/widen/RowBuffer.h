@@ -8,6 +8,8 @@
 #include <libassert/assert.hpp>
 #include <zpp_bits.h>
 
+#include "std_compat.h"
+
 namespace widen {
 
 // A row per node, stored back to back with a seperate length buffer.
@@ -70,7 +72,7 @@ public:
     void push_row(const std::span<const T> row) {
         ASSERT(row.size() <= std::numeric_limits<Length>::max());
 
-        this->_rows.append_range(row);
+        std_compat::append_range(this->_rows, row);
         this->_lengths.push_back(static_cast<Length>(row.size()));
     }
 

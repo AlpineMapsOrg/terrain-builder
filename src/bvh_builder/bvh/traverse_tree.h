@@ -11,6 +11,7 @@
 #include "error/ResultFn.h"
 #include "error/try.h"
 #include "io/serde.h"
+#include "std_compat.h"
 
 #include "bvh/NodeCache.h"
 #include "bvh/Batch.h"
@@ -84,7 +85,7 @@ alp::Result<bool, E> traverse_tree(NodeCache &nodes, const Reference &root, F &&
 
         // Pushed in reverse so that they come off the stack in stored order.
         if (view.is_inner() && control == Control::Continue) {
-            stack.append_range(view.children() | std::views::reverse);
+            std_compat::append_range(stack, view.children() | std::views::reverse);
         }
     }
 

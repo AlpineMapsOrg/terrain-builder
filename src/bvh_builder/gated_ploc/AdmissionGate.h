@@ -13,6 +13,7 @@
 #include "error/try.h"
 #include "geometry/bounds.h"
 #include "io/serde.h"
+#include "std_compat.h"
 
 #include "frontier/EntrySink.h"
 #include "frontier/layout.h"
@@ -58,7 +59,7 @@ public:
             const size_t room = this->_options.region_size - this->_region.size();
             const size_t taken = std::min(room, remaining.size());
 
-            this->_region.append_range(remaining.first(taken));
+            std_compat::append_range(this->_region, remaining.first(taken));
             remaining = remaining.subspan(taken);
 
             if (this->_region.size() == this->_options.region_size) {
