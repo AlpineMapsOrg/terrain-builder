@@ -9,6 +9,7 @@
 #include "frontier/BatchReader.h"
 #include "frontier/Storage.h"
 #include "frontier/layout.h"
+#include "io/filesystem.h"
 
 namespace {
 
@@ -96,7 +97,7 @@ TEST_CASE("BatchReader::next reports the first batch it cannot read", "[frontier
     CHECK(first.value() == a);
 
     // The first batch is already read, so only the second one is lost.
-    std::filesystem::remove_all(directory.path() / "storage");
+    REQUIRE_VALUE(io::filesystem::remove_all(directory.path() / "storage"));
 
     const auto second = reader.next();
     REQUIRE(second.has_value());
