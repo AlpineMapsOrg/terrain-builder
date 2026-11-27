@@ -49,7 +49,6 @@ concept ImageRaster = std::same_as<Image, RGB8> || std::same_as<Image, RGBA8>;
 
 struct Unknown : alp::MessageCode<"the image library reported a failure of unknown meaning"> {};
 
-// How `encode` compresses each format.
 struct EncodeOptions {
     // JPEG quality, from 0 to 100.
     int jpeg_quality = 95;
@@ -69,7 +68,6 @@ template <ImageRaster Image>
 [[nodiscard]]
 alp::Result<bytes::vector, EncodeError> encode(const Image &image, Format format, EncodeOptions options = {});
 
-// How `decode` checks the image.
 struct DecodeOptions {
     // The size the image must have, if given.
     std::optional<glm::uvec2> expected_size = std::nullopt;
@@ -91,7 +89,6 @@ template <ImageRaster Image>
 [[nodiscard]]
 alp::Result<Image, ReadError> read(const std::filesystem::path &path, ReadOptions options = {});
 
-// How `write` treats an existing file and missing parent directories, and how it encodes.
 struct WriteOptions {
     WriteMode mode = default_write_mode;
     bool make_dirs = default_make_dirs;
@@ -104,7 +101,6 @@ template <ImageRaster Image>
 [[nodiscard]]
 alp::Result<void, WriteError> write(const Image &image, const std::filesystem::path &path, WriteOptions options = {});
 
-// An error from reading or writing an image file.
 using Error = alp::Error<ReadError, WriteError>;
 
 } // namespace io::image
