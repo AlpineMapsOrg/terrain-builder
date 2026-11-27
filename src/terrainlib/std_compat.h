@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <concepts>
 #include <functional>
 #include <ranges>
@@ -102,17 +103,41 @@ void assert_disjoint(const std::vector<T, Allocator> &vector, Range &&range) {
 
 // Stand-in for std::vector::append_range.
 // `range` and `vector` must not overlap.
-template <typename T, typename Allocator, std::ranges::common_range Range>
+template <typename T, typename Allocator, std::ranges::input_range Range>
     requires std::convertible_to<std::ranges::range_reference_t<Range>, T>
 void append_range_fallback(std::vector<T, Allocator> &vector, Range &&range) {
-    vector.insert(vector.end(), std::ranges::begin(range), std::ranges::end(range));
+    if constexpr (std::ranges::forward_range<Range> || std::ranges::sized_range<Range>) {
+        // Reserving exactly the new size on every call would defeat the vector's geometric growth and make repeated appends quadratic.
+        const size_t new_size = vector.size() + static_cast<size_t>(std::ranges::distance(range));
+        if (new_size > vector.capacity()) {
+            vector.reserve(std::max(new_size, std::min(2 * vector.size(), vector.max_size())));
+        }
+    }
+    if constexpr (std::ranges::contiguous_range<Range> && std::ranges::sized_range<Range>) {
+        // A pointer always meets the iterator requirements of insert, which copies trivially copyable elements in bulk.
+        const auto first = std::ranges::data(range);
+        vector.insert(vector.end(), first, first + std::ranges::size(range));
+    } else {
+        const size_t old_size = vector.size();
+        try {
+            for (auto &&item : range) {
+                vector.emplace_back(std::forward<decltype(item)>(item));
+            }
+        } catch (...) {
+            // std::vector::append_range has no effects when appending throws.
+            while (vector.size() > old_size) {
+                vector.pop_back();
+            }
+            throw;
+        }
+    }
 }
 
 } // namespace detail
 
 // Stand-in for std::vector::append_range.
 // `range` and `vector` must not overlap.
-template <typename T, typename Allocator, std::ranges::common_range Range>
+template <typename T, typename Allocator, std::ranges::input_range Range>
     requires std::convertible_to<std::ranges::range_reference_t<Range>, T>
 void append_range(std::vector<T, Allocator> &vector, Range &&range) {
     // The fallback does not support overlap.
