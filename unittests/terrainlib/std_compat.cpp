@@ -18,7 +18,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <list>
+#include <ranges>
+#include <sstream>
+#include <stdexcept>
 #include <type_traits>
+#include <vector>
 
 #include "std_compat.h"
 
@@ -58,4 +63,33 @@ TEST_CASE("forward_like returns its argument as like_t", "[std_compat]") {
 
     const Member &forwarded = std_compat::forward_like<Owner>(member);
     CHECK(&forwarded == &member);
+}
+
+TEST_CASE("append_range_fallback appends after the existing elements", "[std_compat]") {
+    std::vector<int> vector{1, 2};
+    SECTION("contiguous") {
+        const std::vector<int> range{3, 4};
+        std_compat::detail::append_range_fallback(vector, range);
+    }
+    SECTION("forward") {
+        const std::list<int> range{3, 4};
+        std_compat::detail::append_range_fallback(vector, range);
+    }
+    SECTION("input") {
+        std::istringstream input("3 4");
+        std_compat::detail::append_range_fallback(vector, std::views::istream<int>(input));
+    }
+    CHECK(vector == std::vector<int>{1, 2, 3, 4});
+}
+
+TEST_CASE("append_range_fallback leaves the vector unchanged when an element throws", "[std_compat]") {
+    std::vector<int> vector{1, 2};
+    const auto range = std::views::iota(3, 6) | std::views::transform([](const int i) {
+        if (i == 5) {
+            throw std::runtime_error("");
+        }
+        return i;
+    });
+    CHECK_THROWS(std_compat::detail::append_range_fallback(vector, range));
+    CHECK(vector == std::vector<int>{1, 2});
 }
