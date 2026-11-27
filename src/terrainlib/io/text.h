@@ -32,7 +32,6 @@ namespace io::text {
 using WriteOptions = bytes::WriteOptions;
 
 using WriteError = bytes::WriteError;
-
 // Writes `text` to the file at `path`.
 [[nodiscard]]
 inline alp::Result<void, WriteError> write(const std::string_view text, const std::filesystem::path &path, const WriteOptions options = {}) {
@@ -41,7 +40,6 @@ inline alp::Result<void, WriteError> write(const std::string_view text, const st
 }
 
 using ReadError = bytes::ReadError;
-
 // Reads the whole file at `path` as text.
 [[nodiscard]]
 inline alp::Result<std::string, ReadError> read(const std::filesystem::path &path) {

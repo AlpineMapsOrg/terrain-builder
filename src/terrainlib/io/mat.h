@@ -36,8 +36,6 @@
 
 namespace io::mat {
 
-using EncodeOptions = image::EncodeOptions;
-using WriteOptions = image::WriteOptions;
 using CorruptData = image::CorruptData;
 
 // How `decode` lays out the image.
@@ -45,31 +43,32 @@ struct DecodeOptions {
     // The channels and depth OpenCV converts the image to.
     cv::ImreadModes mode = cv::IMREAD_COLOR;
 };
-using ReadOptions = DecodeOptions;
 
 using DecodeError = alp::Error<CorruptData, AllocError, OpenCvError>;
-
 // Decodes the image that `bytes` encodes, with its colour channels in BGR order.
 // Fails if `bytes` is larger than `max_buffer_size`.
 [[nodiscard]]
 alp::Result<cv::Mat, DecodeError> decode(bytes::span bytes, DecodeOptions options = {});
 
-using ReadError = alp::Error<bytes::ReadError, DecodeError>;
+using ReadOptions = DecodeOptions;
 
+using ReadError = alp::Error<bytes::ReadError, DecodeError>;
 // Reads and decodes the image file at `path`.
 [[nodiscard]]
 alp::Result<cv::Mat, ReadError> read(const std::filesystem::path &path, ReadOptions options = {});
 
-using EncodeError = alp::Error<Unsupported, OutOfMemory, OpenCvError>;
+using EncodeOptions = image::EncodeOptions;
 
+using EncodeError = alp::Error<Unsupported, OutOfMemory, OpenCvError>;
 // Encodes `image`, whose colour channels are in BGR order, in `format`.
 // Fails if `image` is empty or `format` cannot store it.
 // Each field of `options` must lie in its stated range.
 [[nodiscard]]
 alp::Result<bytes::vector, EncodeError> encode(const cv::Mat &image, image::Format format, EncodeOptions options = {});
 
-using WriteError = alp::Error<Unsupported, EncodeError, bytes::WriteError>;
+using WriteOptions = image::WriteOptions;
 
+using WriteError = alp::Error<Unsupported, EncodeError, bytes::WriteError>;
 // Encodes `image` in the format that the extension of `path` names and writes it to the file at `path`.
 [[nodiscard]]
 alp::Result<void, WriteError> write(const cv::Mat &image, const std::filesystem::path &path, WriteOptions options = {});
