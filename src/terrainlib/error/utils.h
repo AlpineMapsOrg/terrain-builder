@@ -216,11 +216,14 @@ Result<T, E> to_result(
     return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(code), std::forward<decltype(context)>(context), location); });
 }
 
-// Turns `value` into a result that fails with an erased error from `message` when it is empty.
+// Turns `value` into a result that fails with an erased error from `context` when it is empty.
 template <typename T>
 [[nodiscard]]
-ErasedResult<T> to_result(std::optional<T> value, std::string message, const std::source_location location = std::source_location::current()) {
-    return to_expected_or_else(std::move(value), [&] { return alp::make_error(std::move(message), location); });
+ErasedResult<T> to_result(std::optional<T> value, Context auto &&context, const std::source_location location = std::source_location::current()) {
+    return to_expected_or_else(std::move(value), [&] {
+        std::string message = detail::resolve_message(std::forward<decltype(context)>(context));
+        return alp::make_error(std::move(message), location);
+    });
 }
 
 } // namespace alp
