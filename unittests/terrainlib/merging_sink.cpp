@@ -98,7 +98,7 @@ TEST_CASE("the comparator decides the merge order", "[sink][MergingSink]") {
 
 TEST_CASE("an output's error comes back from the push that reached it", "[sink][MergingSink]") {
     auto [input] = make_merging_sink<1, int>(FnSink([](int) -> alp::Result<void, OutputError> {
-        return alp::make_unexpected(OutputError::Rejected);
+        return alp::make_error(OutputError::Rejected);
     }));
 
     const alp::Result<void, OutputError> result = input.push(std::array{1});

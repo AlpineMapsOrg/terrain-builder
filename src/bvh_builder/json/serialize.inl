@@ -33,7 +33,7 @@ alp::Result<Buffer, JsonError> write_to_buffer(const T &value) {
     Buffer buffer;
     const glz::error_ctx error = glz::write<WRITE_OPTIONS>(value, buffer);
     if (error) {
-        return alp::make_unexpected(JsonError(error.ec, glz::format_error(error, buffer)), fmt::format("encoding {}", type_name<T>()));
+        return alp::make_error(JsonError(error.ec, glz::format_error(error, buffer)), fmt::format("encoding {}", type_name<T>()));
     }
     return buffer;
 }
@@ -44,7 +44,7 @@ alp::Result<T, JsonError> read_from_buffer(const Buffer &buffer) {
     T value{};
     const glz::error_ctx error = glz::read<READ_OPTIONS>(value, buffer);
     if (error) {
-        return alp::make_unexpected(JsonError(error.ec, glz::format_error(error, buffer)), fmt::format("decoding {}", type_name<T>()));
+        return alp::make_error(JsonError(error.ec, glz::format_error(error, buffer)), fmt::format("decoding {}", type_name<T>()));
     }
     return value;
 }

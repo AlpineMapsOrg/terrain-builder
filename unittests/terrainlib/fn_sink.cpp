@@ -26,7 +26,7 @@ TEST_CASE("FnSink passes on its callbacks' results", "[sink][FnSink]") {
     SECTION("push") {
         std::vector<int> out;
         FnSink infallible([&out](const int value) { out.push_back(value); });
-        FnSink fallible([](int) -> alp::Result<void, OutputError> { return alp::make_unexpected(OutputError::Rejected); });
+        FnSink fallible([](int) -> alp::Result<void, OutputError> { return alp::make_error(OutputError::Rejected); });
 
         STATIC_REQUIRE(std::same_as<decltype(infallible.push(3)), alp::Result<void, alp::Infallible>>);
         REQUIRE_VALUE(infallible.push(3));
@@ -37,7 +37,7 @@ TEST_CASE("FnSink passes on its callbacks' results", "[sink][FnSink]") {
     SECTION("finish") {
         bool finished = false;
         FnSink infallible([](int) {}, [&finished] { finished = true; });
-        FnSink fallible([](int) {}, []() -> alp::Result<void, OutputError> { return alp::make_unexpected(OutputError::Rejected); });
+        FnSink fallible([](int) {}, []() -> alp::Result<void, OutputError> { return alp::make_error(OutputError::Rejected); });
 
         STATIC_REQUIRE(std::same_as<decltype(std::move(infallible).finish()), alp::Result<void, alp::Infallible>>);
         REQUIRE_VALUE(std::move(infallible).finish());

@@ -115,7 +115,7 @@ alp::Result<void> check_bvh(const cli::CheckArgs &args) {
     ALP_TRY(const bvh::Storage nodes, bvh::Storage::open(args.input_path));
     ALP_TRY(const std::optional<bvh::Reference> root_opt, bvh::find_root(nodes));
     if (!root_opt.has_value()) {
-        return alp::make_unexpected(fmt::format("{} holds a forest or is empty", args.input_path.string()));
+        return alp::make_error(fmt::format("{} holds a forest or is empty", args.input_path.string()));
     }
 
     bvh::NodeCache cache(nodes, args.max_resident_bytes);
@@ -126,7 +126,7 @@ alp::Result<void> check_bvh(const cli::CheckArgs &args) {
 
     const uint64_t violation_count = tree_violation_count + unreached_count;
     if (violation_count != 0) {
-        return alp::make_unexpected(fmt::format("{} has {} violations", args.input_path.string(), violation_count));
+        return alp::make_error(fmt::format("{} has {} violations", args.input_path.string(), violation_count));
     }
     LOG_INFO("{} is one tree whose headers cover their children", args.input_path.string());
     return {};

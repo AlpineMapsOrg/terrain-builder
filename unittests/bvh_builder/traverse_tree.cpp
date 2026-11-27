@@ -242,7 +242,7 @@ TEST_CASE("a failing visitor fails the walk with its error and visits nothing af
     const auto result = bvh::traverse_tree<WalkError>(cache, root, [&](const bvh::Reference &reference, const bvh::NodeView &) -> alp::Result<void, WalkError> {
         visited.push_back(reference);
         if (reference == first) {
-            return alp::make_unexpected(VisitError::Rejected);
+            return alp::make_error(VisitError::Rejected);
         }
         return {};
     });

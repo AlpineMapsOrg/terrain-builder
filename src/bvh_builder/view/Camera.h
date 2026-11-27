@@ -25,7 +25,7 @@ public:
     [[nodiscard]]
     static alp::Result<Camera, InvalidCamera> create(const CameraOptions &options) {
         const auto reject = [&](std::string reason) {
-            return alp::make_unexpected(InvalidCamera{std::move(reason), options});
+            return alp::make_error(InvalidCamera{std::move(reason), options});
         };
 
         if (!(options.fov_y > 0.0 && options.fov_y < glm::pi<double>())) {
