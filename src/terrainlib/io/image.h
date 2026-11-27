@@ -103,4 +103,7 @@ template <ImageRaster Image>
 [[nodiscard]]
 alp::Result<void, WriteError> write(const Image &image, const std::filesystem::path &path, WriteOptions options = {});
 
+// An error from reading or writing an image file.
+using Error = alp::Error<ReadError, WriteError>;
+
 } // namespace io::image

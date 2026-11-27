@@ -47,4 +47,7 @@ inline alp::Result<std::string, ReadError> read(const std::filesystem::path &pat
     return std::string(bytes.begin(), bytes.end());
 }
 
+// An error from reading or writing a text file.
+using Error = bytes::Error;
+
 } // namespace io::text

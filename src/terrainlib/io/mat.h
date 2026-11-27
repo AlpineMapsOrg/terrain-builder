@@ -73,4 +73,7 @@ using WriteError = alp::Error<Unsupported, EncodeError, bytes::WriteError>;
 [[nodiscard]]
 alp::Result<void, WriteError> write(const cv::Mat &image, const std::filesystem::path &path, WriteOptions options = {});
 
+// An error from reading or writing an image file as a matrix.
+using Error = alp::Error<ReadError, WriteError>;
+
 } // namespace io::mat
