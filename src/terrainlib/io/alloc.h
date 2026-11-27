@@ -36,6 +36,7 @@
 #include "error/try.h"
 #include "error/utils.h"
 #include "io/limits.h"
+#include "range_utils.h"
 
 namespace io {
 
@@ -72,7 +73,7 @@ template <std::ranges::sized_range Range>
 [[nodiscard]]
 alp::Result<std::vector<std::ranges::range_value_t<Range>>, AllocError> try_to_vector(Range &&range, const size_t max_bytes = max_buffer_size) {
     ALP_TRY(check_buffer_size<std::ranges::range_value_t<Range>>(std::ranges::size(range), max_bytes));
-    return catch_out_of_memory([&] { return std::ranges::to<std::vector>(std::forward<Range>(range)); });
+    return catch_out_of_memory([&] { return to_vector(std::forward<Range>(range)); });
 }
 
 // Resizes `vector` to `size` elements, value-initializing the new ones; on failure `vector` is unchanged.
