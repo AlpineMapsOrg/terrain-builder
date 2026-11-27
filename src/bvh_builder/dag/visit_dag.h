@@ -10,6 +10,7 @@
 #include "error/try.h"
 #include "io/serde.h"
 #include "octree/Id.h"
+#include "range_utils.h"
 
 #include "dag_id.h"
 #include "metadata.h"
@@ -26,7 +27,7 @@ namespace detail {
 
 // Lists the batches of `index`.
 inline std::vector<BatchId> collect_batches(const octree::storage::Index &index) {
-    return std::ranges::to<std::vector<BatchId>>(index.keys());
+    return to_vector(index.keys());
 }
 
 // Lists the batches on the lowest level of `index`.
