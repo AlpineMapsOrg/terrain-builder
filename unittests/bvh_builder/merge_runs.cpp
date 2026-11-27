@@ -11,6 +11,7 @@
 
 #include "io/serde.h"
 #include "io/FileError.h"
+#include "io/filesystem.h"
 
 #include "frontier/Storage.h"
 #include "frontier/layout.h"
@@ -82,7 +83,7 @@ TEST_CASE("merge_runs reports a run it cannot read", "[sort][merge_runs]") {
     runs.push_back(make_storage(directory.path() / "run-0", {{a, b}}));
     runs.push_back(make_storage(directory.path() / "run-1", {{c}}));
 
-    std::filesystem::remove_all(directory.path() / "run-1");
+    REQUIRE_VALUE(io::filesystem::remove_all(directory.path() / "run-1"));
 
     frontier::Storage output = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "output"));
 

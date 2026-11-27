@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "io/FileError.h"
+#include "io/filesystem.h"
 
 #include "frontier/Storage.h"
 #include "frontier/layout.h"
@@ -72,7 +73,7 @@ TEST_CASE("split_into_sorted_runs reports an input batch it cannot read", "[sort
     const frontier::Entry c{.morton = 9, .header = {}, .ref = {.batch = 0, .node = 2}};
     const frontier::Storage input = make_storage(directory.path() / "input", {{a, b}, {c}});
 
-    std::filesystem::remove_all(directory.path() / "input");
+    REQUIRE_VALUE(io::filesystem::remove_all(directory.path() / "input"));
 
     const io::serde::Error error = REQUIRE_ERROR(sort::split_into_sorted_runs(input, directory.path() / "runs", 3 * ENTRY_BYTES, 2 * ENTRY_BYTES));
     CHECK(error.holds_and<io::FileError>(&io::FileError::is_not_found));

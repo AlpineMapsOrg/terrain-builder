@@ -9,6 +9,7 @@
 #include "error/Error.h"
 #include "io/serde.h"
 #include "io/FileError.h"
+#include "io/filesystem.h"
 
 #include "frontier/Storage.h"
 #include "frontier/layout.h"
@@ -19,7 +20,7 @@ TEST_CASE("BatchStorage::create starts without batches in a missing or an empty 
 
     const bool exists_already = GENERATE(false, true);
     if (exists_already) {
-        std::filesystem::create_directories(path);
+        REQUIRE_VALUE(io::filesystem::create_directories(path));
     }
 
     const frontier::Storage storage = REQUIRE_VALUE(frontier::Storage::create(path));
@@ -69,7 +70,7 @@ TEST_CASE("BatchStorage::open fails in a directory without an index", "[storage]
 
     const bool exists_already = GENERATE(false, true);
     if (exists_already) {
-        std::filesystem::create_directories(path);
+        REQUIRE_VALUE(io::filesystem::create_directories(path));
     }
 
     const io::serde::Error error = REQUIRE_ERROR(frontier::Storage::open(path));
@@ -93,7 +94,7 @@ TEST_CASE("BatchStorage::remove deletes its own directory and nothing else", "[s
 
     REQUIRE_VALUE(std::move(removed).remove());
 
-    CHECK_FALSE(std::filesystem::exists(directory.path() / "removed"));
+    CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(directory.path() / "removed")));
     const frontier::Batch stored_batch = REQUIRE_VALUE(kept.read(0));
     CHECK(stored_batch == kept_batch);
 }
@@ -109,7 +110,7 @@ TEST_CASE("BatchStorage::remove leaves nothing for the dropped storage to write 
         REQUIRE_VALUE(std::move(storage).remove());
     }
 
-    CHECK_FALSE(std::filesystem::exists(directory.path() / "removed"));
+    CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(directory.path() / "removed")));
 }
 
 TEST_CASE("BatchStorage::remove accepts a storage that never wrote anything", "[storage][BatchStorage]") {
@@ -118,5 +119,5 @@ TEST_CASE("BatchStorage::remove accepts a storage that never wrote anything", "[
 
     REQUIRE_VALUE(std::move(storage).remove());
 
-    CHECK_FALSE(std::filesystem::exists(directory.path() / "never_written"));
+    CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(directory.path() / "never_written")));
 }
