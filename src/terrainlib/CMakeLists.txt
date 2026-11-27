@@ -54,6 +54,7 @@ add_library(terrainlib
     vector_utils.h
 
     cli_support/ProgressIndicator.h cli_support/ProgressIndicator.cpp
+    cli_support/for_each_with_progress.h
     cli_support/log.h cli_support/log.cpp
     cli_support/stop_signal.h cli_support/stop_signal.cpp
     cli_support/octree_id.h

@@ -52,7 +52,7 @@
 #include "octree/Space.h"
 #include "mesh/storage.h"
 #include "hierarchy/traverse.h"
-#include "cli_support/ProgressIndicator.h"
+#include "cli_support/for_each_with_progress.h"
 #include "partition.h"
 #include "simplify.h"
 #include "slice.h"
@@ -525,9 +525,6 @@ alp::Result<std::unordered_set<octree::Id>, BuildError> build_level(
 
     tbb::concurrent_vector<octree::Id> built_ids;
 
-    cli_support::ProgressIndicator progress(targets.size());
-    auto progress_thread = progress.start_monitoring();
-
     // Links the target from the checkpoint, or builds and saves it.
     const auto process_target = [&](const octree::Id& target) -> alp::Result<void, BuildError> {
         if (ctx.checkpoint.has(target)) {
@@ -559,15 +556,7 @@ alp::Result<std::unordered_set<octree::Id>, BuildError> build_level(
 
     const parallel::Execution execution = ctx.options.parallelize ? parallel::Execution::Parallel : parallel::Execution::Serial;
     // A failure stops the level like a stop request: active tasks finish their nodes, queued ones are skipped.
-    auto level_result = parallel::try_for_each(targets, [&](const octree::Id& target) {
-        auto target_result = process_target(target);
-        progress.task_finished();
-        return target_result;
-    }, ctx.stop, execution);
-
-    // Targets skipped after a failure never finish, so the monitor has to be stopped rather than waited for.
-    progress_thread.request_stop();
-    progress_thread.join();
+    auto level_result = cli_support::try_for_each_with_progress(targets, process_target, ctx.stop, execution);
     ALP_TRY(std::move(level_result));
 
     return std::unordered_set<octree::Id>(built_ids.begin(), built_ids.end());

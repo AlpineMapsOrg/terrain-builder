@@ -35,7 +35,8 @@
 #include "path_utils.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
-#include "cli_support/ProgressIndicator.h"
+#include "parallel.h"
+#include "cli_support/for_each_with_progress.h"
 #include "storage.h"
 #include "store/open.h"
 #include "utils.h"
@@ -66,20 +67,16 @@ alp::Result<void> export_storage(const cli::Args &args) {
 
     size_t exported_count = 0;
 
-    cli_support::ProgressIndicator progress(input_storage.index().map().size());
-    auto progress_thread = progress.start_monitoring();
-
-    for (const auto &[id, status] : input_storage.index().map()) {
+    cli_support::for_each_with_progress(input_storage.index().map(), [&](const auto &entry) {
+        const auto &[id, status] = entry;
         if (status == hierarchy::NodeStatus::Virtual) {
-            progress.task_finished();
-            continue;
+            return;
         }
 
         const auto load_result = input_storage.load(id);
         if (!load_result.has_value()) {
             LOG_REPORT(load_result.error(), "skipping the node");
-            progress.task_finished();
-            continue;
+            return;
         }
 
         const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
@@ -87,15 +84,11 @@ alp::Result<void> export_storage(const cli::Args &args) {
         const auto save_result = output_storage.save(id, mesh);
         if (!save_result.has_value()) {
             LOG_REPORT(save_result.error(), "skipping the node");
-            progress.task_finished();
-            continue;
+            return;
         }
 
         exported_count++;
-        progress.task_finished();
-    }
-
-    progress_thread.join();
+    }, parallel::Execution::Serial);
 
     ALP_TRY(mesh::storage::publish(std::move(output_storage)));
 

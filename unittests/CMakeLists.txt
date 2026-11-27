@@ -39,6 +39,7 @@ add_executable(unittests_terrainlib
     throwing_assertions.cpp
     tracked.h
 
+    terrainlib/cli_support_for_each_with_progress.cpp
     terrainlib/cli_support_octree_id.cpp
     terrainlib/cli_support_stop_signal.cpp
     terrainlib/convert.cpp

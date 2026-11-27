@@ -27,7 +27,6 @@
 #include <span>
 #include <stop_token>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -41,7 +40,7 @@
 #include <tbb/enumerable_thread_specific.h>
 
 #include "build.h"
-#include "cli_support/ProgressIndicator.h"
+#include "cli_support/for_each_with_progress.h"
 #include "log.h"
 #include "common_error_codes.h"
 #include "earth.h"
@@ -309,16 +308,13 @@ alp::Result<void, Stopped, gis::CplError, mesh::storage::Draft::LinkError, Build
     const std::stop_token &stop) {
     const gis::srs::ThreadLocalSystem ecef_srs(gis::srs::ecef());
 
-    cli_support::ProgressIndicator progress(nodes.size());
-    std::jthread progress_thread = progress.start_monitoring();
-
     // Decrease log level to error to avoid excessive logging during mesh building
     LogScope log_scope(spdlog::level::err);
 
     // GDAL datasets are not thread-safe, so each thread reads through its own handle, opened on its first node.
     tbb::enumerable_thread_specific<std::optional<gis::Dataset>> thread_datasets;
     store::Checkpointer checkpointer;
-    auto build_result = parallel::try_for_each(nodes, [&](const octree::Id &node) -> alp::Result<void, Stopped, gis::CplError, mesh::storage::Draft::LinkError, BuildError> {
+    auto build_result = cli_support::try_for_each_with_progress(nodes, [&](const octree::Id &node) -> alp::Result<void, Stopped, gis::CplError, mesh::storage::Draft::LinkError, BuildError> {
         if (checkpoint.has(node)) {
             ALP_TRY(output.link_from(node, checkpoint));
         } else {
@@ -329,15 +325,11 @@ alp::Result<void, Stopped, gis::CplError, mesh::storage::Draft::LinkError, Build
             ALP_TRY(build_and_save_node(thread_dataset.value(), space, node, ecef_srs.get(), tile_provider, mesh_srs.get(), output));
         }
         checkpointer.save_if_due_or_warn(output);
-        progress.task_finished();
         return {};
     }, stop);
 
     // Restore original level
     drop(std::move(log_scope));
-
-    progress_thread.request_stop();
-    progress_thread.join();
 
     return build_result;
 }
