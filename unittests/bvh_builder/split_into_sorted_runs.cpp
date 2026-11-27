@@ -75,5 +75,5 @@ TEST_CASE("split_into_sorted_runs reports an input batch it cannot read", "[sort
     std::filesystem::remove_all(directory.path() / "input");
 
     const io::serde::Error error = REQUIRE_ERROR(sort::split_into_sorted_runs(input, directory.path() / "runs", 3 * ENTRY_BYTES, 2 * ENTRY_BYTES));
-    CHECK(error.holds_and<io::FileError>([](const io::FileError &e) { return e.is_not_found(); }));
+    CHECK(error.holds_and<io::FileError>(&io::FileError::is_not_found));
 }
