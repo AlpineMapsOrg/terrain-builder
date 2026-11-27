@@ -65,10 +65,7 @@ public:
 
         LOG_WARN("Index was not saved upon storage destruction, use save_index().");
 
-        const auto result = this->save_index();
-        if (!result) {
-            LOG_UNEXPECTED(result.error(), "closing a storage at {}", this->_directory);
-        }
+        LOG_UNEXPECTED_OF(this->save_index(), "closing a storage at {}", this->_directory);
     }
 
     [[nodiscard]]

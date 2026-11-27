@@ -25,10 +25,7 @@ struct PendingBatch {
         void operator()(PendingBatch &pending) const noexcept {
             LOG_WARN("Batch was not written upon writer destruction, use flush().");
 
-            const auto result = pending.output->write(pending.batch);
-            if (!result) {
-                LOG_UNEXPECTED(result.error(), "closing a batch writer for {}", pending.output->directory());
-            }
+            LOG_UNEXPECTED_OF(pending.output->write(pending.batch), "closing a batch writer for {}", pending.output->directory());
         }
     };
 
