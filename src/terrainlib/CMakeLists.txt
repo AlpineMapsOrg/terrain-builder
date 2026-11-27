@@ -45,6 +45,7 @@ add_library(terrainlib
     pch.h
     range_utils.h
     span_utils.h
+    std_compat.h
     stop.h
     string_utils.h
     tile_path.h

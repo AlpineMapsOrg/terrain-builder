@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
-#include <functional>
 #include <ranges>
 #include <span>
 #include <string_view>
@@ -93,7 +92,8 @@ inline constexpr auto extensions = [] {
 // The format that `extension`, with its dot, names, ignoring ASCII case.
 inline alp::Result<Format, Unsupported> format_from_extension(const std::string_view extension) {
     for (const Format format : magic_enum::enum_values<Format>()) {
-        if (std::ranges::any_of(to_extensions(format), std::bind_front(equals_ignore_ascii_case, extension))) {
+        // TODO: switch back to std::bind_front once CI no longer builds with clang against libstdc++ 14.2
+        if (std::ranges::any_of(to_extensions(format), [&](const std::string_view e) { return equals_ignore_ascii_case(extension, e); })) {
             return format;
         }
     }

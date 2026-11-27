@@ -164,6 +164,7 @@ add_executable(unittests_terrainlib
     terrainlib/spatial_lookup.cpp
     terrainlib/spsc_channel.cpp
     terrainlib/stamp_set.cpp
+    terrainlib/std_compat.cpp
     terrainlib/store_checkpoint.cpp
     terrainlib/store_codec.cpp
     terrainlib/store_draft.cpp
