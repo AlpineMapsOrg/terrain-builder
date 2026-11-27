@@ -31,6 +31,7 @@
 #include "mesh/normalize.h"
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/connectivity/vertex_index_range.h"
+#include "range_utils.h"
 
 namespace mesh {
 
@@ -70,7 +71,7 @@ void duplicate_non_manifold_edges(
     duplicate_non_manifold_edges(triangles, duplicate_vertex);
 
     if constexpr (IS_DEBUG_BUILD) {
-        const std::vector<glm::uvec3> triangles_copy(triangles.begin(), triangles.end());
+        const std::vector<glm::uvec3> triangles_copy = to_vector(triangles);
         const mesh::Simple_<n_dims, Position> mesh(triangles_copy, positions);
         DEBUG_ASSERT(find_non_manifold_edges(mesh).empty());
     }

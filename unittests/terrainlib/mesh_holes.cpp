@@ -32,6 +32,7 @@
 #include "mesh/connectivity/topology.h"
 #include "mesh/connectivity/manifold.h"
 #include "log.h"
+#include "range_utils.h"
 
 std::string vec2d_to_string(const std::vector<std::vector<uint32_t>> &v) {
     std::ostringstream oss;
@@ -263,7 +264,7 @@ TEST_CASE("square frame with two holes sharing a vertex") {
 
         // actual
         const std::unordered_set<glm::uvec2> actual_edges_set = find_boundary_edges(mesh);
-        std::vector<glm::uvec2> actual_edges(actual_edges_set.begin(), actual_edges_set.end());
+        std::vector<glm::uvec2> actual_edges = to_vector(actual_edges_set);
 
         // missing edges
         std::vector<glm::uvec2> missing;
