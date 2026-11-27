@@ -62,8 +62,8 @@ TEST_CASE("find_root finds the root of a storage in its last batch", "[bvh][find
     const bvh::Reference first = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference second = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{first, second}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     CHECK(REQUIRE_VALUE(bvh::find_root(nodes)) == root);
 }

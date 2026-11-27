@@ -22,9 +22,8 @@ frontier::Entry make_entry(const uint32_t morton) {
 std::vector<uint32_t> collect_mortons(
     const frontier::Storage &run, const AnyRange<uint32_t> batches = RangeFull{}) {
     std::vector<uint32_t> visited;
-    const auto result = frontier::traverse_entries(
-        run, [&](const frontier::Entry &entry) { visited.push_back(static_cast<uint32_t>(entry.morton)); }, batches);
-    REQUIRE(result.has_value());
+    REQUIRE_VALUE(frontier::traverse_entries(
+        run, [&](const frontier::Entry &entry) { visited.push_back(static_cast<uint32_t>(entry.morton)); }, batches));
     return visited;
 }
 

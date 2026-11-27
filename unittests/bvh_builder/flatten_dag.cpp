@@ -34,16 +34,16 @@ std::vector<bvh::LeafInput> flatten(std::vector<std::pair<octree::Id, dag::NodeM
     {
         auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::ClusterBatch>(dag_directory.path()));
         for (auto &[id, metadata] : dag_nodes) {
-            REQUIRE(dag.save(id, dag::ClusterBatch{std::move(metadata), Clustering{}}).has_value());
+            REQUIRE_VALUE(dag.save(id, dag::ClusterBatch{std::move(metadata), Clustering{}}));
         }
-        REQUIRE(dag.save_index().has_value());
+        REQUIRE_VALUE(dag.save_index());
     }
     const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(dag_directory.path()));
 
     const TempDirectory bvh_directory("flatten_dag_output");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(bvh_directory.path()));
-    REQUIRE(bvh::flatten_dag(dag, nodes).has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(bvh::flatten_dag(dag, nodes));
+    REQUIRE_VALUE(nodes.save_index());
 
     std::vector<bvh::LeafInput> leaves;
     for (const uint32_t batch_index : range(nodes.size())) {

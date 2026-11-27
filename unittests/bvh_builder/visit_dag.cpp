@@ -74,7 +74,7 @@ std::vector<GroupRecord> collect_groups(const std::filesystem::path &path) {
     const auto walked = dag::visit_groups([&](const dag::Group &group) {
         visited.push_back(make_group_record(group, cache));
     }, cache);
-    REQUIRE(walked.value_or(false));
+    REQUIRE(REQUIRE_VALUE(walked));
     return visited;
 }
 

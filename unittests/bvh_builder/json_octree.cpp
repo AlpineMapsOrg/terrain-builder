@@ -19,14 +19,14 @@ TEST_CASE("write_to_text writes an id that reads back equal", "[json][octree]") 
 
 TEST_CASE("read_from_text rejects an index outside its level", "[json][octree]") {
     // Level 1 holds the indices 0 to 7.
-    CHECK_FALSE(json::read_from_text<octree::Id>("[1, 8]").has_value());
+    REQUIRE_ERROR(json::read_from_text<octree::Id>("[1, 8]"));
 }
 
 TEST_CASE("read_from_text rejects a level too deep", "[json][octree]") {
-    CHECK_FALSE(json::read_from_text<octree::Id>("[22, 0]").has_value());
+    REQUIRE_ERROR(json::read_from_text<octree::Id>("[22, 0]"));
 }
 
 TEST_CASE("read_from_text rejects a wrong number of entries", "[json][octree]") {
-    CHECK_FALSE(json::read_from_text<octree::Id>("[2]").has_value());
-    CHECK_FALSE(json::read_from_text<octree::Id>("[2, 5, 1]").has_value());
+    REQUIRE_ERROR(json::read_from_text<octree::Id>("[2]"));
+    REQUIRE_ERROR(json::read_from_text<octree::Id>("[2, 5, 1]"));
 }

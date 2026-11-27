@@ -20,13 +20,13 @@ struct Sample {
 }
 
 TEST_CASE("read_from_text rejects text whose keys do not match the value", "[json][serialize]") {
-    REQUIRE(json::read_from_text<Sample>(R"({"count": 3, "name": "a"})").has_value());
+    REQUIRE_VALUE(json::read_from_text<Sample>(R"({"count": 3, "name": "a"})"));
 
     SECTION("an unknown key") {
-        CHECK_FALSE(json::read_from_text<Sample>(R"({"count": 3, "name": "a", "size": 1})").has_value());
+        REQUIRE_ERROR(json::read_from_text<Sample>(R"({"count": 3, "name": "a", "size": 1})"));
     }
     SECTION("a missing key") {
-        CHECK_FALSE(json::read_from_text<Sample>(R"({"count": 3})").has_value());
+        REQUIRE_ERROR(json::read_from_text<Sample>(R"({"count": 3})"));
     }
 }
 

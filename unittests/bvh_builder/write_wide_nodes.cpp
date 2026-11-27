@@ -31,8 +31,8 @@ void write_splits(
     batch.splits.push_row(b_row);
     batch.splits.push_row(a_row);
     batch.splits.push_row(root_row);
-    REQUIRE(splits.write(batch).has_value());
-    REQUIRE(splits.save_index().has_value());
+    REQUIRE_VALUE(splits.write(batch));
+    REQUIRE_VALUE(splits.save_index());
 }
 
 }
@@ -57,8 +57,8 @@ TEST_CASE("a kept root collects every leaf its dissolved children held", "[widen
     const bvh::Reference a = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_0, leaf_1}}));
     const bvh::Reference b = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_2, leaf_3}}));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{a, b}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     // The root keeps itself and offers A and B two slots each, at which both dissolve.
     widen::SplitStorage splits = REQUIRE_VALUE(widen::SplitStorage::create(directory.path() / "splits"));
@@ -68,17 +68,14 @@ TEST_CASE("a kept root collects every leaf its dissolved children held", "[widen
 
     bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
     bvh::NodeCache cache(nodes, 1);
-    const auto wide_root = widen::write_wide_nodes(splits, cache, root, output, widen::Options{.arity = 4});
-    REQUIRE(wide_root.has_value());
+    const bvh::Reference wide_root = REQUIRE_VALUE(widen::write_wide_nodes(splits, cache, root, output, widen::Options{.arity = 4}));
     REQUIRE_VALUE(output.save_index());
 
-    const auto root_batch = output.read(wide_root->batch);
-    REQUIRE(root_batch.has_value());
+    const bvh::Batch root_batch = REQUIRE_VALUE(output.read(wide_root.batch));
     std::vector<bvh::NodeHeader> child_headers;
-    for (const bvh::Reference &child : root_batch->resolve(root_batch->node(wide_root->node)).children()) {
-        const auto child_batch = output.read(child.batch);
-        REQUIRE(child_batch.has_value());
-        child_headers.push_back(child_batch->node(child.node).header());
+    for (const bvh::Reference &child : root_batch.resolve(root_batch.node(wide_root.node)).children()) {
+        const bvh::Batch child_batch = REQUIRE_VALUE(output.read(child.batch));
+        child_headers.push_back(child_batch.node(child.node).header());
     }
     CHECK(child_headers == to_vector(leaf_headers));
 }
@@ -96,8 +93,8 @@ TEST_CASE("a kept node keeps the header it had", "[widen][write_wide_nodes]") {
     const bvh::Reference a = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_0, leaf_1}}));
     const bvh::Reference b = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_2, leaf_3}}));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{root_header, std::array{a, b}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     widen::SplitStorage splits = REQUIRE_VALUE(widen::SplitStorage::create(directory.path() / "splits"));
     const std::array root_row{widen::Split::keep(2), widen::Split::dissolve(1), widen::Split::dissolve(1)};
@@ -106,13 +103,11 @@ TEST_CASE("a kept node keeps the header it had", "[widen][write_wide_nodes]") {
 
     bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
     bvh::NodeCache cache(nodes, 1);
-    const auto wide_root = widen::write_wide_nodes(splits, cache, root, output, widen::Options{.arity = 4});
-    REQUIRE(wide_root.has_value());
+    const bvh::Reference wide_root = REQUIRE_VALUE(widen::write_wide_nodes(splits, cache, root, output, widen::Options{.arity = 4}));
     REQUIRE_VALUE(output.save_index());
 
-    const auto root_batch = output.read(wide_root->batch);
-    REQUIRE(root_batch.has_value());
-    CHECK(root_batch->node(wide_root->node).header() == root_header);
+    const bvh::Batch root_batch = REQUIRE_VALUE(output.read(wide_root.batch));
+    CHECK(root_batch.node(wide_root.node).header() == root_header);
 }
 
 TEST_CASE("children that keep their slot stay nodes of their own", "[widen][write_wide_nodes]") {
@@ -126,8 +121,8 @@ TEST_CASE("children that keep their slot stay nodes of their own", "[widen][writ
     const bvh::Reference a = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_0, leaf_1}}));
     const bvh::Reference b = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_2, leaf_3}}));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{a, b}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     // At arity two nothing can be widened, so every inner node keeps its slot and its row is one entry long.
     widen::SplitStorage splits = REQUIRE_VALUE(widen::SplitStorage::create(directory.path() / "splits"));
@@ -136,17 +131,14 @@ TEST_CASE("children that keep their slot stay nodes of their own", "[widen][writ
 
     bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
     bvh::NodeCache cache(nodes, 1);
-    const auto wide_root = widen::write_wide_nodes(splits, cache, root, output, widen::Options{.arity = 2});
-    REQUIRE(wide_root.has_value());
+    const bvh::Reference wide_root = REQUIRE_VALUE(widen::write_wide_nodes(splits, cache, root, output, widen::Options{.arity = 2}));
     REQUIRE_VALUE(output.save_index());
 
-    const auto root_batch = output.read(wide_root->batch);
-    REQUIRE(root_batch.has_value());
-    const std::span<const bvh::Reference> children = root_batch->resolve(root_batch->node(wide_root->node)).children();
+    const bvh::Batch root_batch = REQUIRE_VALUE(output.read(wide_root.batch));
+    const std::span<const bvh::Reference> children = root_batch.resolve(root_batch.node(wide_root.node)).children();
     REQUIRE(children.size() == 2);
     for (const bvh::Reference &child : children) {
-        const auto child_batch = output.read(child.batch);
-        REQUIRE(child_batch.has_value());
-        CHECK(child_batch->resolve(child_batch->node(child.node)).children().size() == 2);
+        const bvh::Batch child_batch = REQUIRE_VALUE(output.read(child.batch));
+        CHECK(child_batch.resolve(child_batch.node(child.node)).children().size() == 2);
     }
 }

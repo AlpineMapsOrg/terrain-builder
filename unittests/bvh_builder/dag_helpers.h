@@ -16,7 +16,7 @@
 inline void write_dag(const std::filesystem::path &path, std::vector<std::pair<octree::Id, dag::NodeMetadata>> nodes) {
     auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::ClusterBatch>(path));
     for (auto &[id, metadata] : nodes) {
-        REQUIRE(dag.save(id, dag::ClusterBatch{std::move(metadata), Clustering{}}).has_value());
+        REQUIRE_VALUE(dag.save(id, dag::ClusterBatch{std::move(metadata), Clustering{}}));
     }
-    REQUIRE(dag.save_index().has_value());
+    REQUIRE_VALUE(dag.save_index());
 }

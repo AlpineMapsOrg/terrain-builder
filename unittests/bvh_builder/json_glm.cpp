@@ -30,11 +30,11 @@ TEST_CASE("write_to_text writes a vector that reads back equal", "[json][glm]") 
 
 TEST_CASE("read_from_text rejects an array with the wrong number of components", "[json][glm]") {
     SECTION("2d") {
-        CHECK_FALSE(json::read_from_text<glm::dvec2>("[1.5]").has_value());
-        CHECK_FALSE(json::read_from_text<glm::dvec2>("[1.5, -2, 0.1]").has_value());
+        REQUIRE_ERROR(json::read_from_text<glm::dvec2>("[1.5]"));
+        REQUIRE_ERROR(json::read_from_text<glm::dvec2>("[1.5, -2, 0.1]"));
     }
     SECTION("3d") {
-        CHECK_FALSE(json::read_from_text<glm::dvec3>("[1.5, -2]").has_value());
-        CHECK_FALSE(json::read_from_text<glm::dvec3>("[1.5, -2, 0.1, 4]").has_value());
+        REQUIRE_ERROR(json::read_from_text<glm::dvec3>("[1.5, -2]"));
+        REQUIRE_ERROR(json::read_from_text<glm::dvec3>("[1.5, -2, 0.1, 4]"));
     }
 }

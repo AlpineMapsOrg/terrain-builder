@@ -217,5 +217,5 @@ TEST_CASE("select_clusters fails if a batch it needs is not in the dag", "[view]
     dag::NodeMetadataCache cache(dag, UNBOUNDED_RESIDENT_BYTES);
     const std::vector<dag::SourceId> groups{dag::GroupId{root.child(0).value(), 0}};
 
-    CHECK_FALSE(view::select_clusters(groups, cache, camera, view::CutRule{.threshold = 0.5}).has_value());
+    REQUIRE_ERROR(view::select_clusters(groups, cache, camera, view::CutRule{.threshold = 0.5}));
 }

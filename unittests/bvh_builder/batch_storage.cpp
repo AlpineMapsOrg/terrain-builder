@@ -83,20 +83,19 @@ TEST_CASE("BatchStorage::remove deletes its own directory and nothing else", "[s
     // A sibling under the same parent, so removing the parent instead of the storage would be caught.
     const frontier::Batch kept_batch{.entries = {{.morton = 7, .header = {}, .ref = {.batch = 0, .node = 0}}}};
     frontier::Storage kept = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "kept"));
-    REQUIRE(kept.write(kept_batch).has_value());
-    REQUIRE(kept.save_index().has_value());
+    REQUIRE_VALUE(kept.write(kept_batch));
+    REQUIRE_VALUE(kept.save_index());
 
     frontier::Storage removed = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "removed"));
-    REQUIRE(removed.write(frontier::Batch{.entries = {{.morton = 3, .header = {}, .ref = {.batch = 0, .node = 1}}}}).has_value());
-    REQUIRE(removed.write(frontier::Batch{}).has_value());
-    REQUIRE(removed.save_index().has_value());
+    REQUIRE_VALUE(removed.write(frontier::Batch{.entries = {{.morton = 3, .header = {}, .ref = {.batch = 0, .node = 1}}}}));
+    REQUIRE_VALUE(removed.write(frontier::Batch{}));
+    REQUIRE_VALUE(removed.save_index());
 
-    REQUIRE(std::move(removed).remove().has_value());
+    REQUIRE_VALUE(std::move(removed).remove());
 
     CHECK_FALSE(std::filesystem::exists(directory.path() / "removed"));
-    const auto kept_result = kept.read(0);
-    REQUIRE(kept_result.has_value());
-    CHECK(kept_result.value() == kept_batch);
+    const frontier::Batch stored_batch = REQUIRE_VALUE(kept.read(0));
+    CHECK(stored_batch == kept_batch);
 }
 
 TEST_CASE("BatchStorage::remove leaves nothing for the dropped storage to write back", "[storage][BatchStorage]") {
@@ -105,9 +104,9 @@ TEST_CASE("BatchStorage::remove leaves nothing for the dropped storage to write 
     {
         // The index is left unsaved, so a storage that still thought itself dirty would write it on destruction.
         frontier::Storage storage = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "removed"));
-        REQUIRE(storage.write(frontier::Batch{}).has_value());
+        REQUIRE_VALUE(storage.write(frontier::Batch{}));
 
-        REQUIRE(std::move(storage).remove().has_value());
+        REQUIRE_VALUE(std::move(storage).remove());
     }
 
     CHECK_FALSE(std::filesystem::exists(directory.path() / "removed"));
@@ -117,7 +116,7 @@ TEST_CASE("BatchStorage::remove accepts a storage that never wrote anything", "[
     const TempDirectory directory("batch_storage");
     frontier::Storage storage = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "never_written"));
 
-    REQUIRE(std::move(storage).remove().has_value());
+    REQUIRE_VALUE(std::move(storage).remove());
 
     CHECK_FALSE(std::filesystem::exists(directory.path() / "never_written"));
 }

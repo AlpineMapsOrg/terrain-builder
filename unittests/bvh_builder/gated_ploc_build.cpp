@@ -48,13 +48,13 @@ LeafFrontier write_frontier(const std::filesystem::path &directory, bvh::Storage
         batch.entries.push_back(frontier::Entry{.morton = morton::encode(SCENE_BOUNDS, header), .header = header, .ref = ref});
         refs.push_back(ref);
     }
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(output.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(output.save_index());
     frontier::sort_entries(batch.entries);
 
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory));
-    REQUIRE(run.write(batch).has_value());
-    REQUIRE(run.save_index().has_value());
+    REQUIRE_VALUE(run.write(batch));
+    REQUIRE_VALUE(run.save_index());
     return LeafFrontier{.frontier = std::move(run), .refs = std::move(refs)};
 }
 
@@ -84,7 +84,7 @@ std::vector<std::optional<size_t>> read_shape(const bvh::Storage &output, const 
         }
         FAIL("the tree holds a leaf that was not written");
     });
-    REQUIRE(result.value_or(false));
+    REQUIRE(REQUIRE_VALUE(result));
     return shape;
 }
 
@@ -105,10 +105,9 @@ TEST_CASE("a single leaf is the whole tree", "[build][gated_ploc]") {
     bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
     auto [frontier, refs] = write_frontier(directory.path() / "frontier", output, leaves);
 
-    const auto root = gated_ploc::build(std::move(frontier), output, directory.path() / "scratch", make_options());
-    REQUIRE(root.has_value());
+    const bvh::Reference root = REQUIRE_VALUE(gated_ploc::build(std::move(frontier), output, directory.path() / "scratch", make_options()));
 
-    CHECK(read_shape(output, *root, refs) == std::vector<std::optional<size_t>>{0});
+    CHECK(read_shape(output, root, refs) == std::vector<std::optional<size_t>>{0});
 }
 
 TEST_CASE("neighbours are paired before distant nodes are joined", "[build][gated_ploc]") {
@@ -124,11 +123,10 @@ TEST_CASE("neighbours are paired before distant nodes are joined", "[build][gate
     bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
     auto [frontier, refs] = write_frontier(directory.path() / "frontier", output, leaves);
 
-    const auto root = gated_ploc::build(std::move(frontier), output, directory.path() / "scratch", make_options());
-    REQUIRE(root.has_value());
+    const bvh::Reference root = REQUIRE_VALUE(gated_ploc::build(std::move(frontier), output, directory.path() / "scratch", make_options()));
 
     const std::vector<std::optional<size_t>> expected{std::nullopt, std::nullopt, 0, 1, std::nullopt, 2, 3};
-    CHECK(read_shape(output, *root, refs) == expected);
+    CHECK(read_shape(output, root, refs) == expected);
 }
 
 TEST_CASE("the tree holds every leaf exactly once", "[build][gated_ploc]") {
@@ -138,10 +136,9 @@ TEST_CASE("the tree holds every leaf exactly once", "[build][gated_ploc]") {
     bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
     auto [frontier, refs] = write_frontier(directory.path() / "frontier", output, make_row(count));
 
-    const auto root = gated_ploc::build(std::move(frontier), output, directory.path() / "scratch", make_options());
-    REQUIRE(root.has_value());
+    const bvh::Reference root = REQUIRE_VALUE(gated_ploc::build(std::move(frontier), output, directory.path() / "scratch", make_options()));
 
-    const std::vector<std::optional<size_t>> shape = read_shape(output, *root, refs);
+    const std::vector<std::optional<size_t>> shape = read_shape(output, root, refs);
     std::vector<size_t> leaf_numbers;
     for (const std::optional<size_t> &node : shape) {
         if (node.has_value()) {
@@ -161,16 +158,14 @@ TEST_CASE("splitting the frontier into chunks does not change the tree", "[build
     const TempDirectory single_directory("gated_ploc");
     bvh::Storage single_output = REQUIRE_VALUE(bvh::Storage::create(single_directory.path() / "output"));
     auto [single_frontier, single_refs] = write_frontier(single_directory.path() / "frontier", single_output, leaves);
-    const auto single_root = gated_ploc::build(std::move(single_frontier), single_output, single_directory.path() / "scratch", make_options());
-    REQUIRE(single_root.has_value());
+    const bvh::Reference single_root = REQUIRE_VALUE(gated_ploc::build(std::move(single_frontier), single_output, single_directory.path() / "scratch", make_options()));
 
     const TempDirectory split_directory("gated_ploc");
     bvh::Storage split_output = REQUIRE_VALUE(bvh::Storage::create(split_directory.path() / "output"));
     auto [split_frontier, split_refs] = write_frontier(split_directory.path() / "frontier", split_output, leaves);
-    const auto split_root = gated_ploc::build(std::move(split_frontier), split_output, split_directory.path() / "scratch", make_options(8));
-    REQUIRE(split_root.has_value());
+    const bvh::Reference split_root = REQUIRE_VALUE(gated_ploc::build(std::move(split_frontier), split_output, split_directory.path() / "scratch", make_options(8)));
 
-    CHECK(read_shape(split_output, *split_root, split_refs) == read_shape(single_output, *single_root, single_refs));
+    CHECK(read_shape(split_output, split_root, split_refs) == read_shape(single_output, single_root, single_refs));
 }
 
 TEST_CASE("the build writes its root into the last batch", "[build][gated_ploc]") {

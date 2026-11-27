@@ -24,15 +24,14 @@ std::vector<bvh::NodeHeader> write_nodes(bvh::Storage &nodes, const std::vector<
         written.push_back(make_node_header({1.0, 2.0}, node_bounds));
         batch.add_node(make_leaf_input(written.back()));
     }
-    REQUIRE(nodes.write(batch).has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(nodes.write(batch));
+    REQUIRE_VALUE(nodes.save_index());
     return written;
 }
 
 std::vector<frontier::Entry> read_run(const frontier::Storage &run) {
     std::vector<frontier::Entry> entries;
-    const auto result = frontier::traverse_entries(run, [&](const frontier::Entry &entry) { entries.push_back(entry); });
-    REQUIRE(result.has_value());
+    REQUIRE_VALUE(frontier::traverse_entries(run, [&](const frontier::Entry &entry) { entries.push_back(entry); }));
     return entries;
 }
 
@@ -46,8 +45,8 @@ TEST_CASE("every stored node enters the frontier carrying its header and referen
 
     std::filesystem::create_directories(directory.path() / "frontier");
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "frontier"));
-    REQUIRE(frontier::build_from_leaves(nodes, run).has_value());
-    REQUIRE(run.save_index().has_value());
+    REQUIRE_VALUE(frontier::build_from_leaves(nodes, run));
+    REQUIRE_VALUE(run.save_index());
 
     const std::vector<frontier::Entry> entries = read_run(run);
     REQUIRE(entries.size() == 2);
@@ -73,8 +72,8 @@ TEST_CASE("the entry's morton code comes from the bounds centre", "[frontier][bu
 
     std::filesystem::create_directories(directory.path() / "frontier");
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "frontier"));
-    REQUIRE(frontier::build_from_leaves(nodes, run).has_value());
-    REQUIRE(run.save_index().has_value());
+    REQUIRE_VALUE(frontier::build_from_leaves(nodes, run));
+    REQUIRE_VALUE(run.save_index());
 
     const std::vector<frontier::Entry> entries = read_run(run);
     REQUIRE(entries.size() == 3);
@@ -96,8 +95,8 @@ TEST_CASE("the byte budget splits the frontier into batches", "[frontier][build]
     std::filesystem::create_directories(directory.path() / "frontier");
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "frontier"));
     const frontier::BuildOptions options{.max_batch_bytes = 2 * sizeof(frontier::Entry)};
-    REQUIRE(frontier::build_from_leaves(nodes, run, options).has_value());
-    REQUIRE(run.save_index().has_value());
+    REQUIRE_VALUE(frontier::build_from_leaves(nodes, run, options));
+    REQUIRE_VALUE(run.save_index());
 
     CHECK(run.size() == 3);
     CHECK(read_run(run).size() == 5);
@@ -110,8 +109,8 @@ TEST_CASE("an empty store yields an empty frontier", "[frontier][build]") {
 
     std::filesystem::create_directories(directory.path() / "frontier");
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "frontier"));
-    REQUIRE(frontier::build_from_leaves(nodes, run).has_value());
-    REQUIRE(run.save_index().has_value());
+    REQUIRE_VALUE(frontier::build_from_leaves(nodes, run));
+    REQUIRE_VALUE(run.save_index());
 
     CHECK(run.size() == 0);
 }

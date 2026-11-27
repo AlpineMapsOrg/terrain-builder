@@ -4,6 +4,7 @@
 #include "node_header_helpers.h"
 
 #include <cstdint>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -20,10 +21,10 @@ std::vector<bvh::Batch> write_batches(bvh::Storage &nodes, const uint32_t count)
     for (uint32_t index = 0; index < count; index++) {
         bvh::Batch batch = nodes.create_batch();
         batch.add_node(make_leaf_input());
-        REQUIRE(nodes.write(batch).has_value());
+        REQUIRE_VALUE(nodes.write(batch));
         written.push_back(std::move(batch));
     }
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(nodes.save_index());
     return written;
 }
 
@@ -36,9 +37,8 @@ TEST_CASE("a batch read back is the one that was written", "[storage][BatchCache
 
     BatchCache<bvh::Storage> cache(nodes, 2 * size_bytes(written[0]));
 
-    const auto result = cache.read_batch(2);
-    REQUIRE(result.has_value());
-    CHECK(*result->get() == written[2]);
+    const std::shared_ptr<const bvh::Batch> batch = REQUIRE_VALUE(cache.read_batch(2));
+    CHECK(*batch == written[2]);
 }
 
 TEST_CASE("a batch takes up the budget by its size, so a larger one displaces several smaller ones", "[storage][BatchCache]") {
@@ -50,15 +50,15 @@ TEST_CASE("a batch takes up the budget by its size, so a larger one displaces se
     for (uint32_t group_index = 0; group_index < 3; group_index++) {
         large.add_node(make_leaf_input());
     }
-    REQUIRE(nodes.write(large).has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(nodes.write(large));
+    REQUIRE_VALUE(nodes.save_index());
 
     BatchCache<bvh::Storage> cache(nodes, 2 * size_bytes(written[0]));
 
-    REQUIRE(cache.read_batch(0).has_value());
-    REQUIRE(cache.read_batch(1).has_value());
+    REQUIRE_VALUE(cache.read_batch(0));
+    REQUIRE_VALUE(cache.read_batch(1));
     REQUIRE(cache.count_resident() == 2);
 
-    REQUIRE(cache.read_batch(large.index()).has_value());
+    REQUIRE_VALUE(cache.read_batch(large.index()));
     CHECK(cache.count_resident() == 1);
 }

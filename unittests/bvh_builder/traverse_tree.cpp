@@ -57,8 +57,8 @@ TEST_CASE("the walk visits every node once, each parent before its children and 
     const bvh::Reference left = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_0, leaf_1}}));
     const bvh::Reference right = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_2, leaf_3}}));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{left, right}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     std::vector<bvh::Reference> visited;
@@ -66,7 +66,7 @@ TEST_CASE("the walk visits every node once, each parent before its children and 
         visited.push_back(reference);
     });
 
-    REQUIRE(result.value_or(false));
+    REQUIRE(REQUIRE_VALUE(result));
     CHECK(visited == std::vector{root, left, leaf_0, leaf_1, right, leaf_2, leaf_3});
 }
 
@@ -77,23 +77,22 @@ TEST_CASE("a leaf root is visited alone, with its header and source","[bvh][trav
     const TempDirectory directory("traverse_tree");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
     bvh::BatchWriter writer(nodes);
-    const auto leaf_result = writer.write_node(bvh::LeafInput{leaf_header, leaf_source});
-    REQUIRE(leaf_result.has_value());
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    const bvh::Reference leaf = REQUIRE_VALUE(writer.write_node(bvh::LeafInput{leaf_header, leaf_source}));
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     std::vector<bvh::Reference> visited;
     bvh::NodeHeader header;
     dag::SourceId source;
-    const auto result = bvh::traverse_tree(cache, *leaf_result, [&](const bvh::Reference &reference, const bvh::NodeView &view) {
+    const auto result = bvh::traverse_tree(cache, leaf, [&](const bvh::Reference &reference, const bvh::NodeView &view) {
         visited.push_back(reference);
         header = view.header();
         source = view.source();
     });
 
-    REQUIRE(result.value_or(false));
-    CHECK(visited == std::vector{*leaf_result});
+    REQUIRE(REQUIRE_VALUE(result));
+    CHECK(visited == std::vector{leaf});
     CHECK(header == leaf_header);
     CHECK(source == leaf_source);
 }
@@ -107,8 +106,8 @@ TEST_CASE("an inner node's view carries its header and children", "[bvh][travers
     const bvh::Reference first = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference second = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{root_header, std::array{first, second}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     bvh::NodeHeader header;
@@ -119,7 +118,7 @@ TEST_CASE("an inner node's view carries its header and children", "[bvh][travers
         return false;
     });
 
-    REQUIRE(result.has_value());
+    REQUIRE_VALUE(result);
     CHECK(header == root_header);
     CHECK(children == std::vector{first, second});
 }
@@ -135,8 +134,8 @@ TEST_CASE("a visitor breaking off stops the walk", "[bvh][traverse_tree]") {
     const bvh::Reference left = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_0, leaf_1}}));
     const bvh::Reference right = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_2, leaf_3}}));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{left, right}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     uint32_t visits = 0;
@@ -145,8 +144,7 @@ TEST_CASE("a visitor breaking off stops the walk", "[bvh][traverse_tree]") {
         return visits < 3;
     });
 
-    REQUIRE(result.has_value());
-    CHECK_FALSE(result.value());
+    CHECK_FALSE(REQUIRE_VALUE(result));
     CHECK(visits == 3);
 }
 
@@ -158,18 +156,17 @@ TEST_CASE("a child whose batch cannot be read fails the walk", "[bvh][traverse_t
     const bvh::Batch missing = nodes.create_batch();
 
     bvh::BatchWriter writer(nodes);
-    const auto root_result = writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{bvh::Reference{.batch = missing.index(), .node = 0}}});
-    REQUIRE(root_result.has_value());
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{bvh::Reference{.batch = missing.index(), .node = 0}}}));
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     uint32_t visits = 0;
-    const auto result = bvh::traverse_tree(cache, *root_result, [&](const bvh::Reference &, const bvh::NodeView &) {
+    const auto result = bvh::traverse_tree(cache, root, [&](const bvh::Reference &, const bvh::NodeView &) {
         visits++;
     });
 
-    CHECK_FALSE(result.has_value());
+    REQUIRE_ERROR(result);
     CHECK(visits == 1);
 }
 
@@ -184,8 +181,8 @@ TEST_CASE("a pruned node's children are skipped and the walk goes on with its si
     const bvh::Reference left = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_0, leaf_1}}));
     const bvh::Reference right = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{leaf_2, leaf_3}}));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{left, right}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     std::vector<bvh::Reference> visited;
@@ -198,7 +195,7 @@ TEST_CASE("a pruned node's children are skipped and the walk goes on with its si
         }
     });
 
-    REQUIRE(result.value_or(false));
+    REQUIRE(REQUIRE_VALUE(result));
     CHECK(visited == std::vector{root, left, right, leaf_2, leaf_3});
 }
 
@@ -209,8 +206,8 @@ TEST_CASE("a pruned leaf goes on like a continued one", "[bvh][traverse_tree]") 
     const bvh::Reference first = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference second = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{first, second}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     std::vector<bvh::Reference> visited;
@@ -223,7 +220,7 @@ TEST_CASE("a pruned leaf goes on like a continued one", "[bvh][traverse_tree]") 
         }
     });
 
-    REQUIRE(result.value_or(false));
+    REQUIRE(REQUIRE_VALUE(result));
     CHECK(visited == std::vector{root, first, second});
 }
 
@@ -234,8 +231,8 @@ TEST_CASE("a failing visitor fails the walk with its error and visits nothing af
     const bvh::Reference first = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference second = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{first, second}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
     std::vector<bvh::Reference> visited;
@@ -260,13 +257,12 @@ TEST_CASE("a batch that cannot be read fails a walk with a wider error, holding 
     const bvh::Batch missing = nodes.create_batch();
 
     bvh::BatchWriter writer(nodes);
-    const auto root_result = writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{bvh::Reference{.batch = missing.index(), .node = 0}}});
-    REQUIRE(root_result.has_value());
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(nodes.save_index().has_value());
+    const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{bvh::Reference{.batch = missing.index(), .node = 0}}}));
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(nodes.save_index());
 
     bvh::NodeCache cache(nodes, 1);
-    const auto result = bvh::traverse_tree<WalkError>(cache, *root_result, [&](const bvh::Reference &, const bvh::NodeView &) -> alp::Result<bool, WalkError> {
+    const auto result = bvh::traverse_tree<WalkError>(cache, root, [&](const bvh::Reference &, const bvh::NodeView &) -> alp::Result<bool, WalkError> {
         return true;
     });
 

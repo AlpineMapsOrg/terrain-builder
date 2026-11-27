@@ -24,8 +24,8 @@ TEST_CASE("widen writes its root into the last batch", "[widen][build]") {
     const bvh::Reference first = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference second = REQUIRE_VALUE(writer.write_node(make_leaf_input()));
     const bvh::Reference root = REQUIRE_VALUE(writer.write_node(bvh::InnerInput{bvh::NodeHeader{}, std::array{first, second}}));
-    REQUIRE(writer.flush().has_value());
-    REQUIRE(input.save_index().has_value());
+    REQUIRE_VALUE(writer.flush());
+    REQUIRE_VALUE(input.save_index());
 
     bvh::Storage output = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "output"));
     const widen::Options options{.arity = arity, .max_batch_bytes = max_batch_bytes};

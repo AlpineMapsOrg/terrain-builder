@@ -40,9 +40,8 @@ std::vector<morton::Code> make_ascending_codes(const uint32_t count) {
 
 // The children of the inner node `nodes` holds at `reference`.
 std::vector<bvh::Reference> read_children(const bvh::Storage &nodes, const bvh::Reference &reference) {
-    const auto batch = nodes.read(reference.batch);
-    REQUIRE(batch.has_value());
-    return to_vector(batch->resolve(batch->node(reference.node)).children());
+    const bvh::Batch batch = REQUIRE_VALUE(nodes.read(reference.batch));
+    return to_vector(batch.resolve(batch.node(reference.node)).children());
 }
 
 }
@@ -101,11 +100,10 @@ TEST_CASE("a single entry is its own root and writes nothing", "[pseudo_lbvh][bu
     const TempDirectory directory("pseudo_lbvh");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
     bvh::BatchWriter writer(nodes);
-    const auto root = pseudo_lbvh::detail::build_subtree(std::array{entry}, writer);
-    REQUIRE(root.has_value());
-    REQUIRE(writer.flush().has_value());
+    const frontier::Entry root = REQUIRE_VALUE(pseudo_lbvh::detail::build_subtree(std::array{entry}, writer));
+    REQUIRE_VALUE(writer.flush());
 
-    CHECK(*root == entry);
+    CHECK(root == entry);
     CHECK(nodes.size() == 0);
 }
 
@@ -125,14 +123,13 @@ TEST_CASE("two entries are joined under a parent carrying both their headers", "
     const TempDirectory directory("pseudo_lbvh");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
     bvh::BatchWriter writer(nodes);
-    const auto root = pseudo_lbvh::detail::build_subtree(std::array{left, right}, writer);
-    REQUIRE(root.has_value());
-    REQUIRE(writer.flush().has_value());
+    const frontier::Entry root = REQUIRE_VALUE(pseudo_lbvh::detail::build_subtree(std::array{left, right}, writer));
+    REQUIRE_VALUE(writer.flush());
     REQUIRE_VALUE(nodes.save_index());
 
-    CHECK(root->morton == left.morton);
-    CHECK(root->header == make_node_header({1.0, 4.0}, {glm::dvec3{0.0}, glm::dvec3{7.0}}));
-    CHECK(read_children(nodes, root->ref) == std::vector{left.ref, right.ref});
+    CHECK(root.morton == left.morton);
+    CHECK(root.header == make_node_header({1.0, 4.0}, {glm::dvec3{0.0}, glm::dvec3{7.0}}));
+    CHECK(read_children(nodes, root.ref) == std::vector{left.ref, right.ref});
 }
 
 TEST_CASE("entries whose codes differ in the top bit end up in separate subtrees", "[pseudo_lbvh][build]") {
@@ -146,12 +143,11 @@ TEST_CASE("entries whose codes differ in the top bit end up in separate subtrees
     const TempDirectory directory("pseudo_lbvh");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
     bvh::BatchWriter writer(nodes);
-    const auto root = pseudo_lbvh::detail::build_subtree(entries, writer);
-    REQUIRE(root.has_value());
-    REQUIRE(writer.flush().has_value());
+    const frontier::Entry root = REQUIRE_VALUE(pseudo_lbvh::detail::build_subtree(entries, writer));
+    REQUIRE_VALUE(writer.flush());
     REQUIRE_VALUE(nodes.save_index());
 
-    const std::vector<bvh::Reference> children = read_children(nodes, root->ref);
+    const std::vector<bvh::Reference> children = read_children(nodes, root.ref);
     REQUIRE(children.size() == 2);
     CHECK(read_children(nodes, children[0]) == std::vector{entries[0].ref, entries[1].ref});
     CHECK(read_children(nodes, children[1]) == std::vector{entries[2].ref, entries[3].ref});
@@ -167,12 +163,11 @@ TEST_CASE("entries with equal codes are still all joined, halving the run", "[ps
     const TempDirectory directory("pseudo_lbvh");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path()));
     bvh::BatchWriter writer(nodes);
-    const auto root = pseudo_lbvh::detail::build_subtree(entries, writer);
-    REQUIRE(root.has_value());
-    REQUIRE(writer.flush().has_value());
+    const frontier::Entry root = REQUIRE_VALUE(pseudo_lbvh::detail::build_subtree(entries, writer));
+    REQUIRE_VALUE(writer.flush());
     REQUIRE_VALUE(nodes.save_index());
 
-    const std::vector<bvh::Reference> children = read_children(nodes, root->ref);
+    const std::vector<bvh::Reference> children = read_children(nodes, root.ref);
     REQUIRE(children.size() == 2);
     CHECK(children[0] == entries[0].ref);
     CHECK(read_children(nodes, children[1]) == std::vector{entries[1].ref, entries[2].ref});
@@ -188,18 +183,17 @@ TEST_CASE("each batch of a run gets a subtree of its own before their roots are 
     const TempDirectory directory("pseudo_lbvh");
     // A single run would pair the last two; the batch boundary pairs the first two instead.
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "run"));
-    REQUIRE(run.write(frontier::Batch{.entries = {entries[0], entries[1]}}).has_value());
-    REQUIRE(run.write(frontier::Batch{.entries = {entries[2]}}).has_value());
-    REQUIRE(run.save_index().has_value());
+    REQUIRE_VALUE(run.write(frontier::Batch{.entries = {entries[0], entries[1]}}));
+    REQUIRE_VALUE(run.write(frontier::Batch{.entries = {entries[2]}}));
+    REQUIRE_VALUE(run.save_index());
 
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "nodes"));
     bvh::BatchWriter writer(nodes);
-    const auto root = pseudo_lbvh::build(run, writer);
-    REQUIRE(root.has_value());
-    REQUIRE(writer.flush().has_value());
+    const frontier::Entry root = REQUIRE_VALUE(pseudo_lbvh::build(run, writer));
+    REQUIRE_VALUE(writer.flush());
     REQUIRE_VALUE(nodes.save_index());
 
-    const std::vector<bvh::Reference> children = read_children(nodes, root->ref);
+    const std::vector<bvh::Reference> children = read_children(nodes, root.ref);
     REQUIRE(children.size() == 2);
     CHECK(read_children(nodes, children[0]) == std::vector{entries[0].ref, entries[1].ref});
     CHECK(children[1] == entries[2].ref);
@@ -208,14 +202,14 @@ TEST_CASE("each batch of a run gets a subtree of its own before their roots are 
 TEST_CASE("building into a storage saves its index", "[pseudo_lbvh][build]") {
     const TempDirectory directory("pseudo_lbvh");
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "run"));
-    REQUIRE(run.write(frontier::Batch{.entries = {
+    REQUIRE_VALUE(run.write(frontier::Batch{.entries = {
         frontier::Entry{.morton = morton::Code{0}, .header = {}, .ref = {.batch = 100, .node = 0}},
         frontier::Entry{.morton = morton::Code{1}, .header = {}, .ref = {.batch = 100, .node = 1}},
-    }}).has_value());
-    REQUIRE(run.save_index().has_value());
+    }}));
+    REQUIRE_VALUE(run.save_index());
 
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "nodes"));
-    REQUIRE(pseudo_lbvh::build(run, nodes, pseudo_lbvh::Options{}).has_value());
+    REQUIRE_VALUE(pseudo_lbvh::build(run, nodes, pseudo_lbvh::Options{}));
 
     const bvh::Storage reopened = REQUIRE_VALUE(bvh::Storage::open(directory.path() / "nodes"));
     CHECK(reopened.size() == 1);
@@ -224,16 +218,16 @@ TEST_CASE("building into a storage saves its index", "[pseudo_lbvh][build]") {
 TEST_CASE("a batch limit below one node writes every inner node into a batch of its own", "[pseudo_lbvh][build]") {
     const TempDirectory directory("pseudo_lbvh");
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "run"));
-    REQUIRE(run.write(frontier::Batch{.entries = {
+    REQUIRE_VALUE(run.write(frontier::Batch{.entries = {
         frontier::Entry{.morton = morton::Code{0}, .header = {}, .ref = {.batch = 100, .node = 0}},
         frontier::Entry{.morton = morton::Code{1}, .header = {}, .ref = {.batch = 100, .node = 1}},
         frontier::Entry{.morton = morton::Code{2}, .header = {}, .ref = {.batch = 100, .node = 2}},
         frontier::Entry{.morton = morton::Code{3}, .header = {}, .ref = {.batch = 100, .node = 3}},
-    }}).has_value());
-    REQUIRE(run.save_index().has_value());
+    }}));
+    REQUIRE_VALUE(run.save_index());
 
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "nodes"));
-    REQUIRE(pseudo_lbvh::build(run, nodes, pseudo_lbvh::Options{.max_batch_bytes = 1}).has_value());
+    REQUIRE_VALUE(pseudo_lbvh::build(run, nodes, pseudo_lbvh::Options{.max_batch_bytes = 1}));
 
     // Four entries take three inner nodes.
     CHECK(nodes.size() == 3);
@@ -244,13 +238,13 @@ TEST_CASE("the build writes its root into the last batch", "[pseudo_lbvh][build]
 
     const TempDirectory directory("pseudo_lbvh");
     frontier::Storage run = REQUIRE_VALUE(frontier::Storage::create(directory.path() / "run"));
-    REQUIRE(run.write(frontier::Batch{.entries = {
+    REQUIRE_VALUE(run.write(frontier::Batch{.entries = {
         frontier::Entry{.morton = morton::Code{0}, .header = {}, .ref = {.batch = 100, .node = 0}},
         frontier::Entry{.morton = morton::Code{1}, .header = {}, .ref = {.batch = 100, .node = 1}},
         frontier::Entry{.morton = morton::Code{2}, .header = {}, .ref = {.batch = 100, .node = 2}},
         frontier::Entry{.morton = morton::Code{3}, .header = {}, .ref = {.batch = 100, .node = 3}},
-    }}).has_value());
-    REQUIRE(run.save_index().has_value());
+    }}));
+    REQUIRE_VALUE(run.save_index());
 
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(directory.path() / "nodes"));
     const bvh::Reference root = REQUIRE_VALUE(pseudo_lbvh::build(run, nodes, pseudo_lbvh::Options{.max_batch_bytes = max_batch_bytes}));

@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -29,10 +30,10 @@ std::vector<bvh::Batch> write_leaves(bvh::Storage &nodes, const std::vector<uint
             batch.add_node(make_leaf_input());
             group_index++;
         }
-        REQUIRE(nodes.write(batch).has_value());
+        REQUIRE_VALUE(nodes.write(batch));
         written.push_back(std::move(batch));
     }
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(nodes.save_index());
     return written;
 }
 
@@ -45,9 +46,8 @@ TEST_CASE("a node comes back from the batch it was written to", "[bvh][NodeCache
 
     bvh::NodeCache cache(nodes, UNBOUNDED_BYTES);
 
-    const auto node = cache.read_node(bvh::Reference{.batch = 1, .node = 2});
-    REQUIRE(node.has_value());
-    CHECK(*node == written[1].node(2));
+    const bvh::Node node = REQUIRE_VALUE(cache.read_node(bvh::Reference{.batch = 1, .node = 2}));
+    CHECK(node == written[1].node(2));
 }
 
 TEST_CASE("nodes in the same batch are read once", "[bvh][NodeCache]") {
@@ -57,9 +57,9 @@ TEST_CASE("nodes in the same batch are read once", "[bvh][NodeCache]") {
 
     bvh::NodeCache cache(nodes, UNBOUNDED_BYTES);
 
-    REQUIRE(cache.read_node(bvh::Reference{.batch = 1, .node = 0}).has_value());
-    REQUIRE(cache.read_node(bvh::Reference{.batch = 1, .node = 1}).has_value());
-    REQUIRE(cache.read_node(bvh::Reference{.batch = 1, .node = 2}).has_value());
+    REQUIRE_VALUE(cache.read_node(bvh::Reference{.batch = 1, .node = 0}));
+    REQUIRE_VALUE(cache.read_node(bvh::Reference{.batch = 1, .node = 1}));
+    REQUIRE_VALUE(cache.read_node(bvh::Reference{.batch = 1, .node = 2}));
 
     CHECK(cache.count_misses() == 1);
 }
@@ -71,11 +71,10 @@ TEST_CASE("a node outlives the read that follows it", "[bvh][NodeCache]") {
 
     bvh::NodeCache cache(nodes, 1);
 
-    const auto first = cache.read_node(bvh::Reference{.batch = 0, .node = 0});
-    REQUIRE(first.has_value());
-    REQUIRE(cache.read_node(bvh::Reference{.batch = 2, .node = 0}).has_value());
+    const bvh::Node first = REQUIRE_VALUE(cache.read_node(bvh::Reference{.batch = 0, .node = 0}));
+    REQUIRE_VALUE(cache.read_node(bvh::Reference{.batch = 2, .node = 0}));
 
-    CHECK(*first == written[0].node(0));
+    CHECK(first == written[0].node(0));
 }
 
 TEST_CASE("the batch behind a node is reachable through the cache", "[bvh][NodeCache]") {
@@ -85,7 +84,6 @@ TEST_CASE("the batch behind a node is reachable through the cache", "[bvh][NodeC
 
     bvh::NodeCache cache(nodes, UNBOUNDED_BYTES);
 
-    const auto result = cache.read_batch(1);
-    REQUIRE(result.has_value());
-    CHECK(*result->get() == written[1]);
+    const std::shared_ptr<const bvh::Batch> batch = REQUIRE_VALUE(cache.read_batch(1));
+    CHECK(*batch == written[1]);
 }

@@ -23,21 +23,20 @@ frontier::Entry make_entry(const morton::Code &code, const bvh::NodeIndex node) 
 
 void write_batches(frontier::Storage &storage, const std::vector<std::vector<frontier::Entry>> &batches) {
     for (const std::vector<frontier::Entry> &entries : batches) {
-        REQUIRE(storage.write(frontier::Batch{.entries = entries}).has_value());
+        REQUIRE_VALUE(storage.write(frontier::Batch{.entries = entries}));
     }
-    REQUIRE(storage.save_index().has_value());
+    REQUIRE_VALUE(storage.save_index());
 }
 
 // Takes entries until the reader is exhausted.
 std::vector<frontier::Entry> take_all(frontier::BatchReader &reader) {
     std::vector<frontier::Entry> entries;
     while (true) {
-        const auto entry_result = reader.next();
-        REQUIRE(entry_result.has_value());
-        if (!entry_result->has_value()) {
+        const std::optional<frontier::Entry> entry_opt = REQUIRE_VALUE(reader.next());
+        if (!entry_opt.has_value()) {
             return entries;
         }
-        entries.push_back(entry_result->value());
+        entries.push_back(entry_opt.value());
     }
 }
 
@@ -60,9 +59,7 @@ TEST_CASE("BatchReader::next takes the entries of every batch in stored order", 
     CHECK(take_all(reader) == std::vector<frontier::Entry>{a, b, c, d, e});
 
     // An exhausted reader stays exhausted.
-    const auto after_end = reader.next();
-    REQUIRE(after_end.has_value());
-    CHECK_FALSE(after_end->has_value());
+    CHECK(REQUIRE_VALUE(reader.next()) == std::nullopt);
 }
 
 TEST_CASE("BatchReader::next finds nothing in a storage without entries", "[frontier][BatchReader]") {
@@ -76,9 +73,7 @@ TEST_CASE("BatchReader::next finds nothing in a storage without entries", "[fron
 
     frontier::BatchReader reader(storage);
 
-    const auto entry = reader.next();
-    REQUIRE(entry.has_value());
-    CHECK_FALSE(entry->has_value());
+    CHECK(REQUIRE_VALUE(reader.next()) == std::nullopt);
 }
 
 TEST_CASE("BatchReader::next reports the first batch it cannot read", "[frontier][BatchReader]") {
@@ -92,18 +87,13 @@ TEST_CASE("BatchReader::next reports the first batch it cannot read", "[frontier
 
     frontier::BatchReader reader(storage);
 
-    const auto first = reader.next();
-    REQUIRE(first.has_value());
-    CHECK(first.value() == a);
+    CHECK(REQUIRE_VALUE(reader.next()) == a);
 
     // The first batch is already read, so only the second one is lost.
     REQUIRE_VALUE(io::filesystem::remove_all(directory.path() / "storage"));
 
-    const auto second = reader.next();
-    REQUIRE(second.has_value());
-    CHECK(second.value() == b);
+    CHECK(REQUIRE_VALUE(reader.next()) == b);
 
-    const auto third = reader.next();
-    REQUIRE_FALSE(third.has_value());
-    CHECK(third.error().holds_and<io::FileError>([](const io::FileError &error) { return error.is_not_found(); }));
+    const alp::Error<io::Error> error = REQUIRE_ERROR(reader.next());
+    CHECK(error.holds_and<io::FileError>(&io::FileError::is_not_found));
 }

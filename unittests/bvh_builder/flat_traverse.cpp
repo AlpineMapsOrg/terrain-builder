@@ -23,9 +23,9 @@ std::vector<StoredNode> write_nodes(bvh::Storage &nodes, const std::vector<uint3
             const bvh::NodeIndex node = batch.add_node(make_leaf_input());
             written.emplace_back(bvh::Reference{.batch = batch.index(), .node = node}, batch.node(node));
         }
-        REQUIRE(nodes.write(batch).has_value());
+        REQUIRE_VALUE(nodes.write(batch));
     }
-    REQUIRE(nodes.save_index().has_value());
+    REQUIRE_VALUE(nodes.save_index());
     return written;
 }
 
@@ -41,7 +41,7 @@ TEST_CASE("flat_traverse visits every node in order, with the reference naming i
         visited.emplace_back(reference, node);
     });
 
-    REQUIRE(result.value_or(false));
+    REQUIRE(REQUIRE_VALUE(result));
     CHECK(visited == written);
 }
 
@@ -52,11 +52,11 @@ TEST_CASE("flat_traverse handles an empty store and empty batches", "[bvh][flat_
     uint32_t visits = 0;
     const auto count_visits = [&](const bvh::Reference &, const bvh::Node &) { visits++; };
 
-    REQUIRE(bvh::flat_traverse(nodes, count_visits).value_or(false));
+    REQUIRE(REQUIRE_VALUE(bvh::flat_traverse(nodes, count_visits)));
     CHECK(visits == 0);
 
     write_nodes(nodes, {0, 2, 0});
-    REQUIRE(bvh::flat_traverse(nodes, count_visits).value_or(false));
+    REQUIRE(REQUIRE_VALUE(bvh::flat_traverse(nodes, count_visits)));
     CHECK(visits == 2);
 }
 
@@ -68,8 +68,7 @@ TEST_CASE("flat_traverse reports a missing batch", "[bvh][flat_traverse]") {
     // Reserved but never written, so reading it must fail rather than end the traversal quietly.
     nodes.create_batch();
 
-    const auto result = bvh::flat_traverse(nodes, [](const bvh::Reference &, const bvh::Node &) {});
-    CHECK_FALSE(result.has_value());
+    REQUIRE_ERROR(bvh::flat_traverse(nodes, [](const bvh::Reference &, const bvh::Node &) {}));
 }
 
 TEST_CASE("a visitor returning false stops the flat walk", "[bvh][flat_traverse]") {
@@ -82,9 +81,8 @@ TEST_CASE("a visitor returning false stops the flat walk", "[bvh][flat_traverse]
         visits++;
         return visits < 2;
     };
-    const auto walked = bvh::flat_traverse(nodes, stop_after_second);
-    REQUIRE(walked.has_value());
+    const bool walked = REQUIRE_VALUE(bvh::flat_traverse(nodes, stop_after_second));
 
-    CHECK(!walked.value());
+    CHECK(!walked);
     CHECK(visits == 2);
 }
