@@ -83,6 +83,9 @@ template <typename T>
 [[nodiscard]]
 alp::Result<T, ReadError> read(const std::filesystem::path &path);
 
+// An error from reading or writing an encoded value.
+using Error = alp::Error<ReadError, WriteError>;
+
 } // namespace io::serde
 
 #include "io/serde.inl"

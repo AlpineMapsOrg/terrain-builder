@@ -61,4 +61,7 @@ alp::Result<vector, ReadError> read(const std::filesystem::path &path);
 [[nodiscard]]
 alp::Result<vector, ReadError> read_prefix(const std::filesystem::path &path, size_t max_size);
 
+// An error from reading or writing a file of bytes.
+using Error = alp::Error<ReadError, WriteError>;
+
 } // namespace io::bytes

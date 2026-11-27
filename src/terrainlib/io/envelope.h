@@ -135,6 +135,9 @@ using ReadHeaderError = alp::Error<bytes::ReadError, HeaderError>;
 [[nodiscard]]
 alp::Result<Header, ReadHeaderError> read_header(const std::filesystem::path &path);
 
+// An error from reading or writing an envelope.
+using Error = alp::Error<ReadError, WriteError>;
+
 namespace detail {
 
 // Checks the magic number, the field limits and the algorithms of `header`.
