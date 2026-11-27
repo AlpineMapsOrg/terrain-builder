@@ -95,6 +95,10 @@ concept HttpProgress = std::is_invocable_r_v<bool, F &, std::optional<double>>;
 template <HttpSink Sink>
 using SinkError = typename std::invoke_result_t<Sink &, io::bytes::span>::error_type;
 
+// What streaming a download into `Sink` can fail with.
+template <HttpSink Sink>
+using StreamError = alp::Error<StatusError, TimedOut, TransportError, Stopped, SinkError<Sink>>;
+
 class HttpClient {
 public:
     [[nodiscard]]
@@ -123,7 +127,7 @@ public:
     // Fails with Stopped once `progress` returns false.
     template <HttpSink Sink, HttpProgress Progress>
     [[nodiscard]]
-    alp::Result<TransferInfo, GetError, Stopped, SinkError<Sink>> get(const std::string &url, Sink &&sink, Progress &&progress) {
+    alp::Result<TransferInfo, StreamError<Sink>> stream(const std::string &url, Sink &&sink, Progress &&progress) {
         alp::Result<void, SinkError<Sink>> sink_result;
         const auto write = [&](const io::bytes::span chunk) {
             sink_result = sink(chunk);

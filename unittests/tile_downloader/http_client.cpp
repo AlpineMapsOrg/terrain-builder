@@ -66,26 +66,26 @@ TEST_CASE("HttpClient::get fails with TransportError for a missing file", "[Http
     CHECK(error.holds<TransportError>());
 }
 
-TEST_CASE("HttpClient::get fails once the sink fails", "[HttpClient]") {
+TEST_CASE("HttpClient::stream fails once the sink fails", "[HttpClient]") {
     const TempFile source("atb-http-client.txt", "response body");
     const std::string url = make_file_url(source.path());
     HttpClient client = REQUIRE_VALUE(HttpClient::make());
     const auto failing_sink = [](io::bytes::span) -> alp::Result<void, SinkFailure> { return alp::make_error(SinkFailure{}); };
     const auto keep_going = [](std::optional<double>) { return true; };
 
-    const auto error = REQUIRE_ERROR(client.get(url, failing_sink, keep_going));
+    const auto error = REQUIRE_ERROR(client.stream(url, failing_sink, keep_going));
 
     CHECK(error.holds<SinkFailure>());
 }
 
-TEST_CASE("HttpClient::get fails with Stopped once the progress callback returns false", "[HttpClient]") {
+TEST_CASE("HttpClient::stream fails with Stopped once the progress callback returns false", "[HttpClient]") {
     const TempFile source("atb-http-client.txt", "response body");
     const std::string url = make_file_url(source.path());
     HttpClient client = REQUIRE_VALUE(HttpClient::make());
     const auto ignoring_sink = [](io::bytes::span) -> alp::Result<void, alp::Infallible> { return {}; };
     const auto stop = [](std::optional<double>) { return false; };
 
-    const auto error = REQUIRE_ERROR(client.get(url, ignoring_sink, stop));
+    const auto error = REQUIRE_ERROR(client.stream(url, ignoring_sink, stop));
 
     CHECK(error.holds<Stopped>());
 }
