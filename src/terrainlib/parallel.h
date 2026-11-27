@@ -74,48 +74,49 @@ private:
 
 // A function that takes an item of `Range` and a feeder for further items.
 template <typename F, typename Range>
-concept ItemAndFeederFn = std::invocable<F, const std::ranges::range_value_t<Range> &, Feeder<std::ranges::range_value_t<Range>> &>;
+concept ItemAndFeederFn = std::invocable<F, std::ranges::range_reference_t<Range>, Feeder<std::ranges::range_value_t<Range>> &>;
 
 // A function that takes an item of `Range`.
 template <typename F, typename Range>
-concept ItemFn = std::invocable<F, const std::ranges::range_value_t<Range> &>;
+concept ItemFn = std::invocable<F, std::ranges::range_reference_t<Range>>;
 
 // A function that takes an item of `Range` and a feeder for further items, and returns a result without a value.
 template <typename F, typename Range>
-concept FallibleItemAndFeederFn = ItemAndFeederFn<F, Range> && alp::FallibleFn<F, void, const std::ranges::range_value_t<Range> &, Feeder<std::ranges::range_value_t<Range>> &>;
+concept FallibleItemAndFeederFn = ItemAndFeederFn<F, Range> && alp::FallibleFn<F, void, std::ranges::range_reference_t<Range>, Feeder<std::ranges::range_value_t<Range>> &>;
 
 // A function that takes an item of `Range` and returns a result without a value.
 template <typename F, typename Range>
-concept FallibleItemFn = ItemFn<F, Range> && alp::FallibleFn<F, void, const std::ranges::range_value_t<Range> &>;
+concept FallibleItemFn = ItemFn<F, Range> && alp::FallibleFn<F, void, std::ranges::range_reference_t<Range>>;
 
 namespace detail {
 
 template <typename Range, typename F>
 auto try_for_each_serial(Range &range, F &f, const std::stop_token &stop) {
     using Item = std::ranges::range_value_t<Range>;
-    using Result = alp::Result<void, typename std::invoke_result_t<F &, const Item &, Feeder<Item> &>::error_type, Stopped>;
+    using Reference = std::ranges::range_reference_t<Range>;
+    using Result = alp::Result<void, typename std::invoke_result_t<F &, Reference, Feeder<Item> &>::error_type, Stopped>;
 
     std::vector<Item> added;
     Feeder<Item> feeder(added);
-    for (const Item &item : range) {
+    for (auto &&item : range) {
         if (stop.stop_requested()) {
             return Result(alp::make_error(Stopped{}));
         }
 
-        Result result = f(item, feeder);
+        Result result = f(static_cast<Reference>(item), feeder);
         if (!result.has_value()) {
             return result;
         }
     }
 
     while (!added.empty()) {
-        const std::vector<Item> batch = std::exchange(added, {});
-        for (const Item &item : batch) {
+        std::vector<Item> batch = std::exchange(added, {});
+        for (Item &item : batch) {
             if (stop.stop_requested()) {
                 return Result(alp::make_error(Stopped{}));
             }
 
-            Result result = f(item, feeder);
+            Result result = f(static_cast<Reference>(item), feeder);
             if (!result.has_value()) {
                 return result;
             }
@@ -128,20 +129,22 @@ auto try_for_each_serial(Range &range, F &f, const std::stop_token &stop) {
 template <typename Range, typename F>
 auto try_for_each_parallel(Range &range, F &f, const std::stop_token &stop) {
     using Item = std::ranges::range_value_t<Range>;
-    using Result = alp::Result<void, typename std::invoke_result_t<F &, const Item &, Feeder<Item> &>::error_type, Stopped>;
+    using Reference = std::ranges::range_reference_t<Range>;
+    using Result = alp::Result<void, typename std::invoke_result_t<F &, Reference, Feeder<Item> &>::error_type, Stopped>;
 
     tbb::task_group_context context(tbb::task_group_context::isolated);
     const std::stop_callback cancel_on_stop(stop, [&] { context.cancel_group_execution(); });
 
     Result loop_result;
-    tbb::parallel_for_each(std::ranges::begin(range), std::ranges::end(range), [&](const Item &item, tbb::feeder<Item> &sink) {
+    // TBB passes the items of the range as references and the items added through the feeder as rvalues.
+    tbb::parallel_for_each(std::ranges::begin(range), std::ranges::end(range), [&](auto &&item, tbb::feeder<Item> &sink) {
         // Cancelling the group doesnt stop an item whose task has already started.
         if (context.is_group_execution_cancelled()) {
             return;
         }
 
         Feeder<Item> feeder(sink);
-        Result result = f(item, feeder);
+        Result result = f(static_cast<Reference>(item), feeder);
         if (result.has_value()) {
             return;
         }
@@ -164,28 +167,13 @@ auto try_for_each_parallel(Range &range, F &f, const std::stop_token &stop) {
 template <typename Range, typename F>
 auto ignore_feeder(F &f) {
     using Item = std::ranges::range_value_t<Range>;
-    return [&f](const Item &item, Feeder<Item> &) {
-        return f(item);
+    using Reference = std::ranges::range_reference_t<Range>;
+    return [&f](Reference item, Feeder<Item> &) {
+        return f(static_cast<Reference>(item));
     };
 }
 
 } // namespace detail
-
-// Runs `f` on every item of `range`.
-template <std::ranges::common_range Range, std::invocable<std::ranges::range_reference_t<Range>> F>
-void for_each(Range &&range, F f, const Execution execution = Execution::Parallel) {
-    switch (execution) {
-    case Execution::Parallel:
-        tbb::parallel_for_each(std::ranges::begin(range), std::ranges::end(range), f);
-        return;
-    case Execution::Serial:
-        for (auto &&item : range) {
-            f(item);
-        }
-        return;
-    }
-    UNREACHABLE("invalid execution", execution);
-}
 
 // Runs `f` on every item of `range`, and on every item `f` adds through its feeder, until a stop is requested through `stop`.
 // Returns the first failure, or Stopped if the stop request came first, and skips the items that have not started by then.
@@ -230,9 +218,10 @@ auto try_for_each(Range &&range, F f, const Execution execution = Execution::Par
 template <std::ranges::common_range Range, ItemAndFeederFn<Range> F>
 void for_each(Range &&range, F f, const std::stop_token &stop, const Execution execution = Execution::Parallel) {
     using Item = std::ranges::range_value_t<Range>;
+    using Reference = std::ranges::range_reference_t<Range>;
     // The result can only hold Stopped, and a stopped loop has nothing more to report.
-    std::ignore = try_for_each(range, [&](const Item &item, Feeder<Item> &feeder) -> alp::Result<void, alp::Infallible> {
-        f(item, feeder);
+    std::ignore = try_for_each(range, [&](Reference item, Feeder<Item> &feeder) -> alp::Result<void, alp::Infallible> {
+        f(static_cast<Reference>(item), feeder);
         return {};
     }, stop, execution);
 }
@@ -248,6 +237,12 @@ void for_each(Range &&range, F f, const Execution execution = Execution::Paralle
 template <std::ranges::common_range Range, ItemFn<Range> F>
 void for_each(Range &&range, F f, const std::stop_token &stop, const Execution execution = Execution::Parallel) {
     for_each(range, detail::ignore_feeder<Range>(f), stop, execution);
+}
+
+// Runs `f` on every item of `range`.
+template <std::ranges::common_range Range, ItemFn<Range> F>
+void for_each(Range &&range, F f, const Execution execution = Execution::Parallel) {
+    for_each(range, f, std::stop_token(), execution);
 }
 
 } // namespace parallel

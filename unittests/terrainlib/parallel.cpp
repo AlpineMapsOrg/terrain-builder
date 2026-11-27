@@ -84,6 +84,20 @@ TEST_CASE("for_each runs the items a body adds through its feeder", "[parallel]"
     CHECK(seen == std::vector<uint32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 }
 
+TEST_CASE("for_each lets the body change the items of the range", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    std::vector<uint32_t> items = {3, 5, 8, 13};
+
+    SECTION("without a feeder") {
+        parallel::for_each(items, [](uint32_t &item) { item *= 2; }, execution);
+    }
+    SECTION("with a feeder") {
+        parallel::for_each(items, [](uint32_t &item, parallel::Feeder<uint32_t> &) { item *= 2; }, execution);
+    }
+
+    CHECK(items == std::vector<uint32_t>{6, 10, 16, 26});
+}
+
 TEST_CASE("for_each with a stop token starts no item after a body requested the stop in a serial run", "[parallel]") {
     const std::vector<uint32_t> items = {3, 5, 8, 13};
     std::stop_source stop;
@@ -218,6 +232,26 @@ TEST_CASE("try_for_each runs the items a body adds through its feeder", "[parall
 
     std::ranges::sort(seen);
     CHECK(seen == std::vector<uint32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
+}
+
+TEST_CASE("try_for_each lets the body change the items of the range", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    std::vector<uint32_t> items = {3, 5, 8, 13};
+
+    SECTION("without a feeder") {
+        REQUIRE_VALUE(parallel::try_for_each(items, [](uint32_t &item) -> alp::Result<void, FailedItem> {
+            item *= 2;
+            return {};
+        }, execution));
+    }
+    SECTION("with a feeder") {
+        REQUIRE_VALUE(parallel::try_for_each(items, [](uint32_t &item, parallel::Feeder<uint32_t> &) -> alp::Result<void, FailedItem> {
+            item *= 2;
+            return {};
+        }, execution));
+    }
+
+    CHECK(items == std::vector<uint32_t>{6, 10, 16, 26});
 }
 
 TEST_CASE("try_for_each returns the error of an item that was added through the feeder", "[parallel]") {
