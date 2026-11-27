@@ -6,9 +6,11 @@
 #include <vector>
 
 #include <fmt/format.h>
+#include <fmt/std.h>
 
 #include "cli.h"
 #include "commands.h"
+#include "error/Context.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -53,9 +55,8 @@ struct Evaluation {
 alp::ErasedResult<void> evaluate_bvh(const cli::EvaluateArgs &args) {
     ALP_TRY(const bvh::Storage nodes, bvh::Storage::open(args.input_path));
     ALP_TRY(const std::optional<bvh::Reference> root_opt, bvh::find_root(nodes));
-    if (!root_opt.has_value()) {
-        return alp::make_error(fmt::format("{} holds a forest or is empty", args.input_path.string()));
-    }
+    const auto missing_root_context = alp::make_context("{} holds a forest or is empty", args.input_path);
+    ALP_TRY(const bvh::Reference root, alp::to_result(root_opt, missing_root_context));
 
     ALP_TRY(const view::CameraSet camera_set, json::read_from_path<view::CameraSet>(args.cameras_path));
     std::vector<view::Camera> cameras;
@@ -80,7 +81,7 @@ alp::ErasedResult<void> evaluate_bvh(const cli::EvaluateArgs &args) {
     }
     evaluation.stats.reserve(cameras.size());
     for (const view::Camera &camera : cameras) {
-        ALP_TRY(view::GroupSelection selection, view::select_groups(cache, *root_opt, camera, rule));
+        ALP_TRY(view::GroupSelection selection, view::select_groups(cache, root, camera, rule));
         std::ranges::sort(selection.groups);
         evaluation.stats.push_back(CutStats{
             .group_count = selection.groups.size(),

@@ -6,9 +6,11 @@
 #include <vector>
 
 #include <fmt/format.h>
+#include <fmt/std.h>
 
 #include "cli.h"
 #include "commands.h"
+#include "error/Context.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -114,13 +116,12 @@ alp::Result<uint64_t, io::Error> check_reached(const bvh::Storage &nodes, const 
 alp::ErasedResult<void> check_bvh(const cli::CheckArgs &args) {
     ALP_TRY(const bvh::Storage nodes, bvh::Storage::open(args.input_path));
     ALP_TRY(const std::optional<bvh::Reference> root_opt, bvh::find_root(nodes));
-    if (!root_opt.has_value()) {
-        return alp::make_error(fmt::format("{} holds a forest or is empty", args.input_path.string()));
-    }
+    const auto missing_root_context = alp::make_context("{} holds a forest or is empty", args.input_path);
+    ALP_TRY(const bvh::Reference root, alp::to_result(root_opt, missing_root_context));
 
     bvh::NodeCache cache(nodes, args.max_resident_bytes);
     ReachedNodes reached(nodes.size());
-    ALP_TRY(const uint64_t tree_violation_count, check_tree(cache, *root_opt, nodes.size(), reached));
+    ALP_TRY(const uint64_t tree_violation_count, check_tree(cache, root, nodes.size(), reached));
     ALP_TRY(const uint64_t unreached_count, check_reached(nodes, reached));
     LOG_INFO("The walk read {} batches from disk for {} stored batches", cache.count_misses(), nodes.size());
 
