@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,25 +21,28 @@
 
 #include <cstdint>
 #include <cstring>
-#include <expected>
 #include <limits>
 #include <new>
 #include <type_traits>
 
+#include <fmt/format.h>
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 #include <opencv2/core.hpp>
 #include <radix/raster.h>
 
-#include "Error.h"
+#include "common_error_codes.h"
+#include "error/MessageCode.h"
+#include "error/Result.h"
+#include "error/utils.h"
+#include "io/OpenCvError.h"
+#include "type_name.h"
 
 namespace io::conversion {
 
-namespace detail {
+struct TypeMismatch : alp::MessageCode<"the matrix type is not the one the pixel type maps to"> {};
 
-    inline std::unexpected<Error> allocation_error(const std::source_location location = std::source_location::current()) noexcept
-    {
-        return Error::fail(Error::Code::ResourceExhausted, "allocate raster conversion output", location);
-    }
+namespace detail {
 
     template <typename Channel>
     inline constexpr int cv_depth = -1;
@@ -149,66 +153,67 @@ namespace detail {
 
 } // namespace detail
 
+using ToRasterError = alp::Error<Unsupported, TypeMismatch, OutOfMemory, OpenCvError>;
+
 template <typename Pixel>
-Expected<radix::Raster<Pixel>> to_raster(const cv::Mat& source)
+alp::Result<radix::Raster<Pixel>, ToRasterError> to_raster(const cv::Mat& source)
 {
     if constexpr (!detail::Traits<Pixel>::supported) {
-        return Error::fail(Error::Code::Unsupported, "unsupported raster pixel type");
+        return alp::make_error(Unsupported {}, fmt::format("there is no OpenCV type corresponding to {}", type_name<Pixel>()));
     } else {
         if (source.empty()) {
-            return Error::fail(Error::Code::InvalidInput, "cannot convert an empty OpenCV matrix to a raster");
+            return radix::Raster<Pixel>();
         }
         if (source.dims != 2) {
-            return Error::fail(Error::Code::Unsupported, "unsupported OpenCV matrix dimension count " + std::to_string(source.dims));
+            return alp::make_error(Unsupported {}, fmt::format("the matrix has {} dimensions", source.dims));
         }
         if (source.type() != detail::cv_type<Pixel>) {
-            return Error::fail(Error::Code::InvalidInput,
-                "OpenCV matrix type " + std::to_string(source.type()) + " does not match expected type " + std::to_string(detail::cv_type<Pixel>));
+            return alp::make_error(TypeMismatch {},
+                fmt::format("the matrix has type {}, {} corresponds to {}", cv::typeToString(source.type()), type_name<Pixel>(),
+                    cv::typeToString(detail::cv_type<Pixel>)));
         }
-        if (source.cols < 0 || source.rows < 0 || static_cast<unsigned long long>(source.cols) > std::numeric_limits<unsigned>::max()
-            || static_cast<unsigned long long>(source.rows) > std::numeric_limits<unsigned>::max()) {
-            return Error::fail(Error::Code::InvalidInput, "OpenCV matrix dimensions are outside the raster range");
-        }
+        const glm::ivec2 size(source.cols, source.rows);
+        ASSERT(glm::all(glm::greaterThanEqual(size, glm::ivec2(0))));
 
+        constexpr auto context = "allocating the raster";
         try {
-            radix::Raster<Pixel> destination({
-                static_cast<unsigned>(source.cols),
-                static_cast<unsigned>(source.rows),
-            });
+            radix::Raster<Pixel> destination { glm::uvec2(size) };
             detail::copy_mat_to_raster(source, destination);
             return destination;
         } catch (const std::bad_alloc&) {
-            return detail::allocation_error();
-        } catch (const cv::Exception& error) {
-            return Error::fail(
-                error.code == cv::Error::StsNoMem ? Error::Code::ResourceExhausted : Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
+            return alp::make_error(OutOfMemory {}, context);
+        } catch (const cv::Exception& exception) {
+            if (exception.code == cv::Error::StsNoMem) {
+                return alp::make_error(OutOfMemory {}, context, OpenCvError(exception));
+            }
+            return alp::make_error(OpenCvError(exception), "copying the matrix into the raster");
         }
     }
 }
 
+using ToMatError = alp::Error<Unsupported, OutOfMemory, OpenCvError>;
+
 template <typename Pixel>
-Expected<cv::Mat> to_mat(const radix::Raster<Pixel>& source)
+alp::Result<cv::Mat, ToMatError> to_mat(const radix::Raster<Pixel>& source)
 {
     if constexpr (!detail::Traits<Pixel>::supported) {
-        return Error::fail(Error::Code::Unsupported, "unsupported raster pixel type");
+        return alp::make_error(Unsupported {}, fmt::format("there is no OpenCV type corresponding to {}", type_name<Pixel>()));
     } else {
-        if (source.width() == 0 || source.height() == 0) {
-            return Error::fail(Error::Code::InvalidInput, "cannot convert an empty raster to an OpenCV matrix");
-        }
-        if (source.width() > static_cast<unsigned>(std::numeric_limits<int>::max())
-            || source.height() > static_cast<unsigned>(std::numeric_limits<int>::max())) {
-            return Error::fail(Error::Code::InvalidInput, "raster dimensions are outside the OpenCV matrix range");
-        }
+        ASSERT(glm::all(glm::lessThanEqual(source.size(), glm::uvec2(std::numeric_limits<int>::max()))));
+        const glm::ivec2 size(source.size());
 
+        constexpr auto context = "allocating the matrix";
         try {
-            cv::Mat destination(static_cast<int>(source.height()), static_cast<int>(source.width()), detail::cv_type<Pixel>);
+            cv::Mat destination(size.y, size.x, detail::cv_type<Pixel>);
             detail::copy_raster_to_mat(source, destination);
             return destination;
         } catch (const std::bad_alloc&) {
-            return detail::allocation_error();
-        } catch (const cv::Exception& error) {
-            return Error::fail(
-                error.code == cv::Error::StsNoMem ? Error::Code::ResourceExhausted : Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
+            return alp::make_error(OutOfMemory {}, context);
+        } catch (const cv::Exception& exception) {
+            if (exception.code == cv::Error::StsNoMem) {
+                return alp::make_error(OutOfMemory {}, context, OpenCvError(exception));
+            }
+            return alp::make_error(OpenCvError(exception), "copying the raster into the matrix");
         }
     }
 }

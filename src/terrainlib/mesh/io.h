@@ -19,19 +19,38 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
+#include <string_view>
 
-#include "Error.h"
+#include "common_error_codes.h"
+#include "error/Error.h"
+#include "error/Result.h"
 #include "mesh/SimpleMesh.h"
+#include "mesh/io/gltf.h"
 #include "mesh/io/options.h"
+#include "mesh/io/sf_mesh.h"
 
 namespace mesh::io {
 
-Expected<SimpleMesh> load_from_path(
+// The extensions load_from_path and save_to_path recognise.
+inline constexpr auto extensions = [] {
+    std::array<std::string_view, gltf::extensions.size() + 1> result;
+    std::ranges::copy(gltf::extensions, result.begin());
+    result.back() = sf_mesh::extension;
+    return result;
+}();
+
+using LoadError = alp::Error<Unsupported, gltf::LoadError, sf_mesh::LoadError>;
+[[nodiscard]]
+alp::Result<SimpleMesh, LoadError> load_from_path(
     const std::filesystem::path &path,
     const LoadOptions& options = {});
 
-Expected<void> save_to_path(
+using SaveError = alp::Error<Unsupported, gltf::SaveError, sf_mesh::SaveError>;
+[[nodiscard]]
+alp::Result<void, SaveError> save_to_path(
     const SimpleMesh &mesh,
     const std::filesystem::path &path,
     const SaveOptions& options = {});

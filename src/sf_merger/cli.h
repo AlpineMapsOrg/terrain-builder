@@ -20,6 +20,7 @@
 
 #include <vector>
 #include <filesystem>
+#include <variant>
 
 #include <spdlog/spdlog.h>
 
@@ -43,7 +44,7 @@ struct MergeArgs : public BaseArgs {
     std::filesystem::path output_path;
     std::optional<std::filesystem::path> mask_path;
     // MergeAlgorithm algorihm;
-    std::optional<std::filesystem::path> cache_path;
+    std::optional<std::filesystem::path> checkpoint_path;
 };
 
 struct CutArgs : public BaseArgs {

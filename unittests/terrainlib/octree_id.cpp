@@ -18,6 +18,7 @@
 
 #include <glm/glm.hpp>
 
+#include "../assertion_helpers.h"
 #include "../catch2_helpers.h"
 
 #include "octree/Id.h"
@@ -82,8 +83,8 @@ TEMPLATE_TEST_CASE("Id child returns correct child", "[octree::Id]", Id, WideId,
 
 TEMPLATE_TEST_CASE("Id child throws on invalid index", "[octree::Id]", Id, WideId, UltraWideId) {
     TestType parent(1, typename TestType::Coords(1, 1, 1));
-    CHECK_THROWS_AS(parent.child(8), std::invalid_argument);
-    CHECK_THROWS_AS(parent.child(-1), std::invalid_argument);
+    CHECK_ASSERTS(parent.child(8));
+    CHECK_ASSERTS(parent.child(-1));
 }
 
 TEMPLATE_TEST_CASE("Id at deep level near storage limits", "[octree::Id]", Id, WideId, UltraWideId) {

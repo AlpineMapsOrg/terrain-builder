@@ -29,3 +29,9 @@ template <typename Variant, typename... Ts>
 decltype(auto) match(Variant &&variant, Ts &&...visitors) {
     return std::visit(overloaded{std::forward<Ts>(visitors)...}, std::forward<Variant>(variant));
 }
+
+// Like match, but converts each visitor's result to R, so the visitors may return different types.
+template <typename R, typename Variant, typename... Ts>
+R match(Variant &&variant, Ts &&...visitors) {
+    return std::visit<R>(overloaded{std::forward<Ts>(visitors)...}, std::forward<Variant>(variant));
+}

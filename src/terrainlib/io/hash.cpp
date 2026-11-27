@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,28 +24,27 @@
 
 #include <libassert/assert.hpp>
 
+#include "range_utils.h"
+
 namespace io::hash {
 namespace {
 
-    byte::vector xxh3_64(const byte::span bytes)
-    {
+    bytes::vector xxh3_64(const bytes::span bytes) {
         XXH64_canonical_t canonical;
         XXH64_canonicalFromHash(&canonical, XXH3_64bits(bytes.data(), bytes.size()));
-        const auto* digest = reinterpret_cast<const std::byte*>(canonical.digest);
-        return { digest, digest + sizeof(canonical.digest) };
+        return to_vector<uint8_t>(canonical.digest);
     }
 
 } // namespace
 
-byte::vector data(const byte::span bytes, const Algorithm algorithm)
-{
+bytes::vector compute(const bytes::span bytes, const Algorithm algorithm) {
     switch (algorithm) {
     case Algorithm::None:
         return {};
     case Algorithm::Xxh3_64:
         return xxh3_64(bytes);
     }
-    PANIC("unsupported hash algorithm", static_cast<unsigned>(algorithm));
+    PANIC("unsupported hash algorithm", algorithm);
 }
 
 } // namespace io::hash

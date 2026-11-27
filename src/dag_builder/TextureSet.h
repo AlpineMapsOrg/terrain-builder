@@ -25,6 +25,8 @@
 #include <optional>
 #include <vector>
 
+#include <libassert/assert.hpp>
+
 #include "ImageKey.h"
 
 class TextureSet {
@@ -51,6 +53,10 @@ public:
         return this->id_of(texture).has_value();
     }
 
+    bool contains_id(const Id id) const {
+        return id < this->size();
+    }
+
     Id add(const Texture &texture) {
         const std::optional<Id> id = this->id_of(texture);
         if (id.has_value()) {
@@ -72,7 +78,7 @@ public:
         if (it == this->_textures.end()) {
             return std::nullopt;
         }
-        
+
         return std::distance(this->_textures.begin(), it);
     }
 
@@ -98,12 +104,12 @@ public:
     }
 
     Texture &operator[](const Id index) {
-        ASSERT(index < this->size());
+        ASSERT(this->contains_id(index));
         return this->_textures[index];
     }
 
     const Texture &operator[](const Id index) const {
-        ASSERT(index < this->size());
+        ASSERT(this->contains_id(index));
         return this->_textures[index];
     }
 

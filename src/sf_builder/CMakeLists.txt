@@ -17,17 +17,22 @@
 # *****************************************************************************
 
 add_library(sfbuilderlib
+    LogScope.h
+    RawDatasetReader.h
+    TileProvider.h
     border.h
     inputs.h
+    native_regions.h native_regions.cpp
     mesh_builder.h mesh_builder.cpp
-    raw_dataset_reader.h
-    terrainbuilder.h terrainbuilder.cpp
+    build.h build.cpp
     texture_assembler.h
-    tile_provider.h
 )
 
 target_include_directories(sfbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sfbuilderlib PUBLIC terrainlib spdlog)
 
-add_executable(sf-builder main.cpp)
+add_executable(sf-builder
+    cli.h cli.cpp
+    main.cpp
+)
 target_link_libraries(sf-builder PRIVATE sfbuilderlib CLI11::CLI11)

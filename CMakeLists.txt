@@ -10,6 +10,7 @@ option(ALP_BUILD_MESH_CONVERT "Build mesh-convert" ${PROJECT_IS_TOP_LEVEL})
 option(ALP_BUILD_SF_INDEX_BROWSER "Build sf-index-browser" ${PROJECT_IS_TOP_LEVEL})
 option(ALP_BUILD_DAG_BUILDER "Build dag-builder" ${PROJECT_IS_TOP_LEVEL})
 option(ALP_BUILD_DAG_CONVERT_DEBUG "Build dag-convert-debug" ${PROJECT_IS_TOP_LEVEL})
+option(ALP_BUILD_BVH_BUILDER "Build bvh-builder" ${PROJECT_IS_TOP_LEVEL})
 option(ALP_BUILD_SF_BROWSER "Build sf-browser" ${PROJECT_IS_TOP_LEVEL})
 option(ALP_BUILD_UNITTESTS "Build unit tests for enabled components" ${PROJECT_IS_TOP_LEVEL})
 

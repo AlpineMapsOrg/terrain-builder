@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +19,9 @@
 
 #pragma once
 
+#include <cstdint>
+#include <limits>
+
 #include <radix/tile.h>
 
 namespace gis::webmercator {
@@ -26,7 +30,10 @@ namespace gis::webmercator {
 constexpr double half_extent = 20037508.342789244;
 /// Latitude in degrees at which Web Mercator y reaches half_extent.
 constexpr double latitude_limit = 85.0511287798066;
+/// The deepest zoom level whose tile coordinates fit into radix::tile::Id.
+constexpr uint32_t max_zoom_level = std::numeric_limits<decltype(radix::tile::Id::coords)::value_type>::digits;
+
 /// Web Mercator bounds of an XYZ tile; valid up to zoom level 32.
-radix::tile::SrsBounds tile_bounds(const radix::tile::Id& key);
+radix::tile::SrsBounds compute_tile_bounds(const radix::tile::Id& key);
 
 } // namespace gis::webmercator

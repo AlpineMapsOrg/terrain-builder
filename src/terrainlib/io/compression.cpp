@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,113 +23,149 @@
 
 #include "io/compression.h"
 
-#include <libassert/assert.hpp>
-#include <magic_enum/magic_enum.hpp>
-
 #include <algorithm>
-#include <limits>
-#include <memory>
-#include <utility>
 
-namespace io::envelope {
+#include <fmt/format.h>
+#include <libassert/assert.hpp>
+
+#include "error/try.h"
+#include "error/utils.h"
+#include "io/ZstdError.h"
+#include "io/alloc.h"
+
+namespace io::compression {
 namespace {
 
-    using CompressionContext = std::unique_ptr<ZSTD_CCtx, decltype(&ZSTD_freeCCtx)>;
-
-} // namespace
-
-Expected<byte::vector> compress(const byte::span uncompressed_data, const CompressionAlgorithm compression_algorithm)
-{
-    if (uncompressed_data.size() > default_max_decompressed_size) {
-        return Error::fail(Error::Code::ResourceExhausted, "uncompressed data exceeds the compression size limit");
-    }
-
-    int compression_level = 0;
-    switch (compression_algorithm) {
-    case CompressionAlgorithm::None:
-        return byte::vector(uncompressed_data.begin(), uncompressed_data.end());
-    case CompressionAlgorithm::ZstdBestCompression:
-        compression_level = ZSTD_maxCLevel();
-        break;
-    case CompressionAlgorithm::ZstdDefaultCompression:
-        break;
+// The decompression error for a code Zstandard reported, created from that code.
+DecompressError to_decompress_error(const ZstdError error) {
+    switch (error.code()) {
+    case ZSTD_error_memory_allocation:
+        return alp::make_error(OutOfMemory{}, error);
+    case ZSTD_error_prefix_unknown:
+    case ZSTD_error_corruption_detected:
+    case ZSTD_error_checksum_wrong:
+    case ZSTD_error_literals_headerWrong:
+    case ZSTD_error_tableLog_tooLarge:
+    case ZSTD_error_maxSymbolValue_tooLarge:
+    case ZSTD_error_maxSymbolValue_tooSmall:
+    case ZSTD_error_srcSize_wrong:
+    // No dictionary is ever given, so the corrupt data is the frame's own.
+    case ZSTD_error_dictionary_corrupted:
+    // The buffer holds the bound, which only corrupt data can exceed.
+    case ZSTD_error_dstSize_tooSmall:
+        return alp::make_error(CorruptData{}, error);
+    case ZSTD_error_version_unsupported:
+    case ZSTD_error_frameParameter_unsupported:
+    case ZSTD_error_frameParameter_windowTooLarge:
+    // The frame needs a dictionary, and no dictionary is ever given.
+    case ZSTD_error_dictionary_wrong:
+        return alp::make_error(Unsupported{}, error);
     default:
-        PANIC("unsupported compression algorithm", static_cast<unsigned>(compression_algorithm));
+        return alp::make_error(Unknown{}, error);
     }
+}
 
-    CompressionContext context { ZSTD_createCCtx(), &ZSTD_freeCCtx };
-    if (!context) {
-        return Error::fail(Error::Code::Internal, "failed to create the Zstandard compression context");
+alp::Result<bytes::vector, CompressError> compress_with_zstd(const bytes::span uncompressed_data, const int compression_level) {
+    constexpr auto context = "compressing with Zstandard";
+
+    ALP_TRY_CONTEXT(bytes::vector compressed_data, try_make_vector<uint8_t>(ZSTD_compressBound(uncompressed_data.size())), context);
+    const size_t compress_result = ZSTD_compress(compressed_data.data(), compressed_data.size(), uncompressed_data.data(), uncompressed_data.size(), compression_level);
+    const auto compressed_size_result = to_zstd_result(compress_result);
+    if (!compressed_size_result) {
+        const ZstdError error = compressed_size_result.error();
+        if (error.code() == ZSTD_error_memory_allocation) {
+            return alp::make_error(OutOfMemory{}, context, error);
+        }
+        return alp::make_error(Unknown{}, context, error);
     }
-
-    if (ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_compressionLevel, compression_level))) {
-        return Error::fail(Error::Code::Internal, "failed to configure the Zstandard compression context");
-    }
-
-    const std::size_t capacity = ZSTD_compressBound(uncompressed_data.size());
-    byte::vector compressed_data(capacity);
-    const std::size_t compressed_size
-        = ZSTD_compress2(context.get(), compressed_data.data(), compressed_data.size(), uncompressed_data.data(), uncompressed_data.size());
-    if (ZSTD_isError(compressed_size)) {
-        return Error::fail(Error::Code::Internal, std::string("Zstandard compression failed: ") + ZSTD_getErrorName(compressed_size));
-    }
-
-    compressed_data.resize(compressed_size);
+    compressed_data.resize(*compressed_size_result);
     return compressed_data;
 }
 
-Expected<byte::vector> decompress(
-    const byte::span compressed_data, const CompressionAlgorithm compression_algorithm, const std::size_t max_decompressed_size)
-{
-    ASSERT(magic_enum::enum_contains(compression_algorithm), "unsupported compression algorithm", static_cast<unsigned>(compression_algorithm));
+alp::Result<bytes::vector, DecompressError> decompress_with_zstd(const bytes::span compressed_data, const size_t max_size) {
+    constexpr auto context = "decompressing Zstandard data";
 
-    const std::size_t effective_max_decompressed_size = std::min(max_decompressed_size, default_max_decompressed_size);
-
-    byte::vector uncompressed_data;
-    if (compression_algorithm == CompressionAlgorithm::None) {
-        if (compressed_data.size() > effective_max_decompressed_size) {
-            return Error::fail(Error::Code::ResourceExhausted, "decompressed data exceeds the configured size limit");
-        }
-        uncompressed_data.assign(compressed_data.begin(), compressed_data.end());
-    } else {
-        ZSTD_frameHeader frame_header {};
-        const std::size_t frame_header_result = ZSTD_getFrameHeader(&frame_header, compressed_data.data(), compressed_data.size());
-        if (ZSTD_isError(frame_header_result) || frame_header_result != 0) {
-            return Error::fail(Error::Code::CorruptData, "invalid or incomplete Zstandard frame header");
-        }
-
-        const unsigned long long frame_content_size = ZSTD_getFrameContentSize(compressed_data.data(), compressed_data.size());
-        if (frame_content_size == ZSTD_CONTENTSIZE_ERROR
-            || (frame_content_size != ZSTD_CONTENTSIZE_UNKNOWN && frame_content_size > std::numeric_limits<std::size_t>::max())) {
-            return Error::fail(Error::Code::CorruptData, "invalid Zstandard frame content size");
-        }
-
-        const bool content_size_is_known = frame_content_size != ZSTD_CONTENTSIZE_UNKNOWN;
-        if (content_size_is_known && frame_content_size > effective_max_decompressed_size) {
-            return Error::fail(Error::Code::ResourceExhausted, "decompressed data exceeds the configured size limit");
-        }
-
-        const std::size_t allocation_size = content_size_is_known ? static_cast<std::size_t>(frame_content_size) : effective_max_decompressed_size;
-        uncompressed_data.resize(allocation_size);
-        const std::size_t decompressed_size
-            = ZSTD_decompress(uncompressed_data.data(), uncompressed_data.size(), compressed_data.data(), compressed_data.size());
-        if (ZSTD_isError(decompressed_size)) {
-            if (ZSTD_getErrorCode(decompressed_size) == ZSTD_error_checksum_wrong) {
-                return Error::fail(Error::Code::CorruptData, "Zstandard checksum mismatch");
-            }
-            if (!content_size_is_known && ZSTD_getErrorCode(decompressed_size) == ZSTD_error_dstSize_tooSmall) {
-                return Error::fail(Error::Code::ResourceExhausted, "decompressed data exceeds the configured size limit");
-            }
-            return Error::fail(Error::Code::CorruptData, std::string("Zstandard decompression failed: ") + ZSTD_getErrorName(decompressed_size));
-        }
-        if (content_size_is_known && decompressed_size != uncompressed_data.size()) {
-            return Error::fail(Error::Code::CorruptData, "Zstandard decompressed size does not match its frame header");
-        }
-
-        uncompressed_data.resize(decompressed_size);
+    ZSTD_frameHeader frame_header{};
+    const size_t get_frame_header_result = ZSTD_getFrameHeader(&frame_header, compressed_data.data(), compressed_data.size());
+    const auto frame_header_result = to_zstd_result(get_frame_header_result);
+    if (!frame_header_result) {
+        return to_decompress_error(frame_header_result.error()).context(context);
+    }
+    // A positive result is the input size the header needs, so the header is incomplete.
+    if (*frame_header_result != 0) {
+        return alp::make_error(Truncated{}, context);
     }
 
+    const unsigned long long declared_size = ZSTD_findDecompressedSize(compressed_data.data(), compressed_data.size());
+    // Equals the declared size when every frame declares its size, so only data without one can exceed the limit below.
+    const unsigned long long decompressed_bound = ZSTD_decompressBound(compressed_data.data(), compressed_data.size());
+    if (declared_size == ZSTD_CONTENTSIZE_ERROR || decompressed_bound == ZSTD_CONTENTSIZE_ERROR) {
+        return alp::make_error(CorruptData{}, context);
+    }
+    const bool size_is_declared = declared_size != ZSTD_CONTENTSIZE_UNKNOWN;
+    if (size_is_declared && declared_size > max_size) {
+        return alp::make_error(BufferLimitExceeded(max_size, declared_size), context);
+    }
+    const bool buffer_is_limited = decompressed_bound > max_size;
+    const size_t allocation_size = buffer_is_limited ? max_size : static_cast<size_t>(decompressed_bound);
+
+    ALP_TRY_CONTEXT(bytes::vector uncompressed_data, try_make_vector<uint8_t>(allocation_size), context);
+    const size_t decompress_result = ZSTD_decompress(uncompressed_data.data(), uncompressed_data.size(), compressed_data.data(), compressed_data.size());
+    const auto decompressed_size_result = to_zstd_result(decompress_result);
+    if (!decompressed_size_result) {
+        const ZstdError error = decompressed_size_result.error();
+        // A buffer cut to the limit can be too small for valid data.
+        if (error.code() == ZSTD_error_dstSize_tooSmall && buffer_is_limited) {
+            return alp::make_error(BufferLimitExceeded(max_size), error)
+                .context("the data does not declare its size")
+                .context(context);
+        }
+        return to_decompress_error(error).context(context);
+    }
+    if (size_is_declared && *decompressed_size_result != declared_size) {
+        return alp::make_error(CorruptData{})
+            .context(fmt::format("the data decodes to {} bytes, not the {} bytes it declares", *decompressed_size_result, declared_size))
+            .context(context);
+    }
+
+    uncompressed_data.resize(*decompressed_size_result);
     return uncompressed_data;
 }
 
-} // namespace io::envelope
+} // namespace
+
+alp::Result<bytes::vector, CompressError> compress(const bytes::span uncompressed_data, const Algorithm compression_algorithm) {
+    if (uncompressed_data.size() > max_buffer_size) {
+        return alp::make_error(BufferLimitExceeded(max_buffer_size, uncompressed_data.size()), "compressing");
+    }
+
+    switch (compression_algorithm) {
+    case Algorithm::None: {
+        ALP_TRY_CONTEXT(bytes::vector copy, try_to_vector(uncompressed_data), "copying data stored without compression");
+        return copy;
+    }
+    case Algorithm::ZstdBest:
+        return compress_with_zstd(uncompressed_data, ZSTD_maxCLevel());
+    case Algorithm::ZstdDefault:
+        return compress_with_zstd(uncompressed_data, ZSTD_defaultCLevel());
+    }
+    PANIC("unsupported compression algorithm", compression_algorithm);
+}
+
+alp::Result<bytes::vector, DecompressError> decompress(
+    const bytes::span compressed_data, const Algorithm compression_algorithm, const size_t max_decompressed_size) {
+    const size_t max_size = std::min(max_decompressed_size, max_buffer_size);
+
+    switch (compression_algorithm) {
+    case Algorithm::None: {
+        ALP_TRY_CONTEXT(bytes::vector copy, try_to_vector(compressed_data, max_size), "decompressing data stored without compression");
+        return copy;
+    }
+    case Algorithm::ZstdBest:
+    case Algorithm::ZstdDefault:
+        return decompress_with_zstd(compressed_data, max_size);
+    }
+    PANIC("unsupported compression algorithm", compression_algorithm);
+}
+
+} // namespace io::compression

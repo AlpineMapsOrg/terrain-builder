@@ -20,67 +20,152 @@
 add_library(terrainlib
     Error.h Error.cpp
     ImageKey.h
+    PrunedLocation.h PrunedLocation.cpp
     Range.h
     SphereProjector.h
     VecHash.h
     VecRange.h
     array_utils.h
     build_config.h
+    common_error_codes.h
+    earth.h
     enumerate.h
+    expected_utils.h
     fmt_impls.h
     glm_utils.h
     hash_utils.h
+    log.h log.cpp
     macros.h
+    mem.h
     opencv_utils.h
     optional_utils.h
+    parallel.h
+    path_utils.h
     pch.h
     range_utils.h
+    span_utils.h
+    std_compat.h
+    stop.h
     string_utils.h
     tile_path.h
+    type_name.h
     type_utils.h
     variant_utils.h
     vector_utils.h
 
-    cli_support/log.h cli_support/log.cpp
     cli_support/ProgressIndicator.h cli_support/ProgressIndicator.cpp
+    cli_support/for_each_with_progress.h
+    cli_support/log.h cli_support/log.cpp
     cli_support/stop_signal.h cli_support/stop_signal.cpp
+    cli_support/octree_id.h
 
     containers/Buffer.h
     containers/Cow.h
+    containers/FixedArray.h
+    containers/FixedString.h
     containers/FixedVector.h
     containers/HybridIndexPairMap.h
     containers/HybridVector.h
     containers/OffsetTable.h
     containers/OffsetVector.h
+    containers/OnceCell.h
     containers/SegmentedBuffer.h
     containers/Size.h
     containers/StampSet.h
-    containers/ThreadLocalCache.h
     containers/TinyVector.h
     containers/UnionFind.h
+    containers/UniqueResource.h
     containers/Vector2D.h
+    containers/indirect.h
+    containers/spsc.h
+
+    error/CodeStorage.h
+    error/Context.h
+    error/ErasedCode.h
+    error/Error.h
+    error/ErrorCode.h
+    error/FallibleFn.h
+    error/Infallible.h
+    error/MessageCode.h
+    error/Result.h
+    error/ResultFn.h
+    error/Trace.h
+    error/TypedCode.h
+    error/format.h
+    error/log.h
+    error/prelude.h
+    error/try.h
+    error/unwrap.h
+    error/utils.h
 
     geometry/CoordFrame.h
     geometry/PlaneFrame.h
     geometry/Rect.h
     geometry/geometry.h
 
+    gis/CplError.h
     gis/Dataset.h gis/Dataset.cpp
     gis/DatasetReader.h gis/DatasetReader.cpp
+    gis/GdalError.h
+    gis/GeoTransform.h gis/GeoTransform.cpp
+    gis/OgrError.h
+    gis/PixelTransform.h gis/PixelTransform.cpp
+    gis/Transform.h
     gis/gdal.h gis/gdal.cpp
-    gis/srs.h gis/srs.cpp
+    gis/georeferencing.h
+    gis/srs/Axis.h
+    gis/srs/Ellipsoid.h
+    gis/srs/Kind.h
+    gis/srs/System.h gis/srs/System.cpp
+    gis/srs/ThreadLocalSystem.h
+    gis/srs/Transform.h
+    gis/srs/Unit.h
+    gis/srs/classify.h gis/srs/classify.cpp
+    gis/srs/coverage.h gis/srs/coverage.cpp
     gis/srs/detail.h gis/srs/detail.cpp
+    gis/srs/geographic.h gis/srs/geographic.cpp
+    gis/srs/error.h
+    gis/srs/well_known.h
     gis/vector_mask.h gis/vector_mask.cpp
     gis/webmercator.h gis/webmercator.cpp
 
-    io/byte.h io/byte.cpp
+    hierarchy/Index.h
+    hierarchy/IndexMap.h
+    hierarchy/NodeStatus.h
+    hierarchy/NodeStatusOrMissing.h
+    hierarchy/Traits.h
+    hierarchy/traverse.h
+
+    io/BufferLimitExceeded.h
+    io/FileError.h
+    io/OpenCvError.h
+    io/PayloadSchema.h
+    io/UnknownExtension.h
+    io/WriteMode.h
+    io/ZppBitsError.h
+    io/ZstdError.h
+    io/alloc.h
+    io/bytes.h io/bytes.cpp
     io/compression.h io/compression.cpp
     io/conversion.h
-    io/image.h io/image.cpp
     io/envelope.h io/envelope.cpp
+    io/filesystem.h
+    io/filesystem_utils.h io/filesystem_utils.cpp
     io/glm_serialization.h
     io/hash.h io/hash.cpp
-    io/utils.h io/utils.cpp
+    io/image.h io/image.cpp
+    io/image/Format.h
+    io/image/JxlError.h
+    io/image/TurboJpegError.h
+    io/json.h
+    io/json/Value.h
+    io/json/file.h io/json/file.cpp
+    io/json/serde.h io/json/serde.cpp
+    io/limits.h
+    io/mat.h io/mat.cpp
+    io/radix_serialization.h
+    io/serde.h
+    io/text.h
 
     mesh/EncodedMesh.h
     mesh/PointWithMeta.h
@@ -98,8 +183,7 @@ add_library(terrainlib
     mesh/clip.h mesh/clip.cpp
     mesh/codec/Gltf.h
     mesh/codec/SfMesh.h
-    mesh/codec/SfMeshFormat.h
-    mesh/codec/from_extension.h
+    mesh/codec/resolve.h mesh/codec/resolve.cpp
     mesh/combine.h
     mesh/connectivity/adjacency.h mesh/connectivity/adjacency.cpp
     mesh/connectivity/boundary.h mesh/connectivity/boundary.cpp
@@ -111,13 +195,14 @@ add_library(terrainlib
     mesh/connectivity/vertex_index_range.h mesh/connectivity/vertex_index_range.cpp
     mesh/convert.h mesh/convert.cpp
     mesh/encode.h
+    mesh/encode_error.h
     mesh/geometry.h mesh/geometry.cpp
     mesh/holes.h mesh/holes.cpp
     mesh/io.h mesh/io.cpp
+    mesh/io/CgltfError.h
     mesh/io/gltf.h mesh/io/gltf.cpp
     mesh/io/options.h
-    mesh/io/texture.h mesh/io/texture.cpp
-    mesh/io/utils.h mesh/io/utils.cpp
+    mesh/io/sf_mesh.h mesh/io/sf_mesh.cpp
     mesh/merge.h
     mesh/merging/EpsilonVertexDeduplicate.h
     mesh/merging/ExactVertexDeduplicate.h
@@ -127,21 +212,30 @@ add_library(terrainlib
     mesh/merging/VertexMapping.h
     mesh/merging/helpers.h
     mesh/merging/mapping.h mesh/merging/mapping.cpp
+    mesh/non_manifold_result.h
     mesh/normalize.h
+    mesh/primitives.h
     mesh/reindex.h
     mesh/split.h
     mesh/storage.h
     mesh/texture_trim.h mesh/texture_trim.cpp
     mesh/utils.h
-    mesh/validate.h mesh/validate.cpp
-    mesh/validate_cgal.h
+    mesh/validate/assert.h mesh/validate/debug_assert.h
+    mesh/validate/cgal.h
+    mesh/validate/flags.h mesh/validate/result.h mesh/validate/result.cpp
+
+    meshopt/encode.h
 
     numeric/StrongDouble.h
+    numeric/checked.h
+    numeric/checked_cast.h
     numeric/glm_math.h
     numeric/int_math.h
     numeric/number_types.h
     numeric/number_utils.h
+    numeric/overflow.h
     numeric/quantize.h
+    numeric/saturating.h
     numeric/wide_integer.h
 
     octree/Id.h
@@ -149,12 +243,16 @@ add_library(terrainlib
     octree/OddLevelShifted.h octree/OddLevelShifted.cpp
     octree/Space.h octree/Space.cpp
     octree/StoreTraits.h
-    octree/storage/IndexFile.h
-    octree/storage/open_runtime.h
-    octree/storage/snapshot.h
-    octree/store_layout/Flat.h
-    octree/store_layout/LevelAndCoordinateDirectories.h
-    octree/store_layout/Mappings.h
+    octree/id_serialization.h
+    octree/path_layout.h
+    octree/path_layout/flat.h
+    octree/path_layout/level_and_coordinate_directories.h
+    octree/storage/Index.h
+    octree/storage/create.h
+    octree/storage/index_format.h octree/storage/index_format.cpp
+    octree/storage/metadata.h octree/storage/metadata.cpp
+    octree/storage/open.h
+    octree/storage/publish.h
     octree/utils.h
 
     polygon/Polygon.h
@@ -172,35 +270,40 @@ add_library(terrainlib
     range/RangeTo.h
     range/RangeToInclusive.h
 
-    raster/algorithm.h
-    raster/View.h
     raster/ClampedView.h
-    raster/algorithm/detail.h
+    raster/View.h
+    raster/algorithm.h
     raster/algorithm/conversion.h
+    raster/algorithm/copy.h
+    raster/algorithm/detail.h
+    raster/algorithm/fold.h
     raster/algorithm/reduce.h
     raster/algorithm/reducers.h
     raster/algorithm/scale.h
     raster/algorithm/sample_alignment.h
     raster/algorithm/scaling_detail.h
-    raster/algorithm/copy.h
-    raster/algorithm/fold.h
     raster/algorithm/transform.h
     raster/algorithm/window_transform.h
     raster/algorithm/zip_transform.h
 
     raster_store/StoreTraits.h
-    raster_store/TilePool.h
     raster_store/Tile.h
-    raster_store/attribution.h raster_store/attribution.cpp
+    raster_store/TilePool.h
+    raster_store/attribution/Table.h
+    raster_store/attribution/table_file.h raster_store/attribution/table_file.cpp
     raster_store/io/TileCodec.h
     raster_store/io/float_predictor.h raster_store/io/float_predictor.cpp
-    raster_store/io/manifest.h raster_store/io/manifest.cpp
     raster_store/path_layout.h
+    raster_store/path_layout/zoom_x_y_google.h
     raster_store/pixel.h
     raster_store/scaler.h
     raster_store/storage.h
+    raster_store/storage/Index.h
+    raster_store/storage/index_format.h raster_store/storage/index_format.cpp
+    raster_store/storage/metadata.h raster_store/storage/metadata.cpp
 
-    sf/finalize_storage.h
+    sf/open.h
+    sf/publish.h
     sf/validate_index.h
 
     spatial_lookup/CellBased.h
@@ -213,24 +316,29 @@ add_library(terrainlib
     spatial_lookup/QuantizedHash.h
     spatial_lookup/SpatialLookup.h
 
+    store/Checkpoint.h
+    store/Checkpointer.h
     store/Codec.h
+    store/Draft.h
+    store/Hash.h
     store/Index.h
     store/IndexFormat.h
-    store/IndexedStorage.h
-    store/inputs.h store/inputs.cpp
-    store/NodeStatus.h
-    store/NodeStatusOrMissing.h
-    store/path_layout.h
+    store/KeyTraits.h
+    store/Metadata.h
+    store/PersistedIndex.h
     store/RawStorage.h
+    store/SimpleIndex.h
     store/Storage.h
-    store/ThreadSafeStorage.h
-    store/Traits.h
-    store/cache/Dummy.h
-    store/cache/Interface.h
-    store/cache/Lru.h
+    store/View.h
+    store/create.h
+    store/envelope_utils.h
+    store/fingerprint.h
+    store/index_checks.h
+    store/inputs.h
     store/open.h
-    store/snapshot.h store/snapshot.cpp
-    store/traverse.h
+    store/path_layout.h
+    store/publish.h store/publish.cpp
+    store/storage_paths.h store/storage_paths.cpp
 
     texture/Mask.h
     texture/dilate_colors.h texture/dilate_colors.cpp
@@ -263,6 +371,7 @@ target_link_libraries(terrainlib PUBLIC
     spdlog
     fmt
     zpp_bits
+    value_types
     zstd::libzstd_static
     cgltf
     TBB::tbb
@@ -280,5 +389,5 @@ target_link_libraries(terrainlib PUBLIC
 target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
 # Only io/hash.cpp includes xxHash.
 target_link_libraries(terrainlib PRIVATE xxhash)
-# Only io/image.cpp includes libjxl and TurboJPEG.
+# Only io/image.cpp and io/image/JxlError.h include libjxl, and only io/image.cpp and io/image/TurboJpegError.h include TurboJPEG.
 target_link_libraries(terrainlib PRIVATE JpegXL::jxl libjpeg-turbo::turbojpeg-static)

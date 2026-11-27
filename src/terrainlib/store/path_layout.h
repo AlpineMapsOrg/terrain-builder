@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,41 +27,35 @@
 namespace store::path_layout {
 
 template <typename Key>
-struct Mapping {
+struct Layout {
     std::string_view id;
-    std::filesystem::path (*key_to_node_path)(const Key&);
-    std::optional<Key> (*node_path_to_key)(const std::filesystem::path&);
+    std::filesystem::path (*locate_node)(const Key&);
+    std::optional<Key> (*identify_node)(const std::filesystem::path&);
 
-    bool operator==(const Mapping&) const = default;
+    bool operator==(const Layout&) const = default;
 };
 
 template <typename Key>
 class Resolver {
 public:
-    Resolver(std::filesystem::path base_path, Mapping<Key> mapping)
-        : m_base_path(std::move(base_path))
-        , m_mapping(mapping)
-    {
+    Resolver(std::filesystem::path base_path, Layout<Key> layout)
+        : _base_path(std::move(base_path))
+        , _layout(layout) {
     }
 
-    std::filesystem::path node_path(const Key& key) const { return m_base_path / m_mapping.key_to_node_path(key); }
+    std::filesystem::path locate_node(const Key& key) const { return this->_base_path / this->_layout.locate_node(key); }
 
-    std::optional<Key> key_from_node_path(const std::filesystem::path& node_path) const
-    {
-        std::error_code error;
-        const std::filesystem::path relative = std::filesystem::relative(node_path, m_base_path, error);
-        if (error || relative.empty() || relative.is_absolute()) {
-            return std::nullopt;
-        }
-        return m_mapping.node_path_to_key(relative);
+    std::optional<Key> identify_node(const std::filesystem::path& node_path) const {
+        const std::filesystem::path relative = node_path.lexically_relative(this->_base_path);
+        return this->_layout.identify_node(relative);
     }
 
-    const std::filesystem::path& base_path() const { return m_base_path; }
-    Mapping<Key> mapping() const { return m_mapping; }
+    const std::filesystem::path& base_path() const { return this->_base_path; }
+    Layout<Key> layout() const { return this->_layout; }
 
 private:
-    std::filesystem::path m_base_path;
-    Mapping<Key> m_mapping;
+    std::filesystem::path _base_path;
+    Layout<Key> _layout;
 };
 
 } // namespace store::path_layout

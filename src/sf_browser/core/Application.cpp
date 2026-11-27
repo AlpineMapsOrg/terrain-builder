@@ -182,13 +182,13 @@ void Application::run() {
     cube_vbo.bind();
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), NULL);
-    
+
     // INSTANCE ACTIVE
     cube_instance_active_buffer.bind();
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(float), NULL);
     glVertexAttribDivisor(1, 1);
-    
+
     // INSTANCE MODEL MATRICES
     cube_instance_model_buffer.bind();
 
@@ -233,7 +233,7 @@ void Application::run() {
         const double current_frame_time = glfwGetTime();
         const double frame_delta_time = current_frame_time - last_frame_time;
         last_frame_time = current_frame_time;
-        
+
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();

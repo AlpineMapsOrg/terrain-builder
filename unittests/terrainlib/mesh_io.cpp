@@ -17,249 +17,162 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <opencv2/opencv.hpp>
-#include <fmt/core.h>
+#include <filesystem>
 #include <fstream>
+#include <numbers>
+#include <string>
+#include <string_view>
+#include <system_error>
+
+#include <opencv2/opencv.hpp>
+#include <fmt/format.h>
 
 #include "../catch2_helpers.h"
 #include "../opencv_helpers.h"
-#include "../temporary_directory.h"
+#include "../result_helpers.h"
+#include "../temp_directory.h"
+#include "common_error_codes.h"
+#include "error/format.h"
+#include "io/FileError.h"
+#include "io/envelope.h"
+#include "io/filesystem.h"
+#include "io/image/Format.h"
 #include "mesh/io.h"
-#include "mesh/encode.h"
+#include "mesh/io/gltf.h"
 
-TEST_CASE("transcode roundtrip") {
+TEST_CASE("Saving and loading a mesh round-trips it", "[mesh][io]") {
+    for (const auto &format : {"gltf", "glb", "sfmesh"}) {
+        DYNAMIC_SECTION(format) {
+            mesh::Simple mesh;
+
+            mesh.positions.push_back(glm::dvec3(0, 0, 0));
+            mesh.positions.push_back(glm::dvec3(1, 0, 0));
+            mesh.positions.push_back(glm::dvec3(0, 1, 0));
+            mesh.positions.push_back(glm::dvec3(1, 1, 0));
+
+            mesh.triangles.push_back(glm::uvec3(0, 2, 1));
+            mesh.triangles.push_back(glm::uvec3(1, 2, 3));
+
+            SECTION("textured") {
+                mesh.uvs.push_back(glm::dvec2(0, 0));
+                mesh.uvs.push_back(glm::dvec2(1, 0));
+                mesh.uvs.push_back(glm::dvec2(0, 1));
+                mesh.uvs.push_back(glm::dvec2(1, 1));
+
+                mesh.texture = cv::Mat3b(100, 100);
+                cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
+            }
+
+            SECTION("no texture") {
+                mesh.uvs.push_back(glm::dvec2(0, 0));
+                mesh.uvs.push_back(glm::dvec2(1, 0));
+                mesh.uvs.push_back(glm::dvec2(0, 1));
+                mesh.uvs.push_back(glm::dvec2(1, 1));
+            }
+
+            SECTION("no texture and no uvs") {
+            }
+
+            if (std::string_view(format) == "sfmesh") {
+                SECTION("positions beyond float precision") {
+                    const double pi = std::numbers::pi_v<double>;
+                    CHECK(static_cast<double>(static_cast<float>(pi)) != pi);
+                    mesh.positions[1] = glm::dvec3(pi, 0, 0);
+                    mesh.positions[2] = glm::dvec3(0, pi, 0);
+                }
+            }
+
+            const TempDirectory directory("mesh_io_roundtrip");
+            const std::filesystem::path mesh_path = directory.path() / fmt::format("mesh.{}", format);
+
+            REQUIRE_VALUE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = io::image::Format::Png}));
+
+            const mesh::Simple roundtrip_mesh = REQUIRE_VALUE(mesh::io::load_from_path(mesh_path));
+            CHECK(roundtrip_mesh.positions == mesh.positions);
+            CHECK(roundtrip_mesh.uvs == mesh.uvs);
+            CHECK(roundtrip_mesh.triangles == mesh.triangles);
+            REQUIRE(roundtrip_mesh.texture.has_value() == mesh.texture.has_value());
+            if (mesh.texture.has_value()) {
+                CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
+            }
+        }
+    }
+}
+
+namespace {
+
+// A mesh of a single triangle.
+mesh::Simple make_triangle() {
     mesh::Simple mesh;
-
     mesh.positions.push_back(glm::dvec3(0, 0, 0));
     mesh.positions.push_back(glm::dvec3(1, 0, 0));
     mesh.positions.push_back(glm::dvec3(0, 1, 0));
-    mesh.positions.push_back(glm::dvec3(1, 1, 0));
-
-    mesh.triangles.push_back(glm::uvec3(0, 2, 1));
-    mesh.triangles.push_back(glm::uvec3(1, 2, 3));
-
-    mesh.uvs.push_back(glm::dvec2(0, 0));
-    mesh.uvs.push_back(glm::dvec2(1, 0));
-    mesh.uvs.push_back(glm::dvec2(0, 1));
-    mesh.uvs.push_back(glm::dvec2(1, 1));
-
-    mesh.texture = cv::Mat3b(100, 100);
-    cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
-
-    const std::expected<mesh::Encoded, mesh::EncodeError> encode_result =
-        mesh::encode(mesh, mesh::EncodeOptions{.texture_format = ".png"});
-    if (!encode_result.has_value()) {
-        FAIL(encode_result.error());
-    }
-    const mesh::Encoded encoded = encode_result.value();
-
-    const std::expected<mesh::Simple, mesh::DecodeError> decode_result =
-        mesh::decode(encoded, mesh::DecodeOptions{});
-    if (!decode_result.has_value()) {
-        FAIL(decode_result.error());
-    }
-
-    const SimpleMesh roundtrip_mesh = decode_result.value();
-    CHECK(roundtrip_mesh.positions == mesh.positions);
-    CHECK(roundtrip_mesh.uvs == mesh.uvs);
-    CHECK(roundtrip_mesh.triangles == mesh.triangles);
-    CHECK(roundtrip_mesh.texture.has_value());
-    CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
+    mesh.triangles.push_back(glm::uvec3(0, 1, 2));
+    return mesh;
 }
 
-TEST_CASE("io roundtrip") {
-    for (const auto& format : {"glb", "gltf"}) {
-        DYNAMIC_SECTION(format) {
-            SimpleMesh mesh;
+} // namespace
 
-            mesh.positions.push_back(glm::dvec3(0, 0, 0));
-            mesh.positions.push_back(glm::dvec3(1, 0, 0));
-            mesh.positions.push_back(glm::dvec3(0, 1, 0));
-            mesh.positions.push_back(glm::dvec3(1, 1, 0));
+TEST_CASE("Loading a mesh with an unknown extension fails as unsupported", "[mesh][io]") {
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path("mesh.xyz"));
 
-            mesh.triangles.push_back(glm::uvec3(0, 2, 1));
-            mesh.triangles.push_back(glm::uvec3(1, 2, 3));
-
-            mesh.uvs.push_back(glm::dvec2(0, 0));
-            mesh.uvs.push_back(glm::dvec2(1, 0));
-            mesh.uvs.push_back(glm::dvec2(0, 1));
-            mesh.uvs.push_back(glm::dvec2(1, 1));
-
-            mesh.texture = cv::Mat3b(100, 100);
-            cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
-
-            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
-            std::filesystem::remove(mesh_path);
-            CHECK(!std::filesystem::exists(mesh_path));
-
-            REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
-            CHECK(std::filesystem::exists(mesh_path));
-
-            const auto result = mesh::io::load_from_path(mesh_path);
-            if (!result.has_value()) {
-                FAIL(result.error().to_string());
-            }
-            std::filesystem::remove(mesh_path);
-            const SimpleMesh roundtrip_mesh = result.value();
-            CHECK(roundtrip_mesh.positions == mesh.positions);
-            CHECK(roundtrip_mesh.uvs == mesh.uvs);
-            CHECK(roundtrip_mesh.triangles == mesh.triangles);
-            CHECK(roundtrip_mesh.texture.has_value());
-            CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
-        }
-    }
+    CHECK(error.holds<Unsupported>());
 }
 
-TEST_CASE("io roundtrip high precision") {
-    for (const auto& format : {"sfmesh"}) {
-        DYNAMIC_SECTION(format) {
-            SimpleMesh mesh;
+TEST_CASE("Saving a mesh with an unknown extension fails as unsupported", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_unsupported_save");
+    const auto error = REQUIRE_ERROR(mesh::io::save_to_path(make_triangle(), directory.path() / "mesh.xyz"));
 
-            const double pi = std::numbers::pi_v<double>;
-            CHECK((double)(float)pi != pi);
-
-            mesh.positions.push_back(glm::dvec3(0, 0, 0));
-            mesh.positions.push_back(glm::dvec3(pi, 0, 0));
-            mesh.positions.push_back(glm::dvec3(0, pi, 0));
-
-            mesh.triangles.push_back(glm::uvec3(0, 2, 1));
-
-            mesh.uvs.push_back(glm::dvec2(0, 0));
-            mesh.uvs.push_back(glm::dvec2(1, 0));
-            mesh.uvs.push_back(glm::dvec2(0, 1));
-
-            mesh.texture = cv::Mat3b(100, 100);
-            cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
-
-            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
-            std::filesystem::remove(mesh_path);
-            CHECK(!std::filesystem::exists(mesh_path));
-
-            REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
-            CHECK(std::filesystem::exists(mesh_path));
-
-            const auto result = mesh::io::load_from_path(mesh_path);
-            if (!result.has_value()) {
-                FAIL(result.error().to_string());
-            }
-            std::filesystem::remove(mesh_path);
-            const SimpleMesh roundtrip_mesh = result.value();
-            CHECK(roundtrip_mesh.positions == mesh.positions);
-            CHECK(roundtrip_mesh.uvs == mesh.uvs);
-            CHECK(roundtrip_mesh.triangles == mesh.triangles);
-            CHECK(roundtrip_mesh.texture.has_value());
-            CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
-        }
-    }
+    CHECK(error.holds<Unsupported>());
 }
 
-TEST_CASE("io roundtrip no texture") {
-    for (const auto &format : {"gltf", "glb", "sfmesh"}) {
-        DYNAMIC_SECTION(format) {
-            SimpleMesh mesh;
+TEST_CASE("Loading a missing mesh file reports that it does not exist", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_missing");
+    const std::string extension = GENERATE(".sfmesh", ".gltf", ".glb");
+    const std::filesystem::path path = directory.path() / fmt::format("missing{}", extension);
 
-            const double pi = std::numbers::pi_v<double>;
-            CHECK((double)(float)pi != pi);
-
-            mesh.positions.push_back(glm::dvec3(0, 0, 0));
-            mesh.positions.push_back(glm::dvec3(1, 0, 0));
-            mesh.positions.push_back(glm::dvec3(0, 1, 0));
-            mesh.positions.push_back(glm::dvec3(1, 1, 0));
-
-            mesh.triangles.push_back(glm::uvec3(0, 2, 1));
-            mesh.triangles.push_back(glm::uvec3(1, 2, 3));
-
-            mesh.uvs.push_back(glm::dvec2(0, 0));
-            mesh.uvs.push_back(glm::dvec2(1, 0));
-            mesh.uvs.push_back(glm::dvec2(0, 1));
-            mesh.uvs.push_back(glm::dvec2(1, 1));
-
-            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
-            std::filesystem::remove(mesh_path);
-            CHECK(!std::filesystem::exists(mesh_path));
-
-            REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
-            CHECK(std::filesystem::exists(mesh_path));
-
-            const auto result = mesh::io::load_from_path(mesh_path);
-            if (!result.has_value()) {
-                FAIL(result.error().to_string());
-            }
-            // std::filesystem::remove(mesh_path);
-            const SimpleMesh roundtrip_mesh = result.value();
-            CHECK(roundtrip_mesh.positions == mesh.positions);
-            CHECK(roundtrip_mesh.uvs == mesh.uvs);
-            CHECK(roundtrip_mesh.triangles == mesh.triangles);
-            CHECK(!roundtrip_mesh.texture.has_value());
-        }
-    }
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
+    CHECK(error.holds_code(std::errc::no_such_file_or_directory));
 }
 
-TEST_CASE("io roundtrip no texture and uvs") {
-    for (const auto &format : {"gltf", "glb", "sfmesh"}) {
-        DYNAMIC_SECTION(format) {
-            SimpleMesh mesh;
+TEST_CASE("Loading a truncated SF mesh file fails as corrupt data", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_truncated_sf_mesh");
+    const std::filesystem::path path = directory.path() / "mesh.sfmesh";
+    REQUIRE_VALUE(mesh::io::save_to_path(make_triangle(), path));
+    const uint64_t size = REQUIRE_VALUE(io::filesystem::file_size(path));
+    REQUIRE_VALUE(io::filesystem::resize_file(path, size - 1));
 
-            const double pi = std::numbers::pi_v<double>;
-            CHECK((double)(float)pi != pi);
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
 
-            mesh.positions.push_back(glm::dvec3(0, 0, 0));
-            mesh.positions.push_back(glm::dvec3(1, 0, 0));
-            mesh.positions.push_back(glm::dvec3(0, 1, 0));
-            mesh.positions.push_back(glm::dvec3(1, 1, 0));
-
-            mesh.triangles.push_back(glm::uvec3(0, 2, 1));
-            mesh.triangles.push_back(glm::uvec3(1, 2, 3));
-
-            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
-            std::filesystem::remove(mesh_path);
-            CHECK(!std::filesystem::exists(mesh_path));
-
-            REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
-            CHECK(std::filesystem::exists(mesh_path));
-
-            const auto result = mesh::io::load_from_path(mesh_path);
-            if (!result.has_value()) {
-                FAIL(result.error().to_string());
-            }
-            std::filesystem::remove(mesh_path);
-            const SimpleMesh roundtrip_mesh = result.value();
-            CHECK(roundtrip_mesh.positions == mesh.positions);
-            CHECK(!roundtrip_mesh.has_uvs());
-            CHECK(roundtrip_mesh.triangles == mesh.triangles);
-            CHECK(!roundtrip_mesh.texture.has_value());
-        }
-    }
+    CHECK(error.holds<io::envelope::CorruptData>());
 }
 
-TEST_CASE("mesh IO reports project errors")
-{
-    test::TemporaryDirectory temporary_directory("mesh-io-errors");
+TEST_CASE("Loading a glTF file without a mesh fails as unsupported", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_incomplete_gltf");
+    const std::filesystem::path path = directory.path() / "empty.gltf";
+    std::ofstream(path) << R"({"asset":{"version":"2.0"}})";
 
-    const auto unsupported_input = mesh::io::load_from_path("mesh.unsupported");
-    REQUIRE_FALSE(unsupported_input.has_value());
-    CHECK(unsupported_input.error().code() == Error::Code::Unsupported);
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
 
-    const auto missing_input = mesh::io::load_from_path(temporary_directory.path() / "missing.glb");
-    REQUIRE_FALSE(missing_input.has_value());
-    CHECK(missing_input.error().code() == Error::Code::NotFound);
+    CHECK(error.holds<Unsupported>());
+}
 
-    const std::filesystem::path corrupt_path = temporary_directory.path() / "corrupt.gltf";
-    std::ofstream(corrupt_path) << "not glTF";
-    const auto corrupt_input = mesh::io::load_from_path(corrupt_path);
-    REQUIRE_FALSE(corrupt_input.has_value());
-    CHECK(corrupt_input.error().code() == Error::Code::CorruptData);
+TEST_CASE("Loading a file that is not glTF fails as corrupt data", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_corrupt_gltf");
+    const std::filesystem::path path = directory.path() / "corrupt.gltf";
+    std::ofstream(path) << "not glTF";
 
-    const auto unsupported_output = mesh::io::save_to_path(mesh::Simple {}, "mesh.unsupported");
-    REQUIRE_FALSE(unsupported_output.has_value());
-    CHECK(unsupported_output.error().code() == Error::Code::Unsupported);
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
 
-    mesh::Simple mesh;
-    mesh.positions = { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 } };
-    mesh.triangles = { { 0, 1, 2 } };
-    const std::filesystem::path directory_output = temporary_directory.path() / "directory.glb";
-    REQUIRE(std::filesystem::create_directory(directory_output));
-    const auto failed_output = mesh::io::save_to_path(mesh, directory_output);
-    REQUIRE_FALSE(failed_output.has_value());
-    CHECK(failed_output.error().code() == Error::Code::Io);
+    CHECK(error.holds<mesh::io::gltf::CorruptData>());
+}
+
+TEST_CASE("Saving a mesh onto a directory fails with a file error", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_directory_save");
+    const std::filesystem::path path = directory.path() / "directory.glb";
+    REQUIRE(REQUIRE_VALUE(io::filesystem::create_directory(path)));
+
+    const auto error = REQUIRE_ERROR(mesh::io::save_to_path(make_triangle(), path));
+
+    CHECK(error.holds<io::FileError>());
 }

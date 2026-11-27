@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,12 +19,24 @@
 
 #pragma once
 
+#include <memory>
+#include <stop_token>
+
 namespace cli_support::stop_signal {
 
-// Installs SIGINT and SIGTERM handlers that only record the signal, so a tool can
-// finish its active work, checkpoint, and exit through its normal error path.
-void install();
+struct Installation;
+// While a guard lives, SIGINT and SIGTERM request a stop through the tokens `token` returns.
+// The handlers in place before the first guard come back once the last one is destroyed.
+using Guard = std::shared_ptr<const Installation>;
+
+// Makes SIGINT and SIGTERM request a stop through the tokens `token` returns, until the guard is destroyed.
+[[nodiscard]] Guard install();
+
+// A token that asks to stop once SIGINT or SIGTERM arrived while a guard lived.
+[[nodiscard]] std::stop_token token();
+
 bool requested();
+
 // 128 + the received signal, or 1 if no signal was received.
 int exit_code();
 

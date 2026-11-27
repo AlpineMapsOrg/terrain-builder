@@ -26,27 +26,46 @@
 
 namespace dag {
 
-// A reference to a cluster within a clustered octree node.
-struct Id {
-    octree::Id source_batch;
+// The id of a dag batch.
+using BatchId = octree::Id;
+
+// A reference to a cluster within a dag cluster batch.
+struct ClusterId {
+    BatchId batch;
     uint32_t cluster_index;
 
-    auto operator<=>(const Id &) const = default;
+    auto operator<=>(const ClusterId &) const = default;
+};
+
+// A reference to a group within a dag cluster batch.
+struct GroupId {
+    BatchId batch;
+    uint32_t group_index;
+
+    auto operator<=>(const GroupId &) const = default;
 };
 
 }
 
 template <>
-struct std::hash<dag::Id> {
-    size_t operator()(const dag::Id &id) const  {
-        return ::hash::combine(id.source_batch, id.cluster_index);
+struct std::hash<dag::ClusterId> {
+    size_t operator()(const dag::ClusterId &id) const  {
+        return ::hash::combine(id.batch, id.cluster_index);
     }
 };
 
 template <>
-struct fmt::formatter<dag::Id> {
+struct fmt::formatter<dag::ClusterId> {
     constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
-    auto format(const dag::Id &id, fmt::format_context &ctx) const {
-        return fmt::format_to(ctx.out(), "{}:{}", id.source_batch, id.cluster_index);
+    auto format(const dag::ClusterId &id, fmt::format_context &ctx) const {
+        return fmt::format_to(ctx.out(), "Cluster(batch={}, index={})", id.batch, id.cluster_index);
+    }
+};
+
+template <>
+struct fmt::formatter<dag::GroupId> {
+    constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+    auto format(const dag::GroupId &id, fmt::format_context &ctx) const {
+        return fmt::format_to(ctx.out(), "Group(batch={}, index={})", id.batch, id.group_index);
     }
 };

@@ -18,6 +18,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <functional>
 #include <span>
 #include <type_traits>
 #include <vector>
@@ -66,7 +69,7 @@ template <glm::length_t L, typename T, glm::qualifier Q = glm::defaultp>
 inline std::span<T, L> as_span(glm::vec<L, T, Q>& v) {
     static_assert(std::is_standard_layout_v<glm::vec<L, T, Q>>);
     static_assert(sizeof(glm::vec<L, T, Q>) == sizeof(T) * L);
-    
+
     return std::span<T, L>(value_ptr(v), L);
 }
 template <glm::length_t L, typename T, glm::qualifier Q = glm::defaultp>
@@ -147,4 +150,30 @@ auto enumerate(glm::vec<L, T, Q> &vector) {
 template <typename TIndex = uint8_t, glm::length_t L, typename T, glm::qualifier Q = glm::defaultp>
 auto enumerate(const glm::vec<L, T, Q> &vector) {
     return ::enumerate<TIndex, std::span<const T, L>>(iterate<L, T, Q>(vector));
+}
+
+// The vector of `op` applied to each component.
+template <glm::length_t L, typename T, glm::qualifier Q = glm::defaultp, typename Op>
+constexpr auto transform(const glm::vec<L, T, Q> &v, Op op) {
+    glm::vec<L, decltype(op(v.x)), Q> result{};
+    for (glm::length_t i = 0; i < L; i++) {
+        result[i] = std::invoke(op, v[i]);
+    }
+    return result;
+}
+
+// The vector of `op` applied to each pair of components.
+template <glm::length_t L, typename T, typename U, glm::qualifier Q = glm::defaultp, typename Op>
+constexpr auto transform(const glm::vec<L, T, Q> &lhs, const glm::vec<L, U, Q> &rhs, Op op) {
+    glm::vec<L, decltype(op(lhs.x, rhs.x)), Q> result{};
+    for (glm::length_t i = 0; i < L; i++) {
+        result[i] = std::invoke(op, lhs[i], rhs[i]);
+    }
+    return result;
+}
+
+// Whether every component is finite.
+template <glm::length_t L, typename T, glm::qualifier Q = glm::defaultp>
+inline bool is_finite(const glm::vec<L, T, Q> &vector) {
+    return std::ranges::all_of(iterate<L, T, Q>(vector), [](const T x) { return std::isfinite(x); });
 }

@@ -1,7 +1,11 @@
 // Copyright (C) 2026 Adam Celarek-Litofcenko
+// Copyright (C) 2026 Martin Braunsperger
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "gis/srs.h"
+#include "../result_helpers.h"
+#include "gis/srs/System.h"
+#include "gis/srs/Transform.h"
+#include "gis/srs/well_known.h"
 #include "gis/srs/detail.h"
 
 #include <array>
@@ -10,7 +14,6 @@
 #include <memory>
 #include <string>
 
-#include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cpl_error.h>
@@ -28,8 +31,8 @@ struct BoundsCase {
 void compare_bounds(const BoundsCase& scenario, int samples)
 {
     CAPTURE(scenario.name, samples);
-    auto source = gis::srs::from_user_input(scenario.source).value();
-    auto target = gis::srs::from_user_input(scenario.target).value();
+    OGRSpatialReference source = REQUIRE_VALUE(gis::srs::from_user_input(scenario.source)).as_gdal();
+    OGRSpatialReference target = REQUIRE_VALUE(gis::srs::from_user_input(scenario.target)).as_gdal();
     source.SetAxisMappingStrategy(scenario.axis_mapping);
     target.SetAxisMappingStrategy(scenario.axis_mapping);
     std::unique_ptr<OGRCoordinateTransformation> reference(OGRCreateCoordinateTransformation(&source, &target));
@@ -58,7 +61,7 @@ void compare_bounds(const BoundsCase& scenario, int samples)
 }
 } // namespace
 
-TEST_CASE("Cached projected bounds agree with GDAL", "[srs][bounds]")
+TEST_CASE("Cached projected bounds agree with GDAL", "[gis][srs][detail]")
 {
     const std::array cases {
         BoundsCase { "Austria Lambert", "EPSG:4326", "EPSG:31287", { 12.6, 47.0, 12.61, 47.01 } },
@@ -92,7 +95,7 @@ TEST_CASE("Cached projected bounds agree with GDAL", "[srs][bounds]")
     }
 }
 
-TEST_CASE("Cached bounds preserve GDAL failure handling", "[srs][bounds]")
+TEST_CASE("Cached bounds preserve GDAL failure handling", "[gis][srs][detail]")
 {
     BoundsCase scenario { "invalid densification", "EPSG:4326", "EPSG:31287", { 12.6, 47, 12.61, 47.01 } };
     for (int samples : { -1, 10001 }) {
@@ -106,35 +109,18 @@ TEST_CASE("Cached bounds preserve GDAL failure handling", "[srs][bounds]")
     compare_bounds(scenario, 21);
 }
 
-TEST_CASE("Cached bounds include interior points at a shifted projection seam", "[srs][bounds]")
+TEST_CASE("Cached bounds include interior points at a shifted projection seam", "[gis][srs][detail]")
 {
-    const auto source = gis::srs::wgs84();
-    const auto target = gis::srs::from_user_input("+proj=sinu +lon_0=10 +datum=WGS84 +units=m +type=crs").value();
-    const auto transform = gis::srs::transformation(source, target).value();
+    const gis::srs::System source = gis::srs::wgs84();
+    const gis::srs::System target = REQUIRE_VALUE(gis::srs::from_user_input("+proj=sinu +lon_0=10 +datum=WGS84 +units=m +type=crs"));
+    const gis::srs::Transform transform = REQUIRE_VALUE(gis::srs::get_transform(source, target));
     std::array<double, 4> bounds {};
-    REQUIRE(gis::srs::detail::ogr_transform_bounds(transform.get(), -175, -80, -165, 80, &bounds[0], &bounds[1], &bounds[2], &bounds[3], 257));
+    REQUIRE(gis::srs::detail::ogr_transform_bounds(transform.as_gdal(), -175, -80, -165, 80, &bounds[0], &bounds[1], &bounds[2], &bounds[3], 257));
     for (double longitude : { -170 - 1e-8, -170 + 1e-8 }) {
-        const auto point = gis::srs::transform_point(transform.get(), glm::dvec2(longitude, 0)).value();
+        const glm::dvec2 point = REQUIRE_VALUE(transform.apply(glm::dvec2(longitude, 0)));
         CHECK(point.x >= bounds[0] - 1e-7);
         CHECK(point.x <= bounds[2] + 1e-7);
         CHECK(point.y >= bounds[1]);
         CHECK(point.y <= bounds[3]);
     }
-}
-
-TEST_CASE("Projected bounds transformation benchmark", "[srs][!benchmark][.]")
-{
-    const auto transform = gis::srs::transformation(gis::srs::wgs84(), gis::srs::from_epsg(31287).value()).value();
-    std::array<double, 4> bounds {};
-    REQUIRE(gis::srs::detail::ogr_transform_bounds(transform.get(), 12.6, 47, 12.61, 47.01, &bounds[0], &bounds[1], &bounds[2], &bounds[3], 257));
-    BENCHMARK("GDAL TransformBounds")
-    {
-        transform->TransformBounds(12.6, 47, 12.61, 47.01, &bounds[0], &bounds[1], &bounds[2], &bounds[3], 257);
-        return bounds;
-    };
-    BENCHMARK("cached projected bounds")
-    {
-        gis::srs::detail::ogr_transform_bounds(transform.get(), 12.6, 47, 12.61, 47.01, &bounds[0], &bounds[1], &bounds[2], &bounds[3], 257);
-        return bounds;
-    };
 }

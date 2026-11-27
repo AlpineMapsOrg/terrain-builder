@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,9 +25,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 using namespace std::literals;
+using namespace tile_downloader;
 
-TEST_CASE("tile logger session stops monitoring during exceptional unwinding")
-{
+TEST_CASE("tile logger session stops monitoring during exceptional unwinding", "[TileLogger]") {
     TileLogger logger(0);
 
     const auto before_throw = std::chrono::steady_clock::now();
@@ -41,8 +42,7 @@ TEST_CASE("tile logger session stops monitoring during exceptional unwinding")
     CHECK(unwind_duration < 250ms);
 }
 
-TEST_CASE("tile logger session can finish normally")
-{
+TEST_CASE("tile logger session can finish normally", "[TileLogger]") {
     TileLogger logger(0);
     auto session = logger.start();
 

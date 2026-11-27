@@ -22,6 +22,7 @@
 
 #include "Bound.h"
 #include "RangeBounds.h"
+#include "numeric/checked_cast.h"
 #include "numeric/number_utils.h"
 
 template <typename T>
@@ -33,6 +34,10 @@ struct Range : RangeBounds<Range<T>, T> {
     constexpr Range(T value) requires std::integral<T> || std::floating_point<T>
         : Range(value, next_higher(value)) {}
     constexpr Range(T start_value, T end_value) : start(start_value), end(end_value) {}
+
+    template <typename U>
+    explicit constexpr Range(const Range<U> &other)
+        : Range(debug_checked_cast<T>(other.start), debug_checked_cast<T>(other.end)) {}
 
     [[nodiscard]] constexpr Bound<T> start_bound() const noexcept {
         return Bound<T>::included(this->start);

@@ -21,23 +21,12 @@
 #include <filesystem>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
+#include <radix/tile.h>
 
 #include <fmt/format.h>
+#include <fmt/std.h>
 
 namespace fmt {
-template <>
-struct formatter<std::filesystem::path> {
-    template <typename ParseContext>
-    constexpr auto parse(ParseContext &ctx) {
-        return ctx.begin();
-    }
-
-    template <typename FormatContext>
-    auto format(const std::filesystem::path &path, FormatContext &ctx) const {
-        return fmt::format_to(ctx.out(), "{}", std::filesystem::weakly_canonical(path).string());
-    }
-};
-
 template <glm::length_t N, typename T>
 struct formatter<glm::vec<N, T>> {
     template <typename ParseContext>
@@ -65,6 +54,18 @@ struct formatter<radix::geometry::Aabb<N, T>> {
     template <typename FormatContext>
     auto format(const radix::geometry::Aabb<N, T> &aabb, FormatContext &ctx) const {
         return fmt::format_to(ctx.out(), "[{}-{}]", aabb.min, aabb.max);
+    }
+};
+
+// Aabb2 derives from Aabb instead of aliasing it, so it needs its own specialization.
+template <typename T>
+struct formatter<radix::geometry::Aabb2<T>> : formatter<radix::geometry::Aabb<2, T>> {};
+
+template <>
+struct formatter<radix::tile::Id> : formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const radix::tile::Id &id, FormatContext &ctx) const {
+        return formatter<std::string_view>::format(radix::tile::to_string(id), ctx);
     }
 };
 }

@@ -79,8 +79,8 @@ IdRect OddLevelShifted::get_intersecting_nodes_on_level(const Id &id, const uint
     const glm::dvec3 node_size = this->_space.get_node_size_at_level(target_level);
     const glm::dvec3 offset = node_size / 1024.0;
 
-    const Id min_id = this->find_node_at_level_containing_point(source_bounds.min + offset, target_level).value();
-    const Id max_id = this->find_node_at_level_containing_point(source_bounds.max - offset, target_level).value();
+    const Id min_id = *ASSERT_VAL(this->find_node_at_level_containing_point(source_bounds.min + offset, target_level));
+    const Id max_id = *ASSERT_VAL(this->find_node_at_level_containing_point(source_bounds.max - offset, target_level));
     return IdRect(min_id, max_id);
 }
 
@@ -127,8 +127,8 @@ Bounds OddLevelShifted::get_node_bounds_with_children(const Id &id) const {
     // The node and its children live in different shifted regions (children are
     // one level finer, so an odd node has unshifted children and vice versa).
     // Union both so the bounds cover the node regardless of its level parity.
-    bounds.expand_by(this->get_node_bounds(id.child(0).value()));
-    bounds.expand_by(this->get_node_bounds(id.child(7).value()));
+    bounds.expand_by(this->get_node_bounds(*ASSERT_VAL(id.child(0))));
+    bounds.expand_by(this->get_node_bounds(*ASSERT_VAL(id.child(7))));
     return bounds;
 }
 
@@ -137,7 +137,7 @@ Bounds OddLevelShifted::get_node_bounds(const Id &id) const {
     if (id.level() % 2 == 0) {
         return node_bounds;
     } else {
-        // Shift odd levels by half a node size 
+        // Shift odd levels by half a node size
         const glm::dvec3 shift = node_bounds.size() / 2.0;
         Bounds shifted_bounds(node_bounds.min - shift, node_bounds.max - shift);
 

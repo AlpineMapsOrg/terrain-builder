@@ -77,8 +77,8 @@ public:
         return chi;
     }
     [[nodiscard]] uint32_t genus() const {
-        const int32_t two_genus = 2 
-            - static_cast<int32_t>(this->boundary_count()) 
+        const int32_t two_genus = 2
+            - static_cast<int32_t>(this->boundary_count())
             - static_cast<int32_t>(this->chi());
         DEBUG_ASSERT(two_genus >= 0);
         const int32_t genus = detail::checked_div(two_genus, 2);

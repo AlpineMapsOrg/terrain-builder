@@ -2,6 +2,7 @@
  * AlpineMaps.org
  * Copyright (C) 2024 Martin Braunsperger
  * Copyright (C) 2024 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,24 +18,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <cstdlib>
+#include <expected>
 #include <filesystem>
 
 #include <glm/glm.hpp>
 
+#include "error/Result.h"
+#include "error/log.h"
+#include "error/try.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
 #include "opencv_utils.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "cli.h"
 
-void run(const cli::Args& args) {
+[[nodiscard]]
+alp::Result<void> run(const cli::Args& args) {
     LOG_INFO("Loading input mesh...");
-    const auto load_result = mesh::io::load_from_path(args.input_path);
-    if (!load_result) {
-        LOG_ERROR("Failed to load mesh: {}", load_result.error().to_string());
-        return;
-    }
-    SimpleMesh mesh = load_result.value();
+    ALP_TRY(SimpleMesh mesh, mesh::io::load_from_path(args.input_path));
 
     if (args.texture_resolution.has_value()) {
         if (mesh.texture.has_value()) {
@@ -48,16 +50,19 @@ void run(const cli::Args& args) {
     }
 
     LOG_INFO("Writing output mesh...");
-    const auto save_result = mesh::io::save_to_path(mesh, args.output_path);
-    if (!save_result) {
-        LOG_ERROR("Failed to save mesh: {}", save_result.error().to_string());
-        return;
-    }
+    ALP_TRY(mesh::io::save_to_path(mesh, args.output_path, {.mode = io::WriteMode::Replace}));
+    return {};
 }
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    cli_support::Log::init(args.log_level);
+    logging::Log::init(args.log_level);
 
-    run(args);
+    const alp::Result<void> result = run(args);
+    if (!result.has_value()) {
+        LOG_REPORT(result.error());
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
 }

@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,19 +19,35 @@
 
 #pragma once
 
-#include <expected>
+#include <string>
 
-#include "Error.h"
-#include "octree/StoreTraits.h"
-#include "store/Index.h"
+#include <fmt/format.h>
+
+#include "error/Result.h"
+#include "error/utils.h"
+#include "hierarchy/NodeStatus.h"
+#include "octree/Id.h"
+#include "octree/storage/Index.h"
 
 namespace sf {
 
-inline Expected<void> validate_index(const store::Index<octree::StoreTraits>& index)
-{
-    for (const auto& [key, status] : index) {
-        if (status == store::NodeStatus::Inner) {
-            return Error::fail(Error::Code::CorruptData, "Structura Fundamentalis topology contains Inner node " + key.to_string());
+// The index marks a node as inner, which the Structura Fundamentalis topology does not allow.
+struct UnexpectedInnerNode {
+    octree::Id node;
+
+    bool operator==(const UnexpectedInnerNode&) const = default;
+};
+
+inline std::string format_as(const UnexpectedInnerNode& error) {
+    return fmt::format("node {} is an inner node", error.node);
+}
+
+// Checks that the index holds only leaf and virtual nodes.
+[[nodiscard]]
+inline alp::Result<void, UnexpectedInnerNode> validate_index(const octree::storage::Index& index) {
+    for (const auto& [key, status] : index.map()) {
+        if (status == hierarchy::NodeStatus::Inner) {
+            return alp::make_error(UnexpectedInnerNode{key});
         }
     }
     return {};

@@ -27,6 +27,8 @@
 
 #include <radix/tile.h>
 
+namespace tile_downloader {
+
 enum class TileDownloadProvider {
     Basemap,
     Gataki,
@@ -42,8 +44,7 @@ struct TileProviderConfig {
     TileYDirection y_direction = TileYDirection::Down;
 };
 
-[[nodiscard]] inline TileProviderConfig tile_provider_config(TileDownloadProvider provider)
-{
+[[nodiscard]] inline TileProviderConfig tile_provider_config(TileDownloadProvider provider) {
     switch (provider) {
     case TileDownloadProvider::Basemap:
         return {
@@ -64,8 +65,7 @@ class TileUrlBuilder {
 public:
     explicit TileUrlBuilder(TileProviderConfig config)
         : _url_pattern(std::move(config.url_pattern))
-        , _y_direction(config.y_direction)
-    {
+        , _y_direction(config.y_direction) {
         if (_url_pattern.find("{zoom}") == std::string::npos
             || _url_pattern.find("{x}") == std::string::npos
             || _url_pattern.find("{y}") == std::string::npos) {
@@ -73,8 +73,7 @@ public:
         }
     }
 
-    [[nodiscard]] std::string build_url(const radix::tile::Id& tile_id) const
-    {
+    [[nodiscard]] std::string build_url(const radix::tile::Id& tile_id) const {
         auto y = tile_id.coords.y;
         if (_y_direction == TileYDirection::Up) {
             if (tile_id.zoom_level >= std::numeric_limits<unsigned>::digits)
@@ -90,8 +89,7 @@ public:
     }
 
 private:
-    static void replace_all(std::string& value, std::string_view placeholder, const std::string& replacement)
-    {
+    static void replace_all(std::string& value, std::string_view placeholder, const std::string& replacement) {
         size_t position = 0;
         while ((position = value.find(placeholder, position)) != std::string::npos) {
             value.replace(position, placeholder.size(), replacement);
@@ -102,3 +100,5 @@ private:
     std::string _url_pattern;
     TileYDirection _y_direction;
 };
+
+} // namespace tile_downloader

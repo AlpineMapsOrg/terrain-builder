@@ -19,25 +19,25 @@
 
 #pragma once
 
-#include <cmath>
 #include <filesystem>
-#include <map>
-#include <memory>
-#include <span>
+#include <unordered_map>
 #include <vector>
 
-#include <gdal_priv.h>
-#include <glm/gtx/norm.hpp>
-
+#include "error/Context.h"
+#include "error/Result.h"
+#include "error/try.h"
+#include "gis/CplError.h"
 #include "gis/Dataset.h"
 #include "gis/vector_mask.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
-#include "mesh/validate.h"
-#include "mesh/validate_cgal.h"
+#include "mesh/validate/debug_assert.h"
+#include "mesh/validate/cgal.h"
 #include "mesh/bounds.h"
-#include "gis/srs.h"
+#include "gis/srs/System.h"
+#include "gis/srs/Transform.h"
+#include "gis/srs/well_known.h"
 #include "SphereProjector.h"
 
 #include <CGAL/Boolean_set_operations_2.h>
@@ -108,17 +108,17 @@ namespace {
 
 inline constexpr double simplification_tolerance_m = 0.1;
 
-namespace {
-    template <typename Function>
-    void for_each_point(MultipolygonWithHoles2& polygons, Function function)
+namespace detail {
+    template <typename F>
+    void for_each_point(MultipolygonWithHoles2& polygons, F&& f)
     {
         for (auto& polygon : polygons.polygons_with_holes()) {
             for (auto& cgal_point : polygon.outer_boundary()) {
-                function(cgal_point);
+                f(cgal_point);
             }
             for (auto& hole : polygon.holes()) {
                 for (auto& cgal_point : hole) {
-                    function(cgal_point);
+                    f(cgal_point);
                 }
             }
         }
@@ -159,24 +159,37 @@ glm::dvec2 calculate_radius_range(const std::span<const SimpleMesh3d> meshes) {
     return glm::sqrt(calculate_radius_squared_range(meshes));
 }*/
 
-} // namespace
+} // namespace detail
 
-inline SpherePolygonMask project_onto_sphere(ReferencedPolygonMask ref_mask, const double radius) {
+[[nodiscard]]
+inline alp::Result<SpherePolygonMask, gis::srs::TransformError> project_onto_sphere(ReferencedPolygonMask ref_mask, const double radius) {
     auto mask_2d = std::move(ref_mask.polygons);
     auto srs = std::move(ref_mask.srs);
 
-    // Translate to ecef and project onto sphere
+    // Translate to ecef
     std::vector<glm::dvec3> ecef_points;
-    for_each_point(mask_2d, [&](const Point2& cgal_point) { ecef_points.emplace_back(convert::to_glm_point(cgal_point), 0); });
-    const auto srs_transform = Error::asserting_unwrap(gis::srs::transformation(srs, gis::srs::ecef()));
-    Error::asserting_unwrap(gis::srs::transform_points_inplace(srs_transform.get(), ecef_points));
+    detail::for_each_point(mask_2d, [&](const Point2& cgal_point) {
+        const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
+        ecef_points.emplace_back(source_point, 0);
+    });
+
+    ALP_TRY(const gis::srs::Transform srs_transform, gis::srs::get_transform(srs, gis::srs::ecef()));
+    ALP_TRY(srs_transform.apply_inplace(&ecef_points));
+
     // Unlike the bounds in the source srs, the bounds of the points stay on the mask's side of the
     // earth for masks split at the antimeridian.
-    const radix::geometry::Aabb3d ecef_bounds = radix::geometry::find_bounds(std::span<const glm::dvec3>(ecef_points));
+    const radix::geometry::Aabb3d ecef_bounds = calculate_bounds(ecef_points);
     const glm::dvec3 tangent_point = scale_to_length(ecef_bounds.centre(), radius);
     const SphereProjector projector(tangent_point);
-    auto ecef_point = ecef_points.begin();
-    for_each_point(mask_2d, [&](Point2& cgal_point) { cgal_point = convert::to_cgal_point<Kernel>(projector.project_point(*ecef_point++)); });
+
+    // Project onto sphere
+    auto ecef_point_it = ecef_points.begin();
+    detail::for_each_point(mask_2d, [&](Point2& cgal_point) {
+        const glm::dvec2 projected_point = projector.project_point(*ecef_point_it);
+        cgal_point = convert::to_cgal_point<Kernel>(projected_point);
+        ecef_point_it++;
+    });
+
     return SpherePolygonMask(mask_2d, projector);
 }
 
@@ -335,24 +348,24 @@ inline MeshMask extrude(
     return extrude(mask, padded_radius_range);
 }
 
-inline Expected<ReferencedPolygonMask> load_referenced_from_path(const std::filesystem::path &path) {
-    auto opened = gis::Dataset::open_vector(path);
-    if (!opened) {
-        return Error::propagate(std::move(opened));
-    }
-    return gis::vector_mask::simplify(gis::vector_mask::load(*opened), simplification_tolerance_m);
+using LoadReferencedError = alp::Error<gis::CplError, gis::vector_mask::LoadMaskError, gis::vector_mask::SimplifyMaskError>;
+using LoadError = alp::Error<LoadReferencedError, gis::srs::TransformError>;
+
+[[nodiscard]]
+inline alp::Result<ReferencedPolygonMask, LoadReferencedError> load_referenced_from_path(const std::filesystem::path &path) {
+    const auto context = alp::make_context("loading mask from {}", path);
+    ALP_TRY_CONTEXT(gis::Dataset dataset, gis::Dataset::open_vector(path), context);
+    ALP_TRY_CONTEXT(const ReferencedPolygonMask referenced_mask, gis::vector_mask::load(dataset), context);
+    ALP_TRY_CONTEXT(ReferencedPolygonMask simplified_mask, gis::vector_mask::simplify(referenced_mask, simplification_tolerance_m), context);
+    return simplified_mask;
 }
 
-inline Expected<MeshMask> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
-    auto ref_mask_res = load_referenced_from_path(path);
-    if (!ref_mask_res) {
-        return Error::propagate(std::move(ref_mask_res));
-    }
-    ReferencedPolygonMask ref_polygon_mask = std::move(ref_mask_res.value());
-    SpherePolygonMask sphere_polygon_mask = project_onto_sphere(std::move(ref_polygon_mask), radius_range.x);
+[[nodiscard]]
+inline alp::Result<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
+    ALP_TRY(ReferencedPolygonMask ref_polygon_mask, load_referenced_from_path(path));
+    ALP_TRY_CONTEXT(SpherePolygonMask sphere_polygon_mask, project_onto_sphere(std::move(ref_polygon_mask), radius_range.x), alp::make_context("projecting mask from {} onto the sphere", path));
     SphereMeshMask sphere_mesh_mask = triangulate(sphere_polygon_mask);
     MeshMask mesh_mask = extrude(sphere_mesh_mask, radius_range);
-
     return mesh_mask;
 }
 
@@ -370,7 +383,7 @@ inline SpherePolygonMask compute_mesh_shadow(const SimpleMesh3d &mesh, const glm
     SimpleMesh2d projected_mesh;
     projected_mesh.positions = projected_vertices;
     projected_mesh.triangles = mesh.triangles;
-    mesh::validate(projected_mesh);
+    mesh::debug_assert_valid(projected_mesh);
 
     // Then get the outer boundary (i.e. the mask) of this 2D mesh.
     // PolygonSet2 triangles;

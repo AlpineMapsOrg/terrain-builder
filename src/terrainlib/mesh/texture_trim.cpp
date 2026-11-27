@@ -26,7 +26,7 @@
 #include <radix/geometry.h>
 #include <libassert/assert.hpp>
 
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/texture_trim.h"
 #include "range_utils.h"
 
@@ -90,7 +90,7 @@ TextureTrim compute_texture_trim(const cv::Mat &texture, const radix::geometry::
         clamped_pixel_bounds.width(),
         clamped_pixel_bounds.height());
     cv::Mat cropped_texture = texture(roi);
-    
+
     // Clone the cropped texture if size difference is large to avoid keeping a large texture in memory just for a small cropped area
     constexpr float AreaThreshold = 0.125f;
     const float cropped_area = roi.width * roi.height;
@@ -105,7 +105,7 @@ TextureTrim compute_texture_trim(const cv::Mat &texture, const radix::geometry::
     LOG_TRACE("Trimmed texture from {}x{} to {}x{}", texture_size.x, texture_size.y, cropped_texture_size.x, cropped_texture_size.y);
     const glm::dvec2 offset = glm::dvec2(clamped_pixel_bounds.min) / glm::dvec2(texture_size);
     const glm::dvec2 scale = glm::dvec2(clamped_pixel_bounds.size()) / glm::dvec2(texture_size);
-    
+
     const UvRemap uv_remap{.offset = offset, .scale = scale};
     return TextureTrim{.texture = cropped_texture, .uv_remap = uv_remap};
 }

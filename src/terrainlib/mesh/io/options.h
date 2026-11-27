@@ -20,20 +20,22 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
 
-#include "io/byte.h"
+#include "io/WriteMode.h"
+#include "io/image/Format.h"
+#include "io/json/Value.h"
 
 namespace mesh::io {
-    
+
 struct LoadOptions {
 };
 
 struct SaveOptions {
-    std::string texture_format = ".jpeg";
-    std::string name = "Octree";
-    std::unordered_map<std::string, std::string> metadata = {};
-    ::io::byte::WriteMode write_mode = ::io::byte::WriteMode::Overwrite;
+    ::io::image::Format texture_format = ::io::image::Format::Jpeg;
+    std::string name = "mesh";
+    ::io::json::Object metadata = {};
+    ::io::WriteMode mode = ::io::default_write_mode;
+    bool make_dirs = ::io::default_make_dirs;
 };
 
 } // namespace mesh::io

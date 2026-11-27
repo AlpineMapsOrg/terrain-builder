@@ -3,6 +3,7 @@
  * Copyright (c) 2000, Frank Warmerdam
  * Copyright (c) 2008-2013, Even Rouault <even dot rouault at spatialys.com>
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * SPDX-License-Identifier: MIT
  *
@@ -37,7 +38,8 @@
 #include <glm/glm.hpp>
 #include <ogr_spatialref.h>
 
-#include "gis/srs.h"
+#include "gis/srs/System.h"
+#include "gis/srs/Transform.h"
 #include "gis/webmercator.h"
 
 namespace gis::srs::detail {
@@ -68,6 +70,7 @@ int ogr_transform_bounds(OGRCoordinateTransformation* transform,
         return fallback();
     }
 
+    const Transform to_target(transform);
     CPLErrorReset();
     *out_xmin = *out_ymin = *out_xmax = *out_ymax = HUGE_VAL;
     const int side_points = densify_pts + 1;
@@ -84,7 +87,7 @@ int ogr_transform_bounds(OGRCoordinateTransformation* transform,
         CPLErrorHandlerPusher quiet(CPLQuietErrorHandler);
         // GDAL may accept a partially valid boundary; our batch helper requires
         // every point to succeed, so let GDAL handle those exceptional cases.
-        if (!transform_points_inplace(transform, boundary)
+        if (!to_target.apply_inplace(&boundary)
             || std::ranges::any_of(boundary, [](const auto& point) { return !std::isfinite(point.x) || !std::isfinite(point.y); })) {
             return fallback();
         }
@@ -104,14 +107,14 @@ int ogr_transform_bounds(OGRCoordinateTransformation* transform,
     CPLErrorStateBackuper saved_error(CPLQuietErrorHandler);
     std::unique_ptr<OGRSpatialReference> geographic_target(target->CloneGeogCS());
     geographic_target->SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    auto to_source = transformation(*geographic_target, *source);
+    auto to_source = get_transform(System(std::move(*geographic_target)), System(source));
     if (to_source) {
         const auto include = [&](glm::dvec2 point) {
-            auto input = transform_point(to_source->get(), point);
+            auto input = to_source->apply(point);
             if (!input || !(input->x >= xmin && input->x <= xmax && input->y >= ymin && input->y <= ymax)) {
                 return false;
             }
-            auto output = transform_point(transform, *input);
+            auto output = to_target.apply(*input);
             if (!output) {
                 return false;
             }

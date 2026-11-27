@@ -29,10 +29,8 @@
 using namespace std::literals;
 
 
-TEST_CASE("progress indicator")
-{
-    SECTION("throws on overflow")
-    {
+TEST_CASE("progress indicator") {
+    SECTION("throws on overflow") {
         {
             auto pi = cli_support::ProgressIndicator(0);
             CHECK_THROWS(pi.task_finished());
@@ -44,8 +42,7 @@ TEST_CASE("progress indicator")
         }
     }
 
-    SECTION("message")
-    {
+    SECTION("message") {
         cli_support::ProgressIndicator pi(4);
         // Step 0
         CHECK(pi.x_of_y_done_message() == "0/4");
@@ -67,13 +64,12 @@ TEST_CASE("progress indicator")
         CHECK(pi.x_of_y_done_message() == "4/4");
     }
 
-    SECTION("bar small")
-    {
+    SECTION("bar small") {
         cli_support::ProgressIndicator pi(2);
         // Step 0
         CHECK(pi.progress_bar(2) == "[]");
         CHECK(pi.progress_bar(3) == "[ ]");
-        
+
         // Step 1
         pi.task_finished();
         CHECK(pi.progress_bar(2) == "[]");
@@ -85,16 +81,14 @@ TEST_CASE("progress indicator")
         CHECK(pi.progress_bar(3) == "[=]");
     }
 
-    SECTION("task_finished is thread safe")
-    {
+    SECTION("task_finished is thread safe") {
         const auto tasks = std::vector<int>(1000000);
         auto pi = cli_support::ProgressIndicator(tasks.size());
         std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { pi.task_finished(); });
         CHECK_THROWS(pi.task_finished());
     }
 
-    SECTION("thread parallel reporting")
-    {
+    SECTION("thread parallel reporting") {
         // no real test, because console output can't be easily tested. but at least we are test compiling the interface.
         const auto tasks = std::vector<int>(151);
         auto pi = cli_support::ProgressIndicator(tasks.size());
@@ -104,8 +98,7 @@ TEST_CASE("progress indicator")
         CHECK_THROWS(pi.task_finished());
     }
 
-    SECTION("monitoring can be stopped before all tasks finish")
-    {
+    SECTION("monitoring can be stopped before all tasks finish") {
         cli_support::ProgressIndicator pi(1);
         auto monitoring_thread = pi.start_monitoring();
 

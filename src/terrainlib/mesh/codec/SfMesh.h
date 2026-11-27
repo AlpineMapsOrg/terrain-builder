@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,61 +21,81 @@
 
 #include <filesystem>
 #include <optional>
+#include <utility>
 #include <vector>
 
+#include "error/Error.h"
+#include "error/Result.h"
+#include "error/try.h"
+#include "io/OpenCvError.h"
+#include "io/WriteMode.h"
 #include "io/envelope.h"
+#include "io/mat.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/codec/SfMeshFormat.h"
+#include "mesh/encode_error.h"
+#include "mesh/io/options.h"
+#include "mesh/io/sf_mesh.h"
+#include "path_utils.h"
 #include "store/Codec.h"
+#include "store/envelope_utils.h"
 
 namespace mesh::codec {
 
+namespace detail::sf_mesh {
+
+    // The failure reading a node for a failure loading its SF mesh file, which it keeps as its source.
+    [[nodiscard]]
+    inline store::CodecReadError to_codec_read_error(mesh::io::sf_mesh::LoadError error) {
+        return std::move(error)
+            .map<::io::envelope::ReadError>(store::to_codec_read_error)
+            .map<mesh::io::sf_mesh::CorruptData, mesh::GeometryDecodeError, ::io::mat::CorruptData>(store::CorruptData{})
+            .map<::io::OpenCvError>(store::Unknown{});
+    }
+
+    // The failure writing a node for a failure saving its SF mesh file, which it keeps as its source.
+    [[nodiscard]]
+    inline store::CodecWriteError to_codec_write_error(mesh::io::sf_mesh::SaveError error) {
+        return std::move(error)
+            .map<::io::envelope::WriteError>(store::to_codec_write_error)
+            .map<::io::OpenCvError>(store::Unknown{});
+    }
+
+} // namespace detail::sf_mesh
+
 class SfMesh final : public store::Codec<mesh::Simple> {
 public:
-    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".sfmesh") }; }
+    std::string_view id() const override { return mesh::io::sf_mesh::extension; }
 
-    Expected<mesh::Simple> read(
-        const std::filesystem::path& node_path, const std::optional<store::NodeDataHashView> expected_hash = std::nullopt) const override
-    {
-        const std::filesystem::path path = paths(node_path).front();
-        auto payload = ::io::envelope::read<mesh::sf::Schema>(path, expected_hash);
-        if (!payload) {
-            return Error::propagate(std::move(payload), "read SF mesh");
-        }
-        if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return Error::propagate(std::move(valid), Error::Code::CorruptData, "validate SF mesh read from \"" + path.string() + "\"");
-        }
-        auto decoded = mesh::sf::decode_payload(std::move(*payload));
-        if (!decoded) {
-            return Error::propagate(std::move(decoded), "decode SF mesh \"" + path.string() + "\"");
-        }
-        return std::move(*decoded);
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { this->file_path(node_path) }; }
+
+    [[nodiscard]]
+    alp::Result<mesh::Simple, store::CodecReadError> read(const std::filesystem::path& node_path, const std::optional<store::PayloadHashView> expected_hash = std::nullopt) const override {
+        const std::filesystem::path path = this->file_path(node_path);
+
+        auto load_result = mesh::io::sf_mesh::load_from_path(path, {.expected_hash = expected_hash});
+        ALP_TRY(mesh::Simple mesh, std::move(load_result).transform_error(detail::sf_mesh::to_codec_read_error));
+
+        return mesh;
     }
 
-    Expected<store::NodeDataHash> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
-    {
-        return write(node_path, mesh, {}, ::io::byte::WriteMode::CreateNew);
-    }
+    [[nodiscard]]
+    alp::Result<store::PayloadHash, store::CodecWriteError> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override {
+        const std::filesystem::path path = this->file_path(node_path);
 
-    Expected<store::NodeDataHash> write(
-        const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options, const ::io::byte::WriteMode mode) const
-    {
-        const std::filesystem::path path = paths(node_path).front();
-        auto payload = mesh::sf::encode_payload(mesh, options);
-        if (!payload) {
-            return Error::propagate(std::move(payload), "encode SF mesh \"" + path.string() + "\"");
-        }
-        if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return Error::propagate(std::move(valid), "validate SF mesh for \"" + path.string() + "\"");
-        }
-        auto hash = ::io::envelope::write<mesh::sf::Schema>(*payload, path, mode);
-        if (!hash) {
-            return Error::propagate(std::move(hash), "write SF mesh");
-        }
-        return std::move(*hash);
+        const mesh::io::SaveOptions options{
+            .mode = ::io::WriteMode::CreateNew,
+        };
+        auto save_result = mesh::io::sf_mesh::save_to_path(mesh, path, options);
+        ALP_TRY(store::PayloadHash hash, std::move(save_result).transform_error(detail::sf_mesh::to_codec_write_error));
+
+        return hash;
     }
 
     bool supports_hashing() const override { return true; }
+
+private:
+    // The file that holds the node at `node_path`.
+    std::filesystem::path file_path(const std::filesystem::path& node_path) const { return paths::with_added_extension(node_path, mesh::io::sf_mesh::extension); }
 };
 
 } // namespace mesh::codec

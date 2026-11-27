@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +24,9 @@
 
 #include <radix/tile.h>
 
-[[nodiscard]] inline std::filesystem::path google_tile_path(
-    const std::filesystem::path& base_path, const radix::tile::Id& tile_id, const std::string& extension)
-{
+[[nodiscard]] inline std::filesystem::path make_google_tile_path(
+    const std::filesystem::path& base_path,
+    const radix::tile::Id& tile_id,
+    const std::string& extension) {
     return base_path / std::to_string(tile_id.zoom_level) / std::to_string(tile_id.coords.x) / (std::to_string(tile_id.coords.y) + extension);
 }

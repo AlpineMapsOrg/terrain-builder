@@ -35,14 +35,14 @@ class SegmentedBuffer {
 public:
     using value_type = TValue;
     using index_type = TValueIndex;
-    using segment_index = TSegmentIndex;
-    using offset_range = typename OffsetTable_<index_type>::range_type;
+    using SegmentIndex = TSegmentIndex;
+    using OffsetRange = typename OffsetTable_<index_type>::range_type;
 
     SegmentedBuffer() {
         this->reset();
     }
     SegmentedBuffer(std::vector<value_type> segment) : _data(std::move(segment)) {
-        this->_offsets.append_length(this->_data.size());
+        this->_offsets.append_segment(this->_data.size());
         this->_is_first_segment_implicit = false;
     }
 
@@ -51,7 +51,7 @@ public:
         this->_offsets.clear();
         this->_data.clear();
 
-        this->_offsets.append_length(0);
+        this->_offsets.append_segment(0);
         this->_is_first_segment_implicit = true;
     }
 
@@ -65,7 +65,7 @@ public:
         this->_offsets.clear();
         this->_data.clear();
 
-        this->_offsets.append_lengths(segment_sizes);
+        this->_offsets.append_segments(segment_sizes);
         this->_data.resize(this->_offsets.total_size(), value);
         this->_is_first_segment_implicit = false;
     }
@@ -82,7 +82,7 @@ public:
             return;
         }
 
-        const segment_index last_segment = this->segment_count() - 1;
+        const SegmentIndex last_segment = this->segment_count() - 1;
         const index_type new_end = this->_offsets.segment_range(last_segment).begin + size;
         this->_offsets.set_end(last_segment, new_end);
         this->_data.resize(new_end, value);
@@ -94,6 +94,11 @@ public:
         this->resize_last_segment(size, value);
     }
 
+    // Adds a new segment holding no elements.
+    void push_empty_segment() {
+        this->push_new_segment(index_type{0});
+    }
+
     // Pushes a new segment and copies all elements from a container into it.
     template <std::ranges::input_range Range>
     void push_new_segment(const Range& range) {
@@ -102,7 +107,7 @@ public:
         this->push_new_segment(added_size);
 
         // copy data
-        const segment_index last_segment = this->segment_count() - 1;
+        const SegmentIndex last_segment = this->segment_count() - 1;
         auto destination = this->segment(last_segment);
         std::ranges::copy(range, destination.begin());
     }
@@ -110,8 +115,8 @@ public:
     // Appends an item to the end of the last segment in the data buffer.
     void push_to_last_segment(const value_type &value) {
         this->_is_first_segment_implicit = false;
-        const segment_index last_segment = this->segment_count() - 1;
-        const offset_range range = this->_offsets.segment_range(last_segment);
+        const SegmentIndex last_segment = this->segment_count() - 1;
+        const OffsetRange range = this->_offsets.segment_range(last_segment);
 
         this->_data.push_back(value);
         this->_offsets.set_end(last_segment, range.end + 1);
@@ -120,8 +125,8 @@ public:
     // Appends an item to the end of the last segment in the data buffer.
     void push_to_last_segment(value_type &&value) {
         this->_is_first_segment_implicit = false;
-        const segment_index last_segment = this->segment_count() - 1;
-        const offset_range range = this->_offsets.segment_range(last_segment);
+        const SegmentIndex last_segment = this->segment_count() - 1;
+        const OffsetRange range = this->_offsets.segment_range(last_segment);
 
         this->_data.push_back(std::forward<value_type>(value));
         this->_offsets.set_end(last_segment, range.end + 1);
@@ -134,9 +139,26 @@ public:
             return;
         }
 
-        const segment_index last_segment = this->segment_count() - 1;
+        const SegmentIndex last_segment = this->segment_count() - 1;
         this->_offsets.set_end(last_segment, this->total_size());
-        this->_offsets.append_length(0);
+        this->_offsets.append_segment(0);
+    }
+
+    // Removes the last segment and the elements it holds.
+    void pop_segment() {
+        this->pop_segments(1);
+    }
+
+    // Removes multiple segments, counted from the last one, and the elements they hold.
+    void pop_segments(const SegmentIndex count) {
+        // Emptying the buffer leaves it as construction does, with one segment nobody asked for.
+        if (count == this->segment_count()) {
+            this->reset();
+            return;
+        }
+
+        this->_offsets.pop_segments(count);
+        this->_data.resize(this->_offsets.total_size());
     }
 
     // Removes all empty segments while preserving the order of non-empty segments.
@@ -146,22 +168,22 @@ public:
     }
 
     // Accesses an element using segment-relative indexing.
-    value_type &operator()(const segment_index segment_index, const index_type element_index) {
+    value_type &operator()(const SegmentIndex segment_index, const index_type element_index) {
         return this->get_impl(*this, segment_index, element_index);
     }
 
     // Const-qualified access to elements using segment-relative indexing.
-    const value_type &operator()(const segment_index segment_index, const index_type element_index) const {
+    const value_type &operator()(const SegmentIndex segment_index, const index_type element_index) const {
         return this->get_impl(*this, segment_index, element_index);
     }
 
     // Returns the total number of segments currently tracked.
-    segment_index segment_count() const noexcept {
+    SegmentIndex segment_count() const noexcept {
         return this->_offsets.size();
     }
 
     // Returns the number of elements contained within a specific segment.
-    index_type segment_size(const segment_index segment_index) const noexcept {
+    index_type segment_size(const SegmentIndex segment_index) const noexcept {
         return this->_offsets.segment_size(segment_index);
     }
 
@@ -171,11 +193,11 @@ public:
     }
 
     // Returns a readonly view of one segment of the buffer.
-    std::span<const value_type> segment(const segment_index segment_index) const & noexcept {
+    std::span<const value_type> segment(const SegmentIndex segment_index) const & noexcept {
         return this->get_segment_impl(*this, segment_index);
     }
     // Returns a view of one segment of the buffer.
-    std::span<value_type> segment(const segment_index segment_index) & noexcept {
+    std::span<value_type> segment(const SegmentIndex segment_index) & noexcept {
         return this->get_segment_impl(*this, segment_index);
     }
 
@@ -213,10 +235,10 @@ public:
 
 private:
     template <typename Self>
-    static inline auto &get_impl(Self &self, const segment_index segment_index, const index_type element_index) {
+    static inline auto &get_impl(Self &self, const SegmentIndex segment_index, const index_type element_index) {
         DEBUG_ASSERT(segment_index < self._offsets.size());
 
-        const offset_range range = self._offsets.segment_range(segment_index);
+        const OffsetRange range = self._offsets.segment_range(segment_index);
         const index_type flat_index = range.begin + element_index;
 
         DEBUG_ASSERT(flat_index < range.end);
@@ -224,18 +246,18 @@ private:
     }
 
     template <typename Self>
-    static inline auto get_segment_impl(Self &self, const segment_index segment_index) {
+    static inline auto get_segment_impl(Self &self, const SegmentIndex segment_index) {
         DEBUG_ASSERT(segment_index < self._offsets.size());
 
-        const offset_range range = self._offsets.segment_range(segment_index);
+        const OffsetRange range = self._offsets.segment_range(segment_index);
         const index_type length = range.end - range.begin;
         return std::span(self._data.data() + range.begin, length);
     }
 
     template <typename Self>
     static auto segments_impl(Self &self) noexcept {
-        return std::views::iota(segment_index{0}, self.segment_count()) 
-             | std::views::transform([&self](const segment_index i) noexcept {
+        return std::views::iota(SegmentIndex{0}, self.segment_count())
+             | std::views::transform([&self](const SegmentIndex i) noexcept {
                    return self.segment(i);
                });
     }

@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,31 +19,42 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
-#include <span>
-#include <vector>
 
-#include <expected>
+#include "common_error_codes.h"
+#include "error/Error.h"
+#include "error/MessageCode.h"
+#include "error/Result.h"
+#include "io/alloc.h"
+#include "io/bytes.h"
+#include "io/limits.h"
 
-#include "Error.h"
-#include "io/byte.h"
+namespace io::compression {
 
-namespace io::envelope {
-
-inline constexpr std::size_t default_max_decompressed_size = std::size_t { 1 } << 30;
-
-enum class CompressionAlgorithm : std::uint8_t {
+// How data is compressed.
+enum class Algorithm : uint8_t {
     None,
-    ZstdBestCompression,
-    ZstdDefaultCompression,
+    ZstdBest,
+    ZstdDefault,
 };
 
-// The algorithm must be an enumerator. Zstandard frames are written without their frame checksum.
-Expected<byte::vector> compress(byte::span uncompressed_data, CompressionAlgorithm compression_algorithm);
+struct CorruptData : alp::MessageCode<"the input data is not valid for the algorithm"> {};
+struct Truncated : alp::MessageCode<"the input data ends inside a frame header"> {};
+struct Unknown : alp::MessageCode<"the compression library reported a failure of unknown meaning"> {};
 
-// The algorithm must be an enumerator. Zstandard frames are accepted with or without their frame checksum.
-Expected<byte::vector> decompress(
-    byte::span compressed_data, CompressionAlgorithm compression_algorithm, std::size_t max_decompressed_size = default_max_decompressed_size);
+using CompressError = alp::Error<AllocError, Unknown>;
 
-} // namespace io::envelope
+// Produces a compact form of the input data, which `decompress` restores.
+// Fails if the input data, or the buffer Zstandard needs for the compressed data, would be larger than `max_buffer_size`.
+[[nodiscard]]
+alp::Result<bytes::vector, CompressError> compress(bytes::span uncompressed_data, Algorithm compression_algorithm);
+
+using DecompressError = alp::Error<AllocError, CorruptData, Truncated, Unsupported, Unknown>;
+
+// Restores the original data from the form `compress` produced.
+// Fails if it would be larger than `max_decompressed_size` or `max_buffer_size`.
+[[nodiscard]]
+alp::Result<bytes::vector, DecompressError> decompress(
+    bytes::span compressed_data, Algorithm compression_algorithm, size_t max_decompressed_size = max_buffer_size);
+
+} // namespace io::compression

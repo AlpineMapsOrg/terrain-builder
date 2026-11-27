@@ -22,6 +22,9 @@
 #include <libassert/assert.hpp>
 
 #include "cli_support/log.h"
+#include "error/log.h"
+#include "expected_utils.h"
+#include "io/filesystem.h"
 
 #include <filesystem>
 #include <string>
@@ -60,7 +63,11 @@ Args cli::parse(int argc, const char *const *argv) {
         if (input_path.filename().empty()) {
             input_path = input_path.parent_path();
         }
-        if (std::filesystem::is_directory(input_path)) {
+        const bool is_directory = alp::value_or_else(io::filesystem::is_directory(input_path), [](auto error) -> bool {
+            LOG_REPORT(error);
+            std::exit(EXIT_FAILURE);
+        });
+        if (is_directory) {
             auto stem = input_path.filename().string();
             args.output_path = input_path.parent_path() / fmt::format("{}-debug", stem);
         } else {

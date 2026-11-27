@@ -22,6 +22,7 @@
 #include <functional>
 
 #include <opencv2/opencv.hpp>
+#include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
 #include "atlas/LayoutPlanner.h"
@@ -30,7 +31,7 @@
 
 namespace atlas {
 
-// TODO: merge with dag_builder/atlas/atlas.h 
+// TODO: merge with dag_builder/atlas/atlas.h
 inline Sheet build(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
     const Layout &layout) {

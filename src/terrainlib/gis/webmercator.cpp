@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,16 +19,20 @@
 
 #include "gis/webmercator.h"
 
-#include <cmath>
+#include <cstdint>
+
+#include <glm/glm.hpp>
 
 namespace gis::webmercator {
 
-radix::tile::SrsBounds tile_bounds(const radix::tile::Id& key)
-{
-    // ldexp avoids both 1u << 32 and tile-coordinate * tile-dimension overflow.
-    const double side = std::ldexp(2 * half_extent, -int(key.zoom_level));
-    return { { -half_extent + double(key.coords.x) * side, half_extent - (double(key.coords.y) + 1) * side },
-        { -half_extent + (double(key.coords.x) + 1) * side, half_extent - double(key.coords.y) * side } };
+radix::tile::SrsBounds compute_tile_bounds(const radix::tile::Id& key) {
+    const uint64_t tile_count = uint64_t{1} << key.zoom_level;
+    const double tile_size = 2 * half_extent / tile_count;
+    // XYZ counts rows from the north, while the bounds grow northwards.
+    const glm::dvec2 grid_coords(key.coords.x, tile_count - 1 - key.coords.y);
+    const glm::dvec2 tile_min = glm::dvec2(-half_extent) + grid_coords * tile_size;
+    const glm::dvec2 tile_max = tile_min + tile_size;
+    return { tile_min, tile_max };
 }
 
 } // namespace gis::webmercator

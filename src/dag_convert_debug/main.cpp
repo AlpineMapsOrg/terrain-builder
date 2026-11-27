@@ -17,138 +17,105 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <array>
 #include <cstdlib>
 #include <filesystem>
+#include <string>
 
 #include "cli.h"
 #include "codec.h"
 #include "dag_node.h"
-#include "cli_support/log.h"
+#include "log.h"
+#include "error/Result.h"
+#include "error/log.h"
+#include "error/try.h"
+#include "io/UnknownExtension.h"
+#include "io/filesystem.h"
+#include "io/filesystem_utils.h"
+#include "path_utils.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
-#include "mesh/storage.h"
-#include "cli_support/ProgressIndicator.h"
+#include "parallel.h"
+#include "cli_support/for_each_with_progress.h"
 #include "storage.h"
-#include "store/snapshot.h"
+#include "store/open.h"
 #include "utils.h"
 
 namespace {
 
-void export_node(const cli::Args &args) {
-    if (args.input_path.extension() != ".dag") {
-        LOG_ERROR("Expected a .dag input file, got {}", args.input_path);
-        return;
+[[nodiscard]]
+alp::Result<void> export_node(const cli::Args &args) {
+    const std::string extension = args.input_path.extension().string();
+    if (extension != dag::codec::clustering_extension) {
+        return io::make_unsupported_extension_error(extension, std::array { dag::codec::clustering_extension });
     }
-    std::filesystem::path node_path = args.input_path;
-    node_path.replace_extension();
+    const std::filesystem::path node_path = paths::without_extension(args.input_path);
     const dag::codec::ClusterBatch codec;
-    const auto load_result = codec.read(node_path);
-    if (!load_result) {
-        LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error().to_string());
-        return;
-    }
+    ALP_TRY(const dag::ClusterBatch node, codec.read(node_path));
 
-    const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
+    const mesh::Simple mesh = clustering_to_mesh(node.clustering);
 
-    if (const auto absent = store::snapshot::require_absent(args.output_path); !absent) {
-        LOG_ERROR("Output must be new: {}", absent.error().to_string());
-        return;
-    }
-    const auto save_result = mesh::io::save_to_path(mesh, args.output_path);
-    if (!save_result) {
-        LOG_ERROR("Failed to save mesh to {}: {}", args.output_path, save_result.error().to_string());
-    }
+    ALP_TRY(io::filesystem::require_absent(args.output_path));
+    ALP_TRY(mesh::io::save_to_path(mesh, args.output_path));
+    return {};
 }
 
-void export_storage(const cli::Args &args) {
-    auto input_result = dag::storage::open_folder_indexed(args.input_path);
-    if (!input_result) {
-        LOG_ERROR(
-            "Failed to open input storage {}: {}",
-            args.input_path,
-            input_result.error().to_string());
-        return;
-    }
-    const dag::storage::IndexedStorage input_storage = std::move(input_result.value());
-
-    if (const auto absent = store::snapshot::require_absent(args.output_path); !absent) {
-        LOG_ERROR("Output must be new: {}", absent.error().to_string());
-        return;
-    }
-    mesh::storage::OpenOptions options;
-    options.preferred_extension = ".glb";
-    auto output_result = mesh::storage::open_folder(
-        args.output_path,
-        std::move(options));
-    if (!output_result) {
-        LOG_ERROR(
-            "Failed to open output storage {}: {}",
-            args.output_path,
-            output_result.error().to_string());
-        return;
-    }
-    mesh::storage::Storage output_storage = std::move(output_result.value());
+[[nodiscard]]
+alp::Result<void> export_storage(const cli::Args &args) {
+    ALP_TRY(const dag::storage::Storage input_storage, dag::storage::open(args.input_path, store::Accept::PublishedOrDraft));
+    ALP_TRY(mesh::storage::Draft output_storage, mesh::storage::create(args.output_path, input_storage.resolver().layout(), ".glb"));
 
     size_t exported_count = 0;
 
-    cli_support::ProgressIndicator progress(input_storage.index().size());
-    auto progress_thread = progress.start_monitoring();
-
-    for (const auto &[id, status] : input_storage.index()) {
-        if (status == store::NodeStatus::Virtual) {
-            progress.task_finished();
-            continue;
+    cli_support::for_each_with_progress(input_storage.index().map(), [&](const auto &entry) {
+        const auto &[id, status] = entry;
+        if (status == hierarchy::NodeStatus::Virtual) {
+            return;
         }
 
         const auto load_result = input_storage.load(id);
-        if (!load_result) {
-            LOG_ERROR(
-                "Failed to load node {}: {}",
-                id,
-                load_result.error().to_string());
-            progress.task_finished();
-            continue;
+        if (!load_result.has_value()) {
+            LOG_REPORT(load_result.error(), "skipping the node");
+            return;
         }
 
         const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
 
         const auto save_result = output_storage.save(id, mesh);
-        if (!save_result) {
-            LOG_ERROR(
-                "Failed to save mesh for node {}: {}",
-                id,
-                save_result.error().to_string());
-            progress.task_finished();
-            continue;
+        if (!save_result.has_value()) {
+            LOG_REPORT(save_result.error(), "skipping the node");
+            return;
         }
 
         exported_count++;
-        progress.task_finished();
-    }
+    }, parallel::Execution::Serial);
 
-    progress_thread.join();
-
-    const auto index_result = output_storage.save_or_create_index();
-    if (!index_result) {
-        LOG_ERROR(
-            "Failed to save index for {}: {}",
-            args.output_path,
-            index_result.error().to_string());
-    }
+    ALP_TRY(mesh::storage::publish(std::move(output_storage)));
 
     LOG_INFO("Exported {} debug meshes to {}", exported_count, args.output_path);
+    return {};
+}
+
+[[nodiscard]]
+alp::Result<void> run(const cli::Args &args) {
+    ALP_TRY(const bool is_directory, io::filesystem::is_directory(args.input_path));
+    if (is_directory) {
+        return export_storage(args);
+    } else {
+        return export_node(args);
+    }
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
-    cli_support::Log::init(args.log_level);
+    logging::Log::init(args.log_level);
 
-    if (std::filesystem::is_directory(args.input_path)) {
-        export_storage(args);
-    } else {
-        export_node(args);
+    const alp::Result<void> result = run(args);
+    if (!result.has_value()) {
+        LOG_REPORT(result.error());
+        return EXIT_FAILURE;
     }
 
     return EXIT_SUCCESS;

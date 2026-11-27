@@ -19,32 +19,67 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_tostring.hpp>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include "fmt_impls.h"
-#include "type_utils.h"
+#include "geometry/geometry.h"
 
 namespace Catch {
-template <glm::length_t N, typename T>
-struct StringMaker<glm::vec<N, T>> {
-    static std::string convert(const glm::vec<N, T> &value) {
+
+// A type fmt can format, apart from ranges, whose elements Catch prints one by one.
+template <typename T>
+concept PrintedByFmt = fmt::is_formattable<T>::value && !is_range<T>::value;
+
+// Prints a value the way fmt formats it.
+template <PrintedByFmt T>
+struct StringMaker<T> {
+    static std::string convert(const T &value) {
         return fmt::format("{}", value);
     }
 };
 
-template <glm::length_t N, typename T>
-struct StringMaker<radix::geometry::Aabb<N, T>> {
-    static std::string convert(const radix::geometry::Aabb<N, T> &value) {
-        return fmt::format("Aabb{}{}(({}, {}, {}) - ({}, {}, {}))", 
-            N,
-            type_name<T>()[0], 
-            value.min.x, value.min.y, value.min.z,
-            value.max.x, value.max.y, value.max.z);
+}
+
+// Matches a value equal to `target` up to `geometry::epsilon<double>()`, scaled by its magnitude above 1.
+inline Catch::Matchers::WithinAbsMatcher WithinEpsilon(const double target) {
+    return Catch::Matchers::WithinAbs(target, geometry::epsilon<double>() * std::max(1.0, std::abs(target)));
+}
+
+namespace detail {
+inline bool is_within_epsilon(const double actual, const double expected) {
+    return WithinEpsilon(expected).match(actual);
+}
+
+template <glm::length_t N>
+bool is_within_epsilon(const glm::vec<N, double> &actual, const glm::vec<N, double> &expected) {
+    for (glm::length_t i = 0; i < N; i++) {
+        if (!is_within_epsilon(actual[i], expected[i])) {
+            return false;
+        }
     }
-};
+    return true;
+}
+
+template <glm::length_t N>
+bool is_within_epsilon(const radix::geometry::Aabb<N, double> &actual, const radix::geometry::Aabb<N, double> &expected) {
+    return is_within_epsilon(actual.min, expected.min) && is_within_epsilon(actual.max, expected.max);
+}
+} // namespace detail
+
+// Matches a range holding the elements of `expected` in any order, each equal to its counterpart up to WithinEpsilon in every coordinate.
+template <typename T>
+auto UnorderedWithinEpsilon(std::vector<T> expected) {
+    return Catch::Matchers::UnorderedRangeEquals(std::move(expected), [](const T &a, const T &b) { return detail::is_within_epsilon(a, b); });
 }

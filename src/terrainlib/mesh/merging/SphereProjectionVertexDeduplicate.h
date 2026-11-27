@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
 #include "mesh/merging/VertexDeduplicate.h"
 #include "spatial_lookup/SpatialLookup.h"

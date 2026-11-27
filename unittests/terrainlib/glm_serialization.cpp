@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +18,6 @@
  *****************************************************************************/
 
 #include "io/glm_serialization.h"
-#include "io/byte.h"
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -33,7 +33,7 @@ namespace {
 template <typename Value>
 auto encode(const Value& value)
 {
-    io::byte::vector bytes;
+    std::vector<uint8_t> bytes;
     zpp::bits::out output(bytes);
     REQUIRE(!zpp::bits::failure(output(value)));
     return bytes;
@@ -53,7 +53,7 @@ void check_encoding(const Value& value, const std::array<Scalar, Size>& componen
     CHECK(input.position() == bytes.size());
 
     // Non-const values must also work with output archives.
-    io::byte::vector mutable_bytes;
+    std::vector<uint8_t> mutable_bytes;
     zpp::bits::out output(mutable_bytes);
     REQUIRE(!zpp::bits::failure(output(decoded)));
     CHECK(mutable_bytes == bytes);
@@ -141,11 +141,11 @@ TEMPLATE_TEST_CASE("GLM serialization propagates truncated buffer errors", "[glm
     for (std::size_t size = 0; size < bytes.size(); ++size) {
         CAPTURE(size);
         TestType decoded {};
-        zpp::bits::in input(io::byte::span(bytes.data(), size));
+        zpp::bits::in input(std::span<const uint8_t>(bytes.data(), size));
         CHECK(zpp::bits::failure(input(decoded)));
 
-        io::byte::vector buffer(size);
-        zpp::bits::out output { std::span<std::byte>(buffer) };
+        std::vector<uint8_t> buffer(size);
+        zpp::bits::out output { std::span<uint8_t>(buffer) };
         CHECK(zpp::bits::failure(output(value)));
     }
 }

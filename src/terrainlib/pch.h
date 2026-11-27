@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -53,10 +54,11 @@
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
 #include <spdlog/spdlog.h>
-#include <expected>
+#include <zpp_bits.h>
 
 // Internal headers
-#include "cli_support/log.h"
+#include "log.h"
+#include "error/prelude.h"
 #include "hash_utils.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"

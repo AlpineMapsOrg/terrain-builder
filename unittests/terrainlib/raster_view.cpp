@@ -28,6 +28,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../catch2_helpers.h"
 #include "raster/algorithm/copy.h"
 #include "raster/algorithm/transform.h"
 #include "raster/algorithm/window_transform.h"

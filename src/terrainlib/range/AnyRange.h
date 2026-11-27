@@ -45,6 +45,10 @@ struct AnyRange : RangeBounds<AnyRange<T>, T> {
     constexpr AnyRange(RangeFull range) noexcept
         : start(range.template start_bound<T>()), end(range.template end_bound<T>()) {}
 
+    template <typename U>
+    explicit constexpr AnyRange(const AnyRange<U> &other)
+        : start(Bound<T>(other.start)), end(Bound<T>(other.end)) {}
+
     [[nodiscard]] constexpr Bound<T> start_bound() const noexcept {
         return this->start;
     }
@@ -64,4 +68,6 @@ struct AnyRange : RangeBounds<AnyRange<T>, T> {
             : (this->end.kind == BoundKind::Included ? *this->end.value + 1 : *this->end.value);
         return {range_start, range_end};
     }
+
+    [[nodiscard]] constexpr bool operator==(const AnyRange &) const noexcept = default;
 };

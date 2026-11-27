@@ -214,6 +214,6 @@ inline ClusteringAndBackwardMapping clusterize(const Clustering &input, const Cl
         std::move(new_clusters),
         input.textures
     };
-    validate(new_clustering);
+    assert_valid(new_clustering);
     return ClusteringAndBackwardMapping{std::move(new_clustering), std::move(parent_cluster_indices)};
 }

@@ -35,6 +35,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <glm/gtc/type_precision.hpp>
 
+#include "../catch2_helpers.h"
 #include "raster/algorithm.h"
 #include "raster_store/scaler.h"
 

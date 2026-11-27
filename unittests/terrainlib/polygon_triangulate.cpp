@@ -25,7 +25,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "polygon/triangulate.h"
 #include "mesh/connectivity/triangle_compare.h"
 
@@ -95,7 +95,7 @@ TEST_CASE("triangulate handles a square") {
 
     CHECK(mesh.triangles.size() == 2); // A square should produce 2 triangles
     check_every_vertex_used_at_least_once(mesh);
-    mesh::validate(mesh);
+    mesh::debug_assert_valid(mesh);
 }
 
 TEST_CASE("triangulate works with UVs") {
@@ -158,7 +158,7 @@ TEST_CASE("triangulate handles U-shaped polygon") {
     polygon::triangulate(mesh, indices);
     CHECK(!mesh.triangles.empty());
     check_every_vertex_used_at_least_once(mesh);
-    mesh::validate(mesh);
+    mesh::debug_assert_valid(mesh);
 
     // Check that all boundary edges are present in the triangulation
     const std::vector<glm::uvec2> boundary_edges = {

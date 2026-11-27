@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,13 +27,31 @@
 
 #include <radix/tile.h>
 
+#include "fmt_impls.h"
+
 namespace raster_store {
 
-struct StoreTraits {
+inline constexpr unsigned max_zoom_level = std::numeric_limits<uint32_t>::digits;
+
+struct KeyTraits {
     using Key = radix::tile::Id;
     using Hasher = Key::Hasher;
 
-    static constexpr unsigned max_zoom_level = std::numeric_limits<uint32_t>::digits;
+    static bool is_valid(const Key& key)
+    {
+        if (key.zoom_level > max_zoom_level) {
+            return false;
+        }
+        if (key.zoom_level == max_zoom_level) {
+            return true;
+        }
+        const uint32_t extent = uint32_t { 1 } << key.zoom_level;
+        return key.coords.x < extent && key.coords.y < extent;
+    }
+};
+
+struct HierarchyTraits {
+    using Key = radix::tile::Id;
 
     static Key root() { return { 0, { 0, 0 } }; }
     static std::optional<Key> parent(const Key& key)
@@ -49,18 +68,6 @@ struct StoreTraits {
         }
         return key.children();
     }
-    static bool is_valid(const Key& key)
-    {
-        if (key.zoom_level > max_zoom_level) {
-            return false;
-        }
-        if (key.zoom_level == max_zoom_level) {
-            return true;
-        }
-        const uint32_t extent = uint32_t { 1 } << key.zoom_level;
-        return key.coords.x < extent && key.coords.y < extent;
-    }
-    static std::string key_to_string(const Key& key) { return to_string(key); }
 };
 
 } // namespace raster_store

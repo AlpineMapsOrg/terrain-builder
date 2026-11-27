@@ -23,6 +23,19 @@
 #include <string>
 #include <string_view>
 
+TEST_CASE("starts_with_case_insensitive ignores ASCII case", "[string_utils]") {
+    SECTION("matching prefix") {
+        CHECK(starts_with_case_insensitive("Easting (E)", "easting"));
+        CHECK(starts_with_case_insensitive("easting", "EASTING"));
+    }
+    SECTION("text shorter than the prefix") {
+        CHECK_FALSE(starts_with_case_insensitive("East", "easting"));
+    }
+    SECTION("different text") {
+        CHECK_FALSE(starts_with_case_insensitive("Northing", "easting"));
+    }
+}
+
 TEST_CASE("from_chars parses a plain integer", "[string_utils]") {
     CHECK(from_chars<int>(std::string_view("123")) == 123);
 }

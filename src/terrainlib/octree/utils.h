@@ -55,4 +55,5 @@ inline std::vector<Id> list_descendant_at_level(const Id &node, const Id::Level 
     }
     return nodes;
 }
+
 }

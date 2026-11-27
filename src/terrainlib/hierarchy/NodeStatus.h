@@ -1,0 +1,88 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
+#pragma once
+
+#include <cstdint>
+#include <iostream>
+#include <string>
+
+#include "log.h"
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+
+namespace hierarchy {
+
+class NodeStatus {
+public:
+    using Underlying = uint8_t;
+    enum Value : Underlying {
+        Leaf = 0,
+        Inner = 1,
+        Virtual = 2,
+    };
+
+    constexpr NodeStatus() = default;
+    constexpr NodeStatus(const Value value)
+        : m_value(value) {
+    }
+
+    constexpr operator Value() const { return m_value; }
+    explicit operator bool() const = delete;
+    constexpr bool operator==(const NodeStatus other) const { return m_value == other.m_value; }
+    constexpr bool operator!=(const NodeStatus other) const { return !(*this == other); }
+    constexpr bool operator==(const Value other) const { return m_value == other; }
+    constexpr bool operator!=(const Value other) const { return m_value != other; }
+
+    std::string to_string() const;
+
+private:
+    Value m_value;
+};
+
+} // namespace hierarchy
+
+template <>
+struct fmt::formatter<hierarchy::NodeStatus> {
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& context) {
+        return context.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const hierarchy::NodeStatus& status, FormatContext& context) const {
+        switch (status) {
+        case hierarchy::NodeStatus::Leaf:
+            return fmt::format_to(context.out(), "Leaf");
+        case hierarchy::NodeStatus::Inner:
+            return fmt::format_to(context.out(), "Inner");
+        case hierarchy::NodeStatus::Virtual:
+            return fmt::format_to(context.out(), "Virtual");
+        default:
+            UNREACHABLE();
+        }
+    }
+};
+
+inline std::string hierarchy::NodeStatus::to_string() const { return fmt::format("{}", *this); }
+
+inline std::ostream& operator<<(std::ostream& stream, const hierarchy::NodeStatus& status) {
+    fmt::print(stream, "{}", status);
+    return stream;
+}

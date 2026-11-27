@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "io/byte.h"
+#include "io/bytes.h"
 #include "io/hash.h"
 
 #include <catch2/benchmark/catch_benchmark.hpp>
@@ -24,27 +25,26 @@
 
 #include <array>
 #include <cstdint>
-#include <vector>
 
 namespace {
 
 // XSUM_fillTestBuffer from xxHash's cli/xsum_sanity_check.c, which generates the input of its test vectors.
-io::byte::vector sanity_buffer(const std::size_t size)
+io::bytes::vector sanity_buffer(const size_t size)
 {
-    io::byte::vector buffer(size);
-    std::uint64_t generator = 2654435761U;
+    io::bytes::vector buffer(size);
+    uint64_t generator = 2654435761U;
     for (auto& byte : buffer) {
-        byte = std::byte(generator >> 56);
+        byte = static_cast<uint8_t>(generator >> 56);
         generator *= 11400714785074694797ULL;
     }
     return buffer;
 }
 
-io::byte::vector big_endian(const std::uint64_t value)
+io::bytes::vector big_endian(const uint64_t value)
 {
-    io::byte::vector bytes(8);
-    for (std::size_t index = 0; index < bytes.size(); ++index) {
-        bytes[index] = std::byte(value >> (56 - 8 * index));
+    io::bytes::vector bytes(8);
+    for (size_t index = 0; index < bytes.size(); ++index) {
+        bytes[index] = static_cast<uint8_t>(value >> (56 - 8 * index));
     }
     return bytes;
 }
@@ -54,8 +54,8 @@ io::byte::vector big_endian(const std::uint64_t value)
 TEST_CASE("XXH3-64 matches the xxHash sanity test vectors in canonical byte order", "[io][hash]")
 {
     struct Vector {
-        std::size_t size;
-        std::uint64_t hash;
+        size_t size;
+        uint64_t hash;
     };
     // Seed 0 entries of XSUM_XXH3_testdata in xxHash v0.8.3, covering every input size class.
     constexpr std::array vectors {
@@ -77,14 +77,14 @@ TEST_CASE("XXH3-64 matches the xxHash sanity test vectors in canonical byte orde
     const auto buffer = sanity_buffer(vectors.back().size);
     for (const auto& vector : vectors) {
         CAPTURE(vector.size);
-        CHECK(io::hash::data(std::span(buffer).first(vector.size), io::hash::Algorithm::Xxh3_64) == big_endian(vector.hash));
+        CHECK(io::hash::compute(std::span(buffer).first(vector.size), io::hash::Algorithm::Xxh3_64) == big_endian(vector.hash));
     }
 }
 
-TEST_CASE("the None hash algorithm produces no bytes", "[io][hash]") { CHECK(io::hash::data(sanity_buffer(16), io::hash::Algorithm::None).empty()); }
+TEST_CASE("the None hash algorithm produces no bytes", "[io][hash]") { CHECK(io::hash::compute(sanity_buffer(16), io::hash::Algorithm::None).empty()); }
 
 TEST_CASE("XXH3-64 throughput over 1 GiB", "[!benchmark][io][hash]")
 {
-    const auto buffer = sanity_buffer(std::size_t { 1 } << 30);
-    BENCHMARK("XXH3-64, 1 GiB") { return io::hash::data(buffer, io::hash::Algorithm::Xxh3_64); };
+    const auto buffer = sanity_buffer(size_t { 1 } << 30);
+    BENCHMARK("XXH3-64, 1 GiB") { return io::hash::compute(buffer, io::hash::Algorithm::Xxh3_64); };
 }

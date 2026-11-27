@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,49 +20,61 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <string_view>
 #include <utility>
 
+#include <fmt/std.h>
+
+#include "common_error_codes.h"
+#include "error/Error.h"
+#include "error/Result.h"
+#include "error/try.h"
+#include "mesh/codec/resolve.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/codec/from_extension.h"
-#include "octree/StoreTraits.h"
-#include "octree/storage/IndexFile.h"
-#include "octree/storage/snapshot.h"
-#include "octree/storage/open_runtime.h"
-#include "store/IndexedStorage.h"
+#include "octree/Id.h"
+#include "octree/storage/Index.h"
+#include "octree/storage/create.h"
+#include "octree/storage/open.h"
+#include "octree/storage/publish.h"
+#include "store/Checkpoint.h"
+#include "store/Draft.h"
+#include "store/Storage.h"
+#include "store/open.h"
+#include "store/path_layout.h"
+#include "store/publish.h"
 
 namespace mesh::storage {
 
 inline constexpr std::string_view payload_class = "mesh.Simple3d";
 
-using Storage = store::Storage<octree::StoreTraits, mesh::Simple>;
-using IndexedStorage = store::IndexedStorage<octree::StoreTraits, mesh::Simple>;
-using OpenOptions = octree::storage::OpenOptions;
+using Storage = store::Storage<octree::storage::Index, mesh::Simple>;
+using Draft = store::Draft<octree::storage::Index, mesh::Simple>;
+using Checkpoint = store::Checkpoint<octree::storage::Index, mesh::Simple>;
 
-inline Expected<IndexedStorage> open_index(const std::filesystem::path& path)
-{
-    return store::open_index<octree::StoreTraits, mesh::Simple>(path, octree::storage::index_format(), payload_class, mesh::codec::from_extension);
+using OpenError = octree::storage::OpenError;
+// Opens the mesh storage at `path`, if its state is one `accept` allows.
+[[nodiscard]]
+inline alp::Result<Storage, OpenError> open(const std::filesystem::path& path, const store::Accept accept = store::Accept::Published) {
+    ALP_TRY(Storage storage, octree::storage::open<mesh::Simple>(path, payload_class, codec::resolve, accept));
+    return storage;
 }
 
-inline Expected<Storage> open_folder(const std::filesystem::path& path, OpenOptions options = {})
-{
-    return octree::storage::open_folder<mesh::Simple>(path, std::string(payload_class), ".sfmesh", mesh::codec::from_extension, std::move(options));
+using CreateError = alp::Error<Unsupported, octree::storage::CreateError>;
+// Makes an empty mesh draft at `<final_path>.part`, whose node files `layout` places and the codec `codec_id` names encodes.
+[[nodiscard]]
+inline alp::Result<Draft, CreateError> create(const std::filesystem::path& final_path, const store::path_layout::Layout<octree::Id> layout, const std::string_view codec_id) {
+    ALP_TRY_CONTEXT(auto codec, codec::resolve(codec_id), alp::make_context("choosing the codec for the mesh storage at {}", final_path));
+    ALP_TRY(Draft draft, octree::storage::create<mesh::Simple>(final_path, std::string(payload_class), layout, std::move(codec)));
+    return draft;
 }
 
-inline Expected<IndexedStorage> open_folder_indexed(const std::filesystem::path& path, OpenOptions options = {})
-{
-    return octree::storage::open_folder_indexed<mesh::Simple>(path, std::string(payload_class), ".sfmesh", mesh::codec::from_extension, std::move(options));
+// Saves the draft's index, renames `<path>.part` to `<path>` and removes the input record.
+[[nodiscard]]
+inline alp::Result<void, store::PublishError> publish(Draft draft) {
+    ALP_TRY(octree::storage::publish(std::move(draft)));
+    return {};
 }
-
-// Creates an empty storage in <path>.part; see store::snapshot.
-inline Expected<IndexedStorage> create(const std::filesystem::path& path, OpenOptions options = {})
-{
-    return octree::storage::create<mesh::Simple>(path,
-        std::string(payload_class),
-        options.preferred_extension.value_or(".sfmesh"),
-        mesh::codec::from_extension,
-        options.default_mapping.value_or(octree::storage::default_mapping()));
-}
-
-inline Expected<void> publish(IndexedStorage storage) { return octree::storage::publish(std::move(storage)); }
 
 } // namespace mesh::storage

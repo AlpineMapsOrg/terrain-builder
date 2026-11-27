@@ -24,7 +24,7 @@
 #include "enumerate.h"
 #include "geometry/geometry.h"
 #include "glm_utils.h"
-#include "cli_support/log.h"
+#include "log.h"
 
 namespace uv {
 

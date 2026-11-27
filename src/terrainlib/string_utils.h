@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstdio>
@@ -40,6 +41,33 @@ inline std::string human_byte_size(const size_t bytes) {
     const char *format = unit == 0 ? "%.0f %s" : "%.1f %s";
     std::snprintf(buffer.data(), buffer.size(), format, value, units[unit]);
     return std::string(buffer.data());
+}
+
+// `text` as a view, or nothing if it is null.
+inline std::optional<std::string_view> to_string_view(const char *text) {
+    if (text == nullptr) {
+        return std::nullopt;
+    }
+    return std::string_view(text);
+}
+
+// `c` with ASCII letters in lower case.
+inline constexpr char to_lower_ascii(const char c) {
+    if (c >= 'A' && c <= 'Z') {
+        return static_cast<char>(c + ('a' - 'A'));
+    } else {
+        return c;
+    }
+}
+
+// Whether `text` starts with `prefix`, ignoring the case of ASCII letters.
+inline bool starts_with_case_insensitive(const std::string_view text, const std::string_view prefix) {
+    return text.size() >= prefix.size() && std::ranges::equal(text.substr(0, prefix.size()), prefix, {}, to_lower_ascii, to_lower_ascii);
+}
+
+// Whether `a` and `b` are equal, ignoring the case of ASCII letters.
+inline constexpr bool equals_ignore_ascii_case(const std::string_view a, const std::string_view b) {
+    return std::ranges::equal(a, b, {}, to_lower_ascii, to_lower_ascii);
 }
 
 template <typename T, typename CharT>

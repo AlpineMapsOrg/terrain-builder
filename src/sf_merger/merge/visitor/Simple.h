@@ -24,13 +24,13 @@
 #include "merge/visitor/Visitor.h"
 #include "mesh/merge.h"
 #include "octree/Id.h"
-#include "store/NodeStatusOrMissing.h"
+#include "hierarchy/NodeStatusOrMissing.h"
 
 namespace merge::visitor {
 
 class Simple {
 public:
-    using Status = store::NodeStatusOrMissing;
+    using Status = hierarchy::NodeStatusOrMissing;
     struct Context{};
     using Result = merge::Result<Context>;
 
@@ -39,7 +39,7 @@ public:
     }
 
     template <Status LeftStatus, Status RightStatus>
-    Result visit(
+    alp::Result<Result, NodeLoader::LoadError> visit(
         const octree::Id &,
         const NodeData<LeftStatus> &left,
         const NodeData<RightStatus> &right,
@@ -54,7 +54,9 @@ public:
         }
 
         if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Leaf) {
-            return merge_meshes(right.mesh(), left.mesh());
+            ALP_TRY(const SimpleMesh &left_mesh, left.mesh());
+            ALP_TRY(const SimpleMesh &right_mesh, right.mesh());
+            return merge_meshes(left_mesh, right_mesh);
         }
 
         return Recurse{ctx};

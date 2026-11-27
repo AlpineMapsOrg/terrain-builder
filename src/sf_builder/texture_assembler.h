@@ -26,7 +26,6 @@
 #include <numeric>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <vector>
 #include <cstdint>
 #include <csignal>
@@ -34,19 +33,22 @@
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <glm/vector_relational.hpp>
+#include <glm/gtc/type_precision.hpp>
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
 
-#include "geometry/geometry.h"
+#include "geometry/bounds.h"
 #include "numeric/glm_math.h"
 #include "numeric/int_math.h"
-#include "gis/srs.h"
+#include "numeric/checked_cast.h"
+#include "optional_utils.h"
 #include "gis/webmercator.h"
 
-#include "tile_provider.h"
-#include "cli_support/log.h"
+#include "error/try.h"
+#include "TileProvider.h"
+#include "log.h"
 
-namespace terrainbuilder {
+namespace sf {
 
 /// Estimates the zoom level of the target bounds in relation to some reference tile given by its zoom level and bounds.
 [[nodiscard]] inline uint32_t estimate_zoom_level(
@@ -61,26 +63,21 @@ namespace terrainbuilder {
 }
 
 /// Searches for the smallest Web Mercator tile that encompasses the given bounding box.
-[[nodiscard]] inline std::optional<radix::tile::Id> find_smallest_encompassing_tile(const radix::tile::SrsBounds& bounds)
-{
-    // We dont want to recurse indefinetely if the bounds are empty.
-    if (bounds.width() == 0 || bounds.height() == 0) {
-        throw std::invalid_argument("bounds cannot be empty");
-    }
-
+[[nodiscard]] inline std::optional<radix::tile::Id> find_smallest_encompassing_tile(const radix::tile::SrsBounds& bounds) {
     const std::array<glm::dvec2, 4> points = { bounds.min, bounds.max, glm::dvec2(bounds.min.x, bounds.max.y), glm::dvec2(bounds.max.x, bounds.min.y) };
     const auto all_points_inside = [&](const radix::tile::Id& tile) {
-        const radix::tile::SrsBounds tile_bounds = gis::webmercator::tile_bounds(tile);
+        const radix::tile::SrsBounds tile_bounds = gis::webmercator::compute_tile_bounds(tile);
         return std::ranges::all_of(points, [&](const glm::dvec2& point) { return tile_bounds.contains_inclusive(point); });
     };
 
-    // We start at the root tile and repeatedly check every subtile until we find one that contains all
-    // of the bounding box.
+    // We start at the root tile and repeatedly check every subtile until we find one that contains all of the bounding box.
     radix::tile::Id current_smallest_encompassing_tile(0, { 0, 0 });
     if (!all_points_inside(current_smallest_encompassing_tile)) {
         return std::nullopt;
     }
-    while (true) {
+
+    // We dont want to recurse indefinetely if the bounds are empty.
+    while (current_smallest_encompassing_tile.zoom_level < gis::webmercator::max_zoom_level) {
         const std::array<radix::tile::Id, 4> children = current_smallest_encompassing_tile.children();
         const auto child = std::ranges::find_if(children, all_points_inside);
         // Stop if none of the children contains all of the points.
@@ -89,6 +86,8 @@ namespace terrainbuilder {
         }
         current_smallest_encompassing_tile = *child;
     }
+
+    return current_smallest_encompassing_tile;
 }
 
 /// Find all the tiles needed to construct the texture for the given target bounds under the root tile.
@@ -98,9 +97,9 @@ namespace terrainbuilder {
     /// The root tile specifying the tiles to consider.
     const radix::tile::Id root_tile,
     /// The bounds for which texture data should be created.
-    const radix::tile::SrsBounds &target_bounds,
+    const radix::tile::SrsBounds& target_bounds,
     /// Provider class that maps tile ids to their textures.
-    const TileProvider &tile_provider,
+    const TileProvider& tile_provider,
     /// The maximal zoom level to be considered.
     const std::optional<uint32_t> max_zoom_level_to_consider = std::nullopt,
     /// The minimum zoom level to be surely examined.
@@ -108,10 +107,10 @@ namespace terrainbuilder {
     // It can happen that the root tile is very large because the target tile was (slightly) over the tile border
     // at a high zoom level. So we try to estimate the actual zoom level of the target bounds and recurse at least
     // to that level to find relevant textures.
-    if (!min_zoom_level_to_examine.has_value()) {
-        min_zoom_level_to_examine = estimate_zoom_level(root_tile.zoom_level, gis::webmercator::tile_bounds(root_tile), target_bounds) + 1;
-    }
-    
+    const uint32_t effective_min_zoom_level_to_examine = alp::value_or_else(min_zoom_level_to_examine, [&] {
+        return estimate_zoom_level(root_tile.zoom_level, gis::webmercator::compute_tile_bounds(root_tile), target_bounds) + 1;
+    });
+
     // A list of tiles determined to be relevant for the target bounds.
     std::vector<radix::tile::Id> tiles_to_splatter;
 
@@ -122,7 +121,7 @@ namespace terrainbuilder {
         }
 
         // Check if we even require this tile to fill the target region.
-        const radix::tile::SrsBounds tile_bounds = gis::webmercator::tile_bounds(tile);
+        const radix::tile::SrsBounds tile_bounds = gis::webmercator::compute_tile_bounds(tile);
         if (!radix::geometry::intersect_inclusive(target_bounds, tile_bounds)) {
             return true;
         }
@@ -132,7 +131,7 @@ namespace terrainbuilder {
 
         // If we are not deep enough yet, recurse further down.
         bool should_recurse;
-        if (tile.zoom_level + 1 <= min_zoom_level_to_examine.value()) {
+        if (tile.zoom_level + 1 <= effective_min_zoom_level_to_examine) {
             // Minimum zoom level to examine not yet reached.
             should_recurse = true;
         } else {
@@ -178,10 +177,12 @@ constexpr glm::uvec2 TexturePadding(2);
 constexpr uint32_t TextureAlignment = 16;
 /// Relative growth of the tile selection bounds, so the padding can be filled from neighbouring tiles.
 constexpr double TextureSelectionGrowth = 0.01;
+/// Most zoom levels a fallback tile may lie above the deepest tile it is drawn with.
+constexpr uint32_t MaxFallbackZoomLevels = 8;
 
 struct TargetImageRegion {
     // Region with padding and alignemnt
-    radix::geometry::Aabb2ui full;
+    radix::geometry::Aabb2<uint64_t> full;
 
     // Requested region, relative to `full`.
     radix::geometry::Aabb2ui content;
@@ -201,117 +202,106 @@ inline TargetImageRegion calculate_target_image_region(
     /// Minimum padding to apply
     const glm::uvec2 min_padding = TexturePadding,
     /// Alignment of the region (to reuse JPEG blocks)
-    const uint32_t alignment = TextureAlignment
+    const uint64_t alignment = TextureAlignment
 ) {
     DEBUG_ASSERT(alignment >= 1);
     const glm::dvec2 relative_min = (target_bounds.min - root_tile_bounds.min) / root_tile_bounds.size();
     const glm::dvec2 relative_max = (target_bounds.max - root_tile_bounds.min) / root_tile_bounds.size();
 
-    const uint32_t full_image_size_factor = std::pow(2, zoom_level_range);
-    const glm::uvec2 root_tile_image_size = tile_image_pixel_size * glm::uvec2(full_image_size_factor);
-    const glm::uvec2 target_pixel_offset_min(glm::floor(relative_min * glm::dvec2(root_tile_image_size)));
-    const glm::uvec2 target_pixel_offset_max(glm::ceil(relative_max * glm::dvec2(root_tile_image_size)));
-    
+    const uint64_t full_image_size_factor = ipow2<uint64_t>(zoom_level_range);
+    const glm::u64vec2 root_tile_image_size = glm::u64vec2(tile_image_pixel_size) * full_image_size_factor;
+    const glm::u64vec2 target_pixel_offset_min(glm::floor(relative_min * glm::dvec2(root_tile_image_size)));
+    const glm::u64vec2 target_pixel_offset_max(glm::ceil(relative_max * glm::dvec2(root_tile_image_size)));
+
     // Map from bottom-left origin to top-left origin
-    const radix::geometry::Aabb2ui requested(
-        glm::uvec2(target_pixel_offset_min.x, root_tile_image_size.y - target_pixel_offset_max.y),
-        glm::uvec2(target_pixel_offset_max.x, root_tile_image_size.y - target_pixel_offset_min.y));
+    const radix::geometry::Aabb2<uint64_t> requested(
+        glm::u64vec2(target_pixel_offset_min.x, root_tile_image_size.y - target_pixel_offset_max.y),
+        glm::u64vec2(target_pixel_offset_max.x, root_tile_image_size.y - target_pixel_offset_min.y));
 
     // Apply padding
-    const radix::geometry::Aabb2ui padded(
-        saturating_sub(requested.min, min_padding),
-        saturating_add(requested.max, min_padding));
+    const radix::geometry::Aabb2<uint64_t> padded(
+        saturating_sub(requested.min, glm::u64vec2(min_padding)),
+        saturating_add(requested.max, glm::u64vec2(min_padding)));
 
     // Apply alignment
-    const radix::geometry::Aabb2ui aligned(
-        glm::uvec2(align_down(padded.min.x, alignment), align_down(padded.min.y, alignment)),
-        glm::uvec2(align_up(padded.max.x, alignment), align_up(padded.max.y, alignment)));
+    const radix::geometry::Aabb2<uint64_t> aligned(
+        glm::u64vec2(align_down(padded.min.x, alignment), align_down(padded.min.y, alignment)),
+        glm::u64vec2(align_up(padded.max.x, alignment), align_up(padded.max.y, alignment)));
 
     // Clamp to the root tile image, alignment is best effort at its borders
-    const radix::geometry::Aabb2ui clamped(
+    const radix::geometry::Aabb2<uint64_t> clamped(
         aligned.min,
         glm::min(aligned.max, root_tile_image_size));
 
     // Compute relative requested
     const radix::geometry::Aabb2ui content = {
-        requested.min - clamped.min,
-        requested.max - clamped.min};
+        glm::uvec2(requested.min - clamped.min),
+        glm::uvec2(requested.max - clamped.min)};
 
     return TargetImageRegion{
         .full = clamped,
         .content = content};
 }
 
-[[nodiscard]] inline radix::geometry::Aabb2ui calculate_pixel_tile_bounds(
+[[nodiscard]] inline radix::geometry::Aabb2<uint64_t> calculate_pixel_tile_bounds(
     radix::tile::Id tile,
     const radix::tile::Id root_tile,
     const glm::uvec2 tile_image_pixel_size,
     const uint32_t max_zoom_level) {
     const size_t relative_zoom_level = tile.zoom_level - root_tile.zoom_level;
-    const glm::uvec2 tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
-    const glm::uvec2 tile_size = tile_image_pixel_size * tile_size_factor;
-    const glm::uvec2 relative_tile_coords = tile.coords - root_tile.coords * glm::uvec2(std::pow(2, relative_zoom_level));
-    const glm::uvec2 tile_position = relative_tile_coords * tile_size;
-    return radix::geometry::Aabb2ui(tile_position, tile_position + tile_size);
+    const uint64_t tile_size_factor = ipow2<uint64_t>(max_zoom_level - tile.zoom_level);
+    const glm::u64vec2 tile_size = glm::u64vec2(tile_image_pixel_size) * tile_size_factor;
+    const glm::u64vec2 relative_tile_coords = glm::u64vec2(tile.coords) - glm::u64vec2(root_tile.coords) * ipow2<uint64_t>(relative_zoom_level);
+    const glm::u64vec2 tile_position = relative_tile_coords * tile_size;
+    return radix::geometry::Aabb2<uint64_t>(tile_position, tile_position + tile_size);
 }
 
-[[nodiscard]] inline cv::Rect to_cv_rect(radix::geometry::Aabb2ui aabb) {
-    const glm::uvec2 size = aabb.size();
-    return cv::Rect{
-        static_cast<int32_t>(aabb.min.x),
-        static_cast<int32_t>(aabb.min.y),
-        static_cast<int32_t>(size.x),
-        static_cast<int32_t>(size.y)
-    };
+template <typename T>
+[[nodiscard]] inline cv::Rect to_cv_rect(radix::geometry::Aabb2<T> aabb) {
+    const glm::ivec2 min = debug_checked_cast<int32_t>(aabb.min);
+    const glm::ivec2 size = debug_checked_cast<int32_t>(aabb.size());
+    return cv::Rect{min.x, min.y, size.x, size.y};
 }
 [[nodiscard]] inline cv::Size to_cv_size(glm::uvec2 vec) {
-    return cv::Size{
-        static_cast<int32_t>(vec.x),
-        static_cast<int32_t>(vec.y)
-    };
+    const glm::ivec2 size = debug_checked_cast<int32_t>(vec);
+    return cv::Size{size.x, size.y};
 }
 
 inline void copy_paste_image(
-    cv::Mat &target,
-    const cv::Mat &source,
-    const radix::geometry::Aabb2i target_bounds,
+    cv::Mat& target,
+    const cv::Mat& source,
+    const radix::geometry::Aabb2i64 target_bounds,
     const bool trim_excess = false,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
     // Full source/target rectangles
     const cv::Rect full_source_rect(0, 0, source.cols, source.rows);
-    const cv::Rect full_target_rect(0, 0, target.cols, target.rows);
-
-    cv::Rect source_rect = full_source_rect;
-    // Target rectangle for source image in target image
-    cv::Rect target_rect = to_cv_rect(target_bounds);
+    const radix::geometry::Aabb2i64 full_target_bounds(glm::i64vec2(0), glm::i64vec2(target.cols, target.rows));
 
     // Compute scale factors from source to target
+    const glm::dvec2 target_size(target_bounds.size());
     const glm::dvec2 scale(
-        static_cast<double>(source_rect.width) / target_rect.width,
-        static_cast<double>(source_rect.height) / target_rect.height);
+        full_source_rect.width / target_size.x,
+        full_source_rect.height / target_size.y);
 
     // Check bounds
-    const cv::Rect clipped_target_rect = target_rect & full_target_rect;
+    const radix::geometry::Aabb2i64 clipped_target_bounds(
+        glm::max(target_bounds.min, full_target_bounds.min),
+        glm::min(target_bounds.max, full_target_bounds.max));
     if (!trim_excess) {
         // Must fit entirely
-        if (clipped_target_rect != target_rect) {
-            throw std::runtime_error("Target rectangle out of bounds and trim_excess is false");
-        }
-    } else {
-        target_rect = clipped_target_rect;
-        if (target_rect.empty()) {
-            return;
-        }
+        ASSERT(clipped_target_bounds == target_bounds);
+    } else if (glm::any(glm::lessThanEqual(clipped_target_bounds.max, clipped_target_bounds.min))) {
+        return;
     }
+    // Target rectangle for source image in target image
+    const cv::Rect target_rect = to_cv_rect(clipped_target_bounds);
 
     // Calculate offset and size of clipped target rect
-    const glm::ivec2 trg_offset = glm::ivec2(
-        target_rect.x - target_bounds.min.x,
-        target_rect.y - target_bounds.min.y);
+    const glm::i64vec2 trg_offset = clipped_target_bounds.min - target_bounds.min;
     const glm::uvec2 trg_size = glm::uvec2(target_rect.width, target_rect.height);
 
     // Exact source region corresponding to clipped target rect
-    const radix::geometry::Aabb2d src_exact(glm::dvec2(trg_offset) * scale, glm::dvec2(trg_offset + glm::ivec2(trg_size)) * scale);
+    const radix::geometry::Aabb2d src_exact(glm::dvec2(trg_offset) * scale, glm::dvec2(trg_offset + glm::i64vec2(trg_size)) * scale);
 
     // Pad outwards to integer pixel boundaries for OpenCV crop
     const radix::geometry::Aabb2ui src_padded(
@@ -353,22 +343,14 @@ inline void copy_paste_image(
 }
 
 inline void copy_paste_image(
-    cv::Mat &target,
-    const cv::Mat &source,
+    cv::Mat& target,
+    const cv::Mat& source,
     const glm::ivec2 target_position,
     const bool trim_excess = false,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
-    copy_paste_image(target, source, radix::geometry::Aabb2i(target_position, target_position + glm::ivec2(source.cols, source.rows)), trim_excess, rescale_filter);
-}
-
-namespace {
-inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id tile, const TileProvider &tile_provider) {
-    const TilePathProvider *tile_path_provider = dynamic_cast<const TilePathProvider *>(&tile_provider);
-    if (tile_path_provider != nullptr) {
-        return tile_path_provider->get_tile_path(tile).value();
-    }
-    return std::nullopt;
-}
+    const glm::i64vec2 target_min(target_position);
+    const radix::geometry::Aabb2i64 target_bounds(target_min, target_min + glm::i64vec2(source.cols, source.rows));
+    copy_paste_image(target, source, target_bounds, trim_excess, rescale_filter);
 }
 
 struct AssembledTexture {
@@ -383,7 +365,7 @@ struct AssembledTexture {
         const glm::dvec2 image_size(this->image.cols, this->image.rows);
         const glm::dvec2 offset = glm::dvec2(this->content.min) / image_size;
         const glm::dvec2 scale = glm::dvec2(this->content.size()) / image_size;
-        for (glm::dvec2 &uv : uvs) {
+        for (glm::dvec2& uv : uvs) {
             uv = offset + uv * scale;
         }
     }
@@ -393,19 +375,40 @@ struct AssembledTexture {
 [[nodiscard]]
 inline uint32_t find_max_zoom_level(const std::span<const radix::tile::Id> tiles) {
     uint32_t max_zoom_level = 0;
-    for (const radix::tile::Id &tile : tiles) {
+    for (const radix::tile::Id& tile : tiles) {
         max_zoom_level = std::max(tile.zoom_level, max_zoom_level);
     }
     return max_zoom_level;
 }
 
+/// Removes every tile more than `max_fallback_zoom_levels` above the deepest one.
+inline void drop_coarse_fallback_tiles(std::vector<radix::tile::Id> &tiles, const uint32_t max_fallback_zoom_levels = MaxFallbackZoomLevels) {
+    const uint32_t deepest_zoom_level = find_max_zoom_level(tiles);
+    std::erase_if(tiles, [&](const radix::tile::Id tile) {
+        return deepest_zoom_level - tile.zoom_level > max_fallback_zoom_levels;
+    });
+}
+
+// Logs the size of a texture about to be allocated, at a higher level the more memory it takes.
+inline void log_texture_allocation(const glm::uvec2 image_size, const size_t element_size) {
+    const float expected_memory_mb = (element_size * image_size.x * image_size.y) / (1024.0 * 1024.0);
+    if (expected_memory_mb > 1000.0f) {
+        const float expected_memory_gb = expected_memory_mb / 1024.0f;
+        LOG_WARN("Allocating very large texture of size {}x{} (≈{:.2f} GB)", image_size.x, image_size.y, expected_memory_gb);
+    } else if (expected_memory_mb > 100.0f) {
+        LOG_INFO("Allocating large texture of size {}x{} (≈{:.2f} MB)", image_size.x, image_size.y, expected_memory_mb);
+    } else {
+        LOG_DEBUG("Allocating texture of size {}x{} (≈{:.2f} MB)", image_size.x, image_size.y, expected_memory_mb);
+    }
+}
+
 [[nodiscard]]
-inline AssembledTexture splatter_tiles_to_texture(
+inline alp::Result<AssembledTexture, TileError> splatter_tiles_to_texture(
     const radix::tile::Id root_tile,
     /// The bounds for which texture data should be created.
-    const radix::tile::SrsBounds &target_bounds,
+    const radix::tile::SrsBounds& target_bounds,
     /// A mapping from tile id to a filesystem path.
-    const TileProvider &tile_provider,
+    const TileProvider& tile_provider,
     const std::span<const radix::tile::Id> tiles_to_splatter,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR,
     /// Minimum padding to keep around the requested region.
@@ -416,45 +419,29 @@ inline AssembledTexture splatter_tiles_to_texture(
         return {};
     }
 
-    const radix::tile::SrsBounds root_tile_bounds = gis::webmercator::tile_bounds(root_tile);
+    const radix::tile::SrsBounds root_tile_bounds = gis::webmercator::compute_tile_bounds(root_tile);
 
     const uint32_t max_zoom_level = find_max_zoom_level(tiles_to_splatter);
     DEBUG_ASSERT(max_zoom_level >= root_tile.zoom_level);
     const uint32_t zoom_level_range = max_zoom_level - root_tile.zoom_level;
 
     // Choose any tile to infer tile size and format to allocate our texture buffer accordingly.
-    const radix::tile::Id &any_tile = tiles_to_splatter.front();
-    const cv::Mat any_tile_image = tile_provider.get_tile(any_tile).value();
+    const radix::tile::Id& any_tile = tiles_to_splatter.front();
+    ALP_TRY(const cv::Mat any_tile_image, tile_provider.get_tile(any_tile));
     const glm::uvec2 tile_image_size(any_tile_image.cols, any_tile_image.rows);
 
     // Calculate the offset and size of the target bounds inside the smallest encompassing tile.
     // As we dont want to allocate and fill a larger buffer than we have to.
     const TargetImageRegion target_image_region = calculate_target_image_region(target_bounds, root_tile_bounds, tile_image_size, zoom_level_range, min_padding, alignment);
-    const glm::uvec2 image_size = target_image_region.full.size();
+    const glm::uvec2 image_size(target_image_region.full.size());
 
     // Allocate the image to write all the individual tiles into.
-    const float expected_memory_mb = (image_size.x * image_size.y * any_tile_image.elemSize()) / (1024.0 * 1024.0);
-    if (expected_memory_mb > 1000.0f) {
-        const float expected_memory_gb = expected_memory_mb / 1024.0f;
-        LOG_WARN("Allocating very large texture of size {}x{} (≈{:.2f} GB)", image_size.x, image_size.y, expected_memory_gb);
-    } else if (expected_memory_mb > 100.0f) {
-        LOG_INFO("Allocating large texture of size {}x{} (≈{:.2f} MB)", image_size.x, image_size.y, expected_memory_mb);
-    } else {
-        LOG_DEBUG("Allocating texture of size {}x{} (≈{:.2f} MB)", image_size.x, image_size.y, expected_memory_mb);
-    }
+    log_texture_allocation(image_size, any_tile_image.elemSize());
     cv::Mat image = cv::Mat::zeros(image_size.y, image_size.x, any_tile_image.type());
 
-    for (const radix::tile::Id &tile : tiles_to_splatter) {
-        const cv::Mat tile_image = tile_provider.get_tile(tile).value();
-        if (tile_image.empty()) {
-            const std::optional<std::filesystem::path> tile_path = try_get_tile_path(tile, tile_provider);
-            if (tile_path.has_value()) {
-                LOG_ERROR("Failed to load image from path {}", tile_path.value());
-            } else {
-                LOG_ERROR("Failed to load tile texture");
-            }
-            throw std::runtime_error("failed to load image");
-        }
+    for (const radix::tile::Id& tile : tiles_to_splatter) {
+        ALP_TRY(const cv::Mat tile_image, tile_provider.get_tile(tile));
+        DEBUG_ASSERT(!tile_image.empty());
 
         const glm::uvec2 current_tile_image_size(tile_image.cols, tile_image.rows);
         if (current_tile_image_size != tile_image_size) {
@@ -466,16 +453,16 @@ inline AssembledTexture splatter_tiles_to_texture(
         }
 
         // Pixel bounds of this image relative to the root tile.
-        const radix::geometry::Aabb2ui pixel_tile_bounds = calculate_pixel_tile_bounds(tile, root_tile, tile_image_size, max_zoom_level);
-        DEBUG_ASSERT(glm::all(glm::greaterThanEqual(pixel_tile_bounds.size(), current_tile_image_size)));
+        const radix::geometry::Aabb2<uint64_t> pixel_tile_bounds = calculate_pixel_tile_bounds(tile, root_tile, tile_image_size, max_zoom_level);
+        DEBUG_ASSERT(glm::all(glm::greaterThanEqual(pixel_tile_bounds.size(), glm::u64vec2(current_tile_image_size))));
 
         // Pixel bounds relative to the target image texture region.
-        const glm::ivec2 tile_target_position = glm::ivec2(pixel_tile_bounds.min) - glm::ivec2(target_image_region.full.min);
-        const radix::geometry::Aabb2i target_pixel_tile_bounds(tile_target_position, tile_target_position + glm::ivec2(pixel_tile_bounds.size()));
+        const glm::i64vec2 tile_target_position = glm::i64vec2(pixel_tile_bounds.min) - glm::i64vec2(target_image_region.full.min);
+        const radix::geometry::Aabb2i64 target_pixel_tile_bounds(tile_target_position, tile_target_position + glm::i64vec2(pixel_tile_bounds.size()));
 
         // Resize current tile image and copy into image buffer.
         copy_paste_image(image, tile_image, target_pixel_tile_bounds, true /* allows und handles overflow */, rescale_filter);
-        
+
     }
 
     cv::flip(image, image, 0);
@@ -492,15 +479,13 @@ inline AssembledTexture splatter_tiles_to_texture(
 
 /// Creates a texture for the given region.
 [[nodiscard]]
-inline std::optional<AssembledTexture> assemble_texture_from_tiles(
-    /// Specifies the srs the target bounds are in.
-    const OGRSpatialReference &target_srs,
-    /// The bounds for which texture data should be created.
-    const radix::tile::SrsBounds &target_bounds,
+inline alp::Result<std::optional<AssembledTexture>, TileError> assemble_texture_from_tiles(
+    /// The Web Mercator bounds for which texture data should be created.
+    const radix::tile::SrsBounds& target_bounds,
     /// Provider class that maps tile ids to their textures.
-    const TileProvider &tile_provider,
-    /// The maximal zoom level to be considered. If not present, this function will use the maximal available.
-    const std::optional<uint32_t> max_zoom = std::nullopt,
+    const TileProvider& tile_provider,
+    /// The maximal zoom level to be considered.
+    const uint32_t max_zoom = gis::webmercator::max_zoom_level,
     /// The filter used to rescale the tile images if required due to missing detail tiles.
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR,
     /// Minimum padding to keep around the requested region.
@@ -512,14 +497,16 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
         return std::nullopt;
     }
 
-    // The texture is linear in the srs of the tiles, the uvs are linear in the target srs.
-    ASSERT(gis::srs::webmercator().IsSame(&target_srs));
-    const radix::tile::SrsBounds& encompassing_bounds = target_bounds;
     // Find the smallest tile (id) that encompasses these bounds.
-    radix::tile::Id smallest_encompassing_tile = find_smallest_encompassing_tile(encompassing_bounds).value();
+    const std::optional<radix::tile::Id> encompassing_tile_opt = find_smallest_encompassing_tile(target_bounds);
+    if (!encompassing_tile_opt.has_value()) {
+        LOG_WARN("Texture target bounds lie outside the tile grid");
+        return std::nullopt;
+    }
+    radix::tile::Id smallest_encompassing_tile = encompassing_tile_opt.value();
     LOG_TRACE("Smallest encompassing tile for texture bounds is {}", radix::tile::to_string(smallest_encompassing_tile));
 
-    if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {
+    if (smallest_encompassing_tile.zoom_level > max_zoom) {
         return std::nullopt;
     }
 
@@ -529,18 +516,18 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     }
 
     // Very small target bounds can push the examined zoom level arbitrarily deep, but
-    // gis::webmercator::tile_bounds is only valid up to this zoom level; never recurse deeper than that.
-    const uint32_t max_safe_zoom_level = 32;
-    const uint32_t clamped_max_zoom = std::min(max_zoom.value_or(max_safe_zoom_level), max_safe_zoom_level);
+    // gis::webmercator::compute_tile_bounds is only valid up to this zoom level; never recurse deeper than that.
+    const uint32_t clamped_max_zoom = std::min(max_zoom, gis::webmercator::max_zoom_level);
 
     // The padding reaches past the requested bounds, so select tiles for slightly grown bounds.
     const radix::tile::SrsBounds selection_bounds = min_padding == glm::uvec2(0)
-        ? encompassing_bounds
-        : radix::tile::SrsBounds(geometry::pad_bounds_relative(encompassing_bounds, TextureSelectionGrowth));
+        ? target_bounds
+        : radix::tile::SrsBounds(geometry::pad_bounds_relative(target_bounds, TextureSelectionGrowth));
 
     // Find relevant tiles in bounds
-    const std::vector<radix::tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(
+    std::vector<radix::tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(
         smallest_encompassing_tile, selection_bounds, tile_provider, clamped_max_zoom);
+    drop_coarse_fallback_tiles(tiles_to_splatter);
     LOG_TRACE("Found {} relevant texture tiles", tiles_to_splatter.size());
 
     // If we found to relevant tiles, we are done.
@@ -550,6 +537,9 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     }
 
     // Splatter tiles into texture buffer
-    return splatter_tiles_to_texture(smallest_encompassing_tile, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter, min_padding, alignment);
+    ALP_TRY(
+        AssembledTexture texture,
+        splatter_tiles_to_texture(smallest_encompassing_tile, target_bounds, tile_provider, tiles_to_splatter, rescale_filter, min_padding, alignment));
+    return texture;
 }
 }

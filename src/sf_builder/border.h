@@ -25,9 +25,9 @@
 
 #include <radix/geometry.h>
 
-#include "numeric/int_math.h"
+#include "numeric/saturating.h"
 
-namespace terrainbuilder {
+namespace sf {
 
 template <typename T>
 class Border {

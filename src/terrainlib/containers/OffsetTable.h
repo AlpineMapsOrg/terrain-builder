@@ -77,18 +77,18 @@ public:
     }
 
     // Append an segment given its length.
-    void append_length(const index_type length) {
+    void append_segment(const index_type length) {
         const index_type next_offset = this->_offsets.back() + length;
         this->_offsets.push_back(next_offset);
     }
 
     // Append multiple segments given their lengths.
-    void append_lengths(const std::span<const index_type> lengths) {
+    void append_segments(const std::span<const index_type> lengths) {
         const size_t current_size = this->_offsets.size();
         this->_offsets.reserve(current_size + lengths.size());
 
         for (const index_type length : lengths) {
-            this->append_length(length);
+            this->append_segment(length);
         }
     }
 
@@ -104,7 +104,7 @@ public:
         const index_type prev_boundary = this->_offsets[segment - 1];
         const index_type next_boundary = this->_offsets[segment + 1];
         if (new_begin < prev_boundary || new_begin > next_boundary) {
-            throw std::invalid_argument("new_begin out of valid adjacent boundaries");
+            throw std::out_of_range("segment begin out of range");
         }
 
         this->_offsets[segment] = new_begin;
@@ -120,15 +120,29 @@ public:
         if (segment + 1 < this->size()) {
             const index_type next_boundary = this->_offsets[segment + 2];
             if (new_end < prev_boundary || new_end > next_boundary) {
-                throw std::invalid_argument("new_end out of valid adjacent boundaries");
+                throw std::out_of_range("segment end out of range");
             }
         } else {
             if (new_end < prev_boundary) {
-                throw std::invalid_argument("new_end cannot be less than section begin");
+                throw std::out_of_range("segment end out of range");
             }
         }
 
         this->_offsets[segment + 1] = new_end;
+    }
+
+    // Drop the last segment.
+    void pop_segment() {
+        this->pop_segments(1);
+    }
+
+    // Drop multiple segments, counted from the last one.
+    void pop_segments(const index_type count) {
+        if (count > this->size()) {
+            throw std::out_of_range("segment out of range");
+        }
+
+        this->_offsets.resize(this->_offsets.size() - count);
     }
 
     void remove_empty_segments() {

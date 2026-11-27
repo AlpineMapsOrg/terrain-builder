@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,58 +20,72 @@
 #include "HttpClient.h"
 
 #include <filesystem>
-#include <fstream>
-#include <stdexcept>
+#include <optional>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../result_helpers.h"
+#include "../temp_directory.h"
+#include "error/Infallible.h"
+#include "error/MessageCode.h"
+#include "io/bytes.h"
+#include "io/filesystem_utils.h"
+#include "stop.h"
+
+using namespace tile_downloader;
+
 namespace {
 
-class TemporaryFile {
-public:
-    TemporaryFile()
-        : m_path(std::filesystem::temp_directory_path() / "atb-http-client-test.txt")
-    {
-        std::ofstream output(m_path, std::ios::binary);
-        output << "response body";
-        REQUIRE(output);
-    }
-
-    ~TemporaryFile()
-    {
-        std::error_code error;
-        std::filesystem::remove(m_path, error);
-    }
-
-    [[nodiscard]] std::string url() const { return "file://" + m_path.string(); }
-
-private:
-    std::filesystem::path m_path;
-};
-
-class CallbackError : public std::runtime_error {
-public:
-    CallbackError()
-        : std::runtime_error("callback failed")
-    {
-    }
-};
-
-} // namespace
-
-TEST_CASE("http client propagates response writer exceptions")
-{
-    const TemporaryFile source;
-    HttpClient client([](std::vector<char>&, const char*, size_t) { throw CallbackError(); });
-
-    CHECK_THROWS_AS(client.get(source.url()), CallbackError);
+// Returns the file URL of `path`.
+std::string make_file_url(const std::filesystem::path &path) {
+    return "file://" + io::filesystem::canonicalize_best_effort(path).string();
 }
 
-TEST_CASE("http client propagates progress callback exceptions")
-{
-    const TemporaryFile source;
-    HttpClient client;
+struct SinkFailure : alp::MessageCode<"the sink failed"> {};
 
-    CHECK_THROWS_AS(client.get(source.url(), [](double) { throw CallbackError(); }), CallbackError);
+}
+
+TEST_CASE("HttpClient::get keeps the body in memory", "[HttpClient]") {
+    const TempFile source("atb-http-client.txt", "body");
+    const std::string url = make_file_url(source.path());
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
+
+    const HttpResponse response = REQUIRE_VALUE(client.get(url));
+
+    CHECK(response.body == io::bytes::vector{'b', 'o', 'd', 'y'});
+}
+
+TEST_CASE("HttpClient::get fails with TransportError for a missing file", "[HttpClient]") {
+    const TempDirectory directory("atb-http-client-missing");
+    const std::string url = make_file_url(directory.path() / "missing.txt");
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
+
+    const auto error = REQUIRE_ERROR(client.get(url));
+
+    CHECK(error.holds<TransportError>());
+}
+
+TEST_CASE("HttpClient::stream fails once the sink fails", "[HttpClient]") {
+    const TempFile source("atb-http-client.txt", "response body");
+    const std::string url = make_file_url(source.path());
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
+    const auto failing_sink = [](io::bytes::span) noexcept -> alp::Result<void, SinkFailure> { return alp::make_error(SinkFailure{}); };
+    const auto keep_going = [](std::optional<double>) noexcept { return true; };
+
+    const auto error = REQUIRE_ERROR(client.stream(url, failing_sink, keep_going));
+
+    CHECK(error.holds<SinkFailure>());
+}
+
+TEST_CASE("HttpClient::stream fails with Stopped once the progress callback returns false", "[HttpClient]") {
+    const TempFile source("atb-http-client.txt", "response body");
+    const std::string url = make_file_url(source.path());
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
+    const auto ignoring_sink = [](io::bytes::span) noexcept -> alp::Result<void, alp::Infallible> { return {}; };
+    const auto stop = [](std::optional<double>) noexcept { return false; };
+
+    const auto error = REQUIRE_ERROR(client.stream(url, ignoring_sink, stop));
+
+    CHECK(error.holds<Stopped>());
 }

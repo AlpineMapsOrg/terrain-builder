@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,300 +20,120 @@
 #pragma once
 
 #include <filesystem>
-#include <functional>
 #include <optional>
-#include <string>
+#include <ranges>
+#include <string_view>
+#include <system_error>
 #include <utility>
+#include <vector>
 
-#include <expected>
-
+#include <fmt/std.h>
 #include <libassert/assert.hpp>
 
-#include "cli_support/log.h"
-#include "store/IndexFormat.h"
+#include "common_error_codes.h"
+#include "error/MessageCode.h"
+#include "error/Result.h"
+#include "error/try.h"
+#include "error/utils.h"
+#include "store/Hash.h"
+#include "store/Index.h"
 #include "store/RawStorage.h"
+#include "store/KeyTraits.h"
+#include "store/index_checks.h"
 
 namespace store {
 
-template <HierarchyTraits Traits, typename NodeData>
+template <Index IndexType, typename Payload>
+class Draft;
+
+// Read access to a storage: a published one, or a draft opened to reuse its nodes.
+// All members may be called concurrently.
+template <Index IndexType, typename PayloadType>
 class Storage {
 public:
+    using Index = IndexType;
+    using Payload = PayloadType;
+    using Traits = typename IndexType::Traits;
     using Key = typename Traits::Key;
-    using key_type = Key;
-    using value_type = NodeData;
 
-    struct Persistence {
-        IndexFormat<Traits> format;
-        std::filesystem::path index_path;
-        std::string layout_id;
-        std::string payload_class;
-        std::string codec_selector;
-    };
-
-    Storage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Key2Hash_Map<Traits> hashes, Persistence persistence, const bool dirty = false)
-        : m_raw(std::move(raw))
-        , m_index(std::move(index))
-        , m_hashes(std::move(hashes))
-        , m_persistence(std::move(persistence))
-        , m_dirty(dirty)
-    {
+    // Takes the storage's node files and its index, which must be valid for the storage's codec.
+    Storage(RawStorage<Traits, Payload> raw, IndexType index)
+        : _raw(std::move(raw)),
+          _index(std::move(index)) {
+        DEBUG_ASSERT(validate_index(this->_index, this->_raw.supports_hashing()).has_value());
     }
 
-    virtual ~Storage() { finalize_displaced_state(); }
-
-    Storage(const Storage&) = delete;
-    Storage& operator=(const Storage&) = delete;
-
-    Storage(Storage&& other) noexcept
-        : m_raw(std::move(other.m_raw))
-        , m_index(std::move(other.m_index))
-        , m_hashes(std::move(other.m_hashes))
-        , m_persistence(std::move(other.m_persistence))
-        , m_dirty(std::exchange(other.m_dirty, false))
-    {
-        other.m_index.reset();
-        other.m_hashes.clear();
-        other.m_persistence.reset();
+    // Whether the node has a payload.
+    bool has(const Key& key) const {
+        assert_valid<Traits>(key);
+        return this->_index.has(key);
     }
 
-    Storage& operator=(Storage&& other) noexcept
-    {
-        if (this == &other) {
-            return *this;
-        }
-        finalize_displaced_state();
-        m_raw = std::move(other.m_raw);
-        m_index = std::move(other.m_index);
-        m_hashes = std::move(other.m_hashes);
-        m_persistence = std::move(other.m_persistence);
-        m_dirty = std::exchange(other.m_dirty, false);
-        other.m_index.reset();
-        other.m_hashes.clear();
-        other.m_persistence.reset();
-        return *this;
+    using LoadError = alp::Error<NotFound, CodecReadError>;
+
+    // Reads the node's payload and checks it against its recorded hash.
+    [[nodiscard]]
+    alp::Result<Payload, LoadError> load(const Key& key) const {
+        const std::filesystem::path node_path = this->resolver().locate_node(key);
+        const auto context = alp::make_context("loading node {} at {}", key, node_path);
+
+        ALP_TRY_CONTEXT(detail::require_node(this->_index, key), context);
+
+        const std::optional<PayloadHashView> expected_hash = this->_index.hash(key);
+        ALP_TRY_CONTEXT(Payload data, this->_raw.load(key, expected_hash), context);
+        return data;
     }
 
-    // Compares the node's recorded hash with the identity of the files read.
-    Expected<NodeData> load(const Key& key) const
-    {
-        if (!Traits::is_valid(key)) {
-            return store::invalid_key_error<Traits>(key);
-        }
-        auto status = m_index->get(key);
-        if (!status) {
-            return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
-        }
-        if (!status->has_value() || status->value() == NodeStatus::Virtual) {
-            return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
-        }
-        std::optional<NodeDataHashView> expected_hash;
-        if (const NodeDataHash* hash = recorded_hash(key)) {
-            expected_hash = *hash;
-        }
-        return m_raw.load(key, expected_hash);
+    // The paths of the node's files, whether or not they exist.
+    std::vector<std::filesystem::path> paths(const Key& key) const {
+        return this->_raw.paths(key);
     }
 
-    Expected<void> save(const Key& key, const NodeData& data)
-    {
-        if (!Traits::is_valid(key)) {
-            return store::invalid_key_error<Traits>(key);
-        }
-        auto exists = has(key);
-        if (!exists) {
-            return Error::propagate(std::move(exists), "check whether node " + Traits::key_to_string(key) + " exists before saving");
-        }
-        if (exists.value()) {
-            const auto node_paths = m_raw.paths(key).value();
-            return Error::fail(Error::Code::AlreadyExists, "save node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
+    // The node's recorded hash, without reading its files.
+    // Fails with Unsupported if the storage's codec does not hash.
+    [[nodiscard]]
+    alp::Result<PayloadHash, NotFound, Unsupported> hash(const Key& key) const {
+        assert_valid<Traits>(key);
+
+        const std::filesystem::path node_path = this->resolver().locate_node(key);
+        const auto context = alp::make_context("looking up the hash of node {} at {}", key, node_path);
+
+        if (!this->_raw.supports_hashing()) {
+            return alp::make_error(Unsupported{}, "the storage's codec does not hash").context(context);
         }
 
-        auto hash = write_payload(key, data);
-        if (!hash) {
-            return Error::propagate(std::move(hash));
-        }
-        return commit(key, std::move(*hash));
+        auto hash_result = alp::to_result(this->_index.hash(key), NotFound{}, "the index records no hash for the node");
+        ALP_TRY_CONTEXT(const PayloadHashView hash, std::move(hash_result), context);
+        return std::ranges::to<PayloadHash>(hash);
     }
 
-    // Writes the node's payload files without recording the node in the index and
-    // returns the codec's hash of them; commit records both. save is the existence
-    // check, write_payload and commit.
-    // Thread safety: may run concurrently with itself and with any other method
-    // except construction, move, assignment and destruction. It reads only the
-    // layout and the codec, which never change after construction, and never the
-    // index. Codecs create files exclusively, so a second write of a key, concurrent
-    // or later, fails with AlreadyExists and leaves the first write's files intact.
-    // Payload files must not be removed or replaced externally while writes are
-    // outstanding. Linking from this storage requires completed, immutable payloads.
-    Expected<NodeDataHash> write_payload(const Key& key, const NodeData& data) const { return m_raw.save(key, data); }
-
-    // Records a node and the hash returned by write_payload in the index after
-    // write_payload has succeeded for that key. Without hashing support, the hash is
-    // ignored. Not thread safe. Fails with AlreadyExists if the node is already
-    // physically present in the index.
-    Expected<void> commit(const Key& key, NodeDataHash hash)
-    {
-        auto added = m_index->add(key);
-        if (!added) {
-            return Error::propagate(std::move(added), "add node " + Traits::key_to_string(key) + " to storage index");
-        }
-        if (!added.value()) {
-            return Error::fail(Error::Code::AlreadyExists, "node " + Traits::key_to_string(key) + " is already physically present in the storage index");
-        }
-        if (supports_hashing()) {
-            ASSERT(hash.size() >= min_hash_size);
-            m_hashes.insert_or_assign(key, std::move(hash));
-        }
-        m_dirty = true;
-        return {};
+    // The storage's directory.
+    const std::filesystem::path& base_path() const {
+        return this->_raw.resolver().base_path();
     }
 
-    // The source must list the node as physically present. Linking transfers the source's
-    // recorded hash; both storages use the same codec, so the source has one if the target needs it.
-    Expected<void> link_from(const Key& key, const Storage& source)
-    {
-        if (!Traits::is_valid(key)) {
-            return store::invalid_key_error<Traits>(key);
-        }
-        auto exists = has(key);
-        if (!exists) {
-            return Error::propagate(std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before linking");
-        }
-        if (exists.value()) {
-            const auto node_paths = m_raw.paths(key).value();
-            return Error::fail(Error::Code::AlreadyExists, "link node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
-        }
-        auto source_exists = source.has(key);
-        if (!source_exists) {
-            return Error::propagate(std::move(source_exists), "check whether source node " + Traits::key_to_string(key) + " exists before linking");
-        }
-        if (!source_exists.value()) {
-            return Error::fail(Error::Code::NotFound, "source node " + Traits::key_to_string(key) + " is missing");
-        }
-        NodeDataHash source_hash;
-        if (const NodeDataHash* hash = source.recorded_hash(key)) {
-            source_hash = *hash;
-        }
-
-        auto result = m_raw.link_from(key, source.m_raw);
-        if (!result) {
-            return result;
-        }
-        return commit(key, std::move(source_hash));
+    // The storage's layout, bound to its directory.
+    const path_layout::Resolver<Key>& resolver() const {
+        return this->_raw.resolver();
     }
 
-    Expected<bool> has(const Key& key) const
-    {
-        if (!Traits::is_valid(key)) {
-            return store::invalid_key_error<Traits>(key);
-        }
-        auto status = m_index->get(key);
-        if (!status) {
-            return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index");
-        }
-        return status->has_value() && status->value() != NodeStatus::Virtual;
+    // The id of the storage's codec.
+    std::string_view codec_id() const {
+        return this->_raw.codec_id();
     }
 
-    Expected<std::vector<std::filesystem::path>> paths(const Key& key) const { return m_raw.paths(key); }
-
-    Expected<std::filesystem::path> path_for(const Key& key) const
-    {
-        auto node_paths = paths(key);
-        if (!node_paths) {
-            return Error::propagate(std::move(node_paths));
-        }
-        return node_paths->empty() ? m_raw.layout().node_path(key) : node_paths->front();
+    // The storage's index.
+    const IndexType& index() const {
+        return this->_index;
     }
-
-    // Returns the recorded identity of a physical node without accessing its files.
-    // Storage whose codec does not support hashing reports no hashes.
-    Expected<NodeDataHash> hash_for(const Key& key) const
-    {
-        if (!Traits::is_valid(key)) {
-            return store::invalid_key_error<Traits>(key);
-        }
-        const NodeDataHash* hash = recorded_hash(key);
-        if (hash == nullptr) {
-            return Error::fail(Error::Code::NotFound, "no hash is recorded for node " + Traits::key_to_string(key));
-        }
-        return *hash;
-    }
-
-    const std::filesystem::path& base_path() const { return m_raw.layout().base_path(); }
-    const path_layout::Resolver<Key>& layout() const { return m_raw.layout(); }
-    std::optional<std::string_view> codec_selector() const
-    {
-        if (!m_persistence.has_value()) {
-            return std::nullopt;
-        }
-        return m_persistence->codec_selector;
-    }
-
-    bool is_indexed() const { return m_index.has_value(); }
-
-    std::optional<std::reference_wrapper<const Index<Traits>>> index() const
-    {
-        if (!m_index.has_value()) {
-            return std::nullopt;
-        }
-        return std::cref(m_index.value());
-    }
-
-    Expected<void> save_index()
-    {
-        if (!m_dirty) {
-            return {};
-        }
-        if (!m_index.has_value() || !m_persistence.has_value()) {
-            return Error::fail(Error::Code::Internal, "indexed storage has no persistence configuration");
-        }
-        const IndexMetadata<Traits> metadata {
-            m_index.value(),
-            m_hashes,
-            m_persistence->layout_id,
-            m_persistence->payload_class,
-            m_persistence->codec_selector,
-        };
-        auto result = m_persistence->format.write(m_persistence->index_path, metadata);
-        if (result) {
-            m_dirty = false;
-        }
-        return result;
-    }
-
-    Expected<void> save_or_create_index() { return save_index(); }
-
-protected:
-    Index<Traits>& index_mut() { return m_index.value(); }
-    const Index<Traits>& index_ref() const { return m_index.value(); }
-    bool is_index_dirty() const { return m_dirty; }
-    void set_index_dirty(const bool dirty = true) const { m_dirty = dirty; }
 
 private:
-    bool supports_hashing() const { return m_raw.supports_hashing(); }
+    // Linking a node into a draft reads the source's node files.
+    template <store::Index, typename>
+    friend class Draft;
 
-    const NodeDataHash* recorded_hash(const Key& key) const
-    {
-        const auto found = m_hashes.find(key);
-        return found == m_hashes.end() ? nullptr : &found->second;
-    }
-
-    void finalize_displaced_state() noexcept
-    {
-        if (!m_dirty || !m_index.has_value()) {
-            return;
-        }
-        const auto result = save_index();
-        if (!result) {
-            LOG_ERROR("Failed to automatically save index: {}", result.error().to_string());
-        }
-    }
-
-    RawStorage<Traits, NodeData> m_raw;
-    std::optional<Index<Traits>> m_index;
-    // Identities of physical nodes; empty if the codec does not support hashing.
-    Key2Hash_Map<Traits> m_hashes;
-    std::optional<Persistence> m_persistence = std::nullopt;
-    mutable bool m_dirty = false;
+    RawStorage<Traits, Payload> _raw;
+    IndexType _index;
 };
 
 } // namespace store

@@ -96,6 +96,14 @@ std::optional<size_t> find_single_index(const Range &range, const T &value) {
     return std::distance(begin, it);
 }
 
+// Whether `range` starts with the elements of `prefix`, compared after projecting each.
+// TODO: replace with std::ranges::starts_with once libstdc++ provides it
+template <std::ranges::input_range Range, std::ranges::input_range Prefix, typename Predicate = std::ranges::equal_to,
+          typename RangeProjection = std::identity, typename PrefixProjection = std::identity>
+bool starts_with(Range &&range, Prefix &&prefix, Predicate predicate = {}, RangeProjection range_projection = {}, PrefixProjection prefix_projection = {}) {
+    return std::ranges::mismatch(range, prefix, std::ref(predicate), std::ref(range_projection), std::ref(prefix_projection)).in2 == std::ranges::end(prefix);
+}
+
 namespace detail {
 template <typename T>
 concept tuple_like =
@@ -136,15 +144,46 @@ auto transform_vector(Range &&range, Op&& op) {
     return result;
 }
 
+// std::ranges::to<std::vector>(range).
 template <std::ranges::input_range Range>
 auto to_vector(Range &&range) {
-    using T = std::ranges::range_value_t<Range>;
-    std::vector<T> result;
-    if constexpr (std::ranges::sized_range<Range>) {
-        result.reserve(std::ranges::size(range));
+    return std::ranges::to<std::vector>(std::forward<Range>(range));
+}
+
+// std::ranges::to<std::vector<T>>(range).
+template <typename T, std::ranges::input_range Range>
+std::vector<T> to_vector(Range &&range) {
+    return std::ranges::to<std::vector<T>>(std::forward<Range>(range));
+}
+
+namespace detail {
+
+struct ToDeducedVector : std::ranges::range_adaptor_closure<ToDeducedVector> {
+    template <std::ranges::input_range Range>
+    auto operator()(Range &&range) const {
+        return to_vector(std::forward<Range>(range));
     }
-    std::ranges::copy(range, std::back_inserter(result));
-    return result;
+};
+
+template <typename T>
+struct ToTypedVector : std::ranges::range_adaptor_closure<ToTypedVector<T>> {
+    template <std::ranges::input_range Range>
+    std::vector<T> operator()(Range &&range) const {
+        return to_vector<T>(std::forward<Range>(range));
+    }
+};
+
+} // namespace detail
+
+// std::ranges::to<std::vector>(), for a pipe.
+constexpr detail::ToDeducedVector to_vector() {
+    return {};
+}
+
+// std::ranges::to<std::vector<T>>(), for a pipe.
+template <typename T>
+constexpr detail::ToTypedVector<T> to_vector() {
+    return {};
 }
 
 template <std::ranges::input_range Range, typename T, typename F>
@@ -227,4 +266,14 @@ std::optional<typename Map::mapped_type> find_value(const Map &map, const Key &k
         return std::nullopt;
     }
     return it->second;
+}
+
+// Lookup by key in an associative container (map/unordered_map), without copying the value. Returns nullopt if not found.
+template <typename Map, typename Key>
+std::optional<std::reference_wrapper<const typename Map::mapped_type>> find_value_ref(const Map &map, const Key &key) {
+    const auto it = map.find(key);
+    if (it == map.end()) {
+        return std::nullopt;
+    }
+    return std::cref(it->second);
 }
