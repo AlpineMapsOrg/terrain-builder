@@ -146,11 +146,11 @@ auto try_for_each_parallel(Range &range, F &f, const std::stop_token &stop) {
             return;
         }
 
-        // Exactly one of several concurrent cancel requests returns true, so only one body writes the result.
+        // Exactly one of several concurrent cancel requests returns true, so at most one body writes the result.
         if (context.cancel_group_execution()) {
             loop_result = std::move(result);
         } else {
-            LOG_REPORT(result.error(), "processing an item of a parallel loop that had already failed");
+            LOG_REPORT(result.error(), "processing an item of a parallel loop that had already failed or been stopped");
         }
     }, context);
 
