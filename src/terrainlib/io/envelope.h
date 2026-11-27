@@ -81,27 +81,7 @@ struct SerializeOptions {
     hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64;
 };
 
-// What `deserialize` accepts.
-struct DeserializeOptions {
-    // The hash the header must record, if given.
-    std::optional<bytes::span> expected_hash = std::nullopt;
-    // The largest payload, at most `max_buffer_size`.
-    size_t max_decompressed_size = max_buffer_size;
-};
-
-// What `read` accepts.
-using ReadOptions = DeserializeOptions;
-
-// How `write` encodes the payload and treats an existing file and missing parent directories.
-struct WriteOptions {
-    WriteMode mode = default_write_mode;
-    bool make_dirs = default_make_dirs;
-    compression::Algorithm compression_algorithm = compression::Algorithm::ZstdDefault;
-    hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64;
-};
-
 using SerializeError = alp::Error<serde::SerializeError, compression::CompressError>;
-
 // Encodes `payload` as version `VersionNumber` of `Schema`.
 template <typename Schema, uint32_t VersionNumber>
 [[nodiscard]]
@@ -112,29 +92,44 @@ template <typename Schema>
 [[nodiscard]]
 alp::Result<bytes::vector, SerializeError> serialize(const typename Schema::Latest &payload, SerializeOptions options = {});
 
-using DeserializeError = alp::Error<HeaderError, BufferLimitExceeded, compression::DecompressError>;
+// What `deserialize` accepts.
+struct DeserializeOptions {
+    // The hash the header must record, if given.
+    std::optional<bytes::span> expected_hash = std::nullopt;
+    // The largest payload, at most `max_buffer_size`.
+    size_t max_decompressed_size = max_buffer_size;
+};
 
+using DeserializeError = alp::Error<HeaderError, BufferLimitExceeded, compression::DecompressError>;
 // Decodes an envelope of `Schema` and upgrades its payload to the latest version.
 template <typename Schema>
 [[nodiscard]]
 alp::Result<typename Schema::Latest, DeserializeError> deserialize(bytes::span bytes, DeserializeOptions options = {});
 
-using ReadError = alp::Error<bytes::ReadError, DeserializeError>;
+// What `read` accepts.
+using ReadOptions = DeserializeOptions;
 
+using ReadError = alp::Error<bytes::ReadError, DeserializeError>;
 // Reads the envelope of `Schema` in the file at `path`.
 template <typename Schema>
 [[nodiscard]]
 alp::Result<typename Schema::Latest, ReadError> read(const std::filesystem::path &path, ReadOptions options = {});
 
-using WriteError = alp::Error<SerializeError, bytes::WriteError>;
+// How `write` encodes the payload and treats an existing file and missing parent directories.
+struct WriteOptions {
+    WriteMode mode = default_write_mode;
+    bool make_dirs = default_make_dirs;
+    compression::Algorithm compression_algorithm = compression::Algorithm::ZstdDefault;
+    hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64;
+};
 
+using WriteError = alp::Error<SerializeError, bytes::WriteError>;
 // Writes `payload` as an envelope of `Schema` to the file at `path`, and returns the hash its header records.
 template <typename Schema>
 [[nodiscard]]
 alp::Result<bytes::vector, WriteError> write(const typename Schema::Latest &payload, const std::filesystem::path &path, WriteOptions options = {});
 
 using ReadHeaderError = alp::Error<bytes::ReadError, HeaderError>;
-
 // Reads the header of the envelope in the file at `path`, without its payload.
 // Checks neither its class nor its hash.
 [[nodiscard]]

@@ -47,7 +47,6 @@ struct WriteOptions {
 };
 
 using WriteError = alp::Error<FileError>;
-
 // Writes `bytes` to the file at `path`.
 [[nodiscard]]
 alp::Result<void, WriteError> write(span bytes, const std::filesystem::path &path, WriteOptions options = {});
