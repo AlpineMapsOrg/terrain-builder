@@ -111,7 +111,7 @@ alp::Result<uint64_t, io::Error> check_reached(const bvh::Storage &nodes, const 
 
 }
 
-alp::Result<void> check_bvh(const cli::CheckArgs &args) {
+alp::ErasedResult<void> check_bvh(const cli::CheckArgs &args) {
     ALP_TRY(const bvh::Storage nodes, bvh::Storage::open(args.input_path));
     ALP_TRY(const std::optional<bvh::Reference> root_opt, bvh::find_root(nodes));
     if (!root_opt.has_value()) {

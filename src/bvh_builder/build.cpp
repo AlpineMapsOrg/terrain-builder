@@ -56,7 +56,7 @@ alp::Result<bvh::Reference, io::Error, io::DirectoryNotEmpty> build_tree(
 
 }
 
-alp::Result<void> build_bvh(const cli::BuildArgs &args) {
+alp::ErasedResult<void> build_bvh(const cli::BuildArgs &args) {
     ALP_TRY(bvh::Storage wide, bvh::Storage::create(args.output_path));
     ALP_TRY(const io::ScratchDirectory scratch, io::create_scratch_directory(args.scratch_path));
 

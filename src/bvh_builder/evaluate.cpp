@@ -50,7 +50,7 @@ struct Evaluation {
 
 }
 
-alp::Result<void> evaluate_bvh(const cli::EvaluateArgs &args) {
+alp::ErasedResult<void> evaluate_bvh(const cli::EvaluateArgs &args) {
     ALP_TRY(const bvh::Storage nodes, bvh::Storage::open(args.input_path));
     ALP_TRY(const std::optional<bvh::Reference> root_opt, bvh::find_root(nodes));
     if (!root_opt.has_value()) {

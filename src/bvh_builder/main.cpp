@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
     Log::init(log_level);
 
     try {
-        const alp::Result<void> result = match(args,
+        const alp::ErasedResult<void> result = match(args,
             [](const cli::BuildArgs &a) { return build_bvh(a); },
             [](const cli::EvaluateArgs &a) { return evaluate_bvh(a); },
             [](const cli::CheckArgs &a) { return check_bvh(a); });
