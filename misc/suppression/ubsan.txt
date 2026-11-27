@@ -22,3 +22,7 @@ function:*opencv*/modules/imgproc/src/color.hpp
 # OpenCV's IPP resize fallback uses -1 as an unsupported-interpolation sentinel.
 # Suppress only enum diagnostics in that implementation.
 enum:*opencv*/modules/imgproc/src/resize.cpp
+
+# OpenCV's IPP comparison uses -1 as an unsupported-operation sentinel for CMP_NE.
+# Suppress only enum diagnostics in that implementation.
+enum:*opencv*/modules/core/src/arithm_ipp.hpp

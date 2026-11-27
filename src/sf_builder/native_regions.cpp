@@ -24,6 +24,7 @@
 
 #include "error/try.h"
 #include "gis/srs/Kind.h"
+#include "std_compat.h"
 
 namespace sf {
 
@@ -38,7 +39,7 @@ alp::Result<std::vector<radix::tile::SrsBounds>, ComputeNativeRegionsError> comp
         const radix::tile::SrsBounds horizontal_bounds(bounds);
         if (is_geographic) {
             ALP_TRY(const std::vector<radix::tile::SrsBounds> wrapped, gis::srs::wrap_longitudes(dataset_srs, horizontal_bounds, native_bounds.centre()));
-            regions.append_range(wrapped);
+            std_compat::append_range(regions, wrapped);
         } else {
             regions.push_back(horizontal_bounds);
         }
