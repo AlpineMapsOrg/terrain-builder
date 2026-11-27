@@ -19,8 +19,13 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
 #include <ranges>
+#include <utility>
 #include <vector>
+#include <version>
+
+#include <libassert/assert.hpp>
 
 // Stand-ins for standard library facilities that a supported standard library lacks or that a supported compiler rejects.
 namespace std_compat {
@@ -58,20 +63,67 @@ struct like_impl<const T &&, U &> {
 template <typename T, typename U>
 using like_t = typename detail::like_impl<T &&, U &>::type;
 
-// `x` with the value category of T and the constness of T added, as std::forward_like.
+namespace detail {
+
+// Stand-in for std::forward_like.
+template <typename T, typename U>
+[[nodiscard]]
+constexpr like_t<T, U> forward_like_fallback(U &&x) noexcept {
+    return static_cast<like_t<T, U>>(x);
+}
+
+} // namespace detail
+
+// Stand-in for std::forward_like.
 template <typename T, typename U>
 [[nodiscard]]
 constexpr like_t<T, U> forward_like(U &&x) noexcept {
     // TODO: switch back to std::forward_like once CI no longer builds with clang against libstdc++ 14.2
-    return static_cast<like_t<T, U>>(x);
+#if defined(__cpp_lib_forward_like) && !(defined(__clang__) && defined(_GLIBCXX_RELEASE) && _GLIBCXX_RELEASE == 14)
+    return std::forward_like<T>(std::forward<U>(x));
+#else
+    return detail::forward_like_fallback<T>(std::forward<U>(x));
+#endif
 }
 
-// Appends the elements of `range` to `vector`, as std::vector::append_range for a range whose begin and end have the same type.
+namespace detail {
+
+// Asserts that `range` and `vector` do not overlap, if `range` is contiguous and holds elements of type T.
+template <typename T, typename Allocator, std::ranges::input_range Range>
+void assert_disjoint(const std::vector<T, Allocator> &vector, Range &&range) {
+    if constexpr (std::ranges::contiguous_range<Range> && std::ranges::sized_range<Range> && std::same_as<std::ranges::range_value_t<Range>, T>) {
+        const T *const range_first = std::ranges::data(range);
+        const T *const range_last = range_first + std::ranges::size(range);
+        const T *const vector_first = vector.data();
+        const T *const vector_last = vector_first + vector.size();
+        DEBUG_ASSERT(range_first == range_last || !std::less{}(range_first, vector_last) || !std::less{}(vector_first, range_last));
+    }
+}
+
+// Stand-in for std::vector::append_range.
+// `range` and `vector` must not overlap.
+template <typename T, typename Allocator, std::ranges::common_range Range>
+    requires std::convertible_to<std::ranges::range_reference_t<Range>, T>
+void append_range_fallback(std::vector<T, Allocator> &vector, Range &&range) {
+    vector.insert(vector.end(), std::ranges::begin(range), std::ranges::end(range));
+}
+
+} // namespace detail
+
+// Stand-in for std::vector::append_range.
+// `range` and `vector` must not overlap.
 template <typename T, typename Allocator, std::ranges::common_range Range>
     requires std::convertible_to<std::ranges::range_reference_t<Range>, T>
 void append_range(std::vector<T, Allocator> &vector, Range &&range) {
+    // The fallback does not support overlap.
+    detail::assert_disjoint(vector, range);
+
     // TODO: switch back to std::vector::append_range once CI no longer builds against libstdc++ 14
-    vector.insert(vector.end(), std::ranges::begin(range), std::ranges::end(range));
+#if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
+    vector.append_range(std::forward<Range>(range));
+#else
+    detail::append_range_fallback(vector, std::forward<Range>(range));
+#endif
 }
 
 } // namespace std_compat
