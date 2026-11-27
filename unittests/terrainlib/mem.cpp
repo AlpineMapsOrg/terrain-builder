@@ -18,10 +18,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <memory>
 #include <string>
 #include <utility>
 
+#include "containers/UniqueResource.h"
 #include "mem.h"
 
 namespace {
@@ -32,13 +32,12 @@ concept Droppable = requires(T &&value) { drop(std::forward<T>(value)); };
 } // namespace
 
 TEST_CASE("drop destroys the value moved into it", "[mem]") {
-    const std::shared_ptr<int> kept = std::make_shared<int>(7);
-    std::shared_ptr<int> dropped = kept;
-    REQUIRE(kept.use_count() == 2);
+    bool released = false;
+    UniqueResource dropped(&released, [](bool *flag) noexcept { *flag = true; });
 
     drop(std::move(dropped));
 
-    CHECK(kept.use_count() == 1);
+    CHECK(released);
 }
 
 TEST_CASE("drop only accepts a value that is moved in", "[mem]") {
