@@ -71,7 +71,7 @@ alp::ErasedResult<void> build_bvh(const cli::BuildArgs &args) {
     };
     ALP_TRY(bvh::flatten_dag(dag, nodes, flatten_options));
     ALP_TRY(nodes.save_index());
-    LOG_INFO("Flattened {} into {} node batches", args.input_path.string(), nodes.size());
+    LOG_INFO("Flattened {} into {} node batches", args.input_path, nodes.size());
 
     ALP_TRY(frontier::Storage run, frontier::Storage::create(scratch.path() / "leaves"));
 

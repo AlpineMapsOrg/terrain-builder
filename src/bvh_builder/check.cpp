@@ -127,8 +127,8 @@ alp::ErasedResult<void> check_bvh(const cli::CheckArgs &args) {
 
     const uint64_t violation_count = tree_violation_count + unreached_count;
     if (violation_count != 0) {
-        return alp::make_error(fmt::format("{} has {} violations", args.input_path.string(), violation_count));
+        return alp::make_error(fmt::format("{} has {} violations", args.input_path, violation_count));
     }
-    LOG_INFO("{} is one tree whose headers cover their children", args.input_path.string());
+    LOG_INFO("{} is one tree whose headers cover their children", args.input_path);
     return {};
 }
