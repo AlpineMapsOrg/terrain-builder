@@ -231,7 +231,7 @@ inline std::vector<BakePlan> unwrap_per_node(
     // Apply new uvs and duplicated seam vertices
     apply_node_atlas(merged, to_unwrap, atlas);
 
-    std::vector<uint32_t> clusters(to_unwrap.begin(), to_unwrap.end());
+    std::vector<uint32_t> clusters = to_vector(to_unwrap);
 
     std::vector<BakePlan> plans;
     plans.push_back(size_texture(merged, demands, std::move(clusters), atlas.aspect()));

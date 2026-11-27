@@ -31,6 +31,7 @@
 #include "gis/srs/Kind.h"
 #include "gis/srs/Unit.h"
 #include "gis/srs/classify.h"
+#include "range_utils.h"
 
 namespace gis::srs {
 
@@ -56,7 +57,7 @@ alp::Result<std::vector<radix::tile::SrsBounds>, WrapLongitudesError> wrap_longi
     glm::dvec2 period(0);
     period[dimension] = convert(2 * std::numbers::pi, units::radian, longitude.axis.unit);
     const std::vector<radix::geometry::Aabb<2, double>> wrapped = geometry::wrap_into_periods(bounds, longitude_only, centre, period);
-    return std::vector<radix::tile::SrsBounds>(wrapped.begin(), wrapped.end());
+    return to_vector<radix::tile::SrsBounds>(wrapped);
 }
 
 }

@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "containers/spsc.h"
+#include "range_utils.h"
 
 namespace {
 
@@ -345,7 +346,7 @@ TEST_CASE("a batch pop wraps around the end of the ring", "[spsc_channel]") {
 
     std::array<uint32_t, 4> out{};
     REQUIRE(receiver.pop_batch(out) == 4);
-    CHECK(std::vector<uint32_t>(out.begin(), out.end()) == std::vector<uint32_t>{4, 5, 6, 7});
+    CHECK(to_vector(out) == std::vector<uint32_t>{4, 5, 6, 7});
 }
 
 TEST_CASE("move assigning a sender ends the channel it left", "[spsc_channel]") {

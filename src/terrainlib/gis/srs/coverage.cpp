@@ -47,6 +47,7 @@
 #include "gis/srs/well_known.h"
 #include "gis/webmercator.h"
 #include "mesh/bounds.h"
+#include "range_utils.h"
 
 namespace gis::srs::coverage {
 
@@ -107,7 +108,7 @@ namespace {
         const glm::dvec2 centre(0, 0);
         const glm::dvec2 period(convert(2 * std::numbers::pi, units::radian, units::degree), 0);
         const std::vector<radix::geometry::Aabb<2, double>> wrapped = geometry::wrap_into_periods(bounds, longitude_only, centre, period);
-        return std::vector<radix::tile::SrsBounds>(wrapped.begin(), wrapped.end());
+        return to_vector<radix::tile::SrsBounds>(wrapped);
     }
 
     bool is_finite_and_ordered(const radix::geometry::Aabb3d& bounds) {

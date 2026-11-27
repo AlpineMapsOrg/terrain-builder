@@ -68,6 +68,7 @@
 #include "octree/Space.h"
 #include "octree/storage/index_format.h"
 #include "parallel.h"
+#include "range_utils.h"
 #include "sf/publish.h"
 #include "stop.h"
 #include "store/Checkpoint.h"
@@ -292,7 +293,7 @@ alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::sr
         return {};
     }, stop));
 
-    std::vector<octree::Id> target_nodes(concurrent_targets.begin(), concurrent_targets.end());
+    std::vector<octree::Id> target_nodes = to_vector(concurrent_targets);
     return target_nodes;
 }
 
