@@ -12,10 +12,10 @@
 #include "bvh/flatten_dag.h"
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "io/ScratchDirectory.h"
 #include "io/filesystem.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "octree/OddLevelShifted.h"
 #include "octree/storage/open.h"
 #include "../dag_builder/storage.h"
@@ -30,7 +30,7 @@ namespace {
 
 // Builds the tree over the sorted frontier with the algorithm the mode names.
 [[nodiscard]]
-alp::Result<bvh::Reference, io::Error, io::DirectoryNotEmpty> build_tree(
+alp::Result<bvh::Reference, io::serde::Error> build_tree(
     const cli::BuildArgs &args, frontier::Storage sorted, bvh::Storage &nodes) {
     switch (args.mode) {
     case cli::Mode::PseudoLbvh:
@@ -60,7 +60,7 @@ alp::ErasedResult<void> build_bvh(const cli::BuildArgs &args) {
     ALP_TRY(bvh::Storage wide, bvh::Storage::create(args.output_path));
     ALP_TRY(const io::ScratchDirectory scratch, io::create_scratch_directory(args.scratch_path));
 
-    ALP_TRY(const octree::IndexedDagMetaStorage dag, octree::open_folder_indexed<dag::NodeMetadata>(args.input_path));
+    ALP_TRY(const dag::storage::MetadataStorage dag, dag::storage::open_metadata(args.input_path));
 
     // The binary tree is what widening consumes, so only its widened form is the run being asked for.
     ALP_TRY(bvh::Storage nodes, bvh::Storage::create(scratch.path() / "binary"));

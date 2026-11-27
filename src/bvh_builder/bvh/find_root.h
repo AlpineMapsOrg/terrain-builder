@@ -9,7 +9,7 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 
 #include "bvh/Storage.h"
@@ -52,7 +52,7 @@ inline std::optional<Reference> find_root(const Batch &batch) {
 // Finds the root of the tree stored in `nodes` (the root of its last batch).
 // Returns nothing if the storage is empty or its last batch has no single root.
 [[nodiscard]]
-inline alp::Result<std::optional<Reference>, io::Error> find_root(const Storage &nodes) {
+inline alp::Result<std::optional<Reference>, io::serde::Error> find_root(const Storage &nodes) {
     // Builders write a parent only after its children, through one writer at a time, so the root is written last and lands in the last batch.
     if (nodes.size() == 0) {
         return std::nullopt;

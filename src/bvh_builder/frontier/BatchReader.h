@@ -6,7 +6,7 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "frontier/Storage.h"
 #include "frontier/layout.h"
@@ -20,7 +20,7 @@ public:
 
     // Takes the next entry, reading the following batch when the current one is used up. Nothing once the storage is exhausted.
     [[nodiscard]]
-    alp::Result<std::optional<Entry>, io::Error> next() {
+    alp::Result<std::optional<Entry>, io::serde::Error> next() {
         while (true) {
             // If we have entries left in the current batch, return the next one.
             if (this->_position < this->_current_batch.entries.size()) {

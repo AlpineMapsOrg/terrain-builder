@@ -94,6 +94,6 @@ TEST_CASE("BatchReader::next reports the first batch it cannot read", "[frontier
 
     CHECK(REQUIRE_VALUE(reader.next()) == b);
 
-    const alp::Error<io::Error> error = REQUIRE_ERROR(reader.next());
+    const io::serde::Error error = REQUIRE_ERROR(reader.next());
     CHECK(error.holds_and<io::FileError>(&io::FileError::is_not_found));
 }

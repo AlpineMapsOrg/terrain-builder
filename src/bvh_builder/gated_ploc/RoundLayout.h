@@ -7,7 +7,6 @@
 #include <fmt/format.h>
 
 #include "error/Result.h"
-#include "io/DirectoryNotEmpty.h"
 #include "io/FileError.h"
 
 #include "frontier/Storage.h"
@@ -22,7 +21,7 @@ public:
 
     // Creates the storage a round writes the next run to, in morton order.
     [[nodiscard]]
-    alp::Result<frontier::Storage, io::FileError, io::DirectoryNotEmpty> create_merge_scratch(const uint32_t round) const {
+    alp::Result<frontier::Storage, io::FileError> create_merge_scratch(const uint32_t round) const {
         return frontier::Storage::create(this->get_round_path(round) / "merged");
     }
 

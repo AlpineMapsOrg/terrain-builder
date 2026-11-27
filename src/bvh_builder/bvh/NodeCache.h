@@ -5,7 +5,7 @@
 
 #include <libassert/assert.hpp>
 
-#include "io/Error.h"
+#include "io/serde.h"
 #include "error/Result.h"
 #include "error/try.h"
 
@@ -24,7 +24,7 @@ public:
 
     // The node `reference` points at.
     [[nodiscard]]
-    alp::Result<Node, io::Error> read_node(const Reference &reference) {
+    alp::Result<Node, io::serde::Error> read_node(const Reference &reference) {
         ALP_TRY(const std::shared_ptr<const Batch> shared_batch, this->read_batch(reference.batch));
         const Batch &batch = *shared_batch;
         ASSERT(reference.node < batch.nodes().size());

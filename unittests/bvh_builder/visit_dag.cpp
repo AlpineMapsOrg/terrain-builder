@@ -68,7 +68,7 @@ GroupRecord make_group_record(const dag::Group &group, dag::NodeMetadataCache &c
 
 // Collects every group of the dag at `path`.
 std::vector<GroupRecord> collect_groups(const std::filesystem::path &path) {
-    const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(path));
+    const auto dag = REQUIRE_VALUE(dag::storage::open_metadata(path));
     dag::NodeMetadataCache cache(dag, UNBOUNDED_RESIDENT_BYTES);
     std::vector<GroupRecord> visited;
     const auto walked = dag::visit_groups([&](const dag::Group &group) {
@@ -112,14 +112,14 @@ TEST_CASE("visit_groups visits every group once", "[dag][visit_dag]") {
         .groups = {},
     };
     const TempDirectory directory("visit_dag");
-    write_dag(directory.path(), {{root, root_node}, {first_child, first_child_node}, {second_child, second_child_node}, {grandchild, grandchild_node}});
+    write_dag(directory.path() / "dag", {{root, root_node}, {first_child, first_child_node}, {second_child, second_child_node}, {grandchild, grandchild_node}});
 
     const ClusterRecord first_child_0{.id = {first_child, 0}, .error = first_child_node.groups[0].error, .lod_bounds = first_child_node.groups[0].bounds, .tight_bounds = first_child_node.clusters[0].bounds};
     const ClusterRecord second_child_0{.id = {second_child, 0}, .error = 0.0, .lod_bounds = second_child_node.clusters[0].bounds, .tight_bounds = second_child_node.clusters[0].bounds};
     const ClusterRecord second_child_1{.id = {second_child, 1}, .error = 0.0, .lod_bounds = second_child_node.clusters[1].bounds, .tight_bounds = second_child_node.clusters[1].bounds};
     const ClusterRecord grandchild_0{.id = {grandchild, 0}, .error = 0.0, .lod_bounds = grandchild_node.clusters[0].bounds, .tight_bounds = grandchild_node.clusters[0].bounds};
 
-    const std::vector<GroupRecord> groups = collect_groups(directory.path());
+    const std::vector<GroupRecord> groups = collect_groups(directory.path() / "dag");
     CHECK_THAT(groups, Catch::Matchers::UnorderedEquals(std::vector<GroupRecord>{
         {.id = {root, 0}, .error = root_node.groups[0].error, .lod_bounds = root_node.groups[0].bounds, .clusters = {first_child_0, second_child_0}},
         {.id = {root, 1}, .error = root_node.groups[1].error, .lod_bounds = root_node.groups[1].bounds, .clusters = {second_child_1}},
@@ -133,11 +133,11 @@ TEST_CASE("visit_groups stops when the visitor returns false", "[dag][visit_dag]
     const radix::geometry::Aabb3d bounds{glm::dvec3{0.0}, glm::dvec3{1.0}};
 
     const TempDirectory directory("visit_dag");
-    write_dag(directory.path(), {
+    write_dag(directory.path() / "dag", {
         {root, dag::NodeMetadata{.clusters = {{.group_index = 0, .bounds = bounds}}, .groups = {{.children = {{child, 0}}, .error = 1.0, .bounds = bounds}, {.children = {{child, 1}}, .error = 1.0, .bounds = bounds}}}},
         {child, dag::NodeMetadata{.clusters = {{.group_index = std::nullopt, .bounds = bounds}, {.group_index = std::nullopt, .bounds = bounds}}, .groups = {}}},
     });
-    const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(directory.path()));
+    const auto dag = REQUIRE_VALUE(dag::storage::open_metadata(directory.path() / "dag"));
     dag::NodeMetadataCache cache(dag, UNBOUNDED_RESIDENT_BYTES);
 
     uint32_t visit_count = 0;
@@ -169,8 +169,8 @@ TEST_CASE("visit_root_clusters visits every cluster of the batches on the lowest
         .groups = {},
     };
     const TempDirectory directory("visit_dag");
-    write_dag(directory.path(), {{first, first_node}, {second, second_node}, {above, above_node}});
-    const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(directory.path()));
+    write_dag(directory.path() / "dag", {{first, first_node}, {second, second_node}, {above, above_node}});
+    const auto dag = REQUIRE_VALUE(dag::storage::open_metadata(directory.path() / "dag"));
     dag::NodeMetadataCache cache(dag, UNBOUNDED_RESIDENT_BYTES);
 
     std::vector<ClusterRecord> visited;
@@ -191,10 +191,10 @@ TEST_CASE("visit_root_clusters stops when the visitor returns false", "[dag][vis
     const radix::geometry::Aabb3d bounds{glm::dvec3{0.0}, glm::dvec3{1.0}};
 
     const TempDirectory directory("visit_dag");
-    write_dag(directory.path(), {
+    write_dag(directory.path() / "dag", {
         {root, dag::NodeMetadata{.clusters = {{.group_index = std::nullopt, .bounds = bounds}, {.group_index = std::nullopt, .bounds = bounds}}, .groups = {}}},
     });
-    const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(directory.path()));
+    const auto dag = REQUIRE_VALUE(dag::storage::open_metadata(directory.path() / "dag"));
     dag::NodeMetadataCache cache(dag, UNBOUNDED_RESIDENT_BYTES);
 
     uint32_t visit_count = 0;

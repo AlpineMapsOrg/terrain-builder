@@ -1,8 +1,40 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "../catch2_helpers.h"
 #include "string_utils.h"
 
 #include <string>
 #include <string_view>
+
+TEST_CASE("starts_with_case_insensitive ignores ASCII case", "[string_utils]") {
+    SECTION("matching prefix") {
+        CHECK(starts_with_case_insensitive("Easting (E)", "easting"));
+        CHECK(starts_with_case_insensitive("easting", "EASTING"));
+    }
+    SECTION("text shorter than the prefix") {
+        CHECK_FALSE(starts_with_case_insensitive("East", "easting"));
+    }
+    SECTION("different text") {
+        CHECK_FALSE(starts_with_case_insensitive("Northing", "easting"));
+    }
+}
 
 TEST_CASE("from_chars parses a plain integer", "[string_utils]") {
     CHECK(from_chars<int>(std::string_view("123")) == 123);
@@ -21,7 +53,7 @@ TEST_CASE("from_chars rejects non-numeric input", "[string_utils]") {
 }
 
 TEST_CASE("from_chars rejects trailing garbage after a valid number", "[string_utils]") {
-    CHECK(from_chars<int>(std::string_view("123.terrain")) == std::nullopt);
+    CHECK(from_chars<int>(std::string_view("123.sfmesh")) == std::nullopt);
     CHECK(from_chars<int>(std::string_view("123abc")) == std::nullopt);
 }
 

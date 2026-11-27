@@ -65,14 +65,14 @@ template <typename T>
 alp::Result<void, io::FileError, JsonError> write_to_path(const T &value, const std::filesystem::path &path, const bool make_dirs) {
     const auto context = alp::make_context("writing {} to {}", type_name<T>(), path);
     ALP_TRY_CONTEXT(const std::vector<uint8_t> &bytes, detail::write_to_buffer<std::vector<uint8_t>>(value), context);
-    ALP_TRY_CONTEXT(io::write_bytes_to_path(bytes, path, make_dirs), context);
+    ALP_TRY_CONTEXT(io::bytes::write(bytes, path, io::bytes::WriteOptions{.make_dirs = make_dirs}), context);
     return {};
 }
 
 template <typename T>
-alp::Result<T, io::FileError, JsonError> read_from_path(const std::filesystem::path &path) {
+alp::Result<T, io::bytes::ReadError, JsonError> read_from_path(const std::filesystem::path &path) {
     const auto context = alp::make_context("reading {} from {}", type_name<T>(), path);
-    ALP_TRY_CONTEXT(const std::vector<uint8_t> &bytes, io::read_bytes_from_path(path), context);
+    ALP_TRY_CONTEXT(const std::vector<uint8_t> &bytes, io::bytes::read(path), context);
     ALP_TRY_CONTEXT(T value, detail::read_from_buffer<T>(bytes), context);
     return value;
 }

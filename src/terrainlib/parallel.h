@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <concepts>
@@ -91,7 +109,7 @@ auto try_for_each_parallel(Range &range, Body &body) {
         if (context.cancel_group_execution()) {
             loop_result = std::move(result);
         } else {
-            LOG_UNEXPECTED(result.error(), "processing an item of a loop that had already failed");
+            LOG_REPORT(result.error(), "processing an item of a parallel loop that had already failed");
         }
     }, context);
     return loop_result;
@@ -112,7 +130,7 @@ void for_each(Range &&range, Body body, const Execution execution = Execution::P
         }
         return;
     }
-    UNREACHABLE();
+    UNREACHABLE("invalid execution", execution);
 }
 
 // Runs `body` on every item of `range`, and on every item a body adds through its feeder.
@@ -126,7 +144,7 @@ auto try_for_each(Range &&range, Body body, const Execution execution = Executio
     case Execution::Serial:
         return detail::try_for_each_serial(range, body);
     }
-    UNREACHABLE();
+    UNREACHABLE("invalid execution", execution);
 }
 
 // Runs `body` on every item of `range`.

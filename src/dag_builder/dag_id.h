@@ -1,8 +1,25 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <cstdint>
-
-#include <zpp_bits.h>
 
 #include "octree/Id.h"
 #include "hash_utils.h"
@@ -52,27 +69,3 @@ struct fmt::formatter<dag::GroupId> {
         return fmt::format_to(ctx.out(), "Group(batch={}, index={})", id.batch, id.group_index);
     }
 };
-
-namespace zpp::bits {
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::ClusterId &id) {
-    return archive(id.batch, id.cluster_index);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, dag::ClusterId &id) {
-    return archive(id.batch, id.cluster_index);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::GroupId &id) {
-    return archive(id.batch, id.group_index);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, dag::GroupId &id) {
-    return archive(id.batch, id.group_index);
-}
-
-}

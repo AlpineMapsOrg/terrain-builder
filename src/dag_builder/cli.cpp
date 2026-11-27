@@ -1,8 +1,32 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "cli.h"
 
 #include <CLI/CLI.hpp>
 #include <libassert/assert.hpp>
 #include <spdlog/spdlog.h>
+
+#include "cli_support/log.h"
+#include "cli_support/octree_id.h"
+#include "error/format.h"
+#include "expected_utils.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -16,16 +40,6 @@
 using namespace cli;
 
 namespace {
-
-const std::unordered_map<std::string, spdlog::level::level_enum> log_level_names{
-    {"off", spdlog::level::level_enum::off},
-    {"critical", spdlog::level::level_enum::critical},
-    {"error", spdlog::level::level_enum::err},
-    {"warn", spdlog::level::level_enum::warn},
-    {"info", spdlog::level::level_enum::info},
-    {"debug", spdlog::level::level_enum::debug},
-    {"trace", spdlog::level::level_enum::trace},
-};
 
 const std::unordered_map<std::string, dag::IncludeMode> include_mode_names{
     {"current", dag::IncludeMode::CurrentOnly},
@@ -68,53 +82,9 @@ AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
 }
 
 octree::Id make_octree_id(const std::vector<uint64_t> &values) {
-    if (values.size() == 2) {
-        const octree::Id::Level level = values[0];
-        const octree::Id::Index index = values[1];
-
-        return octree::Id(level, index);
-    }
-
-    if (values.size() == 4) {
-        const octree::Id::Level level = values[0];
-        const octree::Id::Coord x = values[1];
-        const octree::Id::Coord y = values[2];
-        const octree::Id::Coord z = values[3];
-
-        return octree::Id(level, x, y, z);
-    }
-
-    throw CLI::ValidationError("--root-node expects either: <level> <index> or <level> <x> <y> <z>");
-}
-
-ContinuationMode make_continuation_mode(const bool resume, const bool overwrite) {
-    if (resume && overwrite) {
-        UNREACHABLE();
-    }
-    if (resume) {
-        return ContinuationMode::Resume;
-    } else if (overwrite) {
-        return ContinuationMode::Overwrite;
-    } else {
-        return ContinuationMode::Error;
-    }
-
-    // TODO(ORIGINAL AUTHOR): !!! THIS FALLBACK NEEDS AN AUTHORITATIVE BEHAVIOUR DECISION !!!
-    //
-    // Neither --resume nor --overwrite is a normal command-line combination, but the intended
-    // continuation semantics are unclear. Do not replace this exception without first confirming
-    // the desired behaviour with the original author.
-    //
-    // Codex believes the correct implementation is:
-    //
-    //     return ContinuationMode::Error;
-    //
-    // ContinuationMode::Error is already the default in Args and BuildOptions, and build_level()
-    // contains a dedicated branch for it. Returning Error would therefore preserve the apparent
-    // design: refuse to overwrite existing output unless the user explicitly selects --resume or
-    // --overwrite. The exception below intentionally keeps the unsupported path loud until the
-    // original author confirms or corrects that interpretation.
-    throw std::runtime_error("unsupported operation");
+    return alp::value_or_else(cli_support::parse_octree_id(values), [](const alp::ErasedError &error) -> octree::Id {
+        throw CLI::ValidationError("--root-node", fmt::format("{}", error));
+    });
 }
 
 } // namespace
@@ -141,14 +111,14 @@ Args cli::parse(int argc, const char *const *argv) {
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
-        .continuation_mode = ContinuationMode::Error
+        .checkpoint_path = std::nullopt
     };
 
     app.add_option("--input", args.input_path, "Path to input mesh dataset")
         ->required()
         ->check(CLI::ExistingDirectory);
 
-    app.add_option("--output", args.output_path, "Path to write generated dag levels")
+    app.add_option("--output", args.output_path, "New path for the generated dag levels; they are written to <output>.part, which is renamed to <output> when complete")
         ->required();
 
     std::vector<uint64_t> root_node_values;
@@ -195,11 +165,8 @@ Args cli::parse(int argc, const char *const *argv) {
         ->default_val(args.texture_gutter)
         ->check(CLI::NonNegativeNumber);
 
-    bool resume = false;
-    bool overwrite = false;
-    app.add_flag("--resume", resume, "Resume building the dag from then data in output");
-    app.add_flag("--overwrite", overwrite, "Overwrite data already present in output")
-        ->excludes("--resume");
+    app.add_option("--checkpoint", args.checkpoint_path, "Draft of an earlier build with the same inputs, whose nodes are reused")
+        ->check(CLI::ExistingDirectory);
 
     app.add_flag("--write-debug-meshes", args.write_debug_meshes, "Write debug .glb meshes alongside the output");
 
@@ -210,7 +177,7 @@ Args cli::parse(int argc, const char *const *argv) {
         ->default_val(args.include_mode);
 
     app.add_option("--verbosity", args.log_level, "Verbosity level of logging")
-        ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
+        ->transform(CLI::CheckedTransformer(cli_support::log_level_names(), CLI::ignore_case))
         ->default_val(args.log_level);
 
     try {
@@ -220,7 +187,6 @@ Args cli::parse(int argc, const char *const *argv) {
         if (!root_node_values.empty()) {
             args.root_node = make_octree_id(root_node_values);
         }
-        args.continuation_mode = make_continuation_mode(resume, overwrite);
 
         args.sizing_options.mode = make_texture_sizing_mode(texels_per_triangle);
     } catch (const CLI::ParseError &e) {

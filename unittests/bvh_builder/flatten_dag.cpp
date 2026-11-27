@@ -1,6 +1,7 @@
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
 #include "../temp_directory.h"
+#include "dag_helpers.h"
 #include "node_header_helpers.h"
 
 #include <cstdint>
@@ -12,9 +13,7 @@
 #include <glm/glm.hpp>
 
 #include "../dag_builder/dag_node.h"
-#include "../dag_builder/encoded.h"
 #include "../dag_builder/storage.h"
-#include "octree/storage/open.h"
 #include "range_utils.h"
 
 #include "bvh/Batch.h"
@@ -31,14 +30,8 @@ namespace {
 // Flattens a dag holding exactly `dag_nodes` and returns every node written, each of which must be a leaf.
 std::vector<bvh::LeafInput> flatten(std::vector<std::pair<octree::Id, dag::NodeMetadata>> dag_nodes) {
     const TempDirectory dag_directory("flatten_dag_input");
-    {
-        auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::ClusterBatch>(dag_directory.path()));
-        for (auto &[id, metadata] : dag_nodes) {
-            REQUIRE_VALUE(dag.save(id, dag::ClusterBatch{std::move(metadata), Clustering{}}));
-        }
-        REQUIRE_VALUE(dag.save_index());
-    }
-    const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(dag_directory.path()));
+    write_dag(dag_directory.path() / "dag", std::move(dag_nodes));
+    const auto dag = REQUIRE_VALUE(dag::storage::open_metadata(dag_directory.path() / "dag"));
 
     const TempDirectory bvh_directory("flatten_dag_output");
     bvh::Storage nodes = REQUIRE_VALUE(bvh::Storage::create(bvh_directory.path()));

@@ -7,7 +7,6 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
 #include "octree/Id.h"
 
 #include "metadata.h"
@@ -16,20 +15,23 @@
 
 namespace dag {
 
+// An error from reading the dag's node metadata.
+using ReadError = storage::MetadataStorage::LoadError;
+
 // A cache of dag node metadata, bounded by its size in bytes.
 class NodeMetadataCache {
 public:
-    NodeMetadataCache(const octree::IndexedDagMetaStorage &dag, const size_t max_resident_bytes)
+    NodeMetadataCache(const storage::MetadataStorage &dag, const size_t max_resident_bytes)
         : _storage(dag), _cache(max_resident_bytes) {}
 
-    const octree::IndexedDagMetaStorage &storage() const {
+    const storage::MetadataStorage &storage() const {
         return this->_storage;
     }
 
     // Reads the metadata of `batch`.
     [[nodiscard]]
-    alp::Result<std::shared_ptr<const NodeMetadata>, io::Error> read_metadata(const BatchId &batch) {
-        return this->_cache.get_or_try_insert_with(batch, [&]() -> alp::Result<Cache::Entry, io::Error> {
+    alp::Result<std::shared_ptr<const NodeMetadata>, ReadError> read_metadata(const BatchId &batch) {
+        return this->_cache.get_or_try_insert_with(batch, [&]() -> alp::Result<Cache::Entry, ReadError> {
             ALP_TRY(NodeMetadata metadata, this->_storage.load(batch));
             const size_t cost = estimate_bytes(metadata);
             std::shared_ptr<const NodeMetadata> shared_metadata = std::make_shared<const NodeMetadata>(std::move(metadata));
@@ -55,7 +57,7 @@ private:
         return bytes;
     }
 
-    const octree::IndexedDagMetaStorage &_storage;
+    const storage::MetadataStorage &_storage;
     Cache _cache;
 };
 

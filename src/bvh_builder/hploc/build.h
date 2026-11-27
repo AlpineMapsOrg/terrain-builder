@@ -7,7 +7,7 @@
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "bvh/BatchWriter.h"
 #include "bvh/Storage.h"
@@ -23,11 +23,11 @@ namespace hploc {
 // Writes the H-PLOC tree over the run through `sink` and returns its root.
 // The run must be non-empty and in morton order.
 [[nodiscard]]
-inline alp::Result<frontier::Entry, io::Error> build(const frontier::Storage &input, bvh::BatchWriter &sink, const Options &options) {
+inline alp::Result<frontier::Entry, io::serde::Error> build(const frontier::Storage &input, bvh::BatchWriter &sink, const Options &options) {
     ASSERT(input.size() > 0);
 
     detail::HierarchyMerger merger(sink, options);
-    ALP_TRY(frontier::traverse_entries(input, [&](const frontier::Entry &entry) -> alp::Result<void, io::Error> {
+    ALP_TRY(frontier::traverse_entries(input, [&](const frontier::Entry &entry) -> alp::Result<void, io::serde::Error> {
         return merger.push(entry);
     }));
     return std::move(merger).finish();
@@ -37,10 +37,10 @@ inline alp::Result<frontier::Entry, io::Error> build(const frontier::Storage &in
 // Saves the index of `output`.
 // The run must be non-empty and in morton order.
 [[nodiscard]]
-inline alp::Result<bvh::Reference, io::Error> build(const frontier::Storage &input, bvh::Storage &output, const Options &options) {
+inline alp::Result<bvh::Reference, io::serde::Error> build(const frontier::Storage &input, bvh::Storage &output, const Options &options) {
     return alp::run_with_context(
         alp::make_context("building a tree from {} to {}", input.directory(), output.directory()),
-        [&] -> alp::Result<bvh::Reference, io::Error> {
+        [&] -> alp::Result<bvh::Reference, io::serde::Error> {
             bvh::BatchWriter sink(output, options.max_batch_bytes);
 
             ALP_TRY(const frontier::Entry root, build(input, sink, options));

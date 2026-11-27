@@ -6,7 +6,7 @@
 #include <type_traits>
 
 #include "enumerate.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 #include "bvh/Batch.h"
 #include "bvh/Reference.h"
@@ -20,8 +20,8 @@ namespace bvh {
 // Visits every stored node with the reference naming it. False if the visitor stopped the walk before its end.
 template <typename F>
 [[nodiscard]]
-alp::Result<bool, io::Error> flat_traverse(const Storage &nodes, F &&v) {
-    visitor::FallibleVisitor<io::Error, F &> visitor(v);
+alp::Result<bool, io::serde::Error> flat_traverse(const Storage &nodes, F &&v) {
+    visitor::FallibleVisitor<io::serde::Error, F &> visitor(v);
 
     for (const BatchIndex batch_index : range(nodes.size())) {
         ALP_TRY(const Batch batch, nodes.read(batch_index));

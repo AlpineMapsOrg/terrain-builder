@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <any>
@@ -35,6 +53,11 @@ public:
     template <typename E>
     static constexpr bool can_hold = ErrorCode<E> && std::copy_constructible<E>;
 
+    // Whether this code can be compared with a T.
+    // It knows only whether it holds a T, so it compares only a held code of type T.
+    template <typename T>
+    static constexpr bool compares_with = can_hold<T> && std::equality_comparable<T>;
+
     template <typename E> requires(can_hold<E>)
     explicit ErasedCode(E code) : _code(std::in_place_type<E>, std::move(code)), _format(&format<E>) {}
 
@@ -48,6 +71,14 @@ public:
     [[nodiscard]]
     const E *get_if() const {
         return std::any_cast<E>(&this->_code);
+    }
+
+    // Whether the held code is a T equal to `value`.
+    template <typename T> requires(compares_with<T>)
+    [[nodiscard]]
+    bool equals(const T &value) const {
+        const T *held = this->get_if<T>();
+        return held != nullptr && *held == value;
     }
 
     [[nodiscard]]

@@ -8,7 +8,7 @@
 
 #include <fmt/format.h>
 
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "storage/batch_limits.h"
 #include "bvh/Storage.h"
@@ -43,10 +43,10 @@ struct BuildOptions {
 
 // Writes every stored node as a set of frontier run batches.
 [[nodiscard]]
-inline alp::Result<void, io::Error> build_from_leaves(const bvh::Storage &nodes, Storage &output, const BuildOptions &options = {}) {
+inline alp::Result<void, io::serde::Error> build_from_leaves(const bvh::Storage &nodes, Storage &output, const BuildOptions &options = {}) {
     return alp::run_with_context(
         alp::make_context("building a frontier from {} to {}", nodes.directory(), output.directory()),
-        [&] -> alp::Result<void, io::Error> {
+        [&] -> alp::Result<void, io::serde::Error> {
             BatchWriter writer(output, options.max_batch_bytes);
 
             // The walk stops on the first failed write, leaving it to report.

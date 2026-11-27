@@ -2,17 +2,18 @@
 
 # Repeatable, non-unit end-to-end verification for the current 3D SF/DAG path.
 # Inputs are prepared once under INPUT_ROOT. Completed steps are skipped through
-# explicit state markers, so an interrupted SF or DAG run can be resumed.
+# explicit state markers. The tools write <output>.part and publish <output> when
+# complete; an interrupted run's .part is reused as the next run's --checkpoint.
 
 set -Eeuo pipefail
 
-readonly SOURCE_DIR="/home/codex/Documents/alpine-terrain-builder/terrain-builder-raster-store"
-readonly BUILD_DIR="${SOURCE_DIR}/build/golden-e2e"
-readonly RUN_ROOT="/data/scratch/codex/alpine-terrain-builder-golden-e2e"
-readonly INPUT_ROOT="${RUN_ROOT}/inputs"
-readonly REFERENCE_ROOT="${RUN_ROOT}/reference"
-readonly LOG_ROOT="${RUN_ROOT}/logs"
-readonly STATE_ROOT="${RUN_ROOT}/state"
+readonly SOURCE_DIR="${SOURCE_DIR:-/home/codex/Documents/alpine-terrain-builder/terrain-builder-raster-store}"
+readonly BUILD_DIR="${BUILD_DIR:-${SOURCE_DIR}/build/golden-e2e}"
+readonly RUN_ROOT="${RUN_ROOT:-/data/scratch/codex/alpine-terrain-builder-golden-e2e}"
+readonly INPUT_ROOT="${INPUT_ROOT:-${RUN_ROOT}/inputs}"
+readonly REFERENCE_ROOT="${REFERENCE_ROOT:-${RUN_ROOT}/reference}"
+readonly LOG_ROOT="${LOG_ROOT:-${RUN_ROOT}/logs}"
+readonly STATE_ROOT="${STATE_ROOT:-${RUN_ROOT}/state}"
 readonly RUN_ID="${RUN_ID:-$(date +%Y%m%dT%H%M%S)}"
 readonly RUN_LOG_ROOT="${LOG_ROOT}/runs/${RUN_ID}"
 readonly TIMINGS_FILE="${RUN_LOG_ROOT}/timings.tsv"
@@ -25,7 +26,7 @@ readonly DAG_BUILDER="${BUILD_DIR}/src/dag_builder/dag-builder"
 # GT rasters. They are recreated from the raw datasets at the start of a run.
 readonly RAW_GS="/data/raw/raster_data/Oe_2020/OeRect_01m_gs_31287.img"
 readonly RAW_GT="/data/raw/raster_data/Oe_2020/OeRect_01m_gt_31287.img"
-readonly ELEVATION_ROOT="${INPUT_ROOT}/grossglockner-elevation-4km"
+readonly ELEVATION_ROOT="${ELEVATION_ROOT:-${INPUT_ROOT}/grossglockner-elevation-4km}"
 readonly GS_VRT="${ELEVATION_ROOT}/grossglockner-gs-4km.vrt"
 readonly GT_VRT="${ELEVATION_ROOT}/grossglockner-gt-4km.vrt"
 readonly BASEMAP_TILES="${INPUT_ROOT}/basemap"
@@ -105,24 +106,60 @@ require_executable()
     fi
 }
 
-verify_snapshot()
+verify_storage()
 {
-    local snapshot="$1"
+    local storage="$1"
     local extension="$2"
+    local companion_extension="${3:-}"
     local payload_count
 
-    require_file "${snapshot}/terrain.index"
-    if [[ ! -s "${snapshot}/terrain.index" ]]; then
-        printf 'Index is empty: %s\n' "${snapshot}/terrain.index" >&2
+    require_file "${storage}/octree.storemeta"
+    require_file "${storage}/octree.storeindex"
+    if [[ ! -s "${storage}/octree.storemeta" ]] || [[ ! -s "${storage}/octree.storeindex" ]]; then
+        printf 'Octree metadata or index is empty: %s\n' "${storage}" >&2
         return 1
     fi
 
-    payload_count="$(find "${snapshot}" -type f -name "*${extension}" | wc -l)"
+    payload_count="$(find "${storage}" -type f -name "*${extension}" | wc -l)"
     if ((payload_count == 0)); then
-        printf 'No %s payloads found in %s\n' "${extension}" "${snapshot}" >&2
+        printf 'No %s payloads found in %s\n' "${extension}" "${storage}" >&2
         return 1
     fi
-    printf 'Verified %s: %s payloads\n' "${snapshot}" "${payload_count}"
+    if [[ -n "${companion_extension}" ]]; then
+        local companion_count
+        companion_count="$(find "${storage}" -type f -name "*${companion_extension}" | wc -l)"
+        if [[ "${companion_count}" != "${payload_count}" ]]; then
+            printf '%s payload count (%s) does not match %s count (%s) in %s\n' \
+                "${extension}" "${payload_count}" "${companion_extension}" "${companion_count}" "${storage}" >&2
+            return 1
+        fi
+    fi
+    printf 'Verified %s: %s payloads\n' "${storage}" "${payload_count}"
+}
+
+# Moves an interrupted run's <output>.part to <output>-checkpoint.part and sets
+# CHECKPOINT_ARGUMENTS to reuse it. The tools refuse an existing <output>.
+CHECKPOINT_ARGUMENTS=()
+prepare_checkpoint()
+{
+    local output="$1"
+    local checkpoint="${output}-checkpoint.part"
+
+    CHECKPOINT_ARGUMENTS=()
+    if [[ -d "${output}.part" ]]; then
+        # A resumed run's .part already links every node of the older checkpoint.
+        rm -rf "${checkpoint}"
+        mv "${output}.part" "${checkpoint}"
+    fi
+    if [[ -d "${checkpoint}" ]]; then
+        printf '[%s] Reusing %s as checkpoint\n' "$(timestamp)" "${checkpoint}"
+        CHECKPOINT_ARGUMENTS=(--checkpoint "${checkpoint}")
+    fi
+}
+
+discard_checkpoint()
+{
+    rm -rf "${1}-checkpoint.part"
 }
 
 build_sf()
@@ -135,11 +172,11 @@ build_sf()
 
     if [[ -f "${marker}" ]]; then
         printf '[%s] SKIP %s: completion marker exists\n' "$(timestamp)" "${name}"
-        verify_snapshot "${output}" ".terrain"
+        verify_storage "${output}" ".sfmesh"
         return
     fi
 
-    mkdir -p "${output}"
+    prepare_checkpoint "${output}"
     run_timed "${name}" \
         "${SF_BUILDER}" \
         --dataset "${dataset}" \
@@ -151,10 +188,12 @@ build_sf()
         batch \
         --target-level "${SF_TARGET_LEVEL}" \
         --output "${output}" \
-        --format .terrain \
-        --threads "${SF_THREADS}"
+        --format .sfmesh \
+        --threads "${SF_THREADS}" \
+        "${CHECKPOINT_ARGUMENTS[@]}"
 
-    verify_snapshot "${output}" ".terrain"
+    verify_storage "${output}" ".sfmesh"
+    discard_checkpoint "${output}"
     touch "${marker}"
 }
 
@@ -164,65 +203,57 @@ merge_sf()
 
     if [[ -f "${marker}" ]]; then
         printf '[%s] SKIP merge_sf: completion marker exists\n' "$(timestamp)"
-        verify_snapshot "${SF_MERGED}" ".terrain"
+        verify_storage "${SF_MERGED}" ".sfmesh"
         return
     fi
 
-    if [[ -d "${SF_MERGED}" ]] && [[ -n "$(find "${SF_MERGED}" -mindepth 1 -print -quit)" ]]; then
-        printf 'Partial merge output exists at %s.\n' "${SF_MERGED}" >&2
-        printf 'The current sf-merger cannot safely resume this output; refusing to overwrite it.\n' >&2
-        return 1
-    fi
-
-    mkdir -p "${SF_MERGED}"
+    prepare_checkpoint "${SF_MERGED}"
     run_timed merge_sf \
         "${SF_MERGER}" merge \
         --base "${SF_BASEMAP}" \
         --new "${SF_GATAKI}" \
         --mask "${TIROL_MASK}" \
         --output "${SF_MERGED}" \
+        "${CHECKPOINT_ARGUMENTS[@]}" \
         --verbosity info
 
-    verify_snapshot "${SF_MERGED}" ".terrain"
+    verify_storage "${SF_MERGED}" ".sfmesh"
+    discard_checkpoint "${SF_MERGED}"
     touch "${marker}"
 }
 
 build_dag()
 {
     local marker="${STATE_ROOT}/build_dag.complete"
-    local continuation=(--overwrite)
 
     if [[ -f "${marker}" ]]; then
         printf '[%s] SKIP build_dag: completion marker exists\n' "$(timestamp)"
-        verify_snapshot "${DAG_MERGED}" ".bin"
+        verify_storage "${DAG_MERGED}" ".dag" ".dagmeta"
         return
     fi
 
-    mkdir -p "${DAG_MERGED}"
-    if [[ -s "${DAG_MERGED}/terrain.index" ]]; then
-        continuation=(--resume)
-    fi
-
+    prepare_checkpoint "${DAG_MERGED}"
     run_timed build_dag \
         "${DAG_BUILDER}" \
         --input "${SF_MERGED}" \
         --output "${DAG_MERGED}" \
-        "${continuation[@]}" \
+        "${CHECKPOINT_ARGUMENTS[@]}" \
         --verbosity info
 
-    verify_snapshot "${DAG_MERGED}" ".bin"
+    verify_storage "${DAG_MERGED}" ".dag" ".dagmeta"
+    discard_checkpoint "${DAG_MERGED}"
     touch "${marker}"
 }
 
 write_manifest()
 {
     local name="$1"
-    local snapshot="$2"
+    local storage="$2"
     local output="${RUN_LOG_ROOT}/${name}.sha256"
 
     (
-        cd "${snapshot}"
-        find . -type f ! -name terrain.index -print0 \
+        cd "${storage}"
+        find . -type f ! -name octree.storeindex ! -name octree.storemeta -print0 \
             | sort -z \
             | xargs -0 -r sha256sum
     ) > "${output}"
@@ -258,7 +289,7 @@ record_hard_links()
         fi
 
         ((newly_written += 1))
-    done < <(find "${SF_MERGED}" -type f -name '*.terrain' -print0)
+    done < <(find "${SF_MERGED}" -type f -name '*.sfmesh' -print0)
 
     printf 'merged_payloads=%s\nlinked_to_gataki=%s\nlinked_to_basemap=%s\nnewly_written=%s\n' \
         "${merged_count}" "${linked_to_gataki}" "${linked_to_basemap}" "${newly_written}" \

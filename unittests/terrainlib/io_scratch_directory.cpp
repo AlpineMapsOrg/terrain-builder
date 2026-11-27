@@ -2,13 +2,13 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <system_error>
 #include <utility>
 #include <vector>
 
 #include "../result_helpers.h"
 #include "../temp_directory.h"
 #include "error/prelude.h"
-#include "io/DirectoryNotEmpty.h"
 #include "io/FileError.h"
 #include "io/ScratchDirectory.h"
 #include "io/bytes.h"
@@ -18,7 +18,7 @@ namespace {
 
 // Writes a one-byte file at `path`.
 void write_dummy_file(const std::filesystem::path &path) {
-    REQUIRE_VALUE(io::write_bytes_to_path(std::vector<uint8_t>{1}, path));
+    REQUIRE_VALUE(io::bytes::write(std::vector<uint8_t>{1}, path));
 }
 
 } // namespace
@@ -53,9 +53,9 @@ TEST_CASE("Creating a scratch directory fails where one holds something, naming 
     const std::filesystem::path used = directory.path() / "used";
     write_dummy_file(used / "file");
 
-    const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(io::create_scratch_directory(used));
+    const alp::Error<io::FileError> error = REQUIRE_ERROR(io::create_scratch_directory(used));
 
-    CHECK(error.holds_code(io::DirectoryNotEmpty{used}));
+    CHECK(error.holds_code(std::errc::directory_not_empty));
     CHECK(REQUIRE_VALUE(io::filesystem::is_regular_file(used / "file")));
 }
 

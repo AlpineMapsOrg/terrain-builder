@@ -8,7 +8,7 @@
 #include "enumerate.h"
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "octree/Id.h"
 
 #include "dag_id.h"
@@ -25,27 +25,15 @@ namespace dag {
 namespace detail {
 
 // Lists the batches of `index`.
-inline std::vector<BatchId> collect_batches(const octree::IndexMap &index) {
-    std::vector<BatchId> result;
-    result.reserve(index.size());
-    for (const auto &[batch, status] : index) {
-        if (index.has_data(batch)) {
-            result.push_back(batch);
-        }
-    }
-    return result;
+inline std::vector<BatchId> collect_batches(const octree::storage::Index &index) {
+    return std::ranges::to<std::vector<BatchId>>(index.keys());
 }
 
 // Lists the batches on the lowest level of `index`.
-inline std::vector<BatchId> collect_root_batches(const octree::IndexMap &index) {
+inline std::vector<BatchId> collect_root_batches(const octree::storage::Index &index) {
     std::vector<BatchId> result;
     octree::Id::Level min_level = octree::Id::max_level();
-    for (const auto &[batch, status] : index) {
-        if (!index.has_data(batch)) {
-            // Virtual nodes have no batch.
-            continue;
-        }
-
+    for (const BatchId &batch : index.keys()) {
         if (batch.level() > min_level) {
             // Not on the lowest level so far.
             continue;
@@ -69,8 +57,8 @@ inline std::vector<BatchId> collect_root_batches(const octree::IndexMap &index) 
 // False if the visitor stopped the walk before its end.
 template <typename F>
 [[nodiscard]]
-alp::Result<bool, io::Error> visit_groups(F &&v, NodeMetadataCache &cache) {
-    visitor::FallibleVisitor<io::Error, F &> visitor(v);
+alp::Result<bool, ReadError, io::serde::Error> visit_groups(F &&v, NodeMetadataCache &cache) {
+    visitor::FallibleVisitor<alp::Error<ReadError, io::serde::Error>, F &> visitor(v);
 
     std::vector<BatchId> batches = detail::collect_batches(cache.storage().index());
     // Sorting by global index keeps groups that are close in space close in the walk.
@@ -92,8 +80,8 @@ alp::Result<bool, io::Error> visit_groups(F &&v, NodeMetadataCache &cache) {
 // False if the visitor stopped the walk before its end.
 template <typename F>
 [[nodiscard]]
-alp::Result<bool, io::Error> visit_root_clusters(F &&v, NodeMetadataCache &cache) {
-    visitor::FallibleVisitor<io::Error, F &> visitor(v);
+alp::Result<bool, ReadError, io::serde::Error> visit_root_clusters(F &&v, NodeMetadataCache &cache) {
+    visitor::FallibleVisitor<alp::Error<ReadError, io::serde::Error>, F &> visitor(v);
 
     std::vector<BatchId> batches = detail::collect_root_batches(cache.storage().index());
     // Sorting by global index keeps the order of the walk the same in every run.

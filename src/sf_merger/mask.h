@@ -1,31 +1,43 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
-#include <cmath>
 #include <filesystem>
-#include <map>
-#include <memory>
+#include <unordered_map>
 #include <vector>
 
-#include <gdal_priv.h>
-#include <glm/gtx/norm.hpp>
-
-#include "gdal/Dataset.h"
-#include "error/Error.h"
+#include "error/Context.h"
 #include "error/Result.h"
 #include "error/try.h"
-#include "error/unwrap.h"
-#include "error/utils.h"
-#include "gdal/CplError.h"
+#include "gis/CplError.h"
+#include "gis/Dataset.h"
+#include "gis/vector_mask.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
-#include "mesh/validate.h"
-#include "mesh/validate_cgal.h"
+#include "mesh/validate/debug_assert.h"
+#include "mesh/validate/cgal.h"
 #include "mesh/bounds.h"
-#include "srs/System.h"
-#include "srs/transform.h"
-#include "srs/transform_bounds.h"
-#include "srs/well_known.h"
+#include "gis/srs/System.h"
+#include "gis/srs/Transform.h"
+#include "gis/srs/well_known.h"
 #include "SphereProjector.h"
 
 #include <CGAL/Boolean_set_operations_2.h>
@@ -40,17 +52,13 @@
 #include <CGAL/Triangulation_face_base_with_info_2.h>
 #include <CGAL/mark_domain_in_triangulation.h>
 
-using Kernel = cgal::kernel::epeck::Kernel;
-using Point2 = Kernel::Point_2;
-using Polygon2 = CGAL::Polygon_2<Kernel>;
-using PolygonWithHoles2 = CGAL::Polygon_with_holes_2<Kernel>;
-using PolygonSet2 = CGAL::Polygon_set_2<Kernel>;
-using MultipolygonWithHoles2 = CGAL::Multipolygon_with_holes_2<Kernel>;
-
-struct ReferencedPolygonMask {
-    MultipolygonWithHoles2 polygons;
-    srs::System srs;
-};
+using gis::vector_mask::Kernel;
+using gis::vector_mask::Point2;
+using gis::vector_mask::Polygon2;
+using gis::vector_mask::PolygonWithHoles2;
+using gis::vector_mask::PolygonSet2;
+using gis::vector_mask::MultipolygonWithHoles2;
+using gis::vector_mask::ReferencedPolygonMask;
 
 struct SpherePolygonMask {
     MultipolygonWithHoles2 polygons;
@@ -98,174 +106,23 @@ namespace {
     }
 }
 
-// A dataset whose content cannot be turned into a mask.
-enum class MaskError {
-    NoPolygons,
-    SimplificationFailed,
-    UnsupportedSpatialReference
-};
+inline constexpr double simplification_tolerance_m = 0.1;
 
-inline std::string_view format_as(const MaskError error) {
-    switch (error) {
-    case MaskError::NoPolygons:
-        return "the dataset holds no valid polygons";
-    case MaskError::SimplificationFailed:
-        return "simplifying a polygon gives an empty or invalid geometry";
-    case MaskError::UnsupportedSpatialReference:
-        return "the spatial reference has no unit to measure the simplification tolerance in";
-    default:
-        return "an unknown mask error";
-    }
-}
-
-// An error from loading a mask.
-using LoadError = alp::Error<gdal::CplError, MaskError>;
-
-namespace {
-constexpr double simplification_tolerance_metres = 0.1;
-
-std::optional<double> simplification_tolerance(const srs::System &system) {
-    // Both horizontal axes have the unit of the first one.
-    const srs::Unit unit = system.axes().front().unit;
-    switch (system.kind()) {
-    case srs::Kind::Projected:
-        return simplification_tolerance_metres / unit.si_size;
-    case srs::Kind::Geographic:
-        return simplification_tolerance_metres / system.ellipsoid().semi_major_metres / unit.si_size;
-    case srs::Kind::Geocentric:
-        return std::nullopt;
-    }
-    UNREACHABLE();
-}
-
-uint64_t point_count(const OGRGeometry &geometry) {
-    const OGRwkbGeometryType geometry_type = wkbFlatten(geometry.getGeometryType());
-    if (geometry_type == wkbPolygon) {
-        const OGRPolygon *polygon = geometry.toPolygon();
-        uint64_t count = polygon->getExteriorRing()->getNumPoints();
-        for (int i = 0; i < polygon->getNumInteriorRings(); ++i) {
-            count += polygon->getInteriorRing(i)->getNumPoints();
-        }
-        return count;
-    }
-
-    if (geometry_type == wkbMultiPolygon || geometry_type == wkbGeometryCollection) {
-        const OGRGeometryCollection *collection = geometry.toGeometryCollection();
-        uint64_t count = 0;
-        for (int i = 0; i < collection->getNumGeometries(); ++i) {
-            count += point_count(*collection->getGeometryRef(i));
-        }
-        return count;
-    }
-
-    return 0;
-}
-
-std::unique_ptr<OGRGeometry> simplify_geometry(
-    const OGRGeometry &geometry,
-    const double tolerance
-) {
-    return std::unique_ptr<OGRGeometry>(geometry.SimplifyPreserveTopology(tolerance));
-}
-
-std::optional<Polygon2> convert_ring(const OGRLinearRing &ring, bool is_outer) {
-    uint32_t num_points = ring.getNumPoints();
-    if (ring.get_IsClosed()) {
-        num_points--;
-    }
-    if (num_points < 3) {
-        return std::nullopt;
-    }
-
-    Polygon2 polygon;
-    for (uint32_t i = 0; i < num_points; i++) {
-        polygon.push_back(Point2(ring.getX(i), ring.getY(i)));
-    }
-
-    if (!polygon.is_simple()) {
-        // Contains self intersections or duplicate points
-        LOG_WARN("Skipping non-simple polygon");
-        return std::nullopt;
-    }
-
-    if (is_outer != polygon.is_counterclockwise_oriented()) {
-        polygon.reverse_orientation();
-    }
-
-    return polygon;
-}
-
-std::optional<PolygonWithHoles2> convert_polygon(const OGRPolygon &ogr_polygon) {
-    const OGRLinearRing *outer_ring = ogr_polygon.getExteriorRing();
-    DEBUG_ASSERT(outer_ring);
-
-    ALP_TRY(const Polygon2 outer, convert_ring(*outer_ring, true));
-
-    PolygonWithHoles2 polygon(outer);
-    const uint32_t num_holes = static_cast<uint32_t>(ogr_polygon.getNumInteriorRings());
-    for (uint32_t i = 0; i < num_holes; i++) {
-        const OGRLinearRing *inner = ogr_polygon.getInteriorRing(i);
-        DEBUG_ASSERT(inner);
-        auto hole_opt = convert_ring(*inner, false);
-        if (!hole_opt) {
-            continue;
-        }
-        Polygon2 hole = std::move(hole_opt.value());
-        polygon.add_hole(std::move(hole));
-    }
-
-    return polygon;
-}
-
-void process_geometry(const OGRGeometry &geometry, MultipolygonWithHoles2 &out) {
-    const OGRwkbGeometryType geometry_type = wkbFlatten(geometry.getGeometryType()); // map 2.5d to 2d
-
-    switch (geometry_type) {
-    case wkbPolygon: {
-        const OGRPolygon *polygon = geometry.toPolygon();
-        DEBUG_ASSERT(polygon);
-        if (auto result = convert_polygon(*polygon)) {
-            out.add_polygon_with_holes(std::move(*result));
-        }
-        break;
-    }
-
-    case wkbMultiPolygon:
-    case wkbGeometryCollection: {
-        const OGRGeometryCollection *collection = geometry.toGeometryCollection();
-        DEBUG_ASSERT(collection);
-        const uint32_t num_children = collection->getNumGeometries();
-        for (uint32_t i = 0; i < num_children; i++) {
-            process_geometry(*collection->getGeometryRef(i), out);
-        }
-        break;
-    }
-
-    default:
-        LOG_WARN("Skipping unsupported geometry type: {}", OGRGeometryTypeToName(geometry_type));
-        break;
-    }
-}
-
-void convert_to_ecef_and_project_onto_sphere(MultipolygonWithHoles2 &polygons, const SphereProjector &projector, const srs::System &srs) {
-    const srs::Transform srs_transform = alp::unwrap(srs::get_transform(srs, srs::ecef()));
-    for (auto &polygon : polygons.polygons_with_holes()) {
-        for (auto &cgal_point : polygon.outer_boundary()) {
-            const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-            const glm::dvec3 ecef_point = alp::unwrap(srs_transform.apply(glm::dvec3(source_point, 0)));
-            const glm::dvec2 projected_point = projector.project_point(ecef_point);
-            cgal_point = convert::to_cgal_point<Kernel>(projected_point);
-        }
-        for (auto &hole : polygon.holes()) {
-            for (auto &cgal_point : hole) {
-                const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-                const glm::dvec3 ecef_point = alp::unwrap(srs_transform.apply(glm::dvec3(source_point, 0)));
-                const glm::dvec2 projected_point = projector.project_point(ecef_point);
-                cgal_point = convert::to_cgal_point<Kernel>(projected_point);
+namespace detail {
+    template <typename F>
+    void for_each_point(MultipolygonWithHoles2& polygons, F&& f)
+    {
+        for (auto& polygon : polygons.polygons_with_holes()) {
+            for (auto& cgal_point : polygon.outer_boundary()) {
+                f(cgal_point);
+            }
+            for (auto& hole : polygon.holes()) {
+                for (auto& cgal_point : hole) {
+                    f(cgal_point);
+                }
             }
         }
     }
-}
 
 /*
 glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
@@ -302,78 +159,37 @@ glm::dvec2 calculate_radius_range(const std::span<const SimpleMesh3d> meshes) {
     return glm::sqrt(calculate_radius_squared_range(meshes));
 }*/
 
-} // namespace
-
-namespace detail {
-
-[[nodiscard]]
-inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_dataset(gdal::Dataset& mask_dataset) {
-    GDALDataset *dataset = mask_dataset.as_gdal();
-
-    std::optional<srs::System> srs_opt;
-    // TODO: remove this try catch
-    try {
-        srs_opt = mask_dataset.srs();
-    } catch (std::runtime_error &e) {
-        LOG_WARN("Mask does not reference an srs, assuming WGS84");
-        srs_opt = srs::wgs84();
-        // srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT);
-    }
-    const srs::System srs = *std::move(srs_opt);
-
-    const std::optional<double> tolerance = simplification_tolerance(srs);
-    if (!tolerance) {
-        return alp::make_error(MaskError::UnsupportedSpatialReference);
-    }
-
-    MultipolygonWithHoles2 polygons;
-    for (auto &&feature_layer_pair : dataset->GetFeatures()) {
-        OGRGeometry *geometry = feature_layer_pair.feature->GetGeometryRef();
-        DEBUG_ASSERT(geometry);
-
-        const uint64_t original_point_count = point_count(*geometry);
-        std::unique_ptr<OGRGeometry> simplified = simplify_geometry(*geometry, *tolerance);
-        if (!simplified || simplified->IsEmpty() || !simplified->IsValid()) {
-            return alp::make_error(MaskError::SimplificationFailed);
-        }
-
-        LOG_DEBUG("Simplified mask with {} m tolerance from {} to {} points",
-            simplification_tolerance_metres, original_point_count, point_count(*simplified));
-        process_geometry(*simplified, polygons);
-    }
-
-    if (polygons.is_empty()) {
-        return alp::make_error(MaskError::NoPolygons);
-    }
-
-    return ReferencedPolygonMask{.polygons = std::move(polygons), .srs = std::move(srs)};
-}
-
 } // namespace detail
 
 [[nodiscard]]
-inline alp::Result<ReferencedPolygonMask, MaskError> load_referenced_from_dataset(gdal::Dataset& mask_dataset) {
-    ALP_TRY_CONTEXT(
-        ReferencedPolygonMask referenced_mask,
-        detail::load_referenced_from_dataset(mask_dataset),
-        fmt::format("reading a mask from {}", mask_dataset.name()));
-    return referenced_mask;
-}
-
-inline SpherePolygonMask project_onto_sphere(ReferencedPolygonMask ref_mask, const double radius) {
+inline alp::Result<SpherePolygonMask, gis::srs::TransformError> project_onto_sphere(ReferencedPolygonMask ref_mask, const double radius) {
     auto mask_2d = std::move(ref_mask.polygons);
     auto srs = std::move(ref_mask.srs);
 
-    // Translate to ecef and project onto sphere
-    const auto source_bounds_cgal = mask_2d.bbox();
-    const radix::geometry::Aabb3d source_bounds(
-        glm::dvec3(source_bounds_cgal.xmin(), source_bounds_cgal.ymin(), 0),
-        glm::dvec3(source_bounds_cgal.xmax(), source_bounds_cgal.ymax(), 0));
-    const radix::geometry::Aabb3d ecef_bounds = alp::unwrap(srs::non_exact_bounds_transform(source_bounds, srs, srs::ecef()));
-    const glm::dvec3 bounds_center = ecef_bounds.centre();
-    const glm::dvec3 tangent_point = scale_to_length(bounds_center, radius);
+    // Translate to ecef
+    std::vector<glm::dvec3> ecef_points;
+    detail::for_each_point(mask_2d, [&](const Point2& cgal_point) {
+        const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
+        ecef_points.emplace_back(source_point, 0);
+    });
+
+    ALP_TRY(const gis::srs::Transform srs_transform, gis::srs::get_transform(srs, gis::srs::ecef()));
+    ALP_TRY(srs_transform.apply_inplace(&ecef_points));
+
+    // Unlike the bounds in the source srs, the bounds of the points stay on the mask's side of the
+    // earth for masks split at the antimeridian.
+    const radix::geometry::Aabb3d ecef_bounds = calculate_bounds(ecef_points);
+    const glm::dvec3 tangent_point = scale_to_length(ecef_bounds.centre(), radius);
     const SphereProjector projector(tangent_point);
-    convert_to_ecef_and_project_onto_sphere(mask_2d, projector, srs);
+
+    // Project onto sphere
+    auto ecef_point_it = ecef_points.begin();
+    detail::for_each_point(mask_2d, [&](Point2& cgal_point) {
+        const glm::dvec2 projected_point = projector.project_point(*ecef_point_it);
+        cgal_point = convert::to_cgal_point<Kernel>(projected_point);
+        ecef_point_it++;
+    });
+
     return SpherePolygonMask(mask_2d, projector);
 }
 
@@ -532,21 +348,24 @@ inline MeshMask extrude(
     return extrude(mask, padded_radius_range);
 }
 
+using LoadReferencedError = alp::Error<gis::CplError, gis::vector_mask::LoadMaskError, gis::vector_mask::SimplifyMaskError>;
+using LoadError = alp::Error<LoadReferencedError, gis::srs::TransformError>;
+
 [[nodiscard]]
-inline alp::Result<ReferencedPolygonMask, LoadError> load_referenced_from_path(const std::filesystem::path &path) {
-    const auto context = alp::make_context("loading a mask from {}", path);
-    ALP_TRY_CONTEXT(gdal::Dataset dataset, gdal::Dataset::open_vector(path), context);
-    ALP_TRY_CONTEXT(ReferencedPolygonMask referenced_mask, detail::load_referenced_from_dataset(dataset), context);
-    return referenced_mask;
+inline alp::Result<ReferencedPolygonMask, LoadReferencedError> load_referenced_from_path(const std::filesystem::path &path) {
+    const auto context = alp::make_context("loading mask from {}", path);
+    ALP_TRY_CONTEXT(gis::Dataset dataset, gis::Dataset::open_vector(path), context);
+    ALP_TRY_CONTEXT(const ReferencedPolygonMask referenced_mask, gis::vector_mask::load(dataset), context);
+    ALP_TRY_CONTEXT(ReferencedPolygonMask simplified_mask, gis::vector_mask::simplify(referenced_mask, simplification_tolerance_m), context);
+    return simplified_mask;
 }
 
 [[nodiscard]]
 inline alp::Result<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
     ALP_TRY(ReferencedPolygonMask ref_polygon_mask, load_referenced_from_path(path));
-    SpherePolygonMask sphere_polygon_mask = project_onto_sphere(std::move(ref_polygon_mask), radius_range.x);
+    ALP_TRY_CONTEXT(SpherePolygonMask sphere_polygon_mask, project_onto_sphere(std::move(ref_polygon_mask), radius_range.x), alp::make_context("projecting mask from {} onto the sphere", path));
     SphereMeshMask sphere_mesh_mask = triangulate(sphere_polygon_mask);
     MeshMask mesh_mask = extrude(sphere_mesh_mask, radius_range);
-
     return mesh_mask;
 }
 
@@ -564,7 +383,7 @@ inline SpherePolygonMask compute_mesh_shadow(const SimpleMesh3d &mesh, const glm
     SimpleMesh2d projected_mesh;
     projected_mesh.positions = projected_vertices;
     projected_mesh.triangles = mesh.triangles;
-    mesh::validate(projected_mesh);
+    mesh::debug_assert_valid(projected_mesh);
 
     // Then get the outer boundary (i.e. the mask) of this 2D mesh.
     // PolygonSet2 triangles;

@@ -10,9 +10,8 @@
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
-#include "io/DirectoryNotEmpty.h"
-#include "io/Error.h"
-#include "log.h"
+#include "io/serde.h"
+#include "cli_support/log.h"
 
 #include "bvh/Storage.h"
 #include "bvh/Batch.h"
@@ -29,7 +28,7 @@ namespace gated_ploc {
 // Saves the index of `output`.
 // The run must be non-empty and in morton order. It is removed once it has been read.
 [[nodiscard]]
-inline alp::Result<bvh::Reference, io::Error, io::DirectoryNotEmpty> build(
+inline alp::Result<bvh::Reference, io::serde::Error> build(
     frontier::Storage input, bvh::Storage &output,
     const std::filesystem::path &scratch_root, const Options &options) {
     ASSERT(input.size() > 0, "the frontier is empty");

@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 #include "error/Result.h"
 #include "error/try.h"
@@ -29,7 +29,7 @@ namespace detail {
 // Writes the parent of both entries and returns it, at the code `compute_morton` gives it.
 template <typename F>
 [[nodiscard]]
-inline alp::Result<Entry, io::Error> merge_entries(bvh::BatchWriter &sink, F &&compute_morton, const Entry &left, const Entry &right) {
+inline alp::Result<Entry, io::serde::Error> merge_entries(bvh::BatchWriter &sink, F &&compute_morton, const Entry &left, const Entry &right) {
     const std::array children{left, right};
     auto child_headers = std::views::transform(children, &Entry::header);
     auto child_refs = std::views::transform(children, &Entry::ref);
@@ -47,13 +47,13 @@ inline alp::Result<Entry, io::Error> merge_entries(bvh::BatchWriter &sink, F &&c
 
 // Writes the parent of both entries and returns it, at `morton`.
 [[nodiscard]]
-inline alp::Result<Entry, io::Error> merge_entries(bvh::BatchWriter &sink, const morton::Code morton, const Entry &left, const Entry &right) {
+inline alp::Result<Entry, io::serde::Error> merge_entries(bvh::BatchWriter &sink, const morton::Code morton, const Entry &left, const Entry &right) {
     return detail::merge_entries(sink, [morton](const bvh::NodeHeader &) { return morton; }, left, right);
 }
 
 // Writes the parent of both entries and returns it, at the code of its own bounds.
 [[nodiscard]]
-inline alp::Result<Entry, io::Error> merge_entries(bvh::BatchWriter &sink, const bvh::Bounds &scene, const Entry &left, const Entry &right) {
+inline alp::Result<Entry, io::serde::Error> merge_entries(bvh::BatchWriter &sink, const bvh::Bounds &scene, const Entry &left, const Entry &right) {
     return detail::merge_entries(sink, [&scene](const bvh::NodeHeader &h) { return morton::encode(scene, h); }, left, right);
 }
 

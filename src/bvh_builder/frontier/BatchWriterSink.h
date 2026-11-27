@@ -1,7 +1,7 @@
 #pragma once
 
 #include "error/Result.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "frontier/BatchWriter.h"
 #include "frontier/layout.h"
@@ -14,12 +14,12 @@ public:
     explicit BatchWriterSink(BatchWriter &writer) : _writer(writer) {}
 
     [[nodiscard]]
-    alp::Result<void, io::Error> push(const Entry &entry) {
+    alp::Result<void, io::serde::Error> push(const Entry &entry) {
         return this->_writer.write(entry);
     }
 
     [[nodiscard]]
-    alp::Result<void, io::Error> finish() && {
+    alp::Result<void, io::serde::Error> finish() && {
         return this->_writer.flush();
     }
 

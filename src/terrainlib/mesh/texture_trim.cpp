@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -8,7 +26,8 @@
 #include <radix/geometry.h>
 #include <libassert/assert.hpp>
 
-#include "log.h"
+#include "cli_support/log.h"
+#include "geometry/bounds.h"
 #include "mesh/texture_trim.h"
 #include "range_utils.h"
 
@@ -30,10 +49,6 @@ void trim_texture_inplace(cv::Mat &texture, const std::span<glm::dvec2> uvs, con
 namespace detail {
 inline TextureTrim identity_trim(const cv::Mat& texture) {
     return TextureTrim{.texture = texture, .uv_remap = UvRemap::identity()};
-}
-
-bool is_empty(const radix::geometry::Aabb2i &bounds) {
-    return bounds.min.x >= bounds.max.x || bounds.min.y >= bounds.max.y;
 }
 }
 
@@ -64,7 +79,7 @@ TextureTrim compute_texture_trim(const cv::Mat &texture, const radix::geometry::
     const radix::geometry::Aabb2i clamped_pixel_bounds(radix::geometry::intersection(padded_pixel_bounds, full_bounds));
 
     // Return identity trim if uv bounds are empty or full texture
-    if (detail::is_empty(clamped_pixel_bounds) || clamped_pixel_bounds == full_bounds) {
+    if (geometry::is_empty(clamped_pixel_bounds) || clamped_pixel_bounds == full_bounds) {
         return detail::identity_trim(texture);
     }
 

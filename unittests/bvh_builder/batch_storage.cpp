@@ -3,11 +3,11 @@
 #include "../temp_directory.h"
 
 #include <filesystem>
+#include <system_error>
 #include <utility>
 
 #include "error/Error.h"
-#include "io/DirectoryNotEmpty.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "io/FileError.h"
 
 #include "frontier/Storage.h"
@@ -38,9 +38,9 @@ TEST_CASE("BatchStorage::create fails in a directory that holds a storage, namin
         REQUIRE_VALUE(earlier.save_index());
     }
 
-    const alp::Error<io::FileError, io::DirectoryNotEmpty> error = REQUIRE_ERROR(frontier::Storage::create(path));
+    const alp::Error<io::FileError> error = REQUIRE_ERROR(frontier::Storage::create(path));
 
-    CHECK(error.holds_code(io::DirectoryNotEmpty{path}));
+    CHECK(error.holds_code(std::errc::directory_not_empty));
 }
 
 TEST_CASE("BatchStorage::open gives back the batches a saved storage wrote", "[storage][BatchStorage]") {
@@ -72,7 +72,7 @@ TEST_CASE("BatchStorage::open fails in a directory without an index", "[storage]
         std::filesystem::create_directories(path);
     }
 
-    const io::Error error = REQUIRE_ERROR(frontier::Storage::open(path));
+    const io::serde::Error error = REQUIRE_ERROR(frontier::Storage::open(path));
 
     CHECK(error.holds_and<io::FileError>(&io::FileError::is_not_found));
 }

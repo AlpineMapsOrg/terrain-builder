@@ -1,9 +1,28 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
+#include "hierarchy/NodeStatusOrMissing.h"
 #include "merge/NodeData.h"
 #include "merge/Result.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
 
 namespace merge {
 template <typename T>
@@ -15,10 +34,10 @@ concept Visitor = requires(T t, const octree::Id &id) {
     { t.make_root_context() } -> std::same_as<typename T::Context>;
 
     {
-        t.template visit<octree::NodeStatusOrMissing::Leaf, octree::NodeStatusOrMissing::Leaf>(
+        t.template visit<hierarchy::NodeStatusOrMissing::Leaf, hierarchy::NodeStatusOrMissing::Leaf>(
             id,
-            std::declval<const NodeData<octree::NodeStatusOrMissing::Leaf> &>(),
-            std::declval<const NodeData<octree::NodeStatusOrMissing::Leaf> &>(),
+            std::declval<const NodeData<hierarchy::NodeStatusOrMissing::Leaf> &>(),
+            std::declval<const NodeData<hierarchy::NodeStatusOrMissing::Leaf> &>(),
             std::declval<const typename T::Context &>())
     } -> std::same_as<Result<typename T::Context>>;
 };

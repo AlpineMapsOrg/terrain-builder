@@ -7,7 +7,7 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "bvh/NodeCache.h"
 #include "bvh/NodeHeader.h"
@@ -40,7 +40,7 @@ struct GroupSelection {
 // Skips every subtree that cannot hold any of them.
 // Fails if a batch cannot be read.
 [[nodiscard]]
-inline alp::Result<GroupSelection, io::Error> select_groups(bvh::NodeCache &nodes, const bvh::Reference &root, const Camera &camera, const CutRule &rule) {
+inline alp::Result<GroupSelection, io::serde::Error> select_groups(bvh::NodeCache &nodes, const bvh::Reference &root, const Camera &camera, const CutRule &rule) {
     const CutView view(camera, rule);
 
     GroupSelection selection{};
@@ -66,7 +66,7 @@ inline alp::Result<GroupSelection, io::Error> select_groups(bvh::NodeCache &node
 // Selects the clusters of `groups` on the cut for `camera` under `rule`, sorted.
 // Fails if the metadata of a batch cannot be read.
 [[nodiscard]]
-inline alp::Result<std::vector<dag::ClusterId>, io::Error> select_clusters(std::span<const dag::SourceId> groups, dag::NodeMetadataCache &cache, const Camera &camera, const CutRule &rule) {
+inline alp::Result<std::vector<dag::ClusterId>, dag::ReadError> select_clusters(std::span<const dag::SourceId> groups, dag::NodeMetadataCache &cache, const Camera &camera, const CutRule &rule) {
     const CutView view(camera, rule);
 
     std::vector<dag::ClusterId> result;

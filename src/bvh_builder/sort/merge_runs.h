@@ -11,7 +11,7 @@
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "frontier/BatchReader.h"
 #include "frontier/BatchWriter.h"
@@ -32,7 +32,7 @@ struct Head {
 
 // Puts the next entry of run `run` on `heads`. Does nothing once `reader` is exhausted.
 [[nodiscard]]
-inline alp::Result<void, io::Error> push_next_head(frontier::BatchReader &reader, const uint32_t run, MinHeap<Head> &heads) {
+inline alp::Result<void, io::serde::Error> push_next_head(frontier::BatchReader &reader, const uint32_t run, MinHeap<Head> &heads) {
     ALP_TRY(const auto entry_opt, reader.next());
     if (entry_opt.has_value()) {
         heads.push(Head{.entry = *entry_opt, .run = run});
@@ -44,10 +44,10 @@ inline alp::Result<void, io::Error> push_next_head(frontier::BatchReader &reader
 
 // Writes the entries of the sorted `runs` to `output` in Morton order and saves its index.
 [[nodiscard]]
-inline alp::Result<void, io::Error> merge_runs(const std::span<const frontier::Storage> runs, frontier::Storage &output, const size_t max_batch_bytes) {
+inline alp::Result<void, io::serde::Error> merge_runs(const std::span<const frontier::Storage> runs, frontier::Storage &output, const size_t max_batch_bytes) {
     return alp::run_with_context(
         alp::make_context("merging {} runs into {}", runs.size(), output.directory()),
-        [&] -> alp::Result<void, io::Error> {
+        [&] -> alp::Result<void, io::serde::Error> {
             std::vector<frontier::BatchReader> readers;
             readers.reserve(runs.size());
             for (const frontier::Storage &run : runs) {

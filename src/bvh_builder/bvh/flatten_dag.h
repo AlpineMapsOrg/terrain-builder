@@ -9,7 +9,7 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 
 #include "../../dag_builder/storage.h"
@@ -35,7 +35,7 @@ namespace detail {
 
 // Makes the leaf standing for `group`.
 [[nodiscard]]
-inline alp::Result<LeafInput, io::Error> make_group_leaf(const dag::Group &group, dag::NodeMetadataCache &cache) {
+inline alp::Result<LeafInput, dag::ReadError> make_group_leaf(const dag::Group &group, dag::NodeMetadataCache &cache) {
     ALP_TRY(const std::vector<dag::Cluster> clusters, dag::read_clusters(group, cache));
     DEBUG_ASSERT(!clusters.empty());
 
@@ -69,17 +69,17 @@ inline LeafInput make_cluster_leaf(const dag::Cluster &cluster) {
 
 // Writes the leaves of a bvh over `dag` into `output`.
 [[nodiscard]]
-inline alp::Result<void, io::Error> flatten_dag(const octree::IndexedDagMetaStorage &dag, Storage &output, const FlattenOptions &options = {}) {
+inline alp::Result<void, dag::ReadError, io::serde::Error> flatten_dag(const dag::storage::MetadataStorage &dag, Storage &output, const FlattenOptions &options = {}) {
     BatchWriter writer(output, options.max_batch_bytes);
     dag::NodeMetadataCache cache(dag, options.max_resident_bytes);
 
-    ALP_TRY(dag::visit_groups([&](const dag::Group &group) -> alp::Result<void, io::Error> {
+    ALP_TRY(dag::visit_groups([&](const dag::Group &group) -> alp::Result<void, dag::ReadError, io::serde::Error> {
         ALP_TRY(const LeafInput leaf, detail::make_group_leaf(group, cache));
         ALP_TRY(writer.write_node(leaf));
         return {};
     }, cache));
 
-    ALP_TRY(dag::visit_root_clusters([&](const dag::Cluster &cluster) -> alp::Result<void, io::Error> {
+    ALP_TRY(dag::visit_root_clusters([&](const dag::Cluster &cluster) -> alp::Result<void, dag::ReadError, io::serde::Error> {
         ALP_TRY(writer.write_node(detail::make_cluster_leaf(cluster)));
         return {};
     }, cache));

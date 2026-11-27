@@ -11,7 +11,7 @@
 #include "containers/PaddedSpan.h"
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 
 #include "bvh/BatchWriter.h"
@@ -29,7 +29,7 @@ namespace detail {
 // Each parent takes its left member's code, so the entries leave in the order of `chunk`.
 // `chunk` must carry a halo on each side, except at the ends of the stream.
 [[nodiscard]]
-inline alp::Result<uint64_t, io::Error> merge_chunk(
+inline alp::Result<uint64_t, io::serde::Error> merge_chunk(
     ploc::NearestSearch &search,
     bvh::BatchWriter &sink,
     const PaddedSpan<const frontier::Entry> chunk,
@@ -73,14 +73,14 @@ public:
 
     // Takes the next entries, merging every chunk they complete.
     [[nodiscard]]
-    alp::Result<void, io::Error> push(const std::span<const frontier::Entry> entries) {
+    alp::Result<void, io::serde::Error> push(const std::span<const frontier::Entry> entries) {
         this->_pending.append_range(entries);
         return this->merge_pending(false);
     }
 
     // Merges the entries left at the end of the stream, then ends the output's stream.
     [[nodiscard]]
-    alp::Result<void, io::Error> finish() && {
+    alp::Result<void, io::serde::Error> finish() && {
         ALP_TRY(this->merge_pending(true));
         return std::move(this->_output).finish();
     }
@@ -88,7 +88,7 @@ public:
 private:
     // Merges the pending entries that have their halo, or all of them at the end of the stream, keeping the halo of the next chunk.
     [[nodiscard]]
-    alp::Result<void, io::Error> merge_pending(const bool is_last) {
+    alp::Result<void, io::serde::Error> merge_pending(const bool is_last) {
         const size_t halo = ploc::halo(this->_search.search_radius());
         const size_t right_padding = is_last ? 0 : halo;
         const size_t min_size = is_last ? 1 : this->_min_chunk_size;

@@ -10,7 +10,7 @@
 #include <libassert/assert.hpp>
 
 #include "array_utils.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -59,7 +59,7 @@ inline Decision compute_decision(const std::span<const Split> row, const uint8_t
 
 // Writes the wide nodes standing for the subtree at `reference` when it is offered `slots`, appending one reference per child it contributes to `children`.
 [[nodiscard]]
-inline alp::Result<void, io::Error> write_subtree(
+inline alp::Result<void, io::serde::Error> write_subtree(
     bvh::NodeCache &input, const bvh::Reference &reference, const uint8_t slots,
     SplitReader &rows, bvh::BatchWriter &writer, const Options &options,
     std::vector<bvh::Reference> &children) {
@@ -72,12 +72,12 @@ inline alp::Result<void, io::Error> write_subtree(
     return batch.visit(
         node,
         // A leaf is carried over as it is, filling the one slot it was offered.
-        [&](const dag::SourceId &source) -> alp::Result<void, io::Error> {
+        [&](const dag::SourceId &source) -> alp::Result<void, io::serde::Error> {
             ALP_TRY(const bvh::Reference leaf, writer.write_node(bvh::LeafInput{node.header(), source}));
             children.push_back(leaf);
             return {};
         },
-        [&](const std::span<const bvh::Reference> node_children) -> alp::Result<void, io::Error> {
+        [&](const std::span<const bvh::Reference> node_children) -> alp::Result<void, io::serde::Error> {
             const auto [left, right] = to_array<2>(node_children);
 
             ALP_TRY(const std::span<const Split> row, rows.pop_row());
@@ -105,14 +105,14 @@ inline alp::Result<void, io::Error> write_subtree(
 
 // Writes the widened tree that `splits` describes for the tree at `root` into `output`, and returns its root.
 [[nodiscard]]
-inline alp::Result<bvh::Reference, io::Error> write_wide_nodes(
+inline alp::Result<bvh::Reference, io::serde::Error> write_wide_nodes(
     const SplitStorage &splits, bvh::NodeCache &input, const bvh::Reference &root,
     bvh::Storage &output, const Options &options) {
     ASSERT(options.arity >= 2 && options.arity <= MAX_ARITY, "the arity does not fit a slot count");
 
     return alp::run_with_context(
         alp::make_context("writing wide nodes to {}", output.directory()),
-        [&] -> alp::Result<bvh::Reference, io::Error> {
+        [&] -> alp::Result<bvh::Reference, io::serde::Error> {
             bvh::BatchWriter writer(output, options.max_batch_bytes);
             SplitReader rows(splits);
 

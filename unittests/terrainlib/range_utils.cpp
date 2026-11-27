@@ -1,7 +1,26 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include "../catch2_helpers.h"
 #include "range_utils.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 TEST_CASE("contains: found and not found") {
@@ -101,6 +120,26 @@ TEST_CASE("find_single_index: two occurrences returns nullopt") {
     std::vector<int> v = {10, 20, 10, 30};
 
     CHECK(find_single_index(v, 10) == std::nullopt);
+}
+
+TEST_CASE("starts_with: a matching prefix") {
+    const std::vector<int> v = {1, 2, 3};
+
+    CHECK(starts_with(v, std::vector<int>{1, 2}));
+    CHECK(starts_with(v, std::vector<int>{}));
+}
+
+TEST_CASE("starts_with: a differing or longer prefix") {
+    const std::vector<int> v = {1, 2, 3};
+
+    CHECK_FALSE(starts_with(v, std::vector<int>{1, 3}));
+    CHECK_FALSE(starts_with(v, std::vector<int>{1, 2, 3, 4}));
+}
+
+TEST_CASE("starts_with: compares projected elements") {
+    const std::vector<std::pair<int, char>> v = {{1, 'a'}, {2, 'b'}, {3, 'c'}};
+
+    CHECK(starts_with(v, std::vector<int>{1, 2}, std::ranges::equal_to{}, &std::pair<int, char>::first));
 }
 
 TEST_CASE("transform_vector: transform ints to strings") {

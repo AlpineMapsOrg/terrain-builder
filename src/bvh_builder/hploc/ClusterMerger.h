@@ -8,7 +8,7 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 
 #include "bvh/BatchWriter.h"
@@ -31,7 +31,7 @@ public:
     // Merges the nearest pairs of `clusters` until at most `limit` are left, which must be at least 1.
     // Returns how many are left. They sit at the front of `clusters` in their original order.
     [[nodiscard]]
-    alp::Result<size_t, io::Error> merge_down_to(std::span<frontier::Entry> clusters, const size_t limit) {
+    alp::Result<size_t, io::serde::Error> merge_down_to(std::span<frontier::Entry> clusters, const size_t limit) {
         DEBUG_ASSERT(limit >= 1);
 
         while (clusters.size() > limit) {
@@ -45,7 +45,7 @@ public:
 private:
     // Merges every pair of `clusters` that are each other's nearest and returns how many are left at its front.
     [[nodiscard]]
-    alp::Result<size_t, io::Error> merge_round(const std::span<frontier::Entry> clusters) {
+    alp::Result<size_t, io::serde::Error> merge_round(const std::span<frontier::Entry> clusters) {
         const std::span<const ploc::Nearest> nearest = this->_search.find_nearest(clusters);
 
         // The clusters left are compacted to the front in place.

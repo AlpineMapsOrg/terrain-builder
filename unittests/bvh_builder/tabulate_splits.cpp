@@ -12,7 +12,7 @@
 
 #include <glm/glm.hpp>
 
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 
 #include "bvh/BatchWriter.h"
@@ -179,6 +179,6 @@ TEST_CASE("tabulate_splits fails when a batch cannot be read", "[widen][tabulate
 
     widen::SplitStorage splits = REQUIRE_VALUE(widen::SplitStorage::create(directory.path() / "splits"));
     bvh::NodeCache cache(nodes, 1);
-    const io::Error error = REQUIRE_ERROR(widen::tabulate_splits(cache, root, splits, widen::Options{.arity = 4}));
+    const io::serde::Error error = REQUIRE_ERROR(widen::tabulate_splits(cache, root, splits, widen::Options{.arity = 4}));
     CHECK(error.holds_and<io::FileError>(&io::FileError::is_not_found));
 }

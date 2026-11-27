@@ -5,7 +5,7 @@
 #include <utility>
 
 #include "Range.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "frontier/layout.h"
 #include "frontier/Storage.h"
 #include "error/Result.h"
@@ -17,8 +17,8 @@ namespace frontier {
 // Streams the run's batches one at a time. Reports whether it reached the end.
 template <typename F>
 [[nodiscard]]
-alp::Result<bool, io::Error> traverse_batches(const Storage &run, F &&f, const AnyRange<uint32_t> batches = RangeFull{}) {
-    visitor::FallibleVisitor<io::Error, F &> visitor(f);
+alp::Result<bool, io::serde::Error> traverse_batches(const Storage &run, F &&f, const AnyRange<uint32_t> batches = RangeFull{}) {
+    visitor::FallibleVisitor<io::serde::Error, F &> visitor(f);
 
     const Range<uint32_t> range = batches.to_range(run.size());
 
@@ -37,10 +37,10 @@ alp::Result<bool, io::Error> traverse_batches(const Storage &run, F &&f, const A
 // Reports whether it reached the end.
 template <typename F>
 [[nodiscard]]
-alp::Result<bool, io::Error> traverse_entries(const Storage &run, F &&f, const AnyRange<uint32_t> batches = RangeFull{}) {
-    visitor::FallibleVisitor<io::Error, F &> visitor(f);
+alp::Result<bool, io::serde::Error> traverse_entries(const Storage &run, F &&f, const AnyRange<uint32_t> batches = RangeFull{}) {
+    visitor::FallibleVisitor<io::serde::Error, F &> visitor(f);
 
-    return traverse_batches(run, [&](const Batch &batch) -> alp::Result<bool, io::Error> {
+    return traverse_batches(run, [&](const Batch &batch) -> alp::Result<bool, io::serde::Error> {
         for (const Entry &entry : batch.entries) {
             ALP_TRY(const bool keep_going, visitor(entry));
             if (!keep_going) {

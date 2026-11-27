@@ -12,7 +12,7 @@
 #include <fmt/format.h>
 #include <libassert/assert.hpp>
 
-#include "io/Error.h"
+#include "io/serde.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -68,7 +68,7 @@ inline size_t find_split(const std::span<const frontier::Entry> entries) {
 // Writes the subtree over `entries` and returns its root, which carries the code of the first entry.
 // `entries` must be non-empty and in morton order.
 [[nodiscard]]
-inline alp::Result<frontier::Entry, io::Error> build_subtree(
+inline alp::Result<frontier::Entry, io::serde::Error> build_subtree(
     const std::span<const frontier::Entry> entries, bvh::BatchWriter &sink) {
     ASSERT(!entries.empty());
 
@@ -87,14 +87,14 @@ inline alp::Result<frontier::Entry, io::Error> build_subtree(
 // Writes a subtree over each batch of the run and one over their roots through `sink`, and returns the root.
 // The run must be non-empty and in morton order.
 [[nodiscard]]
-inline alp::Result<frontier::Entry, io::Error> build(
+inline alp::Result<frontier::Entry, io::serde::Error> build(
     const frontier::Storage &input, bvh::BatchWriter &sink) {
     ASSERT(input.size() > 0);
 
     std::vector<frontier::Entry> batch_roots;
     batch_roots.reserve(input.size());
 
-    ALP_TRY(frontier::traverse_batches(input, [&](const frontier::Batch &batch) -> alp::Result<void, io::Error> {
+    ALP_TRY(frontier::traverse_batches(input, [&](const frontier::Batch &batch) -> alp::Result<void, io::serde::Error> {
         ALP_TRY(const frontier::Entry root, detail::build_subtree(batch.entries, sink));
         batch_roots.push_back(root);
         return {};
@@ -107,11 +107,11 @@ inline alp::Result<frontier::Entry, io::Error> build(
 // Saves the index of `output`.
 // The run must be non-empty and in morton order.
 [[nodiscard]]
-inline alp::Result<bvh::Reference, io::Error> build(
+inline alp::Result<bvh::Reference, io::serde::Error> build(
     const frontier::Storage &input, bvh::Storage &output, const Options &options) {
     return alp::run_with_context(
         alp::make_context("building a tree from {} to {}", input.directory(), output.directory()),
-        [&] -> alp::Result<bvh::Reference, io::Error> {
+        [&] -> alp::Result<bvh::Reference, io::serde::Error> {
             bvh::BatchWriter sink(output, options.max_batch_bytes);
 
             ALP_TRY(const frontier::Entry root, build(input, sink));

@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <concepts>
@@ -115,8 +133,12 @@ TEST_CASE("invoke_fallible without codes keeps the callable's error", "[error][R
     const auto parse = [](const int) -> alp::Result<int, ParseError> {
         return 7;
     };
+    const auto parse_any = [](const int) -> alp::ErasedResult<int> {
+        return 7;
+    };
 
     STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible(ignore, 3)), alp::Result<void, alp::Infallible>>);
     STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible(add, 3, 4)), alp::Result<int, alp::Infallible>>);
     STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible(parse, 3)), alp::Result<int, ParseError>>);
+    STATIC_REQUIRE(std::same_as<decltype(alp::invoke_fallible(parse_any, 3)), alp::ErasedResult<int>>);
 }

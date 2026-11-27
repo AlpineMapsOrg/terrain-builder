@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <expected>
 
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "containers/UniqueResource.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "storage/batch_limits.h"
 #include "error/Result.h"
 #include "error/format.h"
@@ -25,7 +25,7 @@ struct PendingBatch {
         void operator()(PendingBatch &pending) const noexcept {
             LOG_WARN("Batch was not written upon writer destruction, use flush().");
 
-            LOG_UNEXPECTED_OF(pending.output->write(pending.batch), "closing a batch writer for {}", pending.output->directory());
+            LOG_IF_ERROR(pending.output->write(pending.batch), "closing a batch writer for {}", pending.output->directory());
         }
     };
 
@@ -53,7 +53,7 @@ public:
 
     // Writes the current batch to disk.
     [[nodiscard]]
-    alp::Result<void, io::Error> flush() {
+    alp::Result<void, io::serde::Error> flush() {
         if (this->_current.is_empty()) {
             return {};
         }
@@ -85,7 +85,7 @@ protected:
 
     // Writes the batch being filled if it has grown past the maximum.
     [[nodiscard]]
-    alp::Result<void, io::Error> flush_if_full() {
+    alp::Result<void, io::serde::Error> flush_if_full() {
         if (this->compute_buffered_bytes() < this->_max_batch_bytes) {
             return {};
         }

@@ -12,12 +12,10 @@
 #include "error/format.h"
 #include "error/log.h"
 #include "error/try.h"
-#include "io/DirectoryNotEmpty.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "io/FileError.h"
 #include "io/filesystem.h"
-#include "io/serialize.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 class BaseStorage {
 public:
@@ -26,9 +24,9 @@ public:
     };
 
     // Starts an empty storage in `directory`, which may be missing.
-    // Fails with `DirectoryNotEmpty` when `directory` already holds something.
+    // Fails when `directory` already holds something.
     [[nodiscard]]
-    static alp::Result<BaseStorage, io::FileError, io::DirectoryNotEmpty> create(std::filesystem::path directory) {
+    static alp::Result<BaseStorage, io::FileError> create(std::filesystem::path directory) {
         ALP_TRY(io::filesystem::create_empty_directory(directory));
         return BaseStorage(std::move(directory));
     }
@@ -36,9 +34,9 @@ public:
     // Opens the storage kept in `directory`.
     // Fails when it holds no index.
     [[nodiscard]]
-    static alp::Result<BaseStorage, io::Error> open(std::filesystem::path directory) {
+    static alp::Result<BaseStorage, io::serde::Error> open(std::filesystem::path directory) {
         BaseStorage storage(std::move(directory));
-        ALP_TRY_CONTEXT(const Index index, io::read_from_path<Index>(storage.get_index_path()), fmt::format("opening a storage at {}", storage._directory));
+        ALP_TRY_CONTEXT(const Index index, io::serde::read<Index>(storage.get_index_path()), fmt::format("opening a storage at {}", storage._directory));
         storage._next.store(index.batch_count);
         return storage;
     }
@@ -65,16 +63,16 @@ public:
 
         LOG_WARN("Index was not saved upon storage destruction, use save_index().");
 
-        LOG_UNEXPECTED_OF(this->save_index(), "closing a storage at {}", this->_directory);
+        LOG_IF_ERROR(this->save_index(), "closing a storage at {}", this->_directory);
     }
 
     [[nodiscard]]
-    alp::Result<void, io::Error> save_index() const {
+    alp::Result<void, io::serde::Error> save_index() const {
         const Index index{
             .batch_count = this->_next.load(),
         };
 
-        ALP_TRY_CONTEXT(io::write_to_path(index, this->get_index_path()), fmt::format("saving an index to {}", this->get_index_path()));
+        ALP_TRY_CONTEXT(io::serde::write(index, this->get_index_path(), io::serde::WriteOptions{.mode = io::WriteMode::Replace}), fmt::format("saving an index to {}", this->get_index_path()));
         this->_dirty = false;
         return {};
     }

@@ -1,9 +1,27 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <spdlog/spdlog.h>
 
 #include "containers/UniqueResource.h"
-#include "log.h"
+#include "cli_support/log.h"
 
 class LogScope {
 private:
@@ -19,7 +37,7 @@ private:
     };
 
 public:
-    explicit LogScope(spdlog::level::level_enum new_level, spdlog::logger &logger = *Log::get_logger(), bool allow_loosen = false) {
+    explicit LogScope(spdlog::level::level_enum new_level, spdlog::logger &logger = *cli_support::Log::get_logger(), bool allow_loosen = false) {
         const auto original_level = logger.level();
         // Only set to if it's more restrictive than current level
         if (allow_loosen || new_level >= original_level) {

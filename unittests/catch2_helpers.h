@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 alpinemaps.org
- * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
+ * AlpineMaps.org
+ * Copyright (C) 2022 Adam Celarek-Litofcenko
+ * Copyright (C) 2022 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,6 @@
 
 #include "fmt_impls.h"
 #include "geometry/geometry.h"
-#include "type_utils.h"
 
 namespace Catch {
 
@@ -71,6 +70,11 @@ bool is_within_epsilon(const glm::vec<N, double> &actual, const glm::vec<N, doub
         }
     }
     return true;
+}
+
+template <glm::length_t N>
+bool is_within_epsilon(const radix::geometry::Aabb<N, double> &actual, const radix::geometry::Aabb<N, double> &expected) {
+    return is_within_epsilon(actual.min, expected.min) && is_within_epsilon(actual.max, expected.max);
 }
 } // namespace detail
 

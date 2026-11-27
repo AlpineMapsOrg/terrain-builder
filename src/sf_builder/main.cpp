@@ -1,36 +1,50 @@
-#include <algorithm>
-#include <execution>
-#include <filesystem>
-#include <memory>
-#include <optional>
-#include <span>
-#include <variant>
-#include <vector>
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2021 Adam Celarek-Litofcenko
+ * Copyright (C) 2021 Martin Braunsperger
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
+#include <optional>
+#include <variant>
+#include <vector>
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
-#include <glm/gtx/component_wise.hpp>
+#include <libassert/assert.hpp>
 #include <radix/geometry.h>
 #include <tbb/global_control.h>
 
-#include "gdal/Dataset.h"
+#include "build.h"
 #include "cli.h"
+#include "cli_support/log.h"
+#include "cli_support/octree_id.h"
+#include "cli_support/stop_signal.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
-#include "log.h"
-#include "srs/System.h"
-#include "srs/transform_bounds.h"
-#include "srs/well_known.h"
-#include "terrainbuilder.h"
+#include "gis/srs/System.h"
+#include "gis/srs/well_known.h"
+#include "gis/webmercator.h"
+#include "inputs.h"
 #include "octree/Space.h"
-#include "TileProvider.h"
-
-#include "ctb/GlobalGeodetic.hpp"
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/Grid.hpp"
+#include "stop.h"
 
 radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
     const double infinity = std::numeric_limits<double>::infinity();
@@ -39,7 +53,7 @@ radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
     return radix::geometry::Aabb3d(min, max);
 }
 
-alp::Result<radix::geometry::Aabb3d> parse_bounds_from_values(const std::vector<double> &data, const srs::System &srs) {
+alp::Result<radix::geometry::Aabb3d> parse_bounds_from_values(const std::vector<double> &data, const gis::srs::System &srs) {
     const size_t dim = srs.axes().size();
     const size_t expected = (dim == 3) ? 6 : 4;
 
@@ -62,45 +76,26 @@ alp::Result<radix::geometry::Aabb3d> parse_bounds_from_values(const std::vector<
 
 alp::Result<radix::geometry::Aabb3d> parse_bounds_from_tile(
     const std::vector<uint32_t> &data,
-    const srs::System &srs) {
+    const gis::srs::System &srs) {
 
-    // Determine the correct Grid type based on SRS
-    std::optional<ctb::Grid> grid;
-    const srs::System &webmercator_srs = srs::webmercator();
-    const srs::System &wgs84_srs = srs::wgs84();
-    if (srs.is_same(webmercator_srs)) {
-        grid = ctb::GlobalMercator();
-    } else if (srs.is_same(wgs84_srs)) {
-        grid = ctb::GlobalGeodetic();
-    } else {
-        return alp::make_error("Only WebMercator (EPSG:3857) or WGS84 (EPSG:4326) supported for --tile.");
+    if (!srs.is_same(gis::srs::webmercator())) {
+        return alp::make_error("Only WebMercator (EPSG:3857) supported for --tile.");
     }
 
     const uint32_t zoom_level = data[0];
     const glm::uvec2 tile_coords(data[1], data[2]);
     const radix::tile::Id target_tile(zoom_level, tile_coords);
 
-    return extend_bounds_to_3d(grid->srsBounds(target_tile, false));
+    return extend_bounds_to_3d(gis::webmercator::compute_tile_bounds(target_tile));
 }
 
-alp::Result<radix::geometry::Aabb3d> parse_bounds_from_node(const std::vector<uint64_t> &data, const srs::System &srs) {
+alp::Result<radix::geometry::Aabb3d> parse_bounds_from_node(const std::vector<uint64_t> &data, const gis::srs::System &srs) {
     // Validate node SRS (only ECEF)
-    const srs::System &ecef_srs = srs::ecef();
-    if (!srs.is_same(ecef_srs)) {
+    if (!srs.is_same(gis::srs::ecef())) {
         return alp::make_error("Only ECEF (EPSG:4978) supported for --node.");
     }
 
-    const octree::Id::Level zoom_level = data[0];
-    octree::Id target_node = octree::Id::root();
-
-    if (data.size() == 2) {
-        target_node = {zoom_level, data[1]};
-    } else if (data.size() == 4) {
-        const octree::Id::Coords coords(data[1], data[2], data[3]);
-        target_node = {zoom_level, coords};
-    } else {
-        return alp::make_error("Invalid number of args for --node. Expected 2 or 4.");
-    }
+    ALP_TRY_CONTEXT(const octree::Id target_node, cli_support::parse_octree_id(data), "reading --node");
 
     return octree::Space::earth().get_node_bounds(target_node);
 }
@@ -109,7 +104,7 @@ alp::Result<radix::geometry::Aabb3d> parse_target_bounds(
     const std::vector<double> &bounds_data,
     const std::vector<uint64_t> &node_data,
     const std::vector<uint32_t> &tile_data,
-    srs::System &srs) {
+    gis::srs::System &srs) {
 
     if (!bounds_data.empty()) {
         return parse_bounds_from_values(bounds_data, srs);
@@ -126,93 +121,28 @@ alp::Result<radix::geometry::Aabb3d> parse_target_bounds(
     UNREACHABLE();
 }
 
-alp::Result<void, srs::TransformError> log_dataset_overview(const gdal::Dataset &dataset) {
-    const std::string name = dataset.name();
-
-    const uint32_t widthPx = dataset.widthInPixels();
-    const uint32_t heightPx = dataset.heightInPixels();
-    const uint32_t bands = dataset.n_bands();
-
-    const auto datasetSrs = dataset.srs();
-    const glm::dvec2 pixelSize = dataset.pixelSizeIn(datasetSrs);
-    const auto bounds = dataset.bounds3d(true);
-
-    ALP_TRY(const auto boundsEcef,
-        srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds));
-
-    const octree::Space earth = octree::Space::earth();
-    const auto enclosingNode =
-        *ASSERT_VAL(earth.find_smallest_node_encompassing_bounds(boundsEcef));
-
-    const int32_t scaleLevel = static_cast<int32_t>(std::floor(std::log2(
-        earth.bounds().size().x / glm::compMax(boundsEcef.size()))));
-
-    LOG_INFO("Dataset");
-    LOG_INFO("  name        : {}", name);
-    LOG_INFO("  size        : {} x {} px | bands={}", widthPx, heightPx, bands);
-    LOG_INFO("  pixel size  : {:.3f} x {:.3f}", pixelSize.x, pixelSize.y);
-    LOG_INFO("  srs         : {}", datasetSrs);
-    LOG_INFO("  bounds      : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
-             bounds.min.x, bounds.min.y, bounds.min.z,
-             bounds.max.x, bounds.max.y, bounds.max.z);
-    LOG_INFO("  bounds ecef : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
-             boundsEcef.min.x, boundsEcef.min.y, boundsEcef.min.z,
-             boundsEcef.max.x, boundsEcef.max.y, boundsEcef.max.z);
-    LOG_INFO("  octree      : enclosing node level={} coords=({}, {}, {})",
-             enclosingNode.level(),
-             enclosingNode.coords().x,
-             enclosingNode.coords().y,
-             enclosingNode.coords().z);
-    LOG_INFO("  octree      : scale level={}", scaleLevel);
-    return {};
-}
-
-std::unique_ptr<TileProvider> make_tile_provider(const cli::BaseArgs &args) {
-    if (!args.texture_base_path.has_value()) {
-        return nullptr;
-    }
-
-    GoogleMapboxTilePathProvider path_provider(args.texture_base_path.value());
-    if (args.min_texture_level.has_value() || args.max_texture_level.has_value()) {
-        return std::make_unique<ZoomRangeTileProvider<GoogleMapboxTilePathProvider>>(
-            std::move(path_provider),
-            args.min_texture_level,
-            args.max_texture_level);
-    } else {
-        return std::make_unique<GoogleMapboxTilePathProvider>(std::move(path_provider));
-    }
-}
-
-alp::Result<void> run(
-    const cli::SingleArgs &args,
-    gdal::Dataset &dataset,
-    const srs::System &mesh_srs,
-    const srs::System &texture_srs,
-    const TileProvider *tile_provider) {
-    ALP_TRY(srs::System target_srs, srs::from_user_input(args.target_srs_input));
+alp::Result<void> run(const cli::SingleArgs &args) {
+    ALP_TRY(gis::srs::System target_srs, gis::srs::from_user_input(args.target_srs_input));
     ALP_TRY(const radix::geometry::Aabb3d target_bounds, parse_target_bounds(
         args.target_bounds_data,
         args.target_node_data,
         args.target_tile_data,
         target_srs));
 
-    ALP_TRY(terrainbuilder::build_and_save_patch(
-        dataset,
-        target_srs,
-        target_bounds,
-        texture_srs,
-        tile_provider,
-        mesh_srs,
-        args.output_path));
+    const sf::inputs::Patch inputs{
+        .dataset = args.dataset_path,
+        .textures = args.texture_base_path,
+        .min_texture_level = args.min_texture_level,
+        .max_texture_level = args.max_texture_level,
+        .mesh_srs = args.mesh_srs_input,
+        .target_srs = args.target_srs_input,
+        .target_bounds = target_bounds,
+    };
+    ALP_TRY(sf::build_and_save_patch(inputs, args.output_path));
     return {};
 }
 
-alp::Result<void> run(
-    const cli::BatchArgs &args,
-    gdal::Dataset &dataset,
-    const srs::System &mesh_srs,
-    const srs::System &texture_srs,
-    const TileProvider *tile_provider) {
+alp::Result<void> run(const cli::BatchArgs &args) {
     std::optional<tbb::global_control> tbb_control;
     if (args.num_threads > 0) {
         LOG_DEBUG("Requesting max parallelism of {}", args.num_threads);
@@ -222,39 +152,28 @@ alp::Result<void> run(
     const auto maybe_s = actual_num_threads == 1 ? "" : "s";
     LOG_INFO("Using {} thread{} for batch processing.", actual_num_threads, maybe_s);
 
-    ALP_TRY(terrainbuilder::build_all_patches(
-        dataset,
-        args.target_level,
-        texture_srs,
-        tile_provider,
-        mesh_srs,
-        args.output_base_path,
-        args.output_format,
-        args.overwrite_existing));
+    ALP_TRY(const sf::inputs::Build inputs, sf::inputs::make_build(args));
+    const auto stop_guard = cli_support::stop_signal::install();
+    ALP_TRY(sf::build_and_publish_all_patches(inputs, args.output_path, args.checkpoint_path, cli_support::stop_signal::token()));
     return {};
 }
 
 alp::Result<void> run(const cli::Args &args) {
-    const cli::BaseArgs &base_args = std::visit([](const auto &args) -> const cli::BaseArgs & { return args; }, args);
-
-    ALP_TRY(gdal::Dataset dataset, gdal::Dataset::open_raster(base_args.dataset_path));
-    ALP_TRY(dataset.pixel_transform());
-    ALP_TRY(log_dataset_overview(dataset));
-    ALP_TRY(const auto mesh_srs, srs::from_user_input(base_args.mesh_srs_input));
-    const auto texture_srs = srs::webmercator();
-    const auto tile_provider = make_tile_provider(base_args);
-
-    return std::visit([&](const auto &args) { return run(args, dataset, mesh_srs, texture_srs, tile_provider.get()); }, args);
+    return std::visit([](const auto &args) { return run(args); }, args);
 }
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
     const auto log_level = std::visit([](const auto &args) { return args.log_level; }, args);
-    Log::init(log_level);
+    cli_support::Log::init(log_level);
 
     const alp::Result<void> result = run(args);
     if (!result.has_value()) {
-        LOG_UNEXPECTED(result.error());
+        if (result.error().holds<Stopped>()) {
+            LOG_INFO("{}", result.error());
+            return cli_support::stop_signal::exit_code();
+        }
+        LOG_REPORT(result.error());
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

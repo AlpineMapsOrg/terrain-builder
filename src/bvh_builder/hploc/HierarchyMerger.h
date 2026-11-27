@@ -8,7 +8,7 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "optional_utils.h"
 
 #include "bvh/BatchWriter.h"
@@ -31,7 +31,7 @@ public:
 
     // Adds the next entry of the run, which must not come before the last one in morton order.
     [[nodiscard]]
-    alp::Result<void, io::Error> push(const frontier::Entry &entry) {
+    alp::Result<void, io::serde::Error> push(const frontier::Entry &entry) {
         // The depth of the node splitting this entry from the one before it is how many leading bits their keys share.
         const Key key{.code = entry.morton, .position = this->_entry_count};
         const uint32_t depth = alp::transform_or(this->_previous_key, 0, [&](const Key &previous) {
@@ -52,7 +52,7 @@ public:
     // Merges everything pushed into one tree and returns its root.
     // At least one entry must have been pushed.
     [[nodiscard]]
-    alp::Result<frontier::Entry, io::Error> finish() && {
+    alp::Result<frontier::Entry, io::serde::Error> finish() && {
         ASSERT(this->_ranges.size() > 0, "no entry was pushed");
 
         while (this->_ranges.size() >= 2) {
@@ -65,14 +65,14 @@ public:
 private:
     // Joins the range on top into the one below it, merging their clusters down to the threshold.
     [[nodiscard]]
-    alp::Result<void, io::Error> join_top() {
+    alp::Result<void, io::serde::Error> join_top() {
         this->_ranges.join_top();
         return this->merge_top_down_to(this->_merge_threshold);
     }
 
     // Merges the clusters of the range on top down to at most `limit`.
     [[nodiscard]]
-    alp::Result<void, io::Error> merge_top_down_to(const size_t limit) {
+    alp::Result<void, io::serde::Error> merge_top_down_to(const size_t limit) {
         ALP_TRY(const size_t count, this->_merger.merge_down_to(this->_ranges.top().items, limit));
         this->_ranges.shrink_top(count);
         return {};

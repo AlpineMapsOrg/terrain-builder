@@ -15,7 +15,7 @@
 #include "error/Error.h"
 #include "error/Result.h"
 #include "error/utils.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "bvh/BatchWriter.h"
 #include "bvh/NodeCache.h"
@@ -39,7 +39,7 @@ std::string_view format_as(const VisitError) {
 }
 
 // A walk whose visitor can fail on its own as well as on a read.
-using WalkError = alp::Error<io::Error, VisitError>;
+using WalkError = alp::Error<io::serde::Error, VisitError>;
 
 }
 

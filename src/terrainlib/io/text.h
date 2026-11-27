@@ -1,30 +1,53 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
-#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/FileError.h"
 #include "io/bytes.h"
 
-namespace io {
+namespace io::text {
 
-// Writes `text` to the file at `path`, replacing its contents; with `make_dirs`, creates the missing parent directories first.
+// How `write` treats an existing file and missing parent directories.
+using WriteOptions = bytes::WriteOptions;
+
+using WriteError = bytes::WriteError;
+// Writes `text` to the file at `path`.
 [[nodiscard]]
-inline alp::Result<void, FileError> write_text_to_path(const std::string_view text, const std::filesystem::path &path, const bool make_dirs = true) {
-    const std::vector<uint8_t> bytes(text.begin(), text.end());
-    return write_bytes_to_path(bytes, path, make_dirs);
+inline alp::Result<void, WriteError> write(const std::string_view text, const std::filesystem::path &path, const WriteOptions options = {}) {
+    const bytes::vector bytes(text.begin(), text.end());
+    return bytes::write(bytes, path, options);
 }
 
-// The contents of the file at `path`, as text.
+using ReadError = bytes::ReadError;
+// Reads the whole file at `path` as text.
 [[nodiscard]]
-inline alp::Result<std::string, FileError> read_text_from_path(const std::filesystem::path &path) {
-    ALP_TRY(const std::vector<uint8_t> bytes, read_bytes_from_path(path));
+inline alp::Result<std::string, ReadError> read(const std::filesystem::path &path) {
+    ALP_TRY(const bytes::vector bytes, bytes::read(path));
     return std::string(bytes.begin(), bytes.end());
 }
 
-} // namespace io
+// An error from reading or writing a text file.
+using Error = bytes::Error;
+
+} // namespace io::text

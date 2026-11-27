@@ -2,7 +2,9 @@
 
 #include <utility>
 
-#include "zpp_bits_utils.h"
+#include "io/glm_serialization.h"
+#include "io/radix_serialization.h"
+#include "octree/id_serialization.h"
 
 #include "bvh/NodeHeader.h"
 #include "bvh/Reference.h"

@@ -5,7 +5,7 @@
 #include <ranges>
 #include <utility>
 
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "bvh/Storage.h"
 #include "bvh/Batch.h"
@@ -29,7 +29,7 @@ public:
     // Writes `node` to the current batch and returns its reference.
     template <NodeInput N>
     [[nodiscard]]
-    alp::Result<Reference, io::Error> write_node(const N &node) {
+    alp::Result<Reference, io::serde::Error> write_node(const N &node) {
         Batch &current = this->open_batch();
         const NodeIndex node_index = current.add_node(node);
         const BatchIndex batch_index = current.index();

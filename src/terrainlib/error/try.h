@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <concepts>
@@ -135,3 +153,5 @@ decltype(auto) take_value(R &&result) {
 
 // ALP_TRY_CONTEXT(expr, message) or ALP_TRY_CONTEXT(target, expr, message).
 #define ALP_TRY_CONTEXT(...) ALP_CAT_IDENT(ALP_TRY_CONTEXT_, ALP_COUNT_ARGS(__VA_ARGS__))(__VA_ARGS__)
+
+// TODO: consider ALP_TRY_MAP(target, expr, code, message) in place of ALP_TRY_CONTEXT with alp::map_error

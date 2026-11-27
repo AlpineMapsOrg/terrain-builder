@@ -1,3 +1,22 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #include <glm/glm.hpp>
 
 #define CATCH_CONFIG_ENABLE_BENCHMARKING
@@ -14,7 +33,7 @@
 #include "mesh/convert.h"
 #include "mesh/io.h"
 #include "mesh/bounds.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "mesh/connectivity/manifold.h"
 #include "mesh/geometry.h"
 #include "octree/Space.h"
@@ -277,7 +296,7 @@ TEST_CASE("single triangle split by one plane and partly discarded by the next")
 }
 
 void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const radix::geometry::Aabb3d &bounds) {
-    mesh::validate(clipped_mesh);
+    mesh::debug_assert_valid(clipped_mesh);
 
     // Check that no vertices are outside the bounds
     for (const auto &position : clipped_mesh.positions) {
@@ -354,37 +373,3 @@ TEST_CASE("clip_on_bounds produces manifold mesh") {
     CHECK(mesh::is_manifold(clipped));
     CHECK(clipped.positions.size() == 6);
 }
-
-#ifdef NDEBUG
-TEST_CASE("mesh::clip_on_bounds benchmark") {
-    BENCHMARK_ADVANCED("clip based on octree")(Catch::Benchmark::Chronometer meter) {
-        const std::filesystem::path mesh_path = ALP_TEST_DATA_DIR "/meshes/stephansdom_16_51832_38369_54849.terrain";
-        auto mesh_result = mesh::io::load_from_path(mesh_path);
-        REQUIRE(mesh_result.has_value());
-        SimpleMesh &mesh = mesh_result.value();
-        mesh.uvs.clear();
-        mesh.texture = std::nullopt;
-
-        const octree::Space space = octree::Space::earth();
-        const auto mesh_bounds = calculate_bounds(mesh);
-        const octree::Id id = space.find_smallest_node_encompassing_bounds(mesh_bounds).value();
-        const auto child_ids = id.children().value();
-        std::vector<octree::Bounds> child_bounds;
-        child_bounds.reserve(child_ids.size());
-        for (const auto &child_id : child_ids) {
-            const auto bounds = space.get_node_bounds(child_id);
-            child_bounds.push_back(bounds);
-        }
-
-        meter.measure([mesh, child_bounds] {
-            std::vector<SimpleMesh> child_meshes;
-            child_meshes.reserve(child_bounds.size());
-            for (const auto &bounds : child_bounds) {
-                const auto clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
-                child_meshes.push_back(clipped_mesh);
-            }
-            return child_meshes;
-        });
-    };
-}
-#endif

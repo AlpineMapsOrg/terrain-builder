@@ -10,7 +10,7 @@
 #include "error/Result.h"
 #include "error/ResultFn.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "bvh/NodeCache.h"
 #include "bvh/Batch.h"
@@ -55,7 +55,7 @@ inline constexpr Control Control::Break{Action::Break};
 // Visits the tree from `root` in pre-order, passing each node with the reference naming it and skipping the children of every node `v` prunes.
 // False if `v` broke off the walk before its end.
 // Fails with `E` if a batch cannot be read or `v` fails.
-template <typename E = io::Error, typename F>
+template <typename E = io::serde::Error, typename F>
 [[nodiscard]]
 alp::Result<bool, E> traverse_tree(NodeCache &nodes, const Reference &root, F &&v) {
     auto visit = alp::make_result_fn<E>(v);

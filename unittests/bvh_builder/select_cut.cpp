@@ -56,7 +56,7 @@ view::GroupSelection select_camera_groups(bvh::Storage &nodes, const bvh::Refere
 // Selects the clusters of `groups` for `CAMERA` from the dag at `path`.
 std::vector<dag::ClusterId> select_camera_clusters(const std::filesystem::path &path, const std::vector<dag::SourceId> &groups, const view::CutRule &rule = view::CutRule{.threshold = 0.5}) {
     const view::Camera camera = REQUIRE_VALUE(view::Camera::create(CAMERA));
-    const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(path));
+    const auto dag = REQUIRE_VALUE(dag::storage::open_metadata(path));
     dag::NodeMetadataCache cache(dag, UNBOUNDED_RESIDENT_BYTES);
     return REQUIRE_VALUE(view::select_clusters(groups, cache, camera, rule));
 }
@@ -166,35 +166,35 @@ TEST_CASE("select_groups descends into a subtree out of view without culling", "
 
 TEST_CASE("select_clusters selects the clusters whose own error fits", "[view][select_cut]") {
     const TempDirectory directory("select_cut");
-    const dag::GroupId group = write_listing_group(directory.path(), {0.001, 1000.0}, {IN_VIEW, IN_VIEW}, {IN_VIEW, IN_VIEW});
+    const dag::GroupId group = write_listing_group(directory.path() / "dag", {0.001, 1000.0}, {IN_VIEW, IN_VIEW}, {IN_VIEW, IN_VIEW});
 
-    CHECK(select_camera_clusters(directory.path(), {group}) == std::vector<dag::ClusterId>{{octree::Id::root().child(0).value(), 0}});
+    CHECK(select_camera_clusters(directory.path() / "dag", {group}) == std::vector<dag::ClusterId>{{octree::Id::root().child(0).value(), 0}});
 }
 
 TEST_CASE("select_clusters selects a cluster no group lists whose error fits", "[view][select_cut]") {
     const octree::Id root = octree::Id::root();
     const TempDirectory directory("select_cut");
-    write_dag(directory.path(), {
+    write_dag(directory.path() / "dag", {
         {root, dag::NodeMetadata{.clusters = {{.group_index = 0, .bounds = IN_VIEW}}, .groups = {{.children = {}, .error = 0.001, .bounds = IN_VIEW}}}},
     });
 
-    CHECK(select_camera_clusters(directory.path(), {dag::ClusterId{root, 0}}) == std::vector<dag::ClusterId>{{root, 0}});
+    CHECK(select_camera_clusters(directory.path() / "dag", {dag::ClusterId{root, 0}}) == std::vector<dag::ClusterId>{{root, 0}});
 }
 
 TEST_CASE("select_clusters leaves out a cluster whose tight bounds are out of view", "[view][select_cut]") {
     const TempDirectory directory("select_cut");
     // Both LOD bounds are in view, so testing them instead would draw both.
-    const dag::GroupId group = write_listing_group(directory.path(), {0.001, 0.001}, {IN_VIEW, IN_VIEW}, {IN_VIEW, BEHIND});
+    const dag::GroupId group = write_listing_group(directory.path() / "dag", {0.001, 0.001}, {IN_VIEW, IN_VIEW}, {IN_VIEW, BEHIND});
 
-    CHECK(select_camera_clusters(directory.path(), {group}) == std::vector<dag::ClusterId>{{octree::Id::root().child(0).value(), 0}});
+    CHECK(select_camera_clusters(directory.path() / "dag", {group}) == std::vector<dag::ClusterId>{{octree::Id::root().child(0).value(), 0}});
 }
 
 TEST_CASE("select_clusters keeps a cluster out of view without culling", "[view][select_cut]") {
     const octree::Id child = octree::Id::root().child(0).value();
     const TempDirectory directory("select_cut");
-    const dag::GroupId group = write_listing_group(directory.path(), {0.001, 0.001}, {IN_VIEW, IN_VIEW}, {IN_VIEW, BEHIND});
+    const dag::GroupId group = write_listing_group(directory.path() / "dag", {0.001, 0.001}, {IN_VIEW, IN_VIEW}, {IN_VIEW, BEHIND});
 
-    CHECK(select_camera_clusters(directory.path(), {group}, view::CutRule{.threshold = 0.5, .cull = false}) == std::vector<dag::ClusterId>{{child, 0}, {child, 1}});
+    CHECK(select_camera_clusters(directory.path() / "dag", {group}, view::CutRule{.threshold = 0.5, .cull = false}) == std::vector<dag::ClusterId>{{child, 0}, {child, 1}});
 }
 
 TEST_CASE("select_clusters measures each cluster's error from its own LOD bounds", "[view][select_cut]") {
@@ -203,17 +203,17 @@ TEST_CASE("select_clusters measures each cluster's error from its own LOD bounds
     const bvh::Bounds far{{100.0, -1.0, -1.0}, {102.0, 1.0, 1.0}};
 
     const TempDirectory directory("select_cut");
-    const dag::GroupId group = write_listing_group(directory.path(), {20.0, 1000.0}, {far, IN_VIEW}, {IN_VIEW, IN_VIEW});
+    const dag::GroupId group = write_listing_group(directory.path() / "dag", {20.0, 1000.0}, {far, IN_VIEW}, {IN_VIEW, IN_VIEW});
 
-    CHECK(select_camera_clusters(directory.path(), {group}) == std::vector<dag::ClusterId>{{octree::Id::root().child(0).value(), 0}});
+    CHECK(select_camera_clusters(directory.path() / "dag", {group}) == std::vector<dag::ClusterId>{{octree::Id::root().child(0).value(), 0}});
 }
 
 TEST_CASE("select_clusters fails if a batch it needs is not in the dag", "[view][select_cut]") {
     const octree::Id root = octree::Id::root();
     const TempDirectory directory("select_cut");
-    write_dag(directory.path(), {{root, dag::NodeMetadata{.clusters = {}, .groups = {}}}});
+    write_dag(directory.path() / "dag", {{root, dag::NodeMetadata{.clusters = {}, .groups = {}}}});
     const view::Camera camera = REQUIRE_VALUE(view::Camera::create(CAMERA));
-    const auto dag = REQUIRE_VALUE(octree::open_folder_indexed<dag::NodeMetadata>(directory.path()));
+    const auto dag = REQUIRE_VALUE(dag::storage::open_metadata(directory.path() / "dag"));
     dag::NodeMetadataCache cache(dag, UNBOUNDED_RESIDENT_BYTES);
     const std::vector<dag::SourceId> groups{dag::GroupId{root.child(0).value(), 0}};
 

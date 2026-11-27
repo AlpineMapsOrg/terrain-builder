@@ -7,7 +7,6 @@
 #include "error/Result.h"
 #include "error/log.h"
 #include "error/try.h"
-#include "io/DirectoryNotEmpty.h"
 #include "io/FileError.h"
 #include "io/filesystem.h"
 
@@ -17,7 +16,7 @@ namespace io {
 class ScratchDirectory {
     struct Remove {
         void operator()(std::filesystem::path &path) const noexcept {
-            LOG_UNEXPECTED_OF(filesystem::remove_all(path));
+            LOG_IF_ERROR(filesystem::remove_all(path));
         }
     };
 
@@ -35,7 +34,7 @@ public:
     }
 
 private:
-    friend alp::Result<ScratchDirectory, FileError, DirectoryNotEmpty> create_scratch_directory(const std::filesystem::path &path);
+    friend alp::Result<ScratchDirectory, FileError> create_scratch_directory(const std::filesystem::path &path);
 
     explicit ScratchDirectory(std::filesystem::path path) : _path(std::move(path)) {}
 
@@ -43,9 +42,9 @@ private:
 };
 
 // Creates an empty scratch directory at `path`, along with its missing parents.
-// Fails with `DirectoryNotEmpty` when a directory at `path` already holds something.
+// Fails when a directory at `path` already holds something.
 [[nodiscard]]
-inline alp::Result<ScratchDirectory, FileError, DirectoryNotEmpty> create_scratch_directory(const std::filesystem::path &path) {
+inline alp::Result<ScratchDirectory, FileError> create_scratch_directory(const std::filesystem::path &path) {
     ALP_TRY(filesystem::create_empty_directory(path));
     return ScratchDirectory(path);
 }

@@ -1,3 +1,23 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2025 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <optional>
@@ -9,60 +29,38 @@
 #include "mesh/clip.h"
 #include "mesh/texture_trim.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
 #include "octree/Space.h"
-#include "octree/Storage.h"
-#include "octree/storage/IndexedStorage.h"
-#include "octree/storage/cache/Dummy.h"
-#include "octree/storage/cache/ICache.h"
+#include "hierarchy/NodeStatusOrMissing.h"
+#include "mesh/storage.h"
 
-// TODO: a cached ancestor is returned unchanged instead of clipped to the requested node bounds, producing incorrect geometry for child requests.
 class NodeLoader {
 public:
-    NodeLoader(const octree::IndexedStorage &storage, octree::cache::ICache<mesh::Simple> &cache, octree::Space space)
-        : _storage(storage), _cache(cache), _space(space) {
-        if (storage.cache().has_value() && dynamic_cast<octree::cache::Dummy<mesh::Simple> *>(&cache) != nullptr) {
-            LOG_WARN("Backing storage for NodeLoader instance is cached, but another cache was provided leading to double caching.");
-        }
-    }
+    NodeLoader(const mesh::storage::Storage &storage, octree::Space space) : _storage(storage), _space(space) {}
 
-    octree::NodeStatusOrMissing get_status(const octree::Id &id) const noexcept {
-        return this->_storage.index().get(id);
+    hierarchy::NodeStatusOrMissing get_status(const octree::Id &id) const noexcept {
+        return this->_storage.index().status(id);
     }
 
     // Try to retrieve or reconstruct node mesh by ID
     // TODO: return const ref instead?
-    std::optional<SimpleMesh> load_node(const octree::Id &id) const noexcept {
-        // Try cache
-        if (auto cached = this->_cache.get(id); cached.has_value()) {
-            return cached.value();
-        }
-
+    std::optional<SimpleMesh> load_node(const octree::Id &id) const {
         // Try storage
         auto mesh_opt = this->_storage.load(id);
-        if (mesh_opt.has_value()) {
-            auto mesh = mesh_opt.value();
-            this->_cache.put(id, mesh);
-            return mesh;
+        if (mesh_opt) {
+            return mesh_opt.value();
         }
 
         // Try ancestors
         for (auto parent = id.parent(); parent.has_value(); parent = parent->parent()) {
             const auto &parent_id = *parent;
 
-            // Try cache
-            if (auto cached = this->_cache.get(parent_id); cached.has_value()) {
-                return cached;
-            }
-
             // Try storage
             auto parent_mesh_opt = this->_storage.load(parent_id);
-            if (parent_mesh_opt.has_value()) {
+            if (parent_mesh_opt) {
                 auto parent_mesh = parent_mesh_opt.value();
                 const auto bounds = this->_space.get_node_bounds(id);
                 SimpleMesh clipped = mesh::clip_on_bounds(parent_mesh, bounds);
                 trim_texture_inplace(clipped);
-                this->_cache.put(id, clipped);
                 return clipped;
             }
         }
@@ -71,12 +69,11 @@ public:
         return std::nullopt;
     }
 
-    const octree::IndexedStorage &storage() const {
+    const mesh::storage::Storage &storage() const {
         return this->_storage;
     }
 
 private:
-    const octree::IndexedStorage &_storage;
-    octree::cache::ICache<mesh::Simple> &_cache;
+    const mesh::storage::Storage &_storage;
     const octree::Space _space;
 };

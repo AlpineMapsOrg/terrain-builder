@@ -12,7 +12,7 @@
 #include "error/Result.h"
 #include "error/try.h"
 #include "geometry/bounds.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "frontier/EntrySink.h"
 #include "frontier/layout.h"
@@ -52,7 +52,7 @@ public:
 
     // Takes the next entries, splitting off every region they complete.
     [[nodiscard]]
-    alp::Result<void, io::Error> push(const std::span<const frontier::Entry> entries) {
+    alp::Result<void, io::serde::Error> push(const std::span<const frontier::Entry> entries) {
         std::span<const frontier::Entry> remaining = entries;
         while (!remaining.empty()) {
             const size_t room = this->_options.region_size - this->_region.size();
@@ -69,13 +69,13 @@ public:
     }
 
     [[nodiscard]]
-    alp::Result<void, io::Error> push(const frontier::Entry entry) {
+    alp::Result<void, io::serde::Error> push(const frontier::Entry entry) {
         return this->push(std::span<const frontier::Entry>(&entry, 1));
     }
 
     // Splits the region left at the end of the run, then ends both streams.
     [[nodiscard]]
-    alp::Result<void, io::Error> finish() && {
+    alp::Result<void, io::serde::Error> finish() && {
         if (!this->_region.empty()) {
             ALP_TRY(this->drain_region());
         }
@@ -87,7 +87,7 @@ public:
 private:
     // Sends the buffered region to both sinks, held-back entries first, cut at the limit the region asks for.
     [[nodiscard]]
-    alp::Result<void, io::Error> drain_region() {
+    alp::Result<void, io::serde::Error> drain_region() {
         this->_metrics.clear();
         std::ranges::transform(this->_region, std::back_inserter(this->_metrics), [](const frontier::Entry &e) {
             return geometry::compute_mean_extent(e.header.tight_bounds);

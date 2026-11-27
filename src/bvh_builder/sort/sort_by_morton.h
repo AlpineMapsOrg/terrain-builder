@@ -14,8 +14,7 @@
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
-#include "io/DirectoryNotEmpty.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "frontier/Storage.h"
 #include "sort/merge_runs.h"
@@ -28,7 +27,7 @@ namespace detail {
 
 // Merges `runs` in groups of at most `fan_in` into new runs under `directory`.
 [[nodiscard]]
-inline alp::Result<std::vector<frontier::Storage>, io::Error, io::DirectoryNotEmpty> merge_round(
+inline alp::Result<std::vector<frontier::Storage>, io::serde::Error> merge_round(
     const std::span<const frontier::Storage> runs, const std::filesystem::path &directory, const size_t fan_in, const size_t max_batch_bytes) {
     std::vector<frontier::Storage> merged_runs;
     for (size_t first = 0; first < runs.size(); first += fan_in) {
@@ -46,13 +45,13 @@ inline alp::Result<std::vector<frontier::Storage>, io::Error, io::DirectoryNotEm
 
 // Writes the entries of `input` to `output` in Morton order, keeping intermediate runs under `scratch` until they are merged.
 [[nodiscard]]
-inline alp::Result<void, io::Error, io::DirectoryNotEmpty> sort_by_morton(
+inline alp::Result<void, io::serde::Error> sort_by_morton(
     const frontier::Storage &input, frontier::Storage &output, const std::filesystem::path &scratch, const Options &options) {
     DEBUG_ASSERT(options.max_batch_bytes > 0);
 
     return alp::run_with_context(
         alp::make_context("sorting a frontier from {} to {}", input.directory(), output.directory()),
-        [&] -> alp::Result<void, io::Error, io::DirectoryNotEmpty> {
+        [&] -> alp::Result<void, io::serde::Error> {
             // A merge holds one batch per run and one more for its output, and it needs two runs to make progress.
             const size_t resident_batches = options.max_resident_bytes / options.max_batch_bytes;
             const size_t fan_in = std::max<size_t>(resident_batches, 3) - 1;

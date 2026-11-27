@@ -3,7 +3,7 @@
 #include <cstddef>
 
 #include "error/Result.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "bvh/Storage.h"
 #include "bvh/Reference.h"
@@ -22,7 +22,7 @@ struct Options {
 // Saves the index of `output`.
 // The run must be non-empty and in morton order.
 [[nodiscard]]
-inline alp::Result<bvh::Reference, io::Error> build(const frontier::Storage &input, bvh::Storage &output, const Options &options) {
+inline alp::Result<bvh::Reference, io::serde::Error> build(const frontier::Storage &input, bvh::Storage &output, const Options &options) {
     return hploc::build(input, output, hploc::Options{
         .merge_threshold = 1,
         .max_batch_bytes = options.max_batch_bytes,

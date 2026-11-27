@@ -1,5 +1,25 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <functional>
 #include <span>
 #include <type_traits>
@@ -150,4 +170,10 @@ constexpr auto transform(const glm::vec<L, T, Q> &lhs, const glm::vec<L, U, Q> &
         result[i] = std::invoke(op, lhs[i], rhs[i]);
     }
     return result;
+}
+
+// Whether every component is finite.
+template <glm::length_t L, typename T, glm::qualifier Q = glm::defaultp>
+inline bool is_finite(const glm::vec<L, T, Q> &vector) {
+    return std::ranges::all_of(iterate<L, T, Q>(vector), [](const T x) { return std::isfinite(x); });
 }

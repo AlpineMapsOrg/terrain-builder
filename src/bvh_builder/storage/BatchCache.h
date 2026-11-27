@@ -8,7 +8,7 @@
 
 #include <libassert/assert.hpp>
 
-#include "io/Error.h"
+#include "io/serde.h"
 #include "error/Result.h"
 #include "error/try.h"
 
@@ -26,8 +26,8 @@ public:
 
     // The batch at `index`, read if it is not resident.
     [[nodiscard]]
-    alp::Result<std::shared_ptr<const Batch>, io::Error> read_batch(const uint32_t index) {
-        return this->_cache.get_or_try_insert_with(index, [&]() -> alp::Result<typename Cache::Entry, io::Error> {
+    alp::Result<std::shared_ptr<const Batch>, io::serde::Error> read_batch(const uint32_t index) {
+        return this->_cache.get_or_try_insert_with(index, [&]() -> alp::Result<typename Cache::Entry, io::serde::Error> {
             ALP_TRY(Batch batch, this->_input.read(index));
             const size_t cost = size_bytes(batch);
             std::shared_ptr<const Batch> shared_batch = std::make_shared<const Batch>(std::move(batch));

@@ -1,44 +1,55 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #pragma once
 
 #include <filesystem>
-#include <memory>
-#include <optional>
+#include <string_view>
+#include <utility>
 
 #include "error/Error.h"
 #include "error/Result.h"
-#include "io/Error.h"
-#include "octree/disk/layout/UnknownLayoutStrategy.h"
-#include "octree/disk/layout/strategy/Default.h"
-#include "octree/storage/IndexedStorage.h"
-#include "octree/storage/Storage.h"
-#include "octree/storage/codec/Codec.h"
-#include "octree/storage/defaults.h"
+#include "error/try.h"
+#include "octree/storage/Index.h"
+#include "octree/storage/index_format.h"
+#include "octree/storage/metadata.h"
+#include "store/Codec.h"
+#include "store/Metadata.h"
+#include "store/Storage.h"
+#include "store/open.h"
 
-namespace octree {
+namespace octree::storage {
 
-struct OpenOptions {
-    std::unique_ptr<disk::layout::Strategy> default_layout_strategy = {};
-    std::optional<std::string> preferred_extension_with_dot = {};
-};
-
-// An error from opening a storage.
-using OpenError = alp::Error<io::FileError, io::SerdeError, disk::layout::UnknownLayoutStrategy>;
-
-template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
+using OpenError = alp::Error<store::ReadMetadataError, store::ResolveError, store::OpenError>;
+// Opens the octree storage at `path` that holds payloads of class `payload_class`, with the layout and codec its metadata records.
+template <typename Payload>
 [[nodiscard]]
-alp::Result<IndexedStorage_<T, Codec>, OpenError> open_index(const std::filesystem::path &index_path);
-template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-[[nodiscard]]
-alp::Result<Storage_<T, Codec>, OpenError> open_folder(
-    const std::filesystem::path &base_path,
-    const bool create_index = false,
-    OpenOptions options = {});
-template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-[[nodiscard]]
-alp::Result<IndexedStorage_<T, Codec>, OpenError> open_folder_indexed(
-    const std::filesystem::path &base_path,
-    OpenOptions options = {});
+alp::Result<store::Storage<Index, Payload>, OpenError> open(
+    const std::filesystem::path& path,
+    const std::string_view payload_class,
+    store::CodecResolver<Payload> auto resolve_codec,
+    const store::Accept accept = store::Accept::Published
+) {
+    const auto context = alp::make_context("opening the octree storage of {} at {}", payload_class, path);
+    ALP_TRY_CONTEXT(const store::Metadata metadata, read_metadata(path), context);
+    auto open_result = store::open<Index, Payload>(path, index_format(), metadata, payload_class, resolve_codec, accept);
+    ALP_TRY_CONTEXT(auto storage, std::move(open_result), context);
+    return storage;
 }
 
-#include "open.inl"
-
+} // namespace octree::storage

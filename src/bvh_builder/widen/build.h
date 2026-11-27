@@ -8,7 +8,7 @@
 #include <fmt/format.h>
 #include <libassert/assert.hpp>
 
-#include "io/Error.h"
+#include "io/serde.h"
 #include "error/Result.h"
 #include "error/try.h"
 #include "error/utils.h"
@@ -24,12 +24,12 @@ namespace widen {
 
 // Writes the tree at `root` into `output` with up to `arity` children per node, and returns its new root.
 [[nodiscard]]
-inline alp::Result<bvh::Reference, io::Error, io::DirectoryNotEmpty> build(
+inline alp::Result<bvh::Reference, io::serde::Error> build(
     const bvh::Storage &input, const bvh::Reference &root, bvh::Storage &output,
     const std::filesystem::path &scratch, const Options &options) {
     return alp::run_with_context(
         alp::make_context("widening a tree from {} to {}", input.directory(), output.directory()),
-        [&] -> alp::Result<bvh::Reference, io::Error, io::DirectoryNotEmpty> {
+        [&] -> alp::Result<bvh::Reference, io::serde::Error> {
             bvh::NodeCache tree(input, options.max_resident_bytes);
 
             ALP_TRY(SplitStorage splits, SplitStorage::create(scratch / "splits"));

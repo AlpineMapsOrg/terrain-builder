@@ -6,6 +6,7 @@
 
 #include "error/Result.h"
 #include "io/FileError.h"
+#include "io/bytes.h"
 
 #include "json/JsonError.h"
 
@@ -31,7 +32,7 @@ alp::Result<void, io::FileError, JsonError> write_to_path(const T &value, const 
 // Reads the value that the file at `path` holds as JSON.
 template <typename T>
 [[nodiscard]]
-alp::Result<T, io::FileError, JsonError> read_from_path(const std::filesystem::path &path);
+alp::Result<T, io::bytes::ReadError, JsonError> read_from_path(const std::filesystem::path &path);
 
 }
 

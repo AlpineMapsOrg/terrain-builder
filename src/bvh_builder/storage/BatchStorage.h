@@ -9,7 +9,7 @@
 #include <libassert/assert.hpp>
 
 #include "storage/BaseStorage.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "error/Result.h"
 #include "error/try.h"
 
@@ -22,9 +22,9 @@ public:
     using Batch = BatchType;
 
     // Starts an empty storage in `directory`, which may be missing.
-    // Fails with `DirectoryNotEmpty` when `directory` already holds something.
+    // Fails when `directory` already holds something.
     [[nodiscard]]
-    static alp::Result<BatchStorage, io::FileError, io::DirectoryNotEmpty> create(std::filesystem::path directory) {
+    static alp::Result<BatchStorage, io::FileError> create(std::filesystem::path directory) {
         ALP_TRY(Base base, Base::create(std::move(directory)));
         return BatchStorage(std::move(base));
     }
@@ -32,7 +32,7 @@ public:
     // Opens the storage kept in `directory`.
     // Fails when it holds no index.
     [[nodiscard]]
-    static alp::Result<BatchStorage, io::Error> open(std::filesystem::path directory) {
+    static alp::Result<BatchStorage, io::serde::Error> open(std::filesystem::path directory) {
         ALP_TRY(Base base, Base::open(std::move(directory)));
         return BatchStorage(std::move(base));
     }
@@ -49,7 +49,7 @@ public:
     using Base::size;
 
     [[nodiscard]]
-    alp::Result<uint32_t, io::Error> write(const Batch &batch) {
+    alp::Result<uint32_t, io::serde::Error> write(const Batch &batch) {
         const uint32_t index = this->allocate_index();
         ALP_TRY(this->write(index, batch));
         this->mark_dirty();
@@ -57,16 +57,16 @@ public:
     }
 
     [[nodiscard]]
-    alp::Result<uint32_t, io::Error> write(const uint32_t index, const Batch &batch) {
+    alp::Result<uint32_t, io::serde::Error> write(const uint32_t index, const Batch &batch) {
         ASSERT(index < this->size());
-        ALP_TRY_CONTEXT(io::write_to_path(batch, this->get_batch_path(index)), fmt::format("writing batch {}", index));
+        ALP_TRY_CONTEXT(io::serde::write(batch, this->get_batch_path(index)), fmt::format("writing batch {}", index));
         return index;
     }
 
     [[nodiscard]]
-    alp::Result<Batch, io::Error> read(const uint32_t index) const {
+    alp::Result<Batch, io::serde::Error> read(const uint32_t index) const {
         ASSERT(index < this->size());
-        ALP_TRY_CONTEXT(Batch batch, io::read_from_path<Batch>(this->get_batch_path(index)), fmt::format("reading batch {}", index));
+        ALP_TRY_CONTEXT(Batch batch, io::serde::read<Batch>(this->get_batch_path(index)), fmt::format("reading batch {}", index));
         return batch;
     }
 

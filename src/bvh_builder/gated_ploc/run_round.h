@@ -9,7 +9,7 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
+#include "io/serde.h"
 #include "range_utils.h"
 #include "sink/ErasedSink.h"
 #include "sink/FnSink.h"
@@ -40,7 +40,7 @@ auto make_stage(bvh::BatchWriter &sink, Output &&output, const Options &options)
 
 // Merges `input` through the stages into `next`, returning how many entries were written to `next`.
 [[nodiscard]]
-inline alp::Result<uint64_t, io::Error> run_round(
+inline alp::Result<uint64_t, io::serde::Error> run_round(
     const frontier::Storage &input, frontier::Storage &next, bvh::Storage &output, const Options &options, const size_t stage_count) {
     ASSERT(stage_count > 0, "a round needs at least one stage");
 
@@ -59,13 +59,13 @@ inline alp::Result<uint64_t, io::Error> run_round(
         });
 
     // Built from the last stage to the first, each holding the next one by reference.
-    std::deque<ErasedSink<frontier::Entry, io::Error>> stages;
+    std::deque<ErasedSink<frontier::Entry, io::serde::Error>> stages;
     stages.emplace_front(make_stage(sink, std::move(counting_sink), options));
     for ([[maybe_unused]] const size_t i : range(size_t{1}, stage_count)) {
         stages.emplace_front(make_stage(sink, stages.front(), options));
     }
 
-    ErasedSink<frontier::Entry, io::Error> &first = stages.front();
+    ErasedSink<frontier::Entry, io::serde::Error> &first = stages.front();
     ALP_TRY(frontier::traverse_entries(input, [&first](const frontier::Entry &entry) {
         return first.push(entry);
     }));

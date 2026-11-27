@@ -15,7 +15,7 @@
 #include "error/try.h"
 #include "error/utils.h"
 #include "geometry/bounds.h"
-#include "log.h"
+#include "cli_support/log.h"
 #include "bvh/Batch.h"
 #include "bvh/NodeCache.h"
 #include "bvh/NodeHeader.h"
@@ -45,7 +45,7 @@ bool covers(const bvh::NodeHeader &parent, const bvh::NodeHeader &child) {
 
 // Walks the tree from `root`, printing every reference to a node that is not stored, every node reached more than once, every node its parent does not cover and every leaf whose errors are not monotone.
 // Marks the nodes it reached in `reached`. Returns how many violations it printed.
-alp::Result<uint64_t, io::Error> check_tree(bvh::NodeCache &cache, const bvh::Reference &root, const size_t batch_count, ReachedNodes &reached) {
+alp::Result<uint64_t, io::serde::Error> check_tree(bvh::NodeCache &cache, const bvh::Reference &root, const size_t batch_count, ReachedNodes &reached) {
     uint64_t violation_count = 0;
     std::vector<PendingNode> stack{PendingNode{.reference = root, .parent_header_opt = std::nullopt}};
     while (!stack.empty()) {
@@ -98,7 +98,7 @@ alp::Result<uint64_t, io::Error> check_tree(bvh::NodeCache &cache, const bvh::Re
 }
 
 // Prints every stored node that `reached` does not mark. Returns how many it printed.
-alp::Result<uint64_t, io::Error> check_reached(const bvh::Storage &nodes, const ReachedNodes &reached) {
+alp::Result<uint64_t, io::serde::Error> check_reached(const bvh::Storage &nodes, const ReachedNodes &reached) {
     uint64_t violation_count = 0;
     ALP_TRY(bvh::flat_traverse(nodes, [&](const bvh::Reference &reference, const bvh::Node &) {
         const std::vector<bool> &batch_reached = reached[reference.batch];

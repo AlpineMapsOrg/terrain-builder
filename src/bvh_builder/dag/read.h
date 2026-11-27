@@ -6,7 +6,6 @@
 
 #include "error/Result.h"
 #include "error/try.h"
-#include "io/Error.h"
 #include "variant_utils.h"
 
 #include "dag_id.h"
@@ -21,7 +20,7 @@ namespace dag {
 // Reads the cluster `id`.
 // Fails if its batch cannot be read.
 [[nodiscard]]
-inline alp::Result<Cluster, io::Error> read_cluster(const ClusterId id, NodeMetadataCache &cache) {
+inline alp::Result<Cluster, ReadError> read_cluster(const ClusterId id, NodeMetadataCache &cache) {
     ALP_TRY(std::shared_ptr<const NodeMetadata> batch_metadata, cache.read_metadata(id.batch));
     return Cluster(id, std::move(batch_metadata));
 }
@@ -29,7 +28,7 @@ inline alp::Result<Cluster, io::Error> read_cluster(const ClusterId id, NodeMeta
 // Reads the group `id`.
 // Fails if its batch cannot be read.
 [[nodiscard]]
-inline alp::Result<Group, io::Error> read_group(const GroupId id, NodeMetadataCache &cache) {
+inline alp::Result<Group, ReadError> read_group(const GroupId id, NodeMetadataCache &cache) {
     ALP_TRY(std::shared_ptr<const NodeMetadata> batch_metadata, cache.read_metadata(id.batch));
     return Group(id, std::move(batch_metadata));
 }
@@ -37,7 +36,7 @@ inline alp::Result<Group, io::Error> read_group(const GroupId id, NodeMetadataCa
 // Reads the child clusters of `group`.
 // Fails if one of their batches cannot be read.
 [[nodiscard]]
-inline alp::Result<std::vector<Cluster>, io::Error> read_clusters(const Group &group, NodeMetadataCache &cache) {
+inline alp::Result<std::vector<Cluster>, ReadError> read_clusters(const Group &group, NodeMetadataCache &cache) {
     std::vector<Cluster> result;
     result.reserve(group.cluster_ids().size());
     for (const ClusterId &id : group.cluster_ids()) {
@@ -50,14 +49,14 @@ inline alp::Result<std::vector<Cluster>, io::Error> read_clusters(const Group &g
 // Reads the clusters `source` stands for.
 // Fails if one of their batches cannot be read.
 [[nodiscard]]
-inline alp::Result<std::vector<Cluster>, io::Error> read_source_clusters(const SourceId &source, NodeMetadataCache &cache) {
+inline alp::Result<std::vector<Cluster>, ReadError> read_source_clusters(const SourceId &source, NodeMetadataCache &cache) {
     return match(
         source,
-        [&](const GroupId &id) -> alp::Result<std::vector<Cluster>, io::Error> {
+        [&](const GroupId &id) -> alp::Result<std::vector<Cluster>, ReadError> {
             ALP_TRY(const Group group, read_group(id, cache));
             return read_clusters(group, cache);
         },
-        [&](const ClusterId &id) -> alp::Result<std::vector<Cluster>, io::Error> {
+        [&](const ClusterId &id) -> alp::Result<std::vector<Cluster>, ReadError> {
             ALP_TRY(Cluster cluster, read_cluster(id, cache));
             return std::vector<Cluster>{std::move(cluster)};
         });

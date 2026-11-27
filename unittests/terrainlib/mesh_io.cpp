@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 Adam Celarek <last name at cg tuwien ac at>
- * Copyright (C) 2022 alpinemaps.org
+ * AlpineMaps.org
+ * Copyright (C) 2022 Adam Celarek-Litofcenko
+ * Copyright (C) 2022 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,13 +31,17 @@
 #include "../opencv_helpers.h"
 #include "../result_helpers.h"
 #include "../temp_directory.h"
+#include "common_error_codes.h"
 #include "error/format.h"
-#include "io/Error.h"
+#include "io/FileError.h"
+#include "io/envelope.h"
+#include "io/filesystem.h"
+#include "io/image/Format.h"
 #include "mesh/io.h"
-#include "mesh/io/error.h"
+#include "mesh/io/gltf.h"
 
-TEST_CASE("io roundtrip", "[mesh][io]") {
-    for (const auto &format : {"gltf", "glb", "terrain"}) {
+TEST_CASE("Saving and loading a mesh round-trips it", "[mesh][io]") {
+    for (const auto &format : {"gltf", "glb", "sfmesh"}) {
         DYNAMIC_SECTION(format) {
             mesh::Simple mesh;
 
@@ -69,7 +73,7 @@ TEST_CASE("io roundtrip", "[mesh][io]") {
             SECTION("no texture and no uvs") {
             }
 
-            if (std::string_view(format) == "terrain") {
+            if (std::string_view(format) == "sfmesh") {
                 SECTION("positions beyond float precision") {
                     const double pi = std::numbers::pi_v<double>;
                     CHECK(static_cast<double>(static_cast<float>(pi)) != pi);
@@ -81,7 +85,7 @@ TEST_CASE("io roundtrip", "[mesh][io]") {
             const TempDirectory directory("mesh_io_roundtrip");
             const std::filesystem::path mesh_path = directory.path() / fmt::format("mesh.{}", format);
 
-            REQUIRE_VALUE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}));
+            REQUIRE_VALUE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = io::image::Format::Png}));
 
             const mesh::Simple roundtrip_mesh = REQUIRE_VALUE(mesh::io::load_from_path(mesh_path));
             CHECK(roundtrip_mesh.positions == mesh.positions);
@@ -109,37 +113,38 @@ mesh::Simple make_triangle() {
 
 } // namespace
 
-TEST_CASE("Loading a mesh with an unsupported extension fails, naming the extension", "[mesh][io]") {
-    const mesh::io::Error error = REQUIRE_ERROR(mesh::io::load_from_path("mesh.xyz"));
+TEST_CASE("Loading a mesh with an unknown extension fails as unsupported", "[mesh][io]") {
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path("mesh.xyz"));
 
-    CHECK(error.holds_code(io::UnsupportedFormat{".xyz"}));
+    CHECK(error.holds<Unsupported>());
 }
 
-TEST_CASE("Saving a mesh with an unsupported extension fails, naming the extension", "[mesh][io]") {
+TEST_CASE("Saving a mesh with an unknown extension fails as unsupported", "[mesh][io]") {
     const TempDirectory directory("mesh_io_unsupported_save");
-    const mesh::io::Error error = REQUIRE_ERROR(mesh::io::save_to_path(make_triangle(), directory.path() / "mesh.xyz"));
+    const auto error = REQUIRE_ERROR(mesh::io::save_to_path(make_triangle(), directory.path() / "mesh.xyz"));
 
-    CHECK(error.holds_code(io::UnsupportedFormat{".xyz"}));
+    CHECK(error.holds<Unsupported>());
 }
 
-TEST_CASE("load_from_path of a missing file reports that it does not exist", "[mesh][io]") {
+TEST_CASE("Loading a missing mesh file reports that it does not exist", "[mesh][io]") {
     const TempDirectory directory("mesh_io_missing");
-    const std::string extension = GENERATE(".terrain", ".gltf", ".glb");
+    const std::string extension = GENERATE(".sfmesh", ".gltf", ".glb");
     const std::filesystem::path path = directory.path() / fmt::format("missing{}", extension);
 
-    const mesh::io::Error error = REQUIRE_ERROR(mesh::io::load_from_path(path));
-    CHECK(error.holds_code(io::make_file_not_found(path)));
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
+    CHECK(error.holds_code(std::errc::no_such_file_or_directory));
 }
 
-TEST_CASE("Loading a terrain file with truncated data fails with a serde error", "[mesh][io]") {
-    const TempDirectory directory("mesh_io_truncated_terrain");
-    const std::filesystem::path path = directory.path() / "mesh.terrain";
+TEST_CASE("Loading a truncated SF mesh file fails as corrupt data", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_truncated_sf_mesh");
+    const std::filesystem::path path = directory.path() / "mesh.sfmesh";
     REQUIRE_VALUE(mesh::io::save_to_path(make_triangle(), path));
-    std::filesystem::resize_file(path, std::filesystem::file_size(path) - 1);
+    const uint64_t size = REQUIRE_VALUE(io::filesystem::file_size(path));
+    REQUIRE_VALUE(io::filesystem::resize_file(path, size - 1));
 
-    const mesh::io::Error error = REQUIRE_ERROR(mesh::io::load_from_path(path));
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
 
-    CHECK(error.holds<io::SerdeError>());
+    CHECK(error.holds<io::envelope::CorruptData>());
 }
 
 TEST_CASE("Loading a glTF file without a mesh fails as unsupported", "[mesh][io]") {
@@ -147,7 +152,27 @@ TEST_CASE("Loading a glTF file without a mesh fails as unsupported", "[mesh][io]
     const std::filesystem::path path = directory.path() / "empty.gltf";
     std::ofstream(path) << R"({"asset":{"version":"2.0"}})";
 
-    const mesh::io::Error error = REQUIRE_ERROR(mesh::io::load_from_path(path));
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
 
-    CHECK(error.holds<mesh::io::UnsupportedGltf>());
+    CHECK(error.holds<Unsupported>());
+}
+
+TEST_CASE("Loading a file that is not glTF fails as corrupt data", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_corrupt_gltf");
+    const std::filesystem::path path = directory.path() / "corrupt.gltf";
+    std::ofstream(path) << "not glTF";
+
+    const auto error = REQUIRE_ERROR(mesh::io::load_from_path(path));
+
+    CHECK(error.holds<mesh::io::gltf::CorruptData>());
+}
+
+TEST_CASE("Saving a mesh onto a directory fails with a file error", "[mesh][io]") {
+    const TempDirectory directory("mesh_io_directory_save");
+    const std::filesystem::path path = directory.path() / "directory.glb";
+    REQUIRE(REQUIRE_VALUE(io::filesystem::create_directory(path)));
+
+    const auto error = REQUIRE_ERROR(mesh::io::save_to_path(make_triangle(), path));
+
+    CHECK(error.holds<io::FileError>());
 }

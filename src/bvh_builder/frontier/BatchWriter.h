@@ -5,7 +5,7 @@
 #include <span>
 
 #include "error/Result.h"
-#include "io/Error.h"
+#include "io/serde.h"
 
 #include "frontier/Storage.h"
 #include "frontier/layout.h"
@@ -24,7 +24,7 @@ public:
 
     // Appends `entry`, writing the batch out once it is full.
     [[nodiscard]]
-    alp::Result<void, io::Error> write(const Entry &entry) {
+    alp::Result<void, io::serde::Error> write(const Entry &entry) {
         this->open_batch().entries.push_back(entry);
         return this->flush_if_full();
     }
