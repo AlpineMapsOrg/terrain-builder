@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -62,8 +63,8 @@ using IntBytes = std::array<uint8_t, sizeof(int)>;
 inline store::PayloadHash int_hash(const int value, const size_t size = sizeof(int))
 {
     const IntBytes bytes = std::bit_cast<IntBytes>(value);
-    store::PayloadHash hash(bytes.begin(), bytes.end());
-    hash.resize(size, 0x5a);
+    store::PayloadHash hash(size, 0x5a);
+    std::ranges::copy(bytes | std::views::take(size), hash.begin());
     return hash;
 }
 
