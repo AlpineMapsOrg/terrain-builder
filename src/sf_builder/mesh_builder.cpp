@@ -37,7 +37,7 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "fmt_impls.h"
@@ -47,6 +47,7 @@
 #include "gis/srs/System.h"
 #include "gis/srs/Transform.h"
 #include "gis/srs/coverage.h"
+#include "gis/srs/geographic.h"
 #include "gis/srs/well_known.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
@@ -65,7 +66,7 @@ namespace sf {
 
 namespace {
 using PixelBounds = radix::geometry::Aabb2i;
-    
+
 glm::dvec3 convert_pixel_to_vertex(const float height, const glm::uvec2 pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
     const glm::dvec2 point_offset_in_raster(0.5); // Convert pixel coordinates into a point in the dataset's srs.
     const glm::dvec2 coords_raster_relative = glm::dvec2(pixel_coords) + point_offset_in_raster;
@@ -243,7 +244,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     ALP_TRY_CONTEXT(const radix::tile::SrsBounds native_bounds, alp::wrap_error(std::move(native_bounds_result), UnsupportedDataset{}), context);
     auto regions_result = compute_native_regions(source_srs, native_bounds, ecef_clip_bounds).transform_error([&](ComputeNativeRegionsError error) {
         return std::move(error)
-            .map<gis::srs::coverage::UnsupportedSystem, gis::srs::UnsupportedTransform, gis::srs::coverage::NotGeographic>(UnsupportedDataset{})
+            .map<gis::srs::coverage::UnsupportedSystem, gis::srs::UnsupportedTransform, gis::srs::NotGeographic>(UnsupportedDataset{})
             .map<gis::srs::coverage::UnsupportedBounds>(UnsupportedClip{})
             .map<gis::UntransformablePoint>(OutOfBounds{});
     });
@@ -280,7 +281,7 @@ alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
                 .map<gis::srs::coverage::UnsupportedBounds, gis::srs::TransformError>(UntransformableMesh{});
         });
         ALP_TRY_CONTEXT(const radix::geometry::Aabb3d actual_ecef_bounds, std::move(actual_ecef_bounds_result), context);
-        if (!radix::geometry::intersect(actual_ecef_bounds, ecef_clip_bounds)) {
+        if (!radix::geometry::intersect_inclusive(actual_ecef_bounds, ecef_clip_bounds)) {
             return alp::make_error(EmptyRegion{}, "the heights lie outside the clip bounds").context(context);
         }
     }

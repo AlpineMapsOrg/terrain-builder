@@ -1,6 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2026 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,22 +18,16 @@
 
 #pragma once
 
+#include <cstddef>
 #include <span>
-#include <vector>
 
-#include <glm/common.hpp>
+namespace raster_store::io::float_predictor {
 
-#include "mesh/SimpleMesh.h"
+// TIFF Predictor 3 for single-channel Float32 rows in native byte order.
+// width must be positive and data must contain complete rows of width * 4 bytes.
+// The encoded byte planes are most-significant first; differencing continues
+// across plane boundaries, resetting only at the beginning of each row.
+void encode(std::span<std::byte> data, std::size_t width);
+void decode(std::span<std::byte> data, std::size_t width);
 
-namespace mesh {
-
-void orient_triangles_inplace(const std::span<glm::uvec3> triangles);
-std::vector<glm::uvec3> orient_triangles(const std::span<glm::uvec3> triangles);
-
-template <glm::length_t n_dims, typename T>
-void orient_inplace(mesh::Simple_<n_dims, T> &mesh) {
-    orient_triangles_inplace(mesh.triangles);
-}
-
-} // namespace mesh
-
+} // namespace raster_store::io::float_predictor

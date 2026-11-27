@@ -27,6 +27,8 @@
 
 #include <radix/tile.h>
 
+namespace tile_downloader {
+
 enum class TileDownloadProvider {
     Basemap,
     Gataki,
@@ -98,3 +100,5 @@ private:
     std::string _url_pattern;
     TileYDirection _y_direction;
 };
+
+} // namespace tile_downloader

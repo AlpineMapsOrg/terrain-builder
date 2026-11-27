@@ -30,7 +30,6 @@
 
 namespace io::json {
 
-// An error from writing a JSON file.
 using WriteError = alp::Error<Unsupported, FileError>;
 
 // Writes `value` to `path` as JSON laid out as `format`.

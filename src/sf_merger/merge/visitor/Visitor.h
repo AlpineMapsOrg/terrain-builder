@@ -39,7 +39,7 @@ concept Visitor = requires(T t, const octree::Id &id) {
             std::declval<const NodeData<hierarchy::NodeStatusOrMissing::Leaf> &>(),
             std::declval<const NodeData<hierarchy::NodeStatusOrMissing::Leaf> &>(),
             std::declval<const typename T::Context &>())
-    } -> std::same_as<Result<typename T::Context>>;
+    } -> std::same_as<alp::Result<Result<typename T::Context>, NodeLoader::LoadError>>;
 };
 
 } // namespace merge

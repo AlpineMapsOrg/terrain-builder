@@ -30,6 +30,7 @@
 
 #include "error/ErrorCode.h"
 #include "error/Infallible.h"
+#include "std_compat.h"
 #include "type_utils.h"
 
 namespace alp {
@@ -94,7 +95,7 @@ public:
     template <ErrorCode... Fs, typename Self, typename Visitor>
     [[nodiscard]]
     auto visit_if(this Self &&self, Visitor &&visitor) {
-        using Result = std::common_type_t<decltype(std::invoke(visitor, std::forward_like<Self>(std::declval<Fs &>())))...>;
+        using Result = std::common_type_t<decltype(std::invoke(visitor, std_compat::forward_like<Self>(std::declval<Fs &>())))...>;
         return std::forward<Self>(self).visit([&]<typename E>(E &&code) -> std::optional<Result> {
             if constexpr (OneOf<std::remove_cvref_t<E>, Fs...>) {
                 return std::invoke(visitor, std::forward<E>(code));

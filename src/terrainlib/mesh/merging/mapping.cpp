@@ -36,7 +36,7 @@
 
 #include "build_config.h"
 #include "containers/UnionFind.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/convert.h"
 #include "mesh/connectivity/boundary.h"
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
@@ -262,7 +262,7 @@ SimpleMesh apply_mapping(
     if (max_vertex_index == 0) {
         return {};
     }
-    
+
     DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {

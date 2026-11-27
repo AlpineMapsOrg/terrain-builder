@@ -26,7 +26,7 @@
 
 #include "cli_support/log.h"
 
-namespace cli {
+namespace tile_downloader::cli {
 
 Args parse(int argc, const char *const *argv) {
     CLI::App app{"tile-downloader"};
@@ -78,4 +78,4 @@ Args parse(int argc, const char *const *argv) {
     return args;
 }
 
-} // namespace cli
+} // namespace tile_downloader::cli

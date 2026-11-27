@@ -15,7 +15,8 @@
 #include "io/serde.h"
 #include "io/FileError.h"
 #include "io/filesystem.h"
-#include "cli_support/log.h"
+#include "io/filesystem_utils.h"
+#include "log.h"
 
 class BaseStorage {
 public:

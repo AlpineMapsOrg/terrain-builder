@@ -27,6 +27,7 @@
 
 #include <fmt/format.h>
 #include <glm/gtx/component_wise.hpp>
+#include <libassert/assert.hpp>
 #include <tbb/concurrent_vector.h>
 
 #include "build.h"
@@ -37,10 +38,11 @@
 #include "compact.h"
 #include "geometry/geometry.h"
 #include "numeric/int_math.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
+#include "fmt_impls.h"
 #include "merge/clusterings.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
@@ -54,7 +56,6 @@
 #include "partition.h"
 #include "simplify.h"
 #include "slice.h"
-#include "stop.h"
 #include "store/Checkpointer.h"
 #include "range_utils.h"
 #include "parent_child_nodes.h"
@@ -320,7 +321,7 @@ std::optional<dag::ClusterBatch> build_node(
     const auto node_bounds = ctx.shifted_space.get_node_bounds(target_id);
     const double epsilon = compute_epsilon(node_bounds);
 
-    // Prepare filter to only include clusters inside the target_id bounds. 
+    // Prepare filter to only include clusters inside the target_id bounds.
     // In CurrentAndCoarser mode, input regions represented by the relevant DAG nodes are excluded as well.
     RegionFilter input_filter;
     input_filter.include = {node_bounds};
@@ -390,7 +391,7 @@ std::vector<octree::Id> find_relevant_input_nodes(
             const std::vector<octree::Id> &input_nodes = input_by_level[level];
             for (const octree::Id& input_id : input_nodes) {
                 const radix::geometry::Aabb3d input_bounds = space.get_node_bounds(input_id);
-                if (radix::geometry::intersect(target_bounds, input_bounds)) {
+                if (radix::geometry::intersect_inclusive(target_bounds, input_bounds)) {
                     result.push_back(input_id);
                 }
             }
@@ -473,12 +474,12 @@ std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
     hierarchy::traverse(
         index.map(),
         [&](const octree::Id &id, const hierarchy::NodeStatus status) {
-            if (status == hierarchy::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
+            if (status == hierarchy::NodeStatus::Leaf && radix::geometry::intersect_inclusive(root_bounds, space.get_node_bounds(id))) {
                 result[id.level()].push_back(id);
             }
         },
         [&](const octree::Id &id) {
-            return radix::geometry::intersect(root_bounds, space.get_node_bounds(id));
+            return radix::geometry::intersect_inclusive(root_bounds, space.get_node_bounds(id));
         },
         start);
     return result;
@@ -529,7 +530,6 @@ alp::Result<std::unordered_set<octree::Id>, BuildError> build_level(
 
     // Links the target from the checkpoint, or builds and saves it.
     const auto process_target = [&](const octree::Id& target) -> alp::Result<void, BuildError> {
-        ALP_TRY(check_not_stopped(ctx.stop));
         if (ctx.checkpoint.has(target)) {
             auto link_result = ctx.output_storage.link_from(target, ctx.checkpoint);
             ALP_TRY(alp::wrap_error(std::move(link_result), BuildIoError::IncompatibleCheckpoint));
@@ -563,7 +563,7 @@ alp::Result<std::unordered_set<octree::Id>, BuildError> build_level(
         auto target_result = process_target(target);
         progress.task_finished();
         return target_result;
-    }, execution);
+    }, ctx.stop, execution);
 
     // Targets skipped after a failure never finish, so the monitor has to be stopped rather than waited for.
     progress_thread.request_stop();

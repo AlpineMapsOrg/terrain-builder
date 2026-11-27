@@ -34,13 +34,17 @@ inline constexpr std::string_view metadata_file_name = "raster_store.metadata";
 // What a raster storage records once at creation: the ids every storage records, and the shape and meaning of its tiles.
 struct Metadata {
     store::Metadata ids;
-    // The side length in pixels of a stored tile, halo included.
+    // The side length in pixels of a stored tile, halo and overlap included.
     uint32_t stored_tile_size;
     // The side length in pixels of a tile's interior.
     uint32_t nominal_tile_size;
     // The number of halo pixels on each side of a tile's interior.
     uint32_t halo_width;
     pixel::Mapping value_mapping;
+    // Whether samples lie at cell centres or on grid vertices.
+    pixel::Placement placement;
+    // The number of pixels past the interior at the eastern and southern edges, which close a vertex tile's grid.
+    uint32_t overlap;
 
     bool operator==(const Metadata&) const = default;
 };

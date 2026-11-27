@@ -54,7 +54,7 @@ template <AnyVecRange Range>
 auto calculate_bounds(const Range &points) {
     using T = range_scalar_t<Range>;
     constexpr glm::length_t n_dims = range_dims_v<Range>;
-    
+
     radix::geometry::Aabb<n_dims, T> bounds = detail::empty_bounds<n_dims, T>();
     extend_bounds(bounds, points);
     return bounds;

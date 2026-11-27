@@ -12,7 +12,7 @@
 #include "error/Result.h"
 #include "error/try.h"
 #include "io/serde.h"
-#include "cli_support/log.h"
+#include "log.h"
 
 namespace bvh {
 

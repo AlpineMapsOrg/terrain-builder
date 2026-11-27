@@ -18,20 +18,25 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <random>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_precision.hpp>
 
+#include "../assertion_helpers.h"
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
 #include "../temp_directory.h"
@@ -44,20 +49,37 @@
 #include "io/image.h"
 #include "io/serde.h"
 #include "raster_store/Tile.h"
-#include "raster_store/TileCodec.h"
+#include "raster_store/io/TileCodec.h"
 #include "raster_store_test_utils.h"
 #include "store/Codec.h"
 #include "store/Hash.h"
 
 namespace {
 
-namespace tile_codec = raster_store::tile_codec;
-using raster_store::TileCodec;
+namespace tile_codec = raster_store::io::tile_codec;
+using raster_store::io::TileCodec;
 using raster_store_test::check_bytes;
+
+// What the tests of each image codec need to know about it.
+struct Amoit {
+    static constexpr tile_codec::DataEncoding encoding = tile_codec::DataEncoding::JpegXl;
+    using Schema = tile_codec::ImageTileSchema;
+    static constexpr io::image::Format format = io::image::Format::JpegXl;
+    static constexpr std::string_view extension = ".amoit";
+    static constexpr int max_error = 4;
+};
+
+struct Amojt {
+    static constexpr tile_codec::DataEncoding encoding = tile_codec::DataEncoding::Jpeg;
+    using Schema = tile_codec::JpegTileSchema;
+    static constexpr io::image::Format format = io::image::Format::Jpeg;
+    static constexpr std::string_view extension = ".amojt";
+    static constexpr int max_error = 6;
+};
 
 } // namespace
 
-TEMPLATE_TEST_CASE("AMORT preserves native scalar and packed vector bytes", "[raster_store][TileCodec]",
+TEMPLATE_TEST_CASE("AMORT preserves native scalar and packed vector bytes", "[raster_store][io][TileCodec]",
     float, double, int16_t, uint32_t, glm::vec3, glm::u8vec3)
 {
     const TempDirectory directory("amort-bytes");
@@ -82,7 +104,7 @@ TEMPLATE_TEST_CASE("AMORT preserves native scalar and packed vector bytes", "[ra
     check_bytes(REQUIRE_VALUE(writer.read(uncompressed_path)).data, tile.data);
 }
 
-TEST_CASE("AMORT never replaces an existing tile file", "[raster_store][TileCodec]")
+TEST_CASE("AMORT never replaces an existing tile file", "[raster_store][io][TileCodec]")
 {
     const TempDirectory directory("amort-exclusive");
     const std::filesystem::path path = directory.path() / "tile";
@@ -99,7 +121,7 @@ TEST_CASE("AMORT never replaces an existing tile file", "[raster_store][TileCode
     CHECK(REQUIRE_VALUE(io::bytes::read(file)) == original);
 }
 
-TEST_CASE("AMORT preserves NaN bits and data beneath NoData pixels", "[raster_store][TileCodec]")
+TEST_CASE("AMORT preserves NaN bits and data beneath NoData pixels", "[raster_store][io][TileCodec]")
 {
     const TempDirectory directory("amort-nan");
     raster_store::Tile<float> tile(3);
@@ -114,7 +136,7 @@ TEST_CASE("AMORT preserves NaN bits and data beneath NoData pixels", "[raster_st
     check_bytes(read.attribution, tile.attribution);
 }
 
-TEST_CASE("AMORT validates dimensions and byte counts before allocating typed rasters", "[raster_store][TileCodec]")
+TEST_CASE("AMORT validates dimensions and byte counts before allocating typed rasters", "[raster_store][io][TileCodec]")
 {
     const TempDirectory directory("amort-validation");
     const std::filesystem::path path = directory.path() / "tile";
@@ -128,9 +150,9 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     CHECK(REQUIRE_ERROR(amort.read(path)).holds<store::CorruptData>());
 }
 
-TEST_CASE("AMOIT stores RGB8 data lossily and attribution exactly", "[raster_store][TileCodec]")
+TEMPLATE_TEST_CASE("image tile codecs store RGB8 data lossily and attribution exactly", "[raster_store][io][TileCodec]", Amoit, Amojt)
 {
-    const TempDirectory directory("amoit-lossy");
+    const TempDirectory directory("image-lossy");
     raster_store::Tile<glm::u8vec3> tile(32);
     for (uint32_t y = 0; y < 32; y++) {
         for (uint32_t x = 0; x < 32; x++) {
@@ -140,11 +162,11 @@ TEST_CASE("AMOIT stores RGB8 data lossily and attribution exactly", "[raster_sto
     }
     tile.attribution.pixel({ 31, 31 }) = 65534;
     const std::filesystem::path path = directory.path() / "tile";
-    const TileCodec<glm::u8vec3, tile_codec::DataEncoding::JpegXl> amoit(32);
-    CHECK(amoit.paths(path) == std::vector { std::filesystem::path(path.string() + ".amoit") });
-    const store::PayloadHash hash = REQUIRE_VALUE(amoit.write(path, tile));
+    const TileCodec<glm::u8vec3, TestType::encoding> codec(32);
+    CHECK(codec.paths(path) == std::vector { std::filesystem::path(path.string() + std::string(TestType::extension)) });
+    const store::PayloadHash hash = REQUIRE_VALUE(codec.write(path, tile));
     CHECK(hash.size() >= store::min_hash_size);
-    const raster_store::Tile<glm::u8vec3> read = REQUIRE_VALUE(amoit.read(path, hash));
+    const raster_store::Tile<glm::u8vec3> read = REQUIRE_VALUE(codec.read(path, hash));
     check_bytes(read.attribution, tile.attribution);
     REQUIRE(read.data.size() == tile.data.size());
     int max_error = 0;
@@ -153,37 +175,118 @@ TEST_CASE("AMOIT stores RGB8 data lossily and attribution exactly", "[raster_sto
         max_error = std::max({ max_error, difference.x, difference.y, difference.z });
     }
     CHECK(max_error > 0);
-    CHECK(max_error <= 4);
-    const auto error = REQUIRE_ERROR(amoit.write(path, tile));
-    CHECK(error.holds_and<io::FileError>([](const io::FileError& e) { return e.code() == std::errc::file_exists; }));
+    CHECK(max_error <= TestType::max_error);
+    const auto error = REQUIRE_ERROR(codec.write(path, tile));
+    CHECK(error.template holds_and<io::FileError>([](const io::FileError& e) { return e.code() == std::errc::file_exists; }));
 }
 
-TEST_CASE("AMOIT validates images and attribution against the tile dimensions", "[raster_store][TileCodec]")
+TEST_CASE("AMOJT stores the JPEG that io::image encodes for the tile", "[raster_store][io][TileCodec]")
 {
-    const TempDirectory directory("amoit-validation");
+    const TempDirectory directory("amojt-payload");
+    raster_store::Tile<glm::u8vec3> tile(8);
+    for (uint32_t y = 0; y < 8; y++) {
+        for (uint32_t x = 0; x < 8; x++) {
+            tile.data.pixel({ x, y }) = glm::u8vec3(30 * x, 30 * y, 90);
+        }
+    }
     const std::filesystem::path path = directory.path() / "tile";
-    const TileCodec<glm::u8vec3, tile_codec::DataEncoding::JpegXl> amoit(3);
-    const std::filesystem::path file = amoit.paths(path).front();
-    tile_codec::detail::v1::RasterTile encoded { 3, 3, REQUIRE_VALUE(io::image::encode(io::image::RGB8(3), io::image::Format::JpegXl)), io::bytes::vector(18) };
+    const TileCodec<glm::u8vec3, tile_codec::DataEncoding::Jpeg> amojt(8);
+    REQUIRE_VALUE(amojt.write(path, tile));
+    const tile_codec::detail::v1::RasterTile encoded = REQUIRE_VALUE(io::envelope::read<tile_codec::JpegTileSchema>(amojt.paths(path).front()));
+    CHECK(encoded.data == REQUIRE_VALUE(io::image::encode(tile.data, io::image::Format::Jpeg)));
+}
+
+TEMPLATE_TEST_CASE("image tile codecs validate images and attribution against the tile dimensions", "[raster_store][io][TileCodec]", Amoit, Amojt)
+{
+    const TempDirectory directory("image-validation");
+    const std::filesystem::path path = directory.path() / "tile";
+    const TileCodec<glm::u8vec3, TestType::encoding> codec(3);
+    const std::filesystem::path file = codec.paths(path).front();
+    tile_codec::detail::v1::RasterTile encoded { 3, 3, REQUIRE_VALUE(io::image::encode(io::image::RGB8(3), TestType::format)), io::bytes::vector(18) };
     bool valid = false;
     SECTION("valid") { valid = true; }
     SECTION("wrong dimensions") { encoded.width = 4; }
-    SECTION("image of other dimensions") { encoded.data = REQUIRE_VALUE(io::image::encode(io::image::RGB8(4), io::image::Format::JpegXl)); }
+    SECTION("image of other dimensions") { encoded.data = REQUIRE_VALUE(io::image::encode(io::image::RGB8(4), TestType::format)); }
     SECTION("truncated image") { encoded.data.resize(encoded.data.size() / 2); }
     SECTION("long attribution") { encoded.source_attribution.push_back(0); }
-    REQUIRE_VALUE(io::envelope::write<tile_codec::ImageTileSchema>(encoded, file, { .mode = io::WriteMode::Overwrite }));
+    REQUIRE_VALUE(io::envelope::write<typename TestType::Schema>(encoded, file, { .mode = io::WriteMode::Overwrite }));
     if (valid) {
-        REQUIRE_VALUE(amoit.read(path));
+        REQUIRE_VALUE(codec.read(path));
     } else {
-        CHECK(REQUIRE_ERROR(amoit.read(path)).holds<store::CorruptData>());
+        CHECK(REQUIRE_ERROR(codec.read(path)).template holds<store::CorruptData>());
     }
 
     // AMORT payloads use another envelope class.
     REQUIRE_VALUE(io::envelope::write<tile_codec::TileSchema>(encoded, file, { .mode = io::WriteMode::Overwrite }));
-    CHECK(REQUIRE_ERROR(amoit.read(path)).holds<store::CorruptData>());
+    CHECK(REQUIRE_ERROR(codec.read(path)).template holds<store::CorruptData>());
 }
 
-TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster_store][TileCodec]")
+TEST_CASE("AMOFT preserves all Float32 bits and attribution with both Zstd settings", "[raster_store][io][TileCodec]")
+{
+    const uint32_t side = GENERATE(1u, 3u, 17u, 64u);
+    const io::compression::Algorithm compression = GENERATE(io::compression::Algorithm::ZstdDefault, io::compression::Algorithm::ZstdBest);
+    const TempDirectory directory("amoft-bits");
+    raster_store::Tile<float> tile(side);
+    std::mt19937 random(42);
+    std::ranges::generate(tile.data.buffer(), [&random]() { return std::bit_cast<float>(static_cast<uint32_t>(random())); });
+    // Zeros, infinities, NaNs with payloads, denormals and the extremes.
+    constexpr std::array<uint32_t, 12> special_bits = {
+        0x00000000, 0x80000000, 0x7f800000, 0xff800000, 0x7fc01234, 0xffc05678, 0x7f801234, 0x00000001, 0x80000001, 0x007fffff, 0x00800000, 0x7f7fffff
+    };
+    for (auto [value, bits] : std::views::zip(tile.data.buffer(), special_bits)) {
+        value = std::bit_cast<float>(bits);
+    }
+    // Values under NoData must also keep every bit.
+    tile.attribution.fill(0);
+    tile.attribution.pixel({ side - 1, 0 }) = 65534;
+    const radix::Raster<float> original = tile.data;
+
+    const std::filesystem::path path = directory.path() / "tile";
+    const TileCodec<float, tile_codec::DataEncoding::FloatPredictor> writer(side, compression);
+    const store::PayloadHash hash = REQUIRE_VALUE(writer.write(path, tile));
+    check_bytes(tile.data, original);
+    CHECK(writer.paths(path).front().extension() == ".amoft");
+    const io::envelope::Header header = REQUIRE_VALUE(io::envelope::read_header(writer.paths(path).front()));
+    CHECK(header.class_name == "raster_store.FloatTile");
+    CHECK(header.compression_algorithm == compression);
+
+    // The reader takes the compression from the envelope.
+    const TileCodec<float, tile_codec::DataEncoding::FloatPredictor> reader(side);
+    const raster_store::Tile<float> read = REQUIRE_VALUE(reader.read(path, hash));
+    check_bytes(read.data, original);
+    check_bytes(read.attribution, tile.attribution);
+    const auto error = REQUIRE_ERROR(writer.write(path, tile));
+    CHECK(error.holds_and<io::FileError>([](const io::FileError& e) { return e.code() == std::errc::file_exists; }));
+}
+
+TEST_CASE("AMOFT rejects wrong dimensions, byte counts and envelope classes", "[raster_store][io][TileCodec]")
+{
+    const TempDirectory directory("amoft-validation");
+    const std::filesystem::path path = directory.path() / "tile";
+    const TileCodec<float, tile_codec::DataEncoding::FloatPredictor> amoft(3);
+    const std::filesystem::path file = amoft.paths(path).front();
+    tile_codec::detail::v1::RasterTile encoded { 3, 3, io::bytes::vector(36), io::bytes::vector(18) };
+    SECTION("wrong width") { encoded.width = 4; }
+    SECTION("no dimensions")
+    {
+        encoded.width = 0;
+        encoded.height = 0;
+    }
+    SECTION("empty data") { encoded.data.clear(); }
+    SECTION("short data") { encoded.data.pop_back(); }
+    SECTION("long data") { encoded.data.push_back(0); }
+    SECTION("short attribution") { encoded.source_attribution.pop_back(); }
+    REQUIRE_VALUE(io::envelope::write<tile_codec::FloatTileSchema>(encoded, file, { .mode = io::WriteMode::Overwrite }));
+    CHECK(REQUIRE_ERROR(amoft.read(path)).holds<store::CorruptData>());
+
+    // AMORT payloads use another envelope class.
+    REQUIRE_VALUE(io::envelope::write<tile_codec::TileSchema>(encoded, file, { .mode = io::WriteMode::Overwrite }));
+    CHECK(REQUIRE_ERROR(amoft.read(path)).holds<store::CorruptData>());
+
+    CHECK_ASSERTS(amoft.write(directory.path() / "other", raster_store::Tile<float>(4)));
+}
+
+TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster_store][io][TileCodec]")
 {
     const TempDirectory directory("amort-envelope");
     const std::filesystem::path path = directory.path() / "tile";
@@ -207,7 +310,7 @@ TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster_stor
     }
 }
 
-TEST_CASE("AMORT tiles return and verify their payload hash", "[raster_store][TileCodec]")
+TEST_CASE("AMORT tiles return and verify their payload hash", "[raster_store][io][TileCodec]")
 {
     const TempDirectory directory("amort-hash");
     const std::filesystem::path path = directory.path() / "tile";

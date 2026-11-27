@@ -34,4 +34,3 @@ namespace cli {
 
     Args parse(int argc, const char *const *argv);
 }
-

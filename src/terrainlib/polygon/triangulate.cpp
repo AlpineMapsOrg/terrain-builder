@@ -31,7 +31,7 @@
 #include <CGAL/mark_domain_in_triangulation.h>
 
 #include "build_config.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "polygon/triangulate.h"
@@ -83,7 +83,7 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
     if (indices.size() < 3) {
         return;
     }
-    
+
     DEBUG_ASSERT(indices.size() <= mesh.positions.size());
 
     // Build the 3D points of the polygon

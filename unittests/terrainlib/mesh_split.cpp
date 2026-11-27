@@ -174,7 +174,7 @@ TEST_CASE("mesh::split_by_vertex") {
         // Only first triangle is fully in group 0 for this partition.
         CHECK(result.groups[0].triangles.size() == 1);
         CHECK(result.groups[1].triangles.empty());
-        
+
         mesh::debug_assert_valid_basic(result.groups[0]);
         mesh::debug_assert_valid_basic(result.groups[1]);
     }

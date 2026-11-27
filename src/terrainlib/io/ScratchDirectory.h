@@ -9,6 +9,7 @@
 #include "error/try.h"
 #include "io/FileError.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 
 namespace io {
 

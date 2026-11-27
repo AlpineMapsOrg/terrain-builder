@@ -40,7 +40,6 @@
 #include <libassert/assert.hpp>
 #include <ogrsf_frmts.h>
 
-#include "cli_support/log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "geometry/geometry.h"
@@ -49,6 +48,7 @@
 #include "gis/srs/Kind.h"
 #include "gis/srs/classify.h"
 #include "gis/srs/well_known.h"
+#include "log.h"
 #include "mesh/convert.h"
 
 namespace gis::vector_mask {

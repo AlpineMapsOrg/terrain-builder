@@ -30,8 +30,8 @@
 #include <fmt/ostream.h>
 #include <magic_enum/magic_enum.hpp>
 
-#include "cli_support/log.h"
 #include "hierarchy/NodeStatus.h"
+#include "log.h"
 
 namespace hierarchy {
 

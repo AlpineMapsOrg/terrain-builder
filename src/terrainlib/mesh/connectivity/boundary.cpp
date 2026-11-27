@@ -82,7 +82,7 @@ std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uv
     std::vector<std::vector<uint32_t>> boundaries;
     while (!boundary_edges.empty()) {
         std::vector<uint32_t> boundary;
-        
+
         const glm::uvec2 starting_edge = *boundary_edges.begin();
         remove_edge(starting_edge);
 
@@ -93,7 +93,7 @@ std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uv
         while (true) {
             const auto& neighbours = adjacencies[current_vertex_id];
             DEBUG_ASSERT(neighbours.size() >= 1);
-            
+
             const uint32_t next_vertex_id = neighbours[0];
             const glm::uvec2 edge(current_vertex_id, next_vertex_id);
             remove_edge(edge);

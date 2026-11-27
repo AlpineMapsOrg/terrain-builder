@@ -30,6 +30,7 @@
 
 #include "common_error_codes.h"
 #include "error/utils.h"
+#include "range_utils.h"
 
 namespace io {
 
@@ -55,7 +56,7 @@ inline alp::Error<Unsupported> make_unsupported_extension_error(
     const std::string_view extension,
     const std::span<const std::string_view> supported,
     const std::source_location location = std::source_location::current()) {
-    UnknownExtension source{.extension = std::string(extension), .supported = std::vector<std::string>(supported.begin(), supported.end())};
+    UnknownExtension source{.extension = std::string(extension), .supported = to_vector<std::string>(supported)};
     return alp::make_error(Unsupported{}, std::move(source), location);
 }
 

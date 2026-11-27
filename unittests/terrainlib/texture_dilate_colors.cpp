@@ -21,6 +21,7 @@
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "../assertion_helpers.h"
 #include "../catch2_helpers.h"
 #include "../opencv_helpers.h"
 
@@ -149,7 +150,7 @@ TEST_CASE("dilate_colors rejects a coverage that does not match the image", "[te
     Input input = make_input(glm::uvec2(3));
     texture::Mask wrong_size(glm::uvec2(4));
 
-    CHECK_THROWS(texture::dilate_colors_inplace(input.image, wrong_size, 1));
+    CHECK_ASSERTS(texture::dilate_colors_inplace(input.image, wrong_size, 1));
 }
 
 TEST_CASE("dilate_colors leaves the input alone when returning a copy", "[terrainlib][texture_dilate_colors]") {

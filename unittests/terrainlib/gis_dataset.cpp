@@ -19,11 +19,13 @@
 
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
+#include "../temp_directory.h"
 
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cpl_error.h>
 #include <gdal_priv.h>
 
+#include <array>
 #include <filesystem>
 #include <limits>
 #include <optional>
@@ -32,6 +34,7 @@
 #include "gis/Dataset.h"
 #include "gis/GeoTransform.h"
 #include "gis/gdal.h"
+#include "gis/srs/well_known.h"
 #include "gis/webmercator.h"
 
 using namespace radix;
@@ -64,15 +67,15 @@ TEST_CASE("datasets are as expected", "[gis][Dataset]") {
 
     SECTION("coverage") {
         {
-            const auto mgi_coverage = d_mgi.mercator_coverage().value();
-            const auto wgs84_coverage = d_wgs84.mercator_coverage().value();
+            const auto mgi_coverage = REQUIRE_VALUE(d_mgi.mercator_coverage());
+            const auto wgs84_coverage = REQUIRE_VALUE(d_wgs84.mercator_coverage());
             REQUIRE(mgi_coverage.size() == 1);
             REQUIRE(wgs84_coverage.size() == 1);
             check_bounds(mgi_coverage.front(), wgs84_coverage.front());
         }
         {
-            const auto mgi_coverage = d_mgi.geographic_coverage().value();
-            const auto wgs84_coverage = d_wgs84.geographic_coverage().value();
+            const auto mgi_coverage = REQUIRE_VALUE(d_mgi.geographic_coverage());
+            const auto wgs84_coverage = REQUIRE_VALUE(d_wgs84.geographic_coverage());
             REQUIRE(mgi_coverage.size() == 1);
             REQUIRE(wgs84_coverage.size() == 1);
             check_bounds(mgi_coverage.front(), wgs84_coverage.front());
@@ -214,33 +217,61 @@ TEST_CASE("bounds rejects GCP, RPC and geolocation-array georeferencing", "[gis]
     CHECK(error.holds<Unsupported>());
 }
 
+TEST_CASE("bounds3d contains every height of the band", "[gis][Dataset]") {
+    auto dataset = memory_raster({ 10, 2, 0, 50, 0, -4 }, { 4, 2 }, 4326);
+    GDALRasterBand *band = dataset.as_gdal()->GetRasterBand(1);
+    std::array<float, 8> heights = { -3.5f, 0, 1, 2, 3, 4, 5, 12.25f };
+    REQUIRE(band->RasterIO(GF_Write, 0, 0, 4, 2, heights.data(), 4, 2, GDT_Float32, 0, 0) == CE_None);
+    SECTION("without statistics") {}
+    SECTION("with computed statistics") { REQUIRE(band->ComputeStatistics(false, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr) == CE_None); }
+
+    const radix::tile::SrsAndHeightBounds bounds = REQUIRE_VALUE(dataset.bounds3d());
+
+    // The first pixel holds the lowest height and the last one the highest.
+    CHECK(bounds.contains_inclusive(glm::dvec3(11, 48, -3.5)));
+    CHECK(bounds.contains_inclusive(glm::dvec3(17, 44, 12.25)));
+}
+
+TEST_CASE("bounds3d accepts a band in metres or without a unit", "[gis][Dataset]") {
+    auto dataset = memory_raster({ 10, 2, 0, 50, 0, -4 }, { 4, 2 }, 4326);
+    SECTION("metres") { REQUIRE(dataset.as_gdal()->GetRasterBand(1)->SetUnitType("m") == CE_None); }
+    SECTION("no unit") {}
+
+    REQUIRE_VALUE(dataset.bounds3d());
+}
+
+TEST_CASE("bounds3d rejects a band whose height unit is not metres", "[gis][Dataset]") {
+    auto dataset = memory_raster({ 10, 2, 0, 50, 0, -4 }, { 4, 2 }, 4326);
+    REQUIRE(dataset.as_gdal()->GetRasterBand(1)->SetUnitType("ft") == CE_None);
+
+    const auto error = REQUIRE_ERROR(dataset.bounds3d());
+
+    CHECK(error.holds<Unsupported>());
+}
+
 TEST_CASE("dataset coverage is split at the antimeridian", "[gis][Dataset]") {
     const auto dataset = memory_raster({ 170, 0.625, 0, 5, 0, -0.3125 }, { 32, 32 }, 4326);
 
-    const auto geographic = dataset.geographic_coverage();
-    REQUIRE(geographic);
-    REQUIRE(geographic->size() == 2);
-    check_bounds_near((*geographic)[0], { { 170, -5 }, { 180, 5 } }, 1e-9);
-    check_bounds_near((*geographic)[1], { { -180, -5 }, { -170, 5 } }, 1e-9);
+    const auto geographic = REQUIRE_VALUE(dataset.geographic_coverage());
+    REQUIRE(geographic.size() == 2);
+    check_bounds_near(geographic[0], { { 170, -5 }, { 180, 5 } }, 1e-9);
+    check_bounds_near(geographic[1], { { -180, -5 }, { -170, 5 } }, 1e-9);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    REQUIRE(mercator_bounds->size() == 2);
-    check_bounds_near((*mercator_bounds)[0], { mercator(170, -5), mercator(180, 5) }, 1e-3);
-    check_bounds_near((*mercator_bounds)[1], { mercator(-180, -5), mercator(-170, 5) }, 1e-3);
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    REQUIRE(mercator_bounds.size() == 2);
+    check_bounds_near(mercator_bounds[0], { mercator(170, -5), mercator(180, 5) }, 1e-3);
+    check_bounds_near(mercator_bounds[1], { mercator(-180, -5), mercator(-170, 5) }, 1e-3);
 }
 
 TEST_CASE("dataset coverage beyond the polar limit is empty in web mercator", "[gis][Dataset]") {
     const auto dataset = memory_raster({ 10, 0.1, 0, 89, 0, -0.02 }, { 32, 32 }, 4326);
 
-    const auto geographic = dataset.geographic_coverage();
-    REQUIRE(geographic);
-    REQUIRE(geographic->size() == 1);
-    check_bounds_near(geographic->front(), { { 10, 88.36 }, { 13.2, 89 } }, 1e-9);
+    const auto geographic = REQUIRE_VALUE(dataset.geographic_coverage());
+    REQUIRE(geographic.size() == 1);
+    check_bounds_near(geographic.front(), { { 10, 88.36 }, { 13.2, 89 } }, 1e-9);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    CHECK(mercator_bounds->empty());
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    CHECK(mercator_bounds.empty());
 }
 
 TEST_CASE("web mercator dataset coverage is exact", "[gis][Dataset]") {
@@ -248,26 +279,23 @@ TEST_CASE("web mercator dataset coverage is exact", "[gis][Dataset]") {
     const double side = gis::webmercator::half_extent / 4;
     const auto dataset = memory_raster({ 0, side / 32, 0, side, 0, -side / 32 }, { 32, 32 }, 3857);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    REQUIRE(mercator_bounds->size() == 1);
-    CHECK(mercator_bounds->front().min == glm::dvec2(0, 0));
-    CHECK(mercator_bounds->front().max == glm::dvec2(side, side));
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    REQUIRE(mercator_bounds.size() == 1);
+    CHECK(mercator_bounds.front().min == glm::dvec2(0, 0));
+    CHECK(mercator_bounds.front().max == glm::dvec2(side, side));
 }
 
 TEST_CASE("global dataset coverage is a single world rectangle", "[gis][Dataset]") {
     const auto dataset = memory_raster({ -180, 0.5, 0, 90, 0, -0.5 }, { 720, 360 }, 4326);
 
-    const auto geographic = dataset.geographic_coverage();
-    REQUIRE(geographic);
-    REQUIRE(geographic->size() == 1);
-    check_bounds_near(geographic->front(), { { -180, -90 }, { 180, 90 } }, 1e-9);
+    const auto geographic = REQUIRE_VALUE(dataset.geographic_coverage());
+    REQUIRE(geographic.size() == 1);
+    check_bounds_near(geographic.front(), { { -180, -90 }, { 180, 90 } }, 1e-9);
 
-    const auto mercator_bounds = dataset.mercator_coverage();
-    REQUIRE(mercator_bounds);
-    REQUIRE(mercator_bounds->size() == 1);
+    const auto mercator_bounds = REQUIRE_VALUE(dataset.mercator_coverage());
+    REQUIRE(mercator_bounds.size() == 1);
     const double half = gis::webmercator::half_extent;
-    check_bounds_near(mercator_bounds->front(), { { -half, -half }, { half, half } }, 1e-3);
+    check_bounds_near(mercator_bounds.front(), { { -half, -half }, { half, half } }, 1e-3);
 }
 
 TEST_CASE("pixel_transform fails as ambiguous for a raster with a second kind of georeferencing", "[gis][Dataset]") {
@@ -340,23 +368,50 @@ TEST_CASE("open_raster, open_vector and open_shared_raster keep GDAL's message f
     std::optional<gis::CplError> error;
 
     SECTION("raster") {
-        const auto result = gis::Dataset::open_raster(path);
-        REQUIRE(!result.has_value());
-        error = result.error().code();
+        error = REQUIRE_ERROR(gis::Dataset::open_raster(path)).code();
     }
 
     SECTION("vector") {
-        const auto result = gis::Dataset::open_vector(path);
-        REQUIRE(!result.has_value());
-        error = result.error().code();
+        error = REQUIRE_ERROR(gis::Dataset::open_vector(path)).code();
     }
 
     SECTION("shared raster") {
-        const auto result = gis::Dataset::open_shared_raster(path);
-        REQUIRE(!result.has_value());
-        error = result.error().code();
+        error = REQUIRE_ERROR(gis::Dataset::open_shared_raster(path)).code();
     }
 
     CPLErrorReset();
     CHECK(error->message() != gis::CplError::get_last_error().message());
+}
+
+TEST_CASE("reopen opens the dataset again as the same kind", "[gis][Dataset]") {
+    gis::gdal::initialize_once();
+    GDALDriver *driver = GetGDALDriverManager()->GetDriverByName("GPKG");
+    REQUIRE(driver != nullptr);
+    const TempDirectory directory;
+    const std::filesystem::path path = directory.path() / "raster_and_layer.gpkg";
+    {
+        // A GeoPackage registers its raster table once the raster has a geotransform and a system.
+        gis::Dataset raster(driver->Create(path.c_str(), 4, 4, 1, GDT_Byte, nullptr));
+        std::array<double, 6> geotransform{0, 1, 0, 4, 0, -1};
+        REQUIRE(raster.as_gdal()->SetGeoTransform(geotransform.data()) == CE_None);
+        REQUIRE(raster.as_gdal()->SetSpatialRef(&gis::srs::webmercator().as_gdal()) == CE_None);
+    }
+    {
+        gis::Dataset layers(GDALDataset::Open(path.c_str(), GDAL_OF_VECTOR | GDAL_OF_UPDATE));
+        REQUIRE(layers.as_gdal()->CreateLayer("points", nullptr, wkbPoint, nullptr) != nullptr);
+    }
+
+    SECTION("raster") {
+        const gis::Dataset original = REQUIRE_VALUE(gis::Dataset::open_raster(path));
+        gis::Dataset reopened = REQUIRE_VALUE(original.reopen());
+        CHECK(reopened.band_count() != 0);
+        CHECK(reopened.as_gdal()->GetLayerCount() == 0);
+    }
+
+    SECTION("vector") {
+        const gis::Dataset original = REQUIRE_VALUE(gis::Dataset::open_vector(path));
+        gis::Dataset reopened = REQUIRE_VALUE(original.reopen());
+        CHECK(reopened.band_count() == 0);
+        CHECK(reopened.as_gdal()->GetLayerCount() == 1);
+    }
 }

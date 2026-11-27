@@ -31,7 +31,7 @@
 #include <glm/gtx/vector_angle.hpp>
 
 #include "containers/FixedVector.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/connectivity/connected_components.h"
 #include "mesh/holes.h"
 #include "mesh/connectivity/boundary.h"
@@ -41,7 +41,7 @@
 #include "vector_utils.h"
 
 namespace mesh {
-    
+
 namespace {
 using Edge = glm::uvec2;
 using VertexIndex = uint32_t;

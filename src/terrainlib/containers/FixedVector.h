@@ -48,7 +48,7 @@ public:
 
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
-    
+
     constexpr FixedVector() = default;
 
     FixedVector(std::initializer_list<T> init) {
@@ -215,7 +215,7 @@ public:
         }
         this->destroy_back();
     }
-    
+
     T &back() {
         if (this->_size == 0) {
             throw std::out_of_range("empty vector");

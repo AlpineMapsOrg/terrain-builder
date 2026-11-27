@@ -24,7 +24,7 @@
 #include <opencv2/opencv.hpp>
 
 namespace mesh {
-    
+
 template <bool IsMut, glm::length_t dimensions, typename T>
 class View__;
 

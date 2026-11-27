@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <string>
@@ -27,9 +28,20 @@
 
 #include "raster/algorithm/fold.h"
 
+namespace {
+template <typename T>
+radix::Raster<T> samples(glm::uvec2 size, std::initializer_list<T> values)
+{
+    radix::Raster<T> raster(size, radix::uninitialised);
+    REQUIRE(values.size() == raster.buffer_length());
+    std::copy(values.begin(), values.end(), raster.begin());
+    return raster;
+}
+} // namespace
+
 TEST_CASE("fold visits raster and view pixels read-only in row order", "[raster-fold]")
 {
-    radix::Raster<int> values({ 3, 2 }, std::vector<int> { 1, 2, 3, 4, 5, 6 });
+    auto values = samples<int>({ 3, 2 }, { 1, 2, 3, 4, 5, 6 });
     const auto append = [](std::string state, const int& pixel) { return state + std::to_string(pixel); };
     CHECK(raster::algorithm::fold(values, std::string {}, append) == "123456");
     CHECK(raster::algorithm::fold(std::as_const(values), std::string {}, append) == "123456");
@@ -50,14 +62,13 @@ TEST_CASE("fold supports empty rasters and move-only accumulators", "[raster-fol
     };
     radix::Raster<int> empty;
     CHECK(*raster::algorithm::fold(empty, std::make_unique<int>(42), sum) == 42);
-    radix::Raster<int> values({ 2, 2 }, std::vector<int> { 1, 2, 3, 4 });
+    auto values = samples<int>({ 2, 2 }, { 1, 2, 3, 4 });
     CHECK(*raster::algorithm::fold(values, std::make_unique<int>(5), sum) == 15);
 }
 
 TEST_CASE("fold accumulates finite min and max together", "[raster-fold]")
 {
-    const radix::Raster<double> values(
-        { 3, 2 }, std::vector<double> { std::numeric_limits<double>::quiet_NaN(), -7, 12, 3, std::numeric_limits<double>::infinity(), -2 });
+    const auto values = samples<double>({ 3, 2 }, { std::numeric_limits<double>::quiet_NaN(), -7, 12, 3, std::numeric_limits<double>::infinity(), -2 });
     const auto extrema = raster::algorithm::fold(values,
         std::pair { std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity() },
         [](std::pair<double, double> state, const double& value) {

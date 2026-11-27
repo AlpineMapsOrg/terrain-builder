@@ -144,14 +144,46 @@ auto transform_vector(Range &&range, Op&& op) {
     return result;
 }
 
+// std::ranges::to<std::vector>(range).
 template <std::ranges::input_range Range>
 auto to_vector(Range &&range) {
     return std::ranges::to<std::vector>(std::forward<Range>(range));
 }
 
+// std::ranges::to<std::vector<T>>(range).
 template <typename T, std::ranges::input_range Range>
 std::vector<T> to_vector(Range &&range) {
     return std::ranges::to<std::vector<T>>(std::forward<Range>(range));
+}
+
+namespace detail {
+
+struct ToDeducedVector : std::ranges::range_adaptor_closure<ToDeducedVector> {
+    template <std::ranges::input_range Range>
+    auto operator()(Range &&range) const {
+        return to_vector(std::forward<Range>(range));
+    }
+};
+
+template <typename T>
+struct ToTypedVector : std::ranges::range_adaptor_closure<ToTypedVector<T>> {
+    template <std::ranges::input_range Range>
+    std::vector<T> operator()(Range &&range) const {
+        return to_vector<T>(std::forward<Range>(range));
+    }
+};
+
+} // namespace detail
+
+// std::ranges::to<std::vector>(), for a pipe.
+constexpr detail::ToDeducedVector to_vector() {
+    return {};
+}
+
+// std::ranges::to<std::vector<T>>(), for a pipe.
+template <typename T>
+constexpr detail::ToTypedVector<T> to_vector() {
+    return {};
 }
 
 template <std::ranges::input_range Range, typename T, typename F>

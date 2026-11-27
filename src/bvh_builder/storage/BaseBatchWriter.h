@@ -6,7 +6,7 @@
 #include "io/serde.h"
 
 #include "containers/UniqueResource.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "storage/batch_limits.h"
 #include "error/Result.h"
 #include "error/format.h"

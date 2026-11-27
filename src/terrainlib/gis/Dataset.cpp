@@ -26,7 +26,9 @@
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 #include <cpl_error.h>
@@ -35,16 +37,18 @@
 #include <libassert/assert.hpp>
 #include <ogrsf_frmts.h>
 
-#include "cli_support/log.h"
+#include "earth.h"
 #include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "gis/OgrError.h"
 #include "gis/gdal.h"
 #include "gis/srs/System.h"
+#include "gis/srs/Unit.h"
 #include "gis/srs/classify.h"
 #include "gis/srs/coverage.h"
 #include "gis/srs/well_known.h"
+#include "log.h"
 
 namespace gis {
 
@@ -68,17 +72,20 @@ static alp::Result<GDALDataset *, CplError> open_gdal_dataset(const std::filesys
 }
 
 alp::Result<Dataset, CplError> Dataset::open_raster(std::filesystem::path path) {
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, GDAL_OF_RASTER));
-    return Dataset(path, dataset);
+    constexpr uint32_t open_flags = GDAL_OF_RASTER;
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, open_flags));
+    return Dataset(path, dataset, open_flags);
 }
 alp::Result<Dataset, CplError> Dataset::open_vector(std::filesystem::path path) {
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, GDAL_OF_VECTOR));
-    return Dataset(path, dataset);
+    constexpr uint32_t open_flags = GDAL_OF_VECTOR;
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, open_flags));
+    return Dataset(path, dataset, open_flags);
 }
 // TODO: investigate GDAL_OF_THREAD_SAFE again (see 7455f47b)
 alp::Result<std::shared_ptr<Dataset>, CplError> Dataset::open_shared_raster(std::filesystem::path path) {
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, GDAL_OF_RASTER));
-    return std::make_shared<Dataset>(Dataset(path, dataset));
+    constexpr uint32_t open_flags = GDAL_OF_RASTER;
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(path, open_flags));
+    return std::make_shared<Dataset>(Dataset(path, dataset, open_flags));
 }
 
 Dataset::Dataset(std::filesystem::path path) {
@@ -99,16 +106,16 @@ Dataset::Dataset(GDALDataset *dataset) {
         throw std::runtime_error("Dataset is null.");
     }
 }
-Dataset::Dataset(const std::filesystem::path path, GDALDataset *dataset) : Dataset(dataset) {
+Dataset::Dataset(const std::filesystem::path path, GDALDataset *dataset, const uint32_t open_flags) : Dataset(dataset) {
     m_path = path;
+    m_open_flags = open_flags;
 }
 
-// TODO: rename to reopen and fix flag mismatch
-alp::Result<Dataset, CplError> Dataset::clone() const {
-    LOG_TRACE("Cloning dataset {}.", m_path.has_value() ? m_path->string() : "unknown");
-    ASSERT(m_path.has_value(), "only a dataset opened from a path can be cloned");
-    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(this->m_path.value(), 0));
-    return Dataset(this->m_path.value(), dataset);
+alp::Result<Dataset, CplError> Dataset::reopen() const {
+    LOG_TRACE("Reopening dataset {}.", m_path.has_value() ? m_path->string() : "unknown");
+    ASSERT(m_path.has_value(), "only a dataset opened from a path can be reopened");
+    ALP_TRY(GDALDataset *dataset, open_gdal_dataset(this->m_path.value(), this->m_open_flags));
+    return Dataset(this->m_path.value(), dataset, this->m_open_flags);
 }
 
 std::vector<GeoreferencingKind> Dataset::georeferencing_kinds() const {
@@ -223,13 +230,25 @@ alp::Result<radix::tile::SrsBounds, Dataset::ComputeBoundsError> Dataset::bounds
 alp::Result<radix::tile::SrsAndHeightBounds, Dataset::ComputeBoundsError> Dataset::bounds3d(bool approx_ok) const {
     const auto band = this->m_gdal_dataset->GetRasterBand(1);
 
+    // GDAL reports a band without unit metadata as an empty unit type.
+    const std::string_view unit_name = band->GetUnitType();
+    if (unit_name.empty()) {
+        LOG_WARN("Dataset {} does not declare a height unit, assuming metres", this->name());
+    } else {
+        const std::optional<srs::Unit> unit_opt = srs::parse_length_unit(unit_name);
+        if (!unit_opt.has_value() || !unit_opt->is_approx(srs::units::metre)) {
+            const auto message = alp::make_context("the height unit '{}' is not metres", unit_name);
+            const auto context = alp::make_context("computing the 3D bounds of {}", this->name());
+            return alp::make_error(Unsupported{}, message).context(context);
+        }
+    }
+
     glm::dvec2 height_range;
     const auto result = band->GetStatistics(approx_ok, false, &height_range.x, &height_range.y, nullptr, nullptr);
     if (result != CE_None) {
-        const char *unit = band->GetUnitType();
-        ASSERT(unit != nullptr);
-        ASSERT(strcmp(unit, "m") == 0 || strcmp(unit, "meters") == 0);
-        height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
+        // Twice the geoid's largest departure covers heights above the ellipsoid as well as above the geoid.
+        const double margin = 2 * earth::largest_geoid_undulation;
+        height_range = earth::elevation_range + glm::dvec2(-margin, margin);
     }
 
     ALP_TRY(const radix::tile::SrsBounds bounds2d, this->bounds());

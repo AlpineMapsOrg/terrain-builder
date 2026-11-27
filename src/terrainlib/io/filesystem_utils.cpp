@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -29,6 +29,9 @@
 #endif
 
 #include "containers/UniqueResource.h"
+#include "error/try.h"
+#include "error/utils.h"
+#include "io/filesystem.h"
 
 namespace io::filesystem {
 
@@ -91,6 +94,42 @@ alp::Result<bool, FileError> on_same_filesystem(const std::filesystem::path &fir
 #else
     return alp::make_error(FileError(std::errc::operation_not_supported, first), context);
 #endif
+}
+
+alp::Result<void, FileError> require_absent(const std::filesystem::path &path) {
+    const FileError exists_error(std::errc::file_exists, path);
+    ALP_TRY(const bool symlink, filesystem::is_symlink(path));
+    if (symlink) {
+        return alp::make_error(exists_error, "the path is a symlink");
+    }
+    ALP_TRY(const bool exists, filesystem::exists(path));
+    if (exists) {
+        return alp::make_error(exists_error);
+    }
+    return {};
+}
+
+alp::Result<void, FileError> require_same_filesystem(const std::filesystem::path &source, const std::filesystem::path &output) {
+    const auto context = alp::make_context("checking whether {} can be hard linked into {}", source, output);
+
+    // The output may not exist yet, so its closest existing ancestor decides its filesystem.
+    ALP_TRY_CONTEXT(const std::filesystem::path absolute_output, filesystem::absolute(output), context);
+    std::filesystem::path parent = absolute_output.parent_path();
+    ALP_TRY_CONTEXT(bool parent_exists, filesystem::exists(parent), context);
+    while (!parent_exists) {
+        // A root is its own parent, so nothing up to the root exists.
+        if (parent == parent.parent_path()) {
+            return alp::make_error(FileError(std::errc::no_such_file_or_directory, parent)).context(context);
+        }
+        parent = parent.parent_path();
+        ALP_TRY_CONTEXT(parent_exists, filesystem::exists(parent), context);
+    }
+
+    ALP_TRY_CONTEXT(const bool same_filesystem, filesystem::on_same_filesystem(source, parent), context);
+    if (!same_filesystem) {
+        return alp::make_error(FileError(std::errc::cross_device_link, output)).context(context);
+    }
+    return {};
 }
 
 } // namespace io::filesystem

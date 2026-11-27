@@ -35,6 +35,7 @@
 #include <libassert/assert.hpp>
 
 #include "containers/indirect.h"
+#include "numeric/checked_cast.h"
 #include "range_utils.h"
 #include "variant_utils.h"
 
@@ -239,7 +240,7 @@ inline std::optional<int64_t> Value::as_int64() const {
     return match<std::optional<int64_t>>(
         this->_value,
         [](const int64_t value) { return value; },
-        [](const uint64_t value) { return std::in_range<int64_t>(value) ? std::optional(static_cast<int64_t>(value)) : std::nullopt; },
+        [](const uint64_t value) { return try_cast<int64_t>(value); },
         [](const auto &) { return std::nullopt; });
 }
 
@@ -247,7 +248,7 @@ inline std::optional<uint64_t> Value::as_uint64() const {
     return match<std::optional<uint64_t>>(
         this->_value,
         [](const uint64_t value) { return value; },
-        [](const int64_t value) { return std::in_range<uint64_t>(value) ? std::optional(static_cast<uint64_t>(value)) : std::nullopt; },
+        [](const int64_t value) { return try_cast<uint64_t>(value); },
         [](const auto &) { return std::nullopt; });
 }
 

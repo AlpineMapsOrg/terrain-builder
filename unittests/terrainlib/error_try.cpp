@@ -50,7 +50,7 @@ struct MoveOnlyError {
     std::unique_ptr<int> value;
 };
 
-std::string_view format_as(const MoveOnlyError &) {
+[[maybe_unused]] std::string_view format_as(const MoveOnlyError &) {
     return "move only";
 }
 
@@ -397,7 +397,7 @@ TEST_CASE("ALP_TRY_CONTEXT takes an expression with commas inside parentheses", 
     const auto add = [&make_pair]() -> alp::Result<int, FileError> {
         ALP_TRY_CONTEXT(const auto pair, (make_pair(1, 2)), "adding the pair");
         return pair.first + pair.second;
-    }; 
+    };
 
     CHECK(add().value() == 3);
 }

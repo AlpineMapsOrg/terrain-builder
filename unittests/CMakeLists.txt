@@ -31,6 +31,7 @@ function(atb_configure_test target)
 endfunction()
 
 add_executable(unittests_terrainlib
+    assertion_helpers.h
     catch2_helpers.h
     opencv_helpers.h
     result_helpers.h
@@ -71,6 +72,7 @@ add_executable(unittests_terrainlib
     terrainlib/gis_srs_classify.cpp
     terrainlib/gis_srs_coverage.cpp
     terrainlib/gis_srs_detail_benchmark.cpp
+    terrainlib/gis_srs_geographic.cpp
     terrainlib/gis_srs_system.cpp
     terrainlib/gis_srs_thread_local_system.cpp
     terrainlib/gis_srs_transform.cpp
@@ -91,6 +93,7 @@ add_executable(unittests_terrainlib
     terrainlib/io_conversion.cpp
     terrainlib/io_envelope.cpp
     terrainlib/io_filesystem.cpp
+    terrainlib/io_filesystem_utils.cpp
     terrainlib/io_hash.cpp
     terrainlib/io_image.cpp
     terrainlib/io_json_file.cpp
@@ -109,8 +112,6 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_codec.cpp
     terrainlib/mesh_combine.cpp
     terrainlib/mesh_connected_components.cpp
-    terrainlib/mesh_cut.cpp
-    terrainlib/mesh_cut_to_disk.cpp
     terrainlib/mesh_encode.cpp
     terrainlib/mesh_holes.cpp
     terrainlib/mesh_io.cpp
@@ -118,6 +119,7 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_manifold.cpp
     terrainlib/mesh_merge.cpp
     terrainlib/mesh_merge_mapping.cpp
+    terrainlib/mesh_primitives.cpp
     terrainlib/mesh_reindex.cpp
     terrainlib/mesh_split.cpp
     terrainlib/mesh_storage.cpp
@@ -147,12 +149,15 @@ add_executable(unittests_terrainlib
     terrainlib/raster_fold.cpp
     terrainlib/raster_store_attribution_table.cpp
     terrainlib/raster_store_attribution_table_file.cpp
+    terrainlib/raster_store_io_float_predictor.cpp
+    terrainlib/raster_store_io_tile_codec.cpp
+    terrainlib/raster_store_io_tile_codec_benchmark.cpp
     terrainlib/raster_store_path_layout.cpp
     terrainlib/raster_store_storage.cpp
     terrainlib/raster_store_storage_index_format.cpp
+    terrainlib/raster_store_storage_metadata.cpp
     terrainlib/raster_store_store_traits.cpp
     terrainlib/raster_store_test_utils.h
-    terrainlib/raster_store_tile_codec.cpp
     terrainlib/raster_tile_pool.cpp
     terrainlib/raster_view.cpp
     terrainlib/segmented_buffer.cpp
@@ -162,6 +167,7 @@ add_executable(unittests_terrainlib
     terrainlib/spatial_lookup.cpp
     terrainlib/spsc_channel.cpp
     terrainlib/stamp_set.cpp
+    terrainlib/std_compat.cpp
     terrainlib/store_checkpoint.cpp
     terrainlib/store_codec.cpp
     terrainlib/store_draft.cpp
@@ -183,7 +189,8 @@ add_executable(unittests_terrainlib
     terrainlib/uv_atlas.cpp
     terrainlib/zpp_bits_utils.cpp
 )
-target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain)
+# io_image.cpp creates CMYK JPEG images with TurboJPEG.
+target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain libjpeg-turbo::turbojpeg-static)
 atb_configure_test(unittests_terrainlib)
 
 # Keep the aligned GLM configuration isolated from terrainlib and its PCH.
@@ -195,6 +202,7 @@ target_link_libraries(unittests_glm_serialization_aligned PRIVATE glm::glm zpp_b
 
 if(TARGET sfbuilderlib)
     add_executable(unittests_sfbuilder
+        assertion_helpers.h
         catch2_helpers.h
         opencv_helpers.h
         result_helpers.h
@@ -214,6 +222,7 @@ endif()
 if(TARGET tile-downloader)
     find_package(CURL REQUIRED)
     add_executable(unittests_tile_downloader
+        assertion_helpers.h
         result_helpers.h
         temp_directory.h
         throwing_assertions.cpp
@@ -221,7 +230,6 @@ if(TARGET tile-downloader)
         tile_downloader/http_client.cpp
         tile_downloader/logger.cpp
         tile_downloader/url_builder.cpp
-        tile_downloader/write_file.cpp
     )
     target_include_directories(unittests_tile_downloader PRIVATE ${PROJECT_SOURCE_DIR}/src/tile_downloader)
     target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain CURL::libcurl)
@@ -305,6 +313,7 @@ endif()
 
 if(TARGET sfmergerlib)
     add_executable(unittests_sfmerger
+        assertion_helpers.h
         catch2_helpers.h
         result_helpers.h
         temp_directory.h
@@ -326,4 +335,3 @@ if(TARGET sfmergerlib)
     endif()
     atb_configure_test(unittests_sfmerger)
 endif()
-

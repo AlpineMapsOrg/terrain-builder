@@ -18,26 +18,48 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "TileDownloader.h"
+#include <cstdlib>
+#include <utility>
+
+#include "Downloader.h"
+#include "HttpClient.h"
 #include "TileUrlBuilder.h"
 #include "cli.h"
-#include "cli_support/log.h"
+#include "common_error_codes.h"
+#include "error/Context.h"
+#include "error/Result.h"
+#include "error/log.h"
+#include "error/try.h"
+#include "error/utils.h"
+#include "log.h"
 
-int main(int argc, char *argv[]) {
-    const auto args = cli::parse(argc, argv);
-    cli_support::Log::init(args.log_level);
-
+[[nodiscard]]
+alp::Result<void> run(const tile_downloader::cli::Args &args) {
     if (args.srs != 3857) {
-        LOG_ERROR_AND_EXIT("unsupported srs: EPSG \"{}\"", args.srs);
+        return alp::make_error(Unsupported{}, alp::make_context("EPSG:{} as the output SRS", args.srs));
     }
 
     const auto provider_config = args.provider.has_value()
-        ? tile_provider_config(*args.provider)
-        : TileProviderConfig { *args.url_pattern, args.url_y_direction };
-    const TileUrlBuilder url_builder(provider_config);
+        ? tile_downloader::tile_provider_config(*args.provider)
+        : tile_downloader::TileProviderConfig { *args.url_pattern, args.url_y_direction };
+    const tile_downloader::TileUrlBuilder url_builder(provider_config);
 
     const radix::tile::Id root_id = {args.zoom, {args.x, args.y}};
 
-    TileDownloader downloader(url_builder, args.output, args.max_zoom_level, root_id.zoom_level);
-    return downloader.download_recursive(root_id) ? 0 : 1;
+    ALP_TRY(tile_downloader::HttpClient http, tile_downloader::HttpClient::make());
+    tile_downloader::Downloader downloader(url_builder, std::move(http), args.output, args.max_zoom_level, root_id.zoom_level);
+    ALP_TRY(downloader.download_recursive(root_id));
+    return {};
+}
+
+int main(int argc, char **argv) {
+    const tile_downloader::cli::Args args = tile_downloader::cli::parse(argc, argv);
+    logging::Log::init(args.log_level);
+
+    const alp::Result<void> result = run(args);
+    if (!result.has_value()) {
+        LOG_REPORT(result.error());
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }

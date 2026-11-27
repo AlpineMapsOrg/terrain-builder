@@ -72,7 +72,7 @@ cgal::Mesh to_cgal_mesh(const mesh::View &mesh) {
 
 SimpleMesh to_simple_mesh(const cgal::Mesh &cgal_mesh) {
     ASSERT(!cgal_mesh.has_garbage());
-    
+
     SimpleMesh mesh;
 
     auto uv_map_opt = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv");
@@ -80,7 +80,7 @@ SimpleMesh to_simple_mesh(const cgal::Mesh &cgal_mesh) {
     UvMap uv_map;
     if (has_uvs) {
         uv_map = std::move(uv_map_opt.value());
-    }   
+    }
 
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
     const size_t face_count = CGAL::num_faces(cgal_mesh);
@@ -113,5 +113,5 @@ SimpleMesh to_simple_mesh(const cgal::Mesh &cgal_mesh) {
 
     return mesh;
 }
- 
+
 }

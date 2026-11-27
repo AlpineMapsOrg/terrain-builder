@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
-#include <functional>
 #include <ranges>
 #include <span>
 #include <string_view>
@@ -38,6 +37,7 @@
 #include "error/try.h"
 #include "fmt_impls.h"
 #include "io/UnknownExtension.h"
+#include "range_utils.h"
 #include "string_utils.h"
 
 namespace io::image {
@@ -80,15 +80,20 @@ constexpr std::string_view to_extension(const Format format) {
 // The extensions format_from_extension recognises.
 inline constexpr auto extensions = [] {
     static constexpr auto extensions_by_format = transform_array(magic_enum::enum_values<Format>(), to_extensions);
-    std::array<std::string_view, std::ranges::distance(extensions_by_format | std::views::join)> result;
-    std::ranges::copy(extensions_by_format | std::views::join, result.begin());
+    constexpr size_t extension_count = sum(extensions_by_format, std::ranges::size);
+    std::array<std::string_view, extension_count> result;
+    auto output = result.begin();
+    for (const std::span<const std::string_view> format_extensions : extensions_by_format) {
+        output = std::ranges::copy(format_extensions, output).out;
+    }
     return result;
 }();
 
 // The format that `extension`, with its dot, names, ignoring ASCII case.
 inline alp::Result<Format, Unsupported> format_from_extension(const std::string_view extension) {
     for (const Format format : magic_enum::enum_values<Format>()) {
-        if (std::ranges::any_of(to_extensions(format), std::bind_front(equals_ignore_ascii_case, extension))) {
+        // TODO: switch back to std::bind_front once CI no longer builds with clang against libstdc++ 14.2
+        if (std::ranges::any_of(to_extensions(format), [&](const std::string_view e) { return equals_ignore_ascii_case(extension, e); })) {
             return format;
         }
     }

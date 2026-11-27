@@ -26,7 +26,7 @@
 #include "io/json/Value.h"
 
 namespace mesh::io {
-    
+
 struct LoadOptions {
 };
 

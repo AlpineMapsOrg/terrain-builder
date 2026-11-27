@@ -68,7 +68,6 @@ template <typename T, size_t MaxSize = max_buffer_size>
 [[nodiscard]]
 alp::Result<T, DeserializeError> deserialize(bytes::span bytes);
 
-// How `write` treats an existing file and missing parent directories.
 using WriteOptions = bytes::WriteOptions;
 
 using WriteError = alp::Error<bytes::WriteError, SerializeError>;
@@ -83,7 +82,6 @@ template <typename T>
 [[nodiscard]]
 alp::Result<T, ReadError> read(const std::filesystem::path &path);
 
-// An error from reading or writing an encoded value.
 using Error = alp::Error<ReadError, WriteError>;
 
 } // namespace io::serde

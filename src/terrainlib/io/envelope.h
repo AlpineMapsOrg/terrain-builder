@@ -55,7 +55,7 @@ struct Header {
     std::string class_name;
     uint32_t class_version;
     hash::Algorithm hash_algorithm;
-    // hash::data of the uncompressed payload.
+    // hash::compute of the uncompressed payload.
     bytes::vector hash;
     compression::Algorithm compression_algorithm;
     uint64_t uncompressed_size;
@@ -75,7 +75,6 @@ struct CorruptData : alp::MessageCode<"the data is not a valid envelope"> {};
 
 using HeaderError = alp::Error<CorruptData, Unsupported>;
 
-// How `serialize` encodes the payload.
 struct SerializeOptions {
     compression::Algorithm compression_algorithm = compression::Algorithm::ZstdDefault;
     hash::Algorithm hash_algorithm = hash::Algorithm::Xxh3_64;
@@ -92,7 +91,6 @@ template <typename Schema>
 [[nodiscard]]
 alp::Result<bytes::vector, SerializeError> serialize(const typename Schema::Latest &payload, SerializeOptions options = {});
 
-// What `deserialize` accepts.
 struct DeserializeOptions {
     // The hash the header must record, if given.
     std::optional<bytes::span> expected_hash = std::nullopt;
@@ -106,7 +104,6 @@ template <typename Schema>
 [[nodiscard]]
 alp::Result<typename Schema::Latest, DeserializeError> deserialize(bytes::span bytes, DeserializeOptions options = {});
 
-// What `read` accepts.
 using ReadOptions = DeserializeOptions;
 
 using ReadError = alp::Error<bytes::ReadError, DeserializeError>;
@@ -115,7 +112,6 @@ template <typename Schema>
 [[nodiscard]]
 alp::Result<typename Schema::Latest, ReadError> read(const std::filesystem::path &path, ReadOptions options = {});
 
-// How `write` encodes the payload and treats an existing file and missing parent directories.
 struct WriteOptions {
     WriteMode mode = default_write_mode;
     bool make_dirs = default_make_dirs;
@@ -135,7 +131,6 @@ using ReadHeaderError = alp::Error<bytes::ReadError, HeaderError>;
 [[nodiscard]]
 alp::Result<Header, ReadHeaderError> read_header(const std::filesystem::path &path);
 
-// An error from reading or writing an envelope.
 using Error = alp::Error<ReadError, WriteError>;
 
 namespace detail {
@@ -194,7 +189,7 @@ alp::Result<Envelope, SerializeError> make_envelope(const typename Schema::templ
             .class_name = std::string{Schema::class_name},
             .class_version = VersionNumber,
             .hash_algorithm = options.hash_algorithm,
-            .hash = hash::data(payload_bytes, options.hash_algorithm),
+            .hash = hash::compute(payload_bytes, options.hash_algorithm),
             .compression_algorithm = options.compression_algorithm,
             .uncompressed_size = payload_bytes.size(),
         },
@@ -251,7 +246,7 @@ alp::Result<typename Schema::Latest, DeserializeError> deserialize(const bytes::
     if (payload_bytes.size() != header.uncompressed_size) {
         return alp::make_error(CorruptData{}, fmt::format("the payload has {} bytes, not the {} bytes the header declares", payload_bytes.size(), header.uncompressed_size)).context(context);
     }
-    if (hash::data(payload_bytes, header.hash_algorithm) != header.hash) {
+    if (hash::compute(payload_bytes, header.hash_algorithm) != header.hash) {
         return alp::make_error(CorruptData{}, "the payload does not have the hash the header records").context(context);
     }
     if (options.expected_hash.has_value() && !std::ranges::equal(header.hash, *options.expected_hash)) {

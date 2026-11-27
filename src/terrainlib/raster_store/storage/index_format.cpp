@@ -72,7 +72,7 @@ struct Hierarchy {
 
 } // namespace v1
 
-using IndexSchema = io::envelope::PayloadSchema<"raster_store.Index", io::envelope::Version<1, v1::Hierarchy>>;
+using IndexSchema = ::io::envelope::PayloadSchema<"raster_store.Index", ::io::envelope::Version<1, v1::Hierarchy>>;
 using Hierarchy = IndexSchema::Latest;
 
 Hierarchy encode_index(const Index& index) {
@@ -143,7 +143,7 @@ alp::Result<Index, store::CorruptIndex> decode_index(const Hierarchy& encoded) {
 alp::Result<Index, store::ReadIndexError> read_index(const std::filesystem::path& base_path) {
     const std::filesystem::path path = base_path / index_file_name;
     const auto context = alp::make_context("reading the storage's index from {}", path);
-    auto read_result = io::envelope::read<IndexSchema>(path).transform_error(store::to_read_index_error);
+    auto read_result = ::io::envelope::read<IndexSchema>(path).transform_error(store::to_read_index_error);
     ALP_TRY_CONTEXT(const Hierarchy encoded_index, std::move(read_result), context);
     ALP_TRY_CONTEXT(Index index, decode_index(encoded_index), context);
     return index;
@@ -153,7 +153,7 @@ alp::Result<void, store::WriteIndexError> write_index(const std::filesystem::pat
     const std::filesystem::path path = base_path / index_file_name;
     const auto context = alp::make_context("writing the storage's index to {}", path);
     const Hierarchy encoded_index = encode_index(index);
-    auto write_result = io::envelope::write<IndexSchema>(encoded_index, path, {.mode = io::WriteMode::Replace}).transform_error(store::to_write_index_error);
+    auto write_result = ::io::envelope::write<IndexSchema>(encoded_index, path, {.mode = ::io::WriteMode::Replace}).transform_error(store::to_write_index_error);
     ALP_TRY_CONTEXT(std::move(write_result), context);
     return {};
 }

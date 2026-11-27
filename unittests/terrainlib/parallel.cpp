@@ -23,6 +23,7 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,7 @@
 #include "error/Result.h"
 #include "error/utils.h"
 #include "parallel.h"
+#include "stop.h"
 
 namespace {
 
@@ -60,6 +62,75 @@ TEST_CASE("for_each runs the body once for every item", "[parallel]") {
 
     std::ranges::sort(seen);
     CHECK(seen == std::vector<uint32_t>{3, 5, 8, 13});
+}
+
+// Every item below 8 adds its two children in a binary heap numbering, so the root 1 reaches 1 to 15.
+TEST_CASE("for_each runs the items a body adds through its feeder", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {1};
+
+    std::mutex seen_mutex;
+    std::vector<uint32_t> seen;
+    parallel::for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) {
+        if (item < 8) {
+            feeder.add(2 * item);
+            feeder.add(2 * item + 1);
+        }
+        const std::lock_guard lock(seen_mutex);
+        seen.push_back(item);
+    }, execution);
+
+    std::ranges::sort(seen);
+    CHECK(seen == std::vector<uint32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
+}
+
+TEST_CASE("for_each lets the body change the items of the range", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    std::vector<uint32_t> items = {3, 5, 8, 13};
+
+    SECTION("without a feeder") {
+        parallel::for_each(items, [](uint32_t &item) { item *= 2; }, execution);
+    }
+    SECTION("with a feeder") {
+        parallel::for_each(items, [](uint32_t &item, parallel::Feeder<uint32_t> &) { item *= 2; }, execution);
+    }
+
+    CHECK(items == std::vector<uint32_t>{6, 10, 16, 26});
+}
+
+TEST_CASE("for_each with a stop token starts no item after a body requested the stop in a serial run", "[parallel]") {
+    const std::vector<uint32_t> items = {3, 5, 8, 13};
+    std::stop_source stop;
+
+    std::vector<uint32_t> seen;
+    parallel::for_each(items, [&](const uint32_t &item) {
+        seen.push_back(item);
+        if (item == 5) {
+            stop.request_stop();
+        }
+    }, stop.get_token(), parallel::Execution::Serial);
+
+    CHECK(seen == std::vector<uint32_t>{3, 5});
+}
+
+TEST_CASE("for_each with a stop token starts no item that a body adds after it requested the stop", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {1};
+    std::stop_source stop;
+
+    std::mutex seen_mutex;
+    std::vector<uint32_t> seen;
+    parallel::for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) {
+        if (item == 1) {
+            stop.request_stop();
+            feeder.add(2);
+            feeder.add(3);
+        }
+        const std::lock_guard lock(seen_mutex);
+        seen.push_back(item);
+    }, stop.get_token(), execution);
+
+    CHECK(seen == std::vector<uint32_t>{1});
 }
 
 TEST_CASE("try_for_each runs the body once for every item", "[parallel]") {
@@ -96,7 +167,7 @@ TEST_CASE("try_for_each returns the error of the body that failed", "[parallel]"
     const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
     const std::vector<uint32_t> items = {3, 5, 8, 13};
 
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         if (item == 8) {
             return alp::make_error(FailedItem{item});
         }
@@ -112,7 +183,7 @@ TEST_CASE("try_for_each runs no item after the first failure of a serial run", "
     const std::vector<uint32_t> items = {3, 5, 8, 13};
 
     std::vector<uint32_t> seen;
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         seen.push_back(item);
         if (item == 5 || item == 13) {
             return alp::make_error(FailedItem{item});
@@ -129,7 +200,7 @@ TEST_CASE("try_for_each runs no item after the first failure of a serial run", "
 TEST_CASE("try_for_each returns one of the errors when several bodies of a parallel run fail", "[parallel]") {
     const std::vector<uint32_t> items = {3, 5, 8, 13};
 
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
         if (item == 5 || item == 13) {
             return alp::make_error(FailedItem{item});
         }
@@ -163,11 +234,31 @@ TEST_CASE("try_for_each runs the items a body adds through its feeder", "[parall
     CHECK(seen == std::vector<uint32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 }
 
+TEST_CASE("try_for_each lets the body change the items of the range", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    std::vector<uint32_t> items = {3, 5, 8, 13};
+
+    SECTION("without a feeder") {
+        REQUIRE_VALUE(parallel::try_for_each(items, [](uint32_t &item) -> alp::Result<void, FailedItem> {
+            item *= 2;
+            return {};
+        }, execution));
+    }
+    SECTION("with a feeder") {
+        REQUIRE_VALUE(parallel::try_for_each(items, [](uint32_t &item, parallel::Feeder<uint32_t> &) -> alp::Result<void, FailedItem> {
+            item *= 2;
+            return {};
+        }, execution));
+    }
+
+    CHECK(items == std::vector<uint32_t>{6, 10, 16, 26});
+}
+
 TEST_CASE("try_for_each returns the error of an item that was added through the feeder", "[parallel]") {
     const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
     const std::vector<uint32_t> items = {1};
 
-    const alp::Error<FailedItem> error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) -> alp::Result<void, FailedItem> {
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) -> alp::Result<void, FailedItem> {
         if (item == 6) {
             return alp::make_error(FailedItem{item});
         }
@@ -181,4 +272,91 @@ TEST_CASE("try_for_each returns the error of an item that was added through the 
     const FailedItem *failed = error.get_if<FailedItem>();
     REQUIRE(failed != nullptr);
     CHECK(failed->item == 6);
+}
+
+TEST_CASE("try_for_each with a stop token runs no body once the stop was requested before the loop", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {3, 5, 8, 13};
+    std::stop_source stop;
+    stop.request_stop();
+
+    std::atomic<bool> ran = false;
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &) -> alp::Result<void, FailedItem> {
+        ran = true;
+        return {};
+    }, stop.get_token(), execution));
+
+    CHECK(error.holds<Stopped>());
+    CHECK_FALSE(ran);
+}
+
+TEST_CASE("try_for_each with a stop token returns Stopped once a body requests the stop", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {3, 5, 8, 13};
+    std::stop_source stop;
+
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+        if (item == 5) {
+            stop.request_stop();
+        }
+        return {};
+    }, stop.get_token(), execution));
+
+    CHECK(error.holds<Stopped>());
+}
+
+TEST_CASE("try_for_each with a stop token starts no item after a body requested the stop in a serial run", "[parallel]") {
+    const std::vector<uint32_t> items = {3, 5, 8, 13};
+    std::stop_source stop;
+
+    std::vector<uint32_t> seen;
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+        seen.push_back(item);
+        if (item == 5) {
+            stop.request_stop();
+        }
+        return {};
+    }, stop.get_token(), parallel::Execution::Serial));
+
+    CHECK(error.holds<Stopped>());
+    CHECK(seen == std::vector<uint32_t>{3, 5});
+}
+
+TEST_CASE("try_for_each with a stop token returns the error of the body that failed", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {3, 5, 8, 13};
+    const std::stop_source stop;
+
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item) -> alp::Result<void, FailedItem> {
+        if (item == 8) {
+            return alp::make_error(FailedItem{item});
+        }
+        return {};
+    }, stop.get_token(), execution));
+
+    const FailedItem *failed = error.get_if<FailedItem>();
+    REQUIRE(failed != nullptr);
+    CHECK(failed->item == 8);
+}
+
+TEST_CASE("try_for_each with a stop token starts no item that a body adds after it requested the stop", "[parallel]") {
+    const parallel::Execution execution = GENERATE(parallel::Execution::Parallel, parallel::Execution::Serial);
+    const std::vector<uint32_t> items = {1};
+    std::stop_source stop;
+
+    std::mutex seen_mutex;
+    std::vector<uint32_t> seen;
+    const auto error = REQUIRE_ERROR(parallel::try_for_each(items, [&](const uint32_t &item, parallel::Feeder<uint32_t> &feeder) -> alp::Result<void, FailedItem> {
+        if (item == 1) {
+            stop.request_stop();
+            feeder.add(2);
+            feeder.add(3);
+        }
+        const std::lock_guard lock(seen_mutex);
+        seen.push_back(item);
+        return {};
+    }, stop.get_token(), execution));
+
+    CHECK(error.holds<Stopped>());
+    CHECK(seen == std::vector<uint32_t>{1});
 }

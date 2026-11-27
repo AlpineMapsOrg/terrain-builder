@@ -23,7 +23,7 @@
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "geometry/bounds.h"
 #include "hierarchy/NodeStatusOrMissing.h"
 #include "mask.h"

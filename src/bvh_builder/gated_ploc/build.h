@@ -11,7 +11,7 @@
 #include "error/try.h"
 #include "error/utils.h"
 #include "io/serde.h"
-#include "cli_support/log.h"
+#include "log.h"
 
 #include "bvh/Storage.h"
 #include "bvh/Batch.h"

@@ -20,13 +20,20 @@
 #include "HttpClient.h"
 
 #include <filesystem>
-#include <stdexcept>
+#include <optional>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../result_helpers.h"
 #include "../temp_directory.h"
-#include "io/filesystem.h"
+#include "error/Infallible.h"
+#include "error/MessageCode.h"
+#include "io/bytes.h"
+#include "io/filesystem_utils.h"
+#include "stop.h"
+
+using namespace tile_downloader;
 
 namespace {
 
@@ -35,30 +42,50 @@ std::string make_file_url(const std::filesystem::path &path) {
     return "file://" + io::filesystem::canonicalize_best_effort(path).string();
 }
 
-class CallbackError : public std::runtime_error {
-public:
-    CallbackError()
-        : std::runtime_error("callback failed") {}
-};
+struct SinkFailure : alp::MessageCode<"the sink failed"> {};
 
 }
 
-TEST_CASE("http client propagates response writer exceptions") {
-    const TempFile source("atb-http-client.txt", "response body");
-    HttpClient client([](std::vector<char> &, const char *, size_t) {
-        throw CallbackError();
-    });
+TEST_CASE("HttpClient::get keeps the body in memory", "[HttpClient]") {
+    const TempFile source("atb-http-client.txt", "body");
+    const std::string url = make_file_url(source.path());
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
 
-    CHECK_THROWS_AS(client.get(make_file_url(source.path())), CallbackError);
+    const HttpResponse response = REQUIRE_VALUE(client.get(url));
+
+    CHECK(response.body == io::bytes::vector{'b', 'o', 'd', 'y'});
 }
 
-TEST_CASE("http client propagates progress callback exceptions") {
-    const TempFile source("atb-http-client.txt", "response body");
-    HttpClient client;
+TEST_CASE("HttpClient::get fails with TransportError for a missing file", "[HttpClient]") {
+    const TempDirectory directory("atb-http-client-missing");
+    const std::string url = make_file_url(directory.path() / "missing.txt");
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
 
-    CHECK_THROWS_AS(
-        client.get(make_file_url(source.path()), [](double) {
-            throw CallbackError();
-        }),
-        CallbackError);
+    const auto error = REQUIRE_ERROR(client.get(url));
+
+    CHECK(error.holds<TransportError>());
+}
+
+TEST_CASE("HttpClient::stream fails once the sink fails", "[HttpClient]") {
+    const TempFile source("atb-http-client.txt", "response body");
+    const std::string url = make_file_url(source.path());
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
+    const auto failing_sink = [](io::bytes::span) noexcept -> alp::Result<void, SinkFailure> { return alp::make_error(SinkFailure{}); };
+    const auto keep_going = [](std::optional<double>) noexcept { return true; };
+
+    const auto error = REQUIRE_ERROR(client.stream(url, failing_sink, keep_going));
+
+    CHECK(error.holds<SinkFailure>());
+}
+
+TEST_CASE("HttpClient::stream fails with Stopped once the progress callback returns false", "[HttpClient]") {
+    const TempFile source("atb-http-client.txt", "response body");
+    const std::string url = make_file_url(source.path());
+    HttpClient client = REQUIRE_VALUE(HttpClient::make());
+    const auto ignoring_sink = [](io::bytes::span) noexcept -> alp::Result<void, alp::Infallible> { return {}; };
+    const auto stop = [](std::optional<double>) noexcept { return false; };
+
+    const auto error = REQUIRE_ERROR(client.stream(url, ignoring_sink, stop));
+
+    CHECK(error.holds<Stopped>());
 }

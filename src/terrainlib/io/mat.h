@@ -38,7 +38,6 @@ namespace io::mat {
 
 using CorruptData = image::CorruptData;
 
-// How `decode` lays out the image.
 struct DecodeOptions {
     // The channels and depth OpenCV converts the image to.
     cv::ImreadModes mode = cv::IMREAD_COLOR;
@@ -73,7 +72,6 @@ using WriteError = alp::Error<Unsupported, EncodeError, bytes::WriteError>;
 [[nodiscard]]
 alp::Result<void, WriteError> write(const cv::Mat &image, const std::filesystem::path &path, WriteOptions options = {});
 
-// An error from reading or writing an image file as a matrix.
 using Error = alp::Error<ReadError, WriteError>;
 
 } // namespace io::mat

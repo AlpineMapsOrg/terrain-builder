@@ -78,7 +78,7 @@ public:
         if (it == this->_textures.end()) {
             return std::nullopt;
         }
-        
+
         return std::distance(this->_textures.begin(), it);
     }
 

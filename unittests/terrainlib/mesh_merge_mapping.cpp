@@ -43,7 +43,7 @@ TEST_CASE("merging::create_mapping") {
 
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
 
-        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 
+        const VertexMapping mapping = mesh::merging::create_mapping(meshes,
             mesh::merging::create_options()
                 .epsilon(0.1)
                 .only_consider_boundary(false));
@@ -231,7 +231,7 @@ TEST_CASE("merging::create_mapping") {
             mesh::merging::VertexId,
             decltype(map)>
             deduplicate(map, distance_epsilon, radius);
-            
+
         const VertexMapping mapping = mesh::merging::create_mapping(meshes,
             mesh::merging::create_options().deduplicate( deduplicate).only_consider_boundary(only_boundary));
 

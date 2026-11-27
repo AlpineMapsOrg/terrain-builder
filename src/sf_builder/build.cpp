@@ -42,8 +42,9 @@
 
 #include "build.h"
 #include "cli_support/ProgressIndicator.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "common_error_codes.h"
+#include "earth.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "geometry/bounds.h"
@@ -51,6 +52,7 @@
 #include "gis/srs/System.h"
 #include "gis/srs/ThreadLocalSystem.h"
 #include "gis/srs/coverage.h"
+#include "gis/srs/geographic.h"
 #include "gis/srs/well_known.h"
 #include "inputs.h"
 #include "io/json/Value.h"
@@ -66,6 +68,7 @@
 #include "octree/Space.h"
 #include "octree/storage/index_format.h"
 #include "parallel.h"
+#include "range_utils.h"
 #include "sf/publish.h"
 #include "stop.h"
 #include "store/Checkpoint.h"
@@ -209,8 +212,8 @@ alp::Result<void, BuildError> build_and_save_node(
     return {};
 }
 
-// Nodes within this radius contain no terrain: it is 100 km below the earth's mean radius.
-constexpr double terrain_free_radius = 6371008 - 100000;
+// Nodes within this radius contain no terrain: it lies 10 km below the point of the earth's surface closest to its centre.
+constexpr double terrain_free_radius = earth::smallest_radius - 10'000;
 
 // Whether the bounds lie so close to the earth's centre that they hold no terrain.
 bool lies_within_terrain_free_radius(const radix::geometry::Aabb3d &bounds) {
@@ -228,7 +231,7 @@ bool intersects_dataset(
         }
         const radix::tile::SrsBounds horizontal_bounds(region_bounds);
         for (const radix::tile::SrsBounds &dataset_region_bounds : dataset_coverage) {
-            if (radix::geometry::intersect(horizontal_bounds, dataset_region_bounds)) {
+            if (radix::geometry::intersect_inclusive(horizontal_bounds, dataset_region_bounds)) {
                 return true;
             }
         }
@@ -237,7 +240,7 @@ bool intersects_dataset(
 }
 
 // The nodes at `target_level` below `root` that may hold terrain of the dataset.
-alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::srs::coverage::NotGeographic> select_target_nodes(
+alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::srs::NotGeographic> select_target_nodes(
     const octree::Space &space,
     const octree::Id &root,
     const octree::Id::Level target_level,
@@ -253,13 +256,11 @@ alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::sr
     const gis::srs::ThreadLocalSystem wgs84_srs(gis::srs::wgs84());
     const radix::tile::SrsBounds native_bounds(dataset_bounds);
     tbb::concurrent_vector<octree::Id> concurrent_targets;
-    ALP_TRY(parallel::try_for_each(std::views::single(root), [&](const octree::Id &node, parallel::Feeder<octree::Id> &feeder) -> alp::Result<void, Stopped, gis::srs::coverage::Error, gis::srs::coverage::NotGeographic> {
-        ALP_TRY(check_not_stopped(stop));
-
+    ALP_TRY(parallel::try_for_each(std::views::single(root), [&](const octree::Id &node, parallel::Feeder<octree::Id> &feeder) -> alp::Result<void, Stopped, gis::srs::coverage::Error, gis::srs::NotGeographic> {
         // Check if node intersects with ecef bounds of dataset
         const auto node_bounds = space.get_node_bounds(node);
         const auto context = alp::make_context("checking whether node {} may hold terrain", node);
-        if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
+        if (!radix::geometry::intersect_inclusive(node_bounds, ecef_bounds)) {
             return {};
         }
         if (lies_within_terrain_free_radius(node_bounds)) {
@@ -290,9 +291,9 @@ alp::Result<std::vector<octree::Id>, Stopped, gis::srs::coverage::Error, gis::sr
             concurrent_targets.push_back(node);
         }
         return {};
-    }));
+    }, stop));
 
-    std::vector<octree::Id> target_nodes(concurrent_targets.begin(), concurrent_targets.end());
+    std::vector<octree::Id> target_nodes = to_vector(concurrent_targets);
     return target_nodes;
 }
 
@@ -318,20 +319,19 @@ alp::Result<void, Stopped, gis::CplError, mesh::storage::Draft::LinkError, Build
     tbb::enumerable_thread_specific<std::optional<gis::Dataset>> thread_datasets;
     store::Checkpointer checkpointer;
     auto build_result = parallel::try_for_each(nodes, [&](const octree::Id &node) -> alp::Result<void, Stopped, gis::CplError, mesh::storage::Draft::LinkError, BuildError> {
-        ALP_TRY(check_not_stopped(stop));
         if (checkpoint.has(node)) {
             ALP_TRY(output.link_from(node, checkpoint));
         } else {
             std::optional<gis::Dataset> &thread_dataset = thread_datasets.local();
             if (!thread_dataset.has_value()) {
-                ALP_TRY(thread_dataset, dataset.clone());
+                ALP_TRY(thread_dataset, dataset.reopen());
             }
             ALP_TRY(build_and_save_node(thread_dataset.value(), space, node, ecef_srs.get(), tile_provider, mesh_srs.get(), output));
         }
         checkpointer.save_if_due_or_warn(output);
         progress.task_finished();
         return {};
-    });
+    }, stop);
 
     // Restore original level
     drop(std::move(log_scope));

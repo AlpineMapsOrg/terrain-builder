@@ -90,7 +90,7 @@ alp::Result<Fingerprint, FingerprintError, io::serde::SerializeError> fingerprin
     ALP_TRY(const io::bytes::vector bytes, io::serde::serialize(entries));
 
     Fingerprint result{
-        .hash = io::hash::data(bytes, io::hash::Algorithm::Xxh3_64),
+        .hash = io::hash::compute(bytes, io::hash::Algorithm::Xxh3_64),
     };
     return result;
 }

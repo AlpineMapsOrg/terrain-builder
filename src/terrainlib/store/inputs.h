@@ -38,6 +38,7 @@
 #include "io/bytes.h"
 #include "io/compression.h"
 #include "io/envelope.h"
+#include "io/filesystem_utils.h"
 #include "io/limits.h"
 #include "io/serde.h"
 #include "store/storage_paths.h"
@@ -101,10 +102,6 @@ inline ValidateReuseError to_validate_reuse_error(io::envelope::ReadError error)
         .map<Unsupported>(ReuseError::UnsupportedInputs);
 }
 
-// Requires that `source` and the closest existing ancestor of `output` are on the same filesystem.
-[[nodiscard]]
-alp::Result<void, io::FileError> require_same_filesystem(const std::filesystem::path& source, const std::filesystem::path& output);
-
 } // namespace detail
 
 // Records `inputs` in the draft at `base_path`.
@@ -122,7 +119,7 @@ alp::Result<void, WriteError> write(const std::filesystem::path& base_path, cons
 // Checks that the nodes of the storage at `source_path` can be hard-linked into the storage at `output_path`.
 [[nodiscard]]
 inline alp::Result<void, io::FileError> validate_linkable(const std::filesystem::path& source_path, const std::filesystem::path& output_path) {
-    return detail::require_same_filesystem(source_path, output_path);
+    return io::filesystem::require_same_filesystem(source_path, output_path);
 }
 
 // Checks that the nodes of the draft at `draft_path` can be reused for the storage at `output_path`.
@@ -147,7 +144,7 @@ alp::Result<void, ValidateReuseError> validate_reuse(
         return alp::make_error(ReuseError::DifferentInputs).context(context);
     }
 
-    ALP_TRY_CONTEXT(detail::require_same_filesystem(draft_path, output_path), context);
+    ALP_TRY_CONTEXT(io::filesystem::require_same_filesystem(draft_path, output_path), context);
     return {};
 }
 

@@ -30,6 +30,7 @@
 
 #include "error/ErrorCode.h"
 #include "error/TypedCode.h"
+#include "std_compat.h"
 
 namespace alp {
 
@@ -90,11 +91,11 @@ public:
     template <ErrorCode... Fs, typename Self, typename Visitor>
     [[nodiscard]]
     auto visit_if(this Self &&self, Visitor &&visitor) {
-        using Result = std::common_type_t<decltype(std::invoke(visitor, std::forward_like<Self>(std::declval<Fs &>())))...>;
+        using Result = std::common_type_t<decltype(std::invoke(visitor, std_compat::forward_like<Self>(std::declval<Fs &>())))...>;
         std::optional<Result> result;
         const auto visit_if_held = [&]<typename F>() {
             if (auto *code = std::any_cast<F>(&self._code); code != nullptr) {
-                result.emplace(std::invoke(visitor, std::forward_like<Self>(*code)));
+                result.emplace(std::invoke(visitor, std_compat::forward_like<Self>(*code)));
             }
         };
         (visit_if_held.template operator()<Fs>(), ...);

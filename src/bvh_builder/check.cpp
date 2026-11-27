@@ -15,7 +15,7 @@
 #include "error/try.h"
 #include "error/utils.h"
 #include "geometry/bounds.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "bvh/Batch.h"
 #include "bvh/NodeCache.h"
 #include "bvh/NodeHeader.h"

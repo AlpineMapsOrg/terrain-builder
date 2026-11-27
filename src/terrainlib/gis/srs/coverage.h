@@ -40,9 +40,6 @@ struct CompoundSystem : alp::MessageCode<"the spatial reference system is compou
 // The system is geographic, but its angles are not in degrees.
 struct AnglesNotDegrees : alp::MessageCode<"the angles of the spatial reference system are not in degrees"> {};
 
-// The system is not geographic.
-struct NotGeographic : alp::MessageCode<"the spatial reference system is not geographic"> {};
-
 // Why coverage cannot be computed in a reference system.
 using UnsupportedSystem = alp::Error<NotGeodetic, CompoundSystem, AnglesNotDegrees, UnsupportedAxisOrder>;
 
@@ -92,14 +89,5 @@ alp::Result<radix::geometry::Aabb3d, Error> compute_ecef(const System &reference
 // erratic, and if the transformation fails.
 [[nodiscard]]
 alp::Result<std::vector<radix::geometry::Aabb3d>, Error> compute_from_ecef(const radix::geometry::Aabb3d &bounds, const System &reference);
-
-// Why the longitudes of bounds cannot be wrapped in a reference system.
-using WrapLongitudesError = alp::Error<NotGeographic, UnsupportedAxisOrder>;
-
-// Shifts the longitudes of `bounds` by whole circles so that they start within half a circle of the longitude of `centre`, splitting the bounds in two if they then reach past the end of that range.
-// Fails if `reference` is not geographic or has no angular longitude among its first two data axes.
-// TODO: maybe move to another file?
-[[nodiscard]]
-alp::Result<std::vector<radix::tile::SrsBounds>, WrapLongitudesError> wrap_longitudes(const System &reference, const radix::tile::SrsBounds &bounds, const glm::dvec2 &centre);
 
 }

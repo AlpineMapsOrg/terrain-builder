@@ -26,9 +26,9 @@
 #include <fmt/std.h>
 #include <libassert/assert.hpp>
 
-#include "cli_support/log.h"
 #include "error/try.h"
 #include "io/UnknownExtension.h"
+#include "log.h"
 #include "mesh/validate/debug_assert.h"
 #include "string_utils.h"
 

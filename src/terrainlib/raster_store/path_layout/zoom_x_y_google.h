@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "range_utils.h"
 #include "raster_store/StoreTraits.h"
 #include "store/path_layout.h"
 #include "string_utils.h"
@@ -38,7 +39,7 @@ inline std::filesystem::path locate_node(const radix::tile::Id& key)
 
 inline std::optional<radix::tile::Id> identify_node(const std::filesystem::path& node_path)
 {
-    const std::vector<std::filesystem::path> parts(node_path.begin(), node_path.end());
+    const std::vector<std::filesystem::path> parts = to_vector(node_path);
     if (parts.size() != 3) {
         return std::nullopt;
     }

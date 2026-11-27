@@ -52,7 +52,7 @@ inline std::string get_dataset_name(const mesh::storage::Storage &storage) {
     return storage.resolver().base_path().filename().string();
 }
 
-using MergeNodeError = alp::Error<Stopped, mesh::storage::Draft::SaveError, NodeWriter::LinkSubtreeError>;
+using MergeNodeError = alp::Error<Stopped, NodeLoader::LoadError, mesh::storage::Draft::SaveError, NodeWriter::LinkSubtreeError>;
 
 template <merge::Visitor Visitor>
 class Merger {
@@ -105,54 +105,39 @@ public:
             return {};
         }
 
-        const auto merge_result = this->call_merge(id, left_status, right_status, ctx);
+        ALP_TRY(const Result merge_result, this->call_merge(id, left_status, right_status, ctx));
         return std::visit([&](const auto &result) -> alp::Result<void, MergeNodeError> {
             using Result = std::decay_t<decltype(result)>;
             if constexpr (std::is_same_v<Result, merge::Recurse<Context>>) {
                 LOG_DEBUG("[{}] needs recursion", id);
                 const auto children = *ASSERT_VAL(id.children());
                 for (const auto &child_id : children) {
-                    auto child_result = this->merge_node(child_id, result.context);
-                    if (!child_result) {
-                        return child_result;
-                    }
+                    ALP_TRY(this->merge_node(child_id, result.context));
                 }
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Unchanged>) {
                 LOG_DEBUG("[{}] remains unchanged (same as {})", id, (result.source == merge::Source::Left ? "left" : "right"));
                 // If the node should remain unchanged, but its not present on disk we cannot link it.
                 if (result.source == merge::Source::Left && left_status == Status::Missing) {
-                    auto mesh_opt = this->_left.load_node(id);
+                    ALP_TRY(const std::optional<SimpleMesh> mesh_opt, this->_left.load_node(id));
                     if (mesh_opt.has_value()) {
-                        auto write_result = this->_output.write_node(id, *mesh_opt);
-                        if (!write_result) {
-                            return write_result;
-                        }
+                        ALP_TRY(this->_output.write_node(id, *mesh_opt));
                     }
                 } else if (result.source == merge::Source::Right && right_status == Status::Missing) {
-                    auto mesh_opt = this->_right.load_node(id);
+                    ALP_TRY(const std::optional<SimpleMesh> mesh_opt, this->_right.load_node(id));
                     if (mesh_opt.has_value()) {
-                        auto write_result = this->_output.write_node(id, *mesh_opt);
-                        if (!write_result) {
-                            return write_result;
-                        }
+                        ALP_TRY(this->_output.write_node(id, *mesh_opt));
                     }
                 } else {
-                    auto link_result = this->_output.link_subtree_to_output(
+                    ALP_TRY(this->_output.link_subtree_to_output(
                         id,
                         result.source == merge::Source::Left ? this->_left : this->_right,
-                        this->_stop);
-                    if (!link_result) {
-                        return link_result;
-                    }
+                        this->_stop));
                 }
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Merged>) {
                 LOG_DEBUG("[{}] was merged", id);
-                auto write_result = this->_output.write_node(id, result.mesh);
-                if (!write_result) {
-                    return write_result;
-                }
+                ALP_TRY(this->_output.write_node(id, result.mesh));
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Ignore>) {
                 LOG_DEBUG("[{}] was ignored", id);
@@ -173,7 +158,7 @@ private:
         return static_cast<Index>(left) * STATUS_COUNT + static_cast<Index>(right);
     }
 
-    Result call_merge(
+    alp::Result<Result, NodeLoader::LoadError> call_merge(
         const octree::Id &id,
         Status left,
         Status right,

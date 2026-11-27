@@ -32,6 +32,7 @@
 #include "containers/UniqueResource.h"
 #include "io/bytes.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 #include "io/text.h"
 #include "result_helpers.h"
 

@@ -256,7 +256,7 @@ private:
 
     template <typename Self>
     static auto segments_impl(Self &self) noexcept {
-        return std::views::iota(SegmentIndex{0}, self.segment_count()) 
+        return std::views::iota(SegmentIndex{0}, self.segment_count())
              | std::views::transform([&self](const SegmentIndex i) noexcept {
                    return self.segment(i);
                });

@@ -37,7 +37,6 @@
 
 #include "codec.h"
 
-#include "cli_support/log.h"
 #include "cluster.h"
 #include "dag_node.h"
 #include "dag_validate.h"
@@ -53,6 +52,7 @@
 #include "io/limits.h"
 #include "io/mat.h"
 #include "io/radix_serialization.h"
+#include "log.h"
 #include "meshopt/encode.h"
 #include "path_utils.h"
 #include "store/envelope_utils.h"

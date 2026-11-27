@@ -40,7 +40,6 @@
 #undef CGLTF_IMPLEMENTATION
 #undef CGLTF_WRITE_IMPLEMENTATION
 
-#include "cli_support/log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "io/UnknownExtension.h"
@@ -49,6 +48,7 @@
 #include "io/image/Format.h"
 #include "io/json/serde.h"
 #include "io/mat.h"
+#include "log.h"
 #include "mesh/io/CgltfError.h"
 #include "mesh/io/gltf.h"
 #include "string_utils.h"

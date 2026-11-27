@@ -28,7 +28,6 @@
 
 namespace io::text {
 
-// How `write` treats an existing file and missing parent directories.
 using WriteOptions = bytes::WriteOptions;
 
 using WriteError = bytes::WriteError;
@@ -47,7 +46,6 @@ inline alp::Result<std::string, ReadError> read(const std::filesystem::path &pat
     return std::string(bytes.begin(), bytes.end());
 }
 
-// An error from reading or writing a text file.
 using Error = bytes::Error;
 
 } // namespace io::text

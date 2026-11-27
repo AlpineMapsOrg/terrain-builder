@@ -31,6 +31,13 @@ enum class Mapping {
     SRGBA,
 };
 
+// Area samples lie at cell centres, vertex samples on grid vertices.
+// These values are persisted in raster-store metadata.
+enum class Placement {
+    Area = 0,
+    Vertex = 1,
+};
+
 namespace detail {
 
     template <typename PixelType>

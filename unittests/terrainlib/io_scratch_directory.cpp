@@ -13,6 +13,7 @@
 #include "io/ScratchDirectory.h"
 #include "io/bytes.h"
 #include "io/filesystem.h"
+#include "io/filesystem_utils.h"
 
 namespace {
 

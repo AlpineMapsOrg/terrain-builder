@@ -47,6 +47,7 @@
 #include "gis/srs/well_known.h"
 #include "gis/webmercator.h"
 #include "mesh/bounds.h"
+#include "range_utils.h"
 
 namespace gis::srs::coverage {
 
@@ -107,7 +108,7 @@ namespace {
         const glm::dvec2 centre(0, 0);
         const glm::dvec2 period(convert(2 * std::numbers::pi, units::radian, units::degree), 0);
         const std::vector<radix::geometry::Aabb<2, double>> wrapped = geometry::wrap_into_periods(bounds, longitude_only, centre, period);
-        return std::vector<radix::tile::SrsBounds>(wrapped.begin(), wrapped.end());
+        return to_vector<radix::tile::SrsBounds>(wrapped);
     }
 
     bool is_finite_and_ordered(const radix::geometry::Aabb3d& bounds) {
@@ -175,11 +176,11 @@ alp::Result<std::vector<radix::tile::SrsBounds>, Error> compute_mercator(const S
     // Avoid the geographic round trip, it would widen exact Web Mercator bounds by a guard band.
     if (reference.is_same(mercator) && bounds.min.x >= -webmercator::half_extent && bounds.max.x <= webmercator::half_extent) {
         const radix::tile::SrsBounds world { -half_extent, half_extent };
-        const radix::tile::SrsBounds clipped = radix::geometry::intersection(bounds, world);
-        if (geometry::is_empty(clipped)) {
+        const std::optional<radix::tile::SrsBounds> clipped_opt = radix::geometry::intersection_strict(bounds, world);
+        if (!clipped_opt.has_value()) {
             return std::vector<radix::tile::SrsBounds> {};
         }
-        return std::vector<radix::tile::SrsBounds> { clipped };
+        return std::vector<radix::tile::SrsBounds> { *clipped_opt };
     }
     ALP_TRY_CONTEXT(const std::vector<radix::tile::SrsBounds> geographic, compute_geographic(reference, bounds), context);
     ALP_TRY_CONTEXT(const Transform transform, get_transform(wgs84(), mercator), context);
@@ -345,31 +346,6 @@ alp::Result<std::vector<radix::geometry::Aabb3d>, Error> compute_from_ecef(const
         result.push_back({ { box.min, height_range.x }, { box.max, height_range.y } });
     }
     return result;
-}
-
-alp::Result<std::vector<radix::tile::SrsBounds>, WrapLongitudesError> wrap_longitudes(const System &reference, const radix::tile::SrsBounds &bounds, const glm::dvec2 &centre) {
-    const auto context = alp::make_context("wrapping longitudes in {}", reference);
-    if (reference.kind() != Kind::Geographic) {
-        return alp::make_error(NotGeographic{}, context);
-    }
-
-    const std::optional<LongitudeLatitudeAxes> longitude_latitude_axes_opt = longitude_latitude_axes(reference);
-    if (!longitude_latitude_axes_opt.has_value()) {
-        return alp::make_error(UnsupportedAxisOrder{}, context);
-    }
-    const IndexedAxis longitude = longitude_latitude_axes_opt->longitude;
-    // The bounds are horizontal, so their longitude has to be one of their two dimensions.
-    if (longitude.index >= 2) {
-        return alp::make_error(UnsupportedAxisOrder{}, context);
-    }
-
-    const glm::length_t dimension = static_cast<glm::length_t>(longitude.index);
-    glm::bvec2 longitude_only(false);
-    longitude_only[dimension] = true;
-    glm::dvec2 period(0);
-    period[dimension] = convert(2 * std::numbers::pi, units::radian, longitude.axis.unit);
-    const std::vector<radix::geometry::Aabb<2, double>> wrapped = geometry::wrap_into_periods(bounds, longitude_only, centre, period);
-    return std::vector<radix::tile::SrsBounds>(wrapped.begin(), wrapped.end());
 }
 
 }

@@ -107,6 +107,18 @@ TEST_CASE("write with Replace replaces the bytes of an existing file", "[io][byt
     }
 }
 
+TEST_CASE("write with Replace removes the temporary file when it cannot replace the file", "[io][bytes]") {
+    const TempDirectory directory("io_byte_replace_failure");
+    const std::filesystem::path path = directory.path() / "file";
+    const std::filesystem::path temporary_path = directory.path() / "file.tmp";
+    const io::bytes::vector data{4};
+    REQUIRE(REQUIRE_VALUE(io::filesystem::create_directory(path)));
+
+    REQUIRE_ERROR(io::bytes::write(data, path, {.mode = io::WriteMode::Replace}));
+
+    CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(temporary_path)));
+}
+
 TEST_CASE("write fails where a file blocks a parent directory", "[io][bytes]") {
     const TempDirectory directory("io_byte_blocked_parent");
     const std::filesystem::path blocker = directory.path() / "blocker";
@@ -135,7 +147,7 @@ TEST_CASE("read fails as not found for a missing file, naming it", "[io][bytes]"
 TEST_CASE("read fails for a directory", "[io][bytes]") {
     const TempDirectory directory("io_byte_read_directory");
 
-    CHECK(!io::bytes::read(directory.path()).has_value());
+    REQUIRE_ERROR(io::bytes::read(directory.path()));
 }
 
 TEST_CASE("read_prefix reads at most max_size bytes", "[io][bytes]") {

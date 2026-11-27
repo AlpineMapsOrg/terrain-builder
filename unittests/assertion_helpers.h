@@ -16,9 +16,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-// single file that includes all .cpp's that use libigl
+#pragma once
 
-#include "cut.cpp"
-#include "cut_to_disk.cpp"
-#include "orient.cpp"
-#include "manifold.cpp"
+#include <stdexcept>
+
+#include <catch2/catch_test_macros.hpp>
+
+// A failed assertion, as thrown in tests by the handler throwing_assertions.cpp installs.
+struct AssertionFailure : std::logic_error {
+    using std::logic_error::logic_error;
+};
+
+// Checks that evaluating the expression fails an assertion.
+#define CHECK_ASSERTS(...) CHECK_THROWS_AS(__VA_ARGS__, AssertionFailure)
+
+// Requires that evaluating the expression fails an assertion.
+#define REQUIRE_ASSERTS(...) REQUIRE_THROWS_AS(__VA_ARGS__, AssertionFailure)

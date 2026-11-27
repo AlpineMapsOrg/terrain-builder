@@ -33,7 +33,7 @@ enum class ReadError {
     Missing,
 };
 
-std::string_view format_as(const ReadError) {
+[[maybe_unused]] std::string_view format_as(const ReadError) {
     return "missing";
 }
 
@@ -41,7 +41,7 @@ enum class ParseError {
     Malformed,
 };
 
-std::string_view format_as(const ParseError) {
+[[maybe_unused]] std::string_view format_as(const ParseError) {
     return "malformed";
 }
 

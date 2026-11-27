@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
 #include "geometry/bounds.h"
@@ -14,8 +17,13 @@ inline radix::geometry::Aabb3d find_cluster_search_bounds(
     const octree::Id &target_id,
     const octree::OddLevelShifted &shifted_space) {
     // We cannot rely on the intersecting nodes on the next level, since some neighbours clusters may has a centroid in this node's bounds. This can happen when the groups is split at the end of the pipeline.
-    const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(shifted_space.get_node_bounds(target_id), 0.5 - 1e-6);
-    return radix::geometry::intersection(padded_bounds, shifted_space.bounds());
+    const radix::geometry::Aabb3d node_bounds = shifted_space.get_node_bounds(target_id);
+    ASSERT(geometry::is_finite(node_bounds) && !geometry::is_empty(node_bounds), target_id, node_bounds);
+    const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(node_bounds, 0.5 - 1e-6);
+    const std::optional<radix::geometry::Aabb3d> search_bounds_opt = radix::geometry::intersection_inclusive(padded_bounds, shifted_space.bounds());
+    // The padded bounds contain the node's own, which OddLevelShifted clips to the space.
+    ASSERT(search_bounds_opt.has_value(), target_id);
+    return *search_bounds_opt;
 }
 
 // Nodes one level finer that may hold data belonging to the given node.

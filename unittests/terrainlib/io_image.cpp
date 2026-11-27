@@ -19,12 +19,17 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <optional>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <glm/glm.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <turbojpeg.h>
 
 #include "../catch2_helpers.h"
 #include "../result_helpers.h"
@@ -47,41 +52,58 @@ image::RGBA8 colours()
     return result;
 }
 
-cv::Mat encoded_mat(const io::bytes::vector& bytes) { return { 1, int(bytes.size()), CV_8UC1, const_cast<uint8_t*>(bytes.data()) }; }
+cv::Mat encoded_mat(const io::bytes::vector& bytes) { return { 1, static_cast<int>(bytes.size()), CV_8UC1, const_cast<uint8_t*>(bytes.data()) }; }
+
+image::RGB8 gradient(glm::uvec2 size)
+{
+    image::RGB8 result(size);
+    for (uint32_t y = 0; y < size.y; y++) {
+        for (uint32_t x = 0; x < size.x; x++) {
+            result.pixel({ x, y }) = glm::u8vec3(x * 3, y * 5, (x * 7 + y * 11) % 256);
+        }
+    }
+    return result;
+}
+
+// The restart interval that `jpeg` sets before its first scan, if it sets one.
+std::optional<uint32_t> restart_interval(const io::bytes::vector& jpeg)
+{
+    const auto at = [&jpeg](const size_t index) -> uint32_t { return jpeg.at(index); };
+    // Walks the segments after SOI (0xFF, marker, big-endian length that includes itself) up to the start of scan.
+    for (size_t index = 2; at(index) == 0xFF && at(index + 1) != 0xDA; index += 2 + (at(index + 2) << 8 | at(index + 3))) {
+        if (at(index + 1) == 0xDD) {
+            return at(index + 4) << 8 | at(index + 5);
+        }
+    }
+    return std::nullopt;
+}
 } // namespace
 
 TEST_CASE("PNG preserves RGBA including hidden colour and row order", "[io][image]")
 {
     const auto source = colours();
-    const auto bytes = image::encode(source, image::Format::Png);
-    REQUIRE(bytes);
-    const auto decoded = image::decode<image::RGBA8>(*bytes);
-    REQUIRE(decoded);
-    CHECK(decoded->size() == source.size());
-    CHECK(std::ranges::equal(decoded->bytes(), source.bytes()));
+    const auto bytes = REQUIRE_VALUE(image::encode(source, image::Format::Png));
+    const auto decoded = REQUIRE_VALUE(image::decode<image::RGBA8>(bytes));
+    CHECK(decoded.size() == source.size());
+    CHECK(std::ranges::equal(decoded.bytes(), source.bytes()));
     // Independent decoder verifies that both sides of our API cannot hide a channel/row swap.
-    const auto reference = cv::imdecode(encoded_mat(*bytes), cv::IMREAD_UNCHANGED);
+    const auto reference = cv::imdecode(encoded_mat(bytes), cv::IMREAD_UNCHANGED);
     REQUIRE(reference.type() == CV_8UC4);
     CHECK(reference.at<cv::Vec4b>(0, 0) == cv::Vec4b(0, 0, 255, 255));
     CHECK(reference.at<cv::Vec4b>(1, 1) == cv::Vec4b(47, 31, 17, 0));
-    const auto rgb = image::decode<image::RGB8>(*bytes);
-    REQUIRE(rgb);
-    CHECK(rgb->pixel({ 1, 1 }) == glm::u8vec3(17, 31, 47));
-    const auto rgb_bytes = image::encode(*rgb, image::Format::Png);
-    REQUIRE(rgb_bytes);
-    const auto opaque = image::decode<image::RGBA8>(*rgb_bytes);
-    REQUIRE(opaque);
-    CHECK(opaque->pixel({ 1, 1 }) == glm::u8vec4(17, 31, 47, 255));
+    const auto rgb = REQUIRE_VALUE(image::decode<image::RGB8>(bytes));
+    CHECK(rgb.pixel({ 1, 1 }) == glm::u8vec3(17, 31, 47));
+    const auto rgb_bytes = REQUIRE_VALUE(image::encode(rgb, image::Format::Png));
+    const auto opaque = REQUIRE_VALUE(image::decode<image::RGBA8>(rgb_bytes));
+    CHECK(opaque.pixel({ 1, 1 }) == glm::u8vec4(17, 31, 47, 255));
 
     const cv::Mat grey(2, 2, CV_8UC1, cv::Scalar(37));
     std::vector<uint8_t> grey_bytes;
     REQUIRE(cv::imencode(".png", grey, grey_bytes));
-    const auto grey_rgb = image::decode<image::RGB8>(grey_bytes);
-    const auto grey_rgba = image::decode<image::RGBA8>(grey_bytes);
-    REQUIRE(grey_rgb);
-    REQUIRE(grey_rgba);
-    CHECK(grey_rgb->pixel({ 0, 0 }) == glm::u8vec3(37, 37, 37));
-    CHECK(grey_rgba->pixel({ 0, 0 }) == glm::u8vec4(37, 37, 37, 255));
+    const auto grey_rgb = REQUIRE_VALUE(image::decode<image::RGB8>(grey_bytes));
+    const auto grey_rgba = REQUIRE_VALUE(image::decode<image::RGBA8>(grey_bytes));
+    CHECK(grey_rgb.pixel({ 0, 0 }) == glm::u8vec3(37, 37, 37));
+    CHECK(grey_rgba.pixel({ 0, 0 }) == glm::u8vec4(37, 37, 37, 255));
 }
 
 TEST_CASE("PNG compression and JPEG quality options reach encoders", "[io][image]")
@@ -92,32 +114,73 @@ TEST_CASE("PNG compression and JPEG quality options reach encoders", "[io][image
             source.pixel({ x, y }) = glm::u8vec3(x * 2, y * 2, (x * 7 + y * 11) % 256);
         }
     }
-    const auto plain = image::encode(source, image::Format::Png, { .png_compression = 0 });
-    const auto compressed = image::encode(source, image::Format::Png, { .png_compression = 9 });
-    REQUIRE(plain);
-    REQUIRE(compressed);
-    CHECK(compressed->size() < plain->size());
-    for (const auto& bytes : { *plain, *compressed }) {
-        const auto decoded = image::decode<image::RGB8>(bytes);
-        REQUIRE(decoded);
-        CHECK(std::ranges::equal(decoded->bytes(), source.bytes()));
+    const auto plain = REQUIRE_VALUE(image::encode(source, image::Format::Png, { .png_compression = 0 }));
+    const auto compressed = REQUIRE_VALUE(image::encode(source, image::Format::Png, { .png_compression = 9 }));
+    CHECK(compressed.size() < plain.size());
+    for (const auto& bytes : { plain, compressed }) {
+        const auto decoded = REQUIRE_VALUE(image::decode<image::RGB8>(bytes));
+        CHECK(std::ranges::equal(decoded.bytes(), source.bytes()));
     }
-    const auto low = image::encode(source, image::Format::Jpeg, { .jpeg_quality = 10 });
-    const auto high = image::encode(source, image::Format::Jpeg, { .jpeg_quality = 95 });
-    REQUIRE(low);
-    REQUIRE(high);
-    CHECK(low->size() < high->size());
+    const auto low = REQUIRE_VALUE(image::encode(source, image::Format::Jpeg, { .jpeg_quality = 10 }));
+    const auto high = REQUIRE_VALUE(image::encode(source, image::Format::Jpeg, { .jpeg_quality = 95 }));
+    CHECK(low.size() < high.size());
     source.fill({ 255, 0, 0 });
-    const auto jpeg = image::encode(source, image::Format::Jpeg);
-    REQUIRE(jpeg);
-    const auto reference = cv::imdecode(encoded_mat(*jpeg), cv::IMREAD_COLOR);
+    const auto jpeg = REQUIRE_VALUE(image::encode(source, image::Format::Jpeg));
+    const auto reference = cv::imdecode(encoded_mat(jpeg), cv::IMREAD_COLOR);
     const auto red = reference.at<cv::Vec3b>(0, 0);
     CHECK(red[0] <= 2);
     CHECK(red[1] <= 2);
     CHECK(red[2] >= 253);
-    const auto rgba = image::decode<image::RGBA8>(*jpeg);
-    REQUIRE(rgba);
-    CHECK(rgba->pixel({ 0, 0 }).w == 255);
+    const auto rgba = REQUIRE_VALUE(image::decode<image::RGBA8>(jpeg));
+    CHECK(rgba.pixel({ 0, 0 }).w == 255);
+}
+
+TEST_CASE("encode writes JPEG without restart markers that decodes like OpenCV's JPEG of the same quality", "[io][image]")
+{
+    const auto source = gradient({ 70, 45 });
+    const io::bytes::vector jpeg = REQUIRE_VALUE(image::encode(source, image::Format::Jpeg, { .jpeg_quality = 95 }));
+    CHECK_FALSE(restart_interval(jpeg));
+
+    cv::Mat bgr(static_cast<int>(source.height()), static_cast<int>(source.width()), CV_8UC3);
+    for (uint32_t y = 0; y < source.height(); y++) {
+        for (uint32_t x = 0; x < source.width(); x++) {
+            const auto pixel = source.pixel({ x, y });
+            bgr.at<cv::Vec3b>(static_cast<int>(y), static_cast<int>(x)) = cv::Vec3b(pixel.z, pixel.y, pixel.x);
+        }
+    }
+    io::bytes::vector reference;
+    REQUIRE(cv::imencode(".jpg", bgr, reference, { cv::IMWRITE_JPEG_QUALITY, 95 }));
+    const image::RGB8 decoded = REQUIRE_VALUE(image::decode<image::RGB8>(jpeg));
+    const image::RGB8 decoded_reference = REQUIRE_VALUE(image::decode<image::RGB8>(reference));
+    CHECK(decoded.size() == source.size());
+    CHECK(std::ranges::equal(decoded.bytes(), decoded_reference.bytes()));
+}
+
+TEST_CASE("decode rejects CMYK JPEG images", "[io][image]")
+{
+    const TJCS colour_space = GENERATE(TJCS_CMYK, TJCS_YCCK);
+    const std::unique_ptr<void, decltype(&tj3Destroy)> compressor(tj3Init(TJINIT_COMPRESS), &tj3Destroy);
+    REQUIRE(compressor);
+    REQUIRE(tj3Set(compressor.get(), TJPARAM_QUALITY, 90) == 0);
+    REQUIRE(tj3Set(compressor.get(), TJPARAM_SUBSAMP, TJSAMP_444) == 0);
+    REQUIRE(tj3Set(compressor.get(), TJPARAM_COLORSPACE, colour_space) == 0);
+    const std::array<uint8_t, 8 * 8 * 4> cmyk {};
+    uint8_t* output = nullptr;
+    size_t size = 0;
+    const int status = tj3Compress8(compressor.get(), cmyk.data(), 8, 0, 8, TJPF_CMYK, &output, &size);
+    const std::unique_ptr<uint8_t, decltype(&tj3Free)> jpeg(output, &tj3Free);
+    REQUIRE(status == 0);
+    const io::bytes::span bytes(jpeg.get(), size);
+
+    SECTION("RGB8")
+    {
+        CHECK(REQUIRE_ERROR(image::decode<image::RGB8>(bytes)).holds<Unsupported>());
+    }
+
+    SECTION("RGBA8")
+    {
+        CHECK(REQUIRE_ERROR(image::decode<image::RGBA8>(bytes)).holds<Unsupported>());
+    }
 }
 
 TEST_CASE("JPEG XL is lossy by default, lossless at distance zero and keeps row order", "[io][image]")
@@ -128,50 +191,41 @@ TEST_CASE("JPEG XL is lossy by default, lossless at distance zero and keeps row 
             source.pixel({ x, y }) = glm::u8vec3(100 + x, 80 + y, 120);
         }
     }
-    const auto lossy = image::encode(source, image::Format::JpegXl);
-    REQUIRE(lossy);
+    const auto lossy = REQUIRE_VALUE(image::encode(source, image::Format::JpegXl));
     // A bare codestream, not the container format.
-    REQUIRE(lossy->size() > 2);
-    CHECK((*lossy)[0] == 0xff);
-    CHECK((*lossy)[1] == 0x0a);
-    const auto decoded = image::decode<image::RGB8>(*lossy);
-    REQUIRE(decoded);
-    REQUIRE(decoded->size() == source.size());
+    REQUIRE(lossy.size() > 2);
+    CHECK(lossy[0] == 0xff);
+    CHECK(lossy[1] == 0x0a);
+    const auto decoded = REQUIRE_VALUE(image::decode<image::RGB8>(lossy));
+    REQUIRE(decoded.size() == source.size());
     int max_error = 0;
     for (size_t i = 0; i < source.buffer_length(); ++i) {
-        const auto difference = glm::abs(glm::ivec3(decoded->buffer()[i]) - glm::ivec3(source.buffer()[i]));
+        const auto difference = glm::abs(glm::ivec3(decoded.buffer()[i]) - glm::ivec3(source.buffer()[i]));
         max_error = std::max({ max_error, difference.x, difference.y, difference.z });
     }
     // JPEG XL optimises perceived error; strongly saturated colours deviate more.
     CHECK(max_error > 0);
     CHECK(max_error <= 4);
-    const auto opaque = image::decode<image::RGBA8>(*lossy);
-    REQUIRE(opaque);
-    CHECK(opaque->pixel({ 0, 0 }).w == 255);
+    const auto opaque = REQUIRE_VALUE(image::decode<image::RGBA8>(lossy));
+    CHECK(opaque.pixel({ 0, 0 }).w == 255);
 
-    const auto coarse = image::encode(source, image::Format::JpegXl, { .jpegxl_distance = 4 });
-    const auto fast = image::encode(source, image::Format::JpegXl, { .jpegxl_effort = 1 });
-    REQUIRE(coarse);
-    REQUIRE(fast);
-    CHECK(coarse->size() < lossy->size());
-    CHECK(*fast != *lossy);
+    const auto coarse = REQUIRE_VALUE(image::encode(source, image::Format::JpegXl, { .jpegxl_distance = 4 }));
+    const auto fast = REQUIRE_VALUE(image::encode(source, image::Format::JpegXl, { .jpegxl_effort = 1 }));
+    CHECK(coarse.size() < lossy.size());
+    CHECK(fast != lossy);
 
     const auto rgba = colours();
-    const auto lossless = image::encode(rgba, image::Format::JpegXl, { .jpegxl_distance = 0 });
-    REQUIRE(lossless);
-    const auto exact = image::decode<image::RGBA8>(*lossless);
-    REQUIRE(exact);
-    CHECK(std::ranges::equal(exact->bytes(), rgba.bytes()));
-    const auto rgb = image::decode<image::RGB8>(*lossless);
-    REQUIRE(rgb);
-    CHECK(rgb->pixel({ 1, 0 }) == glm::u8vec3(0, 255, 0));
+    const auto lossless = REQUIRE_VALUE(image::encode(rgba, image::Format::JpegXl, { .jpegxl_distance = 0 }));
+    const auto exact = REQUIRE_VALUE(image::decode<image::RGBA8>(lossless));
+    CHECK(std::ranges::equal(exact.bytes(), rgba.bytes()));
+    const auto rgb = REQUIRE_VALUE(image::decode<image::RGB8>(lossless));
+    CHECK(rgb.pixel({ 1, 0 }) == glm::u8vec3(0, 255, 0));
 
     TempDirectory directory;
     const auto path = directory.path() / "image.JXL";
-    REQUIRE(image::write(source, path, { .encoding = { .jpegxl_distance = 0 } }));
-    const auto read = image::read<image::RGB8>(path);
-    REQUIRE(read);
-    CHECK(std::ranges::equal(read->bytes(), source.bytes()));
+    REQUIRE_VALUE(image::write(source, path, { .encoding = { .jpegxl_distance = 0 } }));
+    const auto read = REQUIRE_VALUE(image::read<image::RGB8>(path));
+    CHECK(std::ranges::equal(read.bytes(), source.bytes()));
 }
 
 TEST_CASE("encode reports an image without pixels as unsupported", "[io][image]")
@@ -181,25 +235,28 @@ TEST_CASE("encode reports an image without pixels as unsupported", "[io][image]"
 
     SECTION("RGB8")
     {
-        CHECK(image::encode(image::RGB8(size), format).error().holds<Unsupported>());
+        CHECK(REQUIRE_ERROR(image::encode(image::RGB8(size), format)).holds<Unsupported>());
     }
 
     SECTION("RGBA8")
     {
-        CHECK(image::encode(image::RGBA8(size), format).error().holds<Unsupported>());
+        CHECK(REQUIRE_ERROR(image::encode(image::RGBA8(size), format)).holds<Unsupported>());
     }
 }
 
 TEST_CASE("image I/O rejects invalid inputs without silent alpha loss", "[io][image]")
 {
     const auto source = colours();
-    CHECK(image::encode(source, image::Format::Jpeg).error().holds<Unsupported>());
-    CHECK_FALSE(image::decode<image::RGB8>({}));
+    CHECK(REQUIRE_ERROR(image::encode(source, image::Format::Jpeg)).holds<Unsupported>());
+    CHECK(REQUIRE_ERROR(image::decode<image::RGB8>({})).holds<image::CorruptData>());
     const std::array junk { uint8_t { 1 }, uint8_t { 2 }, uint8_t { 3 }, uint8_t { 4 } };
-    CHECK(image::decode<image::RGBA8>(junk).error().holds<image::CorruptData>());
-    auto truncated = image::encode(source, image::Format::JpegXl).value();
+    CHECK(REQUIRE_ERROR(image::decode<image::RGBA8>(junk)).holds<image::CorruptData>());
+    auto truncated = REQUIRE_VALUE(image::encode(source, image::Format::JpegXl));
     truncated.resize(truncated.size() / 2);
-    CHECK(image::decode<image::RGBA8>(truncated).error().holds<image::CorruptData>());
+    CHECK(REQUIRE_ERROR(image::decode<image::RGBA8>(truncated)).holds<image::CorruptData>());
+    auto truncated_jpeg = REQUIRE_VALUE(image::encode(gradient({ 64, 64 }), image::Format::Jpeg));
+    truncated_jpeg.resize(truncated_jpeg.size() / 2);
+    CHECK(REQUIRE_ERROR(image::decode<image::RGB8>(truncated_jpeg)).holds<image::CorruptData>());
 }
 
 TEST_CASE("disk image I/O preserves RGBA and honours overwrite and directory policies", "[io][image]")
@@ -207,23 +264,20 @@ TEST_CASE("disk image I/O preserves RGBA and honours overwrite and directory pol
     TempDirectory directory;
     const auto path = directory.path() / "nested" / "image.PNG";
     auto source = colours();
-    CHECK_FALSE(image::write(source, path, { .make_dirs = false }));
-    REQUIRE(image::write(source, path));
-    const auto original = io::bytes::read(path);
-    REQUIRE(original);
-    CHECK(image::write(source, path).error().holds_code(io::FileError(std::make_error_code(std::errc::file_exists), path)));
-    CHECK(*io::bytes::read(path) == *original);
+    REQUIRE_ERROR(image::write(source, path, { .make_dirs = false }));
+    REQUIRE_VALUE(image::write(source, path));
+    const auto original = REQUIRE_VALUE(io::bytes::read(path));
+    CHECK(REQUIRE_ERROR(image::write(source, path)).holds_code(io::FileError(std::make_error_code(std::errc::file_exists), path)));
+    CHECK(REQUIRE_VALUE(io::bytes::read(path)) == original);
     source.pixel({ 0, 0 }) = { 8, 9, 10, 11 };
-    REQUIRE(image::write(source, path, { .mode = io::WriteMode::Overwrite }));
-    const auto decoded = image::read<image::RGBA8>(path);
-    REQUIRE(decoded);
-    CHECK(std::ranges::equal(decoded->bytes(), source.bytes()));
-    const auto rgb = image::read<image::RGB8>(path);
-    REQUIRE(rgb);
-    REQUIRE(image::write(*rgb, directory.path() / "image.jpeg"));
-    CHECK_FALSE(image::write(source, directory.path() / "image.unknown"));
-    CHECK(image::read<image::RGB8>(directory.path() / "missing.png").error().holds_code(io::make_file_not_found(directory.path() / "missing.png")));
+    REQUIRE_VALUE(image::write(source, path, { .mode = io::WriteMode::Overwrite }));
+    const auto decoded = REQUIRE_VALUE(image::read<image::RGBA8>(path));
+    CHECK(std::ranges::equal(decoded.bytes(), source.bytes()));
+    const auto rgb = REQUIRE_VALUE(image::read<image::RGB8>(path));
+    REQUIRE_VALUE(image::write(rgb, directory.path() / "image.jpeg"));
+    REQUIRE_ERROR(image::write(source, directory.path() / "image.unknown"));
+    CHECK(REQUIRE_ERROR(image::read<image::RGB8>(directory.path() / "missing.png")).holds_code(io::make_file_not_found(directory.path() / "missing.png")));
     const auto folder = directory.path() / "folder.png";
     REQUIRE(REQUIRE_VALUE(io::filesystem::create_directory(folder)));
-    CHECK_FALSE(image::write(source, folder, { .mode = io::WriteMode::Overwrite }));
+    REQUIRE_ERROR(image::write(source, folder, { .mode = io::WriteMode::Overwrite }));
 }

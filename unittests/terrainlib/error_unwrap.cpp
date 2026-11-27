@@ -18,9 +18,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <stdexcept>
 #include <string_view>
 
+#include "../assertion_helpers.h"
 #include "error/Error.h"
 #include "error/Result.h"
 #include "error/unwrap.h"
@@ -64,8 +64,7 @@ TEST_CASE("unwrap fails for a result that holds an error", "[error][unwrap]") {
     const alp::Result<int, FileError> result = std::unexpected(alp::make_error(FileError::NotFound));
 
     SECTION("asserting") {
-        // In tests a failed assertion throws a std::logic_error instead of aborting; see unittests/throwing_assertions.cpp.
-        CHECK_THROWS_AS(alp::unwrap(result), std::logic_error);
+        CHECK_ASSERTS(alp::unwrap(result));
     }
     SECTION("throwing") {
         CHECK_THROWS_AS(alp::throwing_unwrap(result), alp::UnwrapError);
@@ -87,7 +86,7 @@ TEST_CASE("expect fails for a result that holds an error", "[error][unwrap]") {
     const alp::Result<int, FileError> result = std::unexpected(alp::make_error(FileError::NotFound));
 
     SECTION("asserting") {
-        CHECK_THROWS_AS(alp::expect(result, "reading the answer"), std::logic_error);
+        CHECK_ASSERTS(alp::expect(result, "reading the answer"));
     }
     SECTION("throwing") {
         CHECK_THROWS_AS(alp::throwing_expect(result, "reading the answer"), alp::UnwrapError);

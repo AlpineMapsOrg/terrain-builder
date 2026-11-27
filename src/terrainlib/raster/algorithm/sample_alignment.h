@@ -1,6 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2025 Martin Braunsperger
+ * Copyright (C) 2026 Adam Celarek-Litofcenko
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,21 +18,13 @@
 
 #pragma once
 
-#include <glm/glm.hpp>
+namespace raster::algorithm {
 
-namespace earth {
-    constexpr double largest_radius() {
-        // Chimborazo
-        return 6384400;
-    }
-    constexpr double smallest_radius() {
-        // Litke Deep
-        return 6351704.3;
-    }
-    constexpr double radius() {
-        return 6371008;
-    }
-    constexpr glm::dvec2 radius_range() {
-        return {smallest_radius(), largest_radius()};
-    }
-}
+enum class SampleAlignment {
+    // Sample positions are i + 0.5; scaling maps x to (x + 0.5) / scale - 0.5.
+    CellCenters,
+    // Sample positions are i; scaling maps x to x / scale.
+    GridNodes,
+};
+
+} // namespace raster::algorithm

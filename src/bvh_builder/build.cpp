@@ -15,7 +15,7 @@
 #include "io/serde.h"
 #include "io/ScratchDirectory.h"
 #include "io/filesystem.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "octree/OddLevelShifted.h"
 #include "octree/storage/open.h"
 #include "../dag_builder/storage.h"

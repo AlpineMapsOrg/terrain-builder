@@ -27,7 +27,7 @@
 
 #include "TileUrlBuilder.h"
 
-namespace cli {
+namespace tile_downloader::cli {
 
 struct Args {
     std::optional<TileDownloadProvider> provider = std::nullopt;
@@ -44,4 +44,4 @@ struct Args {
 
 Args parse(int argc, const char *const *argv);
 
-} // namespace cli
+} // namespace tile_downloader::cli
