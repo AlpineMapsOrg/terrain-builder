@@ -152,11 +152,23 @@ TEST_CASE("tile downloader leaves ancestors pending after a child failure", "[Do
 
     HttpClient http = REQUIRE_VALUE(HttpClient::make());
     Downloader downloader(missing_file_url, std::move(http), pyramid.path(), 1u, root.zoom_level);
-    CHECK(REQUIRE_ERROR(downloader.download_recursive(root)).holds<TransportError>());
+    CHECK(REQUIRE_ERROR(downloader.download_recursive(root)).holds_code(IncompleteDownload{1}));
 
     CHECK_FALSE(REQUIRE_VALUE(io::filesystem::exists(pyramid.tile_path(root))));
     CHECK(REQUIRE_VALUE(io::filesystem::exists(details::children_pending_tile_path(pyramid.tile_path(root)))));
     for (size_t i = 1; i < children.size(); ++i) {
         CHECK(REQUIRE_VALUE(io::filesystem::exists(pyramid.tile_path(children[i]))));
     }
+}
+
+TEST_CASE("tile downloader still tries the siblings of a tile that fails", "[Downloader]") {
+    const TemporaryPyramid pyramid("atb-downloader-failed-siblings");
+    const radix::tile::Id root{0, {0, 0}};
+    pyramid.create_pending(root);
+
+    HttpClient http = REQUIRE_VALUE(HttpClient::make());
+    Downloader downloader(missing_file_url, std::move(http), pyramid.path(), 1u, root.zoom_level);
+
+    CHECK(REQUIRE_ERROR(downloader.download_recursive(root)).holds_code(IncompleteDownload{4}));
+    CHECK(REQUIRE_VALUE(io::filesystem::exists(details::children_pending_tile_path(pyramid.tile_path(root)))));
 }

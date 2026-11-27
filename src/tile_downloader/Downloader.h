@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -31,6 +32,7 @@
 #include "TileLogger.h"
 #include "TileUrlBuilder.h"
 #include "error/Result.h"
+#include "error/log.h"
 #include "error/try.h"
 #include "error/utils.h"
 #include "io/FileError.h"
@@ -79,11 +81,22 @@ inline std::string format_as(const BadContentType &error) {
     return fmt::format("the response has content type \"{}\" instead of an image", error.content_type);
 }
 
-// What downloading a tile can fail with.
-using TileError = alp::Error<GetError, BadContentType>;
+// What fetching a tile from the server can fail with.
+using FetchTileError = alp::Error<GetError, BadContentType>;
+
+// Some tiles could not be downloaded, so their ancestors are still pending.
+struct IncompleteDownload {
+    size_t failed_tile_count;
+
+    bool operator==(const IncompleteDownload &) const = default;
+};
+
+inline std::string format_as(const IncompleteDownload &error) {
+    return fmt::format("{} tiles could not be downloaded", error.failed_tile_count);
+}
 
 // What downloading tiles can fail with.
-using DownloadError = alp::Error<io::FileError, TileError>;
+using DownloadError = alp::Error<io::FileError, IncompleteDownload>;
 
 // How downloading a tile ended, when it did not fail.
 enum class TileStatus {
@@ -104,10 +117,14 @@ public:
           _max_zoom_level(max_zoom_level) {}
 
     // Downloads the tile `root_id` and every tile below it.
+    // A tile that cannot be downloaded leaves its ancestors pending, and the tiles beside it are still downloaded.
     [[nodiscard]] alp::Result<void, DownloadError> download_recursive(const radix::tile::Id &root_id) {
         auto progress_session = this->_logger.start();
-        ALP_TRY(this->download_recursive_core(root_id));
+        ALP_TRY(const size_t failed_tile_count, this->download_recursive_core(root_id));
         progress_session.finish();
+        if (failed_tile_count > 0) {
+            return alp::make_error(IncompleteDownload{failed_tile_count});
+        }
         return {};
     }
 
@@ -120,19 +137,30 @@ private:
     TileLogger _logger;
     std::optional<unsigned int> _max_zoom_level;
 
-    [[nodiscard]] alp::Result<void, DownloadError> download_recursive_core(const radix::tile::Id &root_id) {
-        ALP_TRY(const TileStatus status, this->download_tile(root_id));
+    // Downloads the tile `root_id` and every tile below it, and marks every tile whose subtree is complete.
+    // Gives the number of tiles at or below `root_id` that could not be downloaded.
+    [[nodiscard]] alp::Result<size_t, io::FileError> download_recursive_core(const radix::tile::Id &root_id) {
+        auto status_result = this->download_tile(root_id);
+        if (!status_result.has_value()) {
+            // A local file error would fail every other tile as well, so it ends the download.
+            ALP_TRY(const FetchTileError fetch_error, std::move(status_result).error().split<FetchTileError>());
+            LOG_WARN_REPORT(fetch_error);
+            this->_logger.missing(root_id);
+            return 1;
+        }
+        const TileStatus status = *status_result;
 
         if (status == TileStatus::Skipped) {
             this->_logger.skipped(root_id);
-            return {};
+            return 0;
         }
 
         if (status == TileStatus::Absent) {
             this->_logger.missing(root_id);
-            return {};
+            return 0;
         }
 
+        size_t failed_tile_count = 0;
         const auto children = root_id.children();
         for (size_t i = 0; i < children.size(); i++) {
             if (this->_max_zoom_level.has_value() && children[i].zoom_level > *this->_max_zoom_level) {
@@ -140,12 +168,15 @@ private:
                 continue;
             }
 
-            ALP_TRY(this->download_recursive_core(children[i]));
+            ALP_TRY(const size_t child_failed_tile_count, this->download_recursive_core(children[i]));
+            failed_tile_count += child_failed_tile_count;
         }
 
-        const std::filesystem::path path = this->tile_path(root_id);
-        ALP_TRY(details::mark_tile_children_complete(path));
-        return {};
+        if (failed_tile_count == 0) {
+            const std::filesystem::path path = this->tile_path(root_id);
+            ALP_TRY(details::mark_tile_children_complete(path));
+        }
+        return failed_tile_count;
     }
 
     static bool is_image(const TransferInfo &info) {
@@ -156,7 +187,7 @@ private:
         return make_google_tile_path(_output_directory, tile, ".jpeg");
     }
 
-    [[nodiscard]] alp::Result<TileStatus, DownloadError> download_tile(const radix::tile::Id &tile) {
+    [[nodiscard]] alp::Result<TileStatus, io::FileError, FetchTileError> download_tile(const radix::tile::Id &tile) {
         const std::filesystem::path path = this->tile_path(tile);
         const std::filesystem::path pending_path = details::children_pending_tile_path(path);
 
