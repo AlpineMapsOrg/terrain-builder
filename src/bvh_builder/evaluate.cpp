@@ -30,7 +30,7 @@
 #include "view/CutRule.h"
 #include "view/select_cut.h"
 
-namespace {
+namespace detail {
 
 // The groups a camera selected and the work selecting them took.
 struct CutStats {
@@ -50,7 +50,7 @@ struct Evaluation {
     std::optional<std::vector<std::vector<dag::SourceId>>> cuts = std::nullopt;
 };
 
-}
+} // namespace detail
 
 alp::ErasedResult<void> evaluate_bvh(const cli::EvaluateArgs &args) {
     ALP_TRY(const bvh::Storage nodes, bvh::Storage::open(args.input_path));
@@ -75,7 +75,7 @@ alp::ErasedResult<void> evaluate_bvh(const cli::EvaluateArgs &args) {
 
     const view::CutRule rule{.threshold = args.threshold, .cull = !args.no_cull};
     bvh::NodeCache cache(nodes, args.max_resident_bytes);
-    Evaluation evaluation{.camera_set_name = camera_set.name, .rule = rule, .leaf_count = leaf_count};
+    detail::Evaluation evaluation{.camera_set_name = camera_set.name, .rule = rule, .leaf_count = leaf_count};
     if (args.write_cut) {
         evaluation.cuts.emplace();
     }
@@ -83,7 +83,7 @@ alp::ErasedResult<void> evaluate_bvh(const cli::EvaluateArgs &args) {
     for (const view::Camera &camera : cameras) {
         ALP_TRY(view::GroupSelection selection, view::select_groups(cache, root, camera, rule));
         std::ranges::sort(selection.groups);
-        evaluation.stats.push_back(CutStats{
+        evaluation.stats.push_back(detail::CutStats{
             .group_count = selection.groups.size(),
             .inner_nodes_tested = selection.inner_nodes_tested,
             .leaves_tested = selection.leaves_tested,

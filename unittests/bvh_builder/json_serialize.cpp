@@ -10,23 +10,23 @@
 #include "json/serialize.h"
 #include "view/CameraOptions.h"
 
-namespace {
+namespace detail {
 
 struct Sample {
     int count;
     std::string name;
 };
 
-}
+} // namespace detail
 
 TEST_CASE("read_from_text rejects text whose keys do not match the value", "[json][serialize]") {
-    REQUIRE_VALUE(json::read_from_text<Sample>(R"({"count": 3, "name": "a"})"));
+    REQUIRE_VALUE(json::read_from_text<detail::Sample>(R"({"count": 3, "name": "a"})"));
 
     SECTION("an unknown key") {
-        REQUIRE_ERROR(json::read_from_text<Sample>(R"({"count": 3, "name": "a", "size": 1})"));
+        REQUIRE_ERROR(json::read_from_text<detail::Sample>(R"({"count": 3, "name": "a", "size": 1})"));
     }
     SECTION("a missing key") {
-        REQUIRE_ERROR(json::read_from_text<Sample>(R"({"count": 3})"));
+        REQUIRE_ERROR(json::read_from_text<detail::Sample>(R"({"count": 3})"));
     }
 }
 
