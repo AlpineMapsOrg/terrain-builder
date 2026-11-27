@@ -40,7 +40,7 @@ enum class ParseError {
     BadDigit,
 };
 
-std::string_view format_as(const ParseError) {
+[[maybe_unused]] std::string_view format_as(const ParseError) {
     return "bad digit";
 }
 
