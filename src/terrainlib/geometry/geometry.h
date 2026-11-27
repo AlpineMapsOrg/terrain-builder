@@ -37,6 +37,7 @@
 
 #include "containers/FixedVector.h"
 #include "glm_utils.h"
+#include "std_compat.h"
 
 namespace geometry {
 
@@ -130,7 +131,7 @@ std::vector<radix::geometry::Aabb<n_dims, T>> wrap_into_periods(
         std::vector<radix::geometry::Aabb<n_dims, T>> wrapped;
         for (const radix::geometry::Aabb<n_dims, T> &piece : pieces) {
             const FixedVector<radix::geometry::Aabb<n_dims, T>, 2> split = detail::wrap_into_period(piece, dimension, centre[dimension], period[dimension]);
-            wrapped.append_range(split);
+            std_compat::append_range(wrapped, split);
         }
         pieces = std::move(wrapped);
     }
