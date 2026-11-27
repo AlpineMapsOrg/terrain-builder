@@ -50,7 +50,7 @@ struct MoveOnlyError {
     std::unique_ptr<int> value;
 };
 
-std::string_view format_as(const MoveOnlyError &) {
+[[maybe_unused]] std::string_view format_as(const MoveOnlyError &) {
     return "move only";
 }
 
