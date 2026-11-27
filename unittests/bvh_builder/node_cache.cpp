@@ -23,12 +23,10 @@ constexpr size_t UNBOUNDED_BYTES = std::numeric_limits<size_t>::max();
 // `nodes_per_batch[i]` leaves in batch i, and returns the batches as written.
 std::vector<bvh::Batch> write_leaves(bvh::Storage &nodes, const std::vector<uint32_t> &nodes_per_batch) {
     std::vector<bvh::Batch> written;
-    uint32_t group_index = 0;
     for (const uint32_t count : nodes_per_batch) {
         bvh::Batch batch = nodes.create_batch();
         for (uint32_t i = 0; i < count; i++) {
             batch.add_node(make_leaf_input());
-            group_index++;
         }
         REQUIRE_VALUE(nodes.write(batch));
         written.push_back(std::move(batch));
