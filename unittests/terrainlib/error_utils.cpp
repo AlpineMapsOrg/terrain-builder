@@ -1,0 +1,406 @@
+/*****************************************************************************
+ * AlpineMaps.org
+ * Copyright (C) 2026 Martin Braunsperger
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_range_equals.hpp>
+
+#include <cstdint>
+#include <expected>
+#include <optional>
+#include <source_location>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+#include <fmt/format.h>
+
+#include "error/Error.h"
+#include "error/Result.h"
+#include "error/format.h"
+#include "error/utils.h"
+#include "error_test_utils.h"
+
+namespace {
+
+enum class FileError {
+    NotFound,
+};
+
+std::string_view format_as(const FileError) {
+    return "file not found";
+}
+
+enum class ConfigError {
+    Missing,
+};
+
+std::string_view format_as(const ConfigError) {
+    return "the configuration is missing";
+}
+
+// A value that counts how often it is formatted.
+struct Counted {
+    uint32_t *formats;
+};
+
+std::string_view format_as(const Counted counted) {
+    (*counted.formats)++;
+    return "counted";
+}
+
+} // namespace
+
+TEST_CASE("make_error creates an error with its code that originates at the location it is handed", "[error][utils]") {
+    const std::source_location location = std::source_location::current();
+    const alp::Error<FileError> error = alp::make_error(FileError::NotFound, location);
+
+    CHECK(error.code() == FileError::NotFound);
+    CHECK(is_same_location(error.origin(), location));
+}
+
+TEST_CASE("make_error adds a message as the first context at the error's origin", "[error][utils]") {
+    const alp::Error<FileError> error = alp::make_error(FileError::NotFound, "opening app.cfg");
+
+    REQUIRE(error.frames().size() == 1);
+    CHECK(error.frames()[0].message == "opening app.cfg");
+    CHECK(is_same_location(error.frames()[0].location, error.origin()));
+}
+
+TEST_CASE("make_error creates an erased error from text that originates at the location it is handed", "[error][utils]") {
+    const std::source_location location = std::source_location::current();
+    const alp::ErasedError error = alp::make_error("round 3 made no progress", location);
+
+    CHECK(fmt::to_string(error).contains("round 3 made no progress"));
+    CHECK(is_same_location(error.origin(), location));
+}
+
+TEST_CASE("make_error with an inner code or error creates an error with its code that originates at the location it is handed and was created from the inner one", "[error][utils]") {
+    SECTION("code") {
+        const std::source_location location = std::source_location::current();
+        const alp::Error<ConfigError> error = alp::make_error(ConfigError::Missing, FileError::NotFound, location);
+
+        CHECK(error.code() == ConfigError::Missing);
+        const std::vector<alp::Frame> expected{
+            {.location = location},
+        };
+        CHECK_THAT(error.frames(), Catch::Matchers::RangeEquals(expected, is_same_frame));
+        REQUIRE(error.source() != nullptr);
+        CHECK(error.source()->holds_code(FileError::NotFound));
+        CHECK_THAT(error.source()->frames(), Catch::Matchers::RangeEquals(expected, is_same_frame));
+        CHECK(error.source()->source() == nullptr);
+    }
+
+    SECTION("error") {
+        const std::source_location origin = std::source_location::current();
+        const std::source_location context_location = std::source_location::current();
+        alp::Error<FileError> inner = alp::make_error(FileError::NotFound, "opening app.cfg", origin).context("reading the configuration", context_location);
+        const std::source_location location = std::source_location::current();
+        const alp::Error<ConfigError> error = alp::make_error(ConfigError::Missing, std::move(inner), location);
+
+        CHECK(error.code() == ConfigError::Missing);
+        const std::vector<alp::Frame> expected{
+            {.location = location},
+        };
+        CHECK_THAT(error.frames(), Catch::Matchers::RangeEquals(expected, is_same_frame));
+        REQUIRE(error.source() != nullptr);
+        CHECK(error.source()->holds_code(FileError::NotFound));
+        const std::vector<alp::Frame> expected_inner{
+            {.message = "opening app.cfg", .location = origin},
+            {.message = "reading the configuration", .location = context_location},
+        };
+        CHECK_THAT(error.source()->frames(), Catch::Matchers::RangeEquals(expected_inner, is_same_frame));
+    }
+
+    SECTION("error created from another error") {
+        alp::Error<ConfigError> inner = alp::make_error(ConfigError::Missing, alp::make_error(FileError::NotFound));
+        const alp::Error<ConfigError> error = alp::make_error(ConfigError::Missing, std::move(inner));
+
+        REQUIRE(error.source() != nullptr);
+        REQUIRE(error.source()->source() != nullptr);
+        CHECK(error.source()->source()->holds_code(FileError::NotFound));
+    }
+}
+
+TEST_CASE("make_unexpected creates an error with its code and only its origin", "[error][utils]") {
+    const alp::Result<int, FileError> result = alp::make_unexpected(FileError::NotFound);
+
+    REQUIRE(!result.has_value());
+    CHECK(result.error().code() == FileError::NotFound);
+    CHECK(result.error().frames().size() == 1);
+}
+
+TEST_CASE("make_unexpected adds a message as the first context", "[error][utils]") {
+    const alp::Result<int, FileError> result = alp::make_unexpected(FileError::NotFound, "opening app.cfg");
+
+    REQUIRE(!result.has_value());
+    REQUIRE(result.error().frames().size() == 1);
+    CHECK(result.error().frames()[0].message == "opening app.cfg");
+}
+
+TEST_CASE("make_unexpected creates an error that originates at the location it is handed", "[error][utils]") {
+    const std::source_location location = std::source_location::current();
+    const alp::Result<int, FileError> result = alp::make_unexpected(FileError::NotFound, location);
+
+    REQUIRE(!result.has_value());
+    CHECK(is_same_location(result.error().origin(), location));
+}
+
+TEST_CASE("make_unexpected creates an erased error from a message that originates at the location it is handed", "[error][utils]") {
+    const std::source_location location = std::source_location::current();
+    const alp::ErasedResult<int> result = alp::make_unexpected("round 3 made no progress", location);
+
+    REQUIRE(!result.has_value());
+    CHECK(fmt::to_string(result.error()).contains("round 3 made no progress"));
+    CHECK(is_same_location(result.error().origin(), location));
+}
+
+TEST_CASE("propagate passes an error on as the same type", "[error][utils]") {
+    STATIC_REQUIRE(std::is_same_v<decltype(alp::propagate(std::declval<alp::Error<FileError>>())), std::unexpected<alp::Error<FileError>>>);
+}
+
+TEST_CASE("propagate adds a frame without a message at the location it is handed", "[error][utils]") {
+    const std::source_location location = std::source_location::current();
+    const alp::Result<int, FileError> result = alp::propagate(alp::make_error(FileError::NotFound), location);
+
+    REQUIRE(!result.has_value());
+    REQUIRE(result.error().frames().size() == 2);
+    CHECK(result.error().frames()[1].message == std::nullopt);
+    CHECK(is_same_location(result.error().frames()[1].location, location));
+}
+
+TEST_CASE("propagate passes a const error on and leaves it unchanged", "[error][utils]") {
+    const auto error = alp::make_error(FileError::NotFound);
+    const alp::Result<int, FileError> result = alp::propagate(error);
+
+    REQUIRE(!result.has_value());
+    CHECK(result.error().frames().size() == 2);
+    CHECK(error.frames().size() == 1);
+}
+
+TEST_CASE("to_result passes a value through", "[error][utils]") {
+    const alp::Result<int, FileError> result = alp::to_result(std::optional<int>(3), FileError::NotFound);
+
+    CHECK(result.value() == 3);
+}
+
+TEST_CASE("to_result turns an empty optional into an error that originates at the location it is handed", "[error][utils]") {
+    const std::source_location location = std::source_location::current();
+    const alp::Result<int, FileError> result = alp::to_result(std::optional<int>(), FileError::NotFound, location);
+
+    REQUIRE(!result.has_value());
+    CHECK(result.error().code() == FileError::NotFound);
+    CHECK(is_same_location(result.error().origin(), location));
+}
+
+TEST_CASE("to_result adds a message as the first context", "[error][utils]") {
+    const alp::Result<int, FileError> result = alp::to_result(std::optional<int>(), FileError::NotFound, "looking up the mesh");
+
+    REQUIRE(!result.has_value());
+    REQUIRE(result.error().frames().size() == 1);
+    CHECK(result.error().frames()[0].message == "looking up the mesh");
+}
+
+TEST_CASE("to_result turns an empty optional into an erased error from text", "[error][utils]") {
+    const alp::ErasedResult<int> result = alp::to_result(std::optional<int>(), "the mesh is missing");
+
+    REQUIRE(!result.has_value());
+    CHECK(fmt::to_string(result.error()).contains("the mesh is missing"));
+}
+
+TEST_CASE("to_result builds its message only for an empty optional", "[error][utils]") {
+    uint32_t calls = 0;
+    const auto make_message = [&calls]() {
+        calls++;
+        return std::string("looking up the mesh");
+    };
+
+    const alp::Result<int, FileError> present = alp::to_result(std::optional<int>(3), FileError::NotFound, make_message);
+    CHECK(present.value() == 3);
+    CHECK(calls == 0);
+
+    const alp::Result<int, FileError> empty = alp::to_result(std::optional<int>(), FileError::NotFound, make_message);
+    CHECK(calls == 1);
+    REQUIRE(!empty.has_value());
+    REQUIRE(empty.error().frames().size() == 1);
+    CHECK(empty.error().frames()[0].message == "looking up the mesh");
+}
+
+TEST_CASE("make_context formats its message only when asked", "[error][utils]") {
+    uint32_t formats = 0;
+    const Counted counted{.formats = &formats};
+
+    const auto context = alp::make_context("loading {}", counted);
+    CHECK(formats == 0);
+
+    CHECK(context() == "loading counted");
+    CHECK(formats == 1);
+}
+
+TEST_CASE("make_context keeps a temporary argument alive", "[error][utils]") {
+    const auto context = alp::make_context("loading {}", std::string("the configuration"));
+
+    CHECK(context() == "loading the configuration");
+}
+
+TEST_CASE("with_context adds a frame at the location it is handed to a failed result", "[error][utils]") {
+    alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+    const std::source_location location = std::source_location::current();
+    const alp::Result<int, FileError> result = alp::with_context(std::move(failed), "loading the configuration", location);
+
+    REQUIRE(!result.has_value());
+    REQUIRE(result.error().frames().size() == 2);
+    CHECK(result.error().frames()[1].message == "loading the configuration");
+    CHECK(is_same_location(result.error().frames()[1].location, location));
+}
+
+TEST_CASE("with_context leaves a succeeded result alone", "[error][utils]") {
+    const alp::Result<int, FileError> result = alp::with_context(alp::Result<int, FileError>(3), "loading the configuration");
+
+    CHECK(result.value() == 3);
+}
+
+TEST_CASE("with_context builds its message only for a failed result", "[error][utils]") {
+    uint32_t calls = 0;
+    const auto make_message = [&calls]() {
+        calls++;
+        return std::string("loading the configuration");
+    };
+
+    const alp::Result<int, FileError> succeeded = alp::with_context(alp::Result<int, FileError>(3), make_message);
+    CHECK(succeeded.value() == 3);
+    CHECK(calls == 0);
+
+    const alp::Result<int, FileError> failed = alp::with_context(alp::Result<int, FileError>(alp::make_error(FileError::NotFound)), make_message);
+    CHECK(calls == 1);
+    REQUIRE(!failed.has_value());
+    REQUIRE(failed.error().frames().size() == 2);
+    CHECK(failed.error().frames()[1].message == "loading the configuration");
+}
+
+TEST_CASE("map_error applies BasicError::map to the error of a failed result", "[error][utils]") {
+    SECTION("callable") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const auto to_config_error = [](const alp::Error<FileError> error) { return alp::make_error(ConfigError::Missing, error); };
+        const auto result = alp::map_error<FileError>(std::move(failed), to_config_error);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+    }
+
+    SECTION("code") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const std::source_location location = std::source_location::current();
+        const auto result = alp::map_error<FileError>(std::move(failed), ConfigError::Missing, location);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+        CHECK(is_same_location(result.error().origin(), location));
+    }
+}
+
+TEST_CASE("map_code applies BasicError::map_code to the error of a failed result", "[error][utils]") {
+    SECTION("callable") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const auto to_config_error = [](const alp::Error<FileError> error) { return alp::make_error(ConfigError::Missing, error); };
+        const auto result = alp::map_code(std::move(failed), FileError::NotFound, to_config_error);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+    }
+
+    SECTION("code") {
+        alp::Result<int, FileError> failed = alp::make_error(FileError::NotFound);
+        const std::source_location location = std::source_location::current();
+        const auto result = alp::map_code(std::move(failed), FileError::NotFound, ConfigError::Missing, location);
+
+        REQUIRE(!result.has_value());
+        CHECK(result.error().holds_code(ConfigError::Missing));
+        CHECK(is_same_location(result.error().origin(), location));
+    }
+}
+
+TEST_CASE("wrap_error creates an error with its code from the whole error of a failed result, which it keeps as its source", "[error][utils]") {
+    alp::Result<int, FileError, ConfigError> failed = alp::make_error(FileError::NotFound);
+    const std::source_location location = std::source_location::current();
+    const alp::Result<int, ConfigError> result = alp::wrap_error(std::move(failed), ConfigError::Missing, location);
+
+    REQUIRE(!result.has_value());
+    CHECK(result.error().code() == ConfigError::Missing);
+    CHECK(is_same_location(result.error().origin(), location));
+    REQUIRE(result.error().source() != nullptr);
+    CHECK(result.error().source()->holds_code(FileError::NotFound));
+}
+
+TEST_CASE("wrap_error passes the value of a succeeded result through", "[error][utils]") {
+    const alp::Result<int, ConfigError> result = alp::wrap_error(alp::Result<int, FileError>(3), ConfigError::Missing);
+
+    REQUIRE(result.has_value());
+    CHECK(*result == 3);
+}
+
+TEST_CASE("A body run with a context that fails gets the context", "[error][utils]") {
+    const auto fail = []() -> alp::Result<int, FileError> {
+        return alp::make_error(FileError::NotFound);
+    };
+    std::optional<alp::Result<int, FileError>> result;
+
+    SECTION("message") {
+        result = alp::run_with_context("loading the configuration", fail);
+    }
+
+    SECTION("lazy message") {
+        result = alp::run_with_context([] { return std::string("loading the configuration"); }, fail);
+    }
+
+    REQUIRE(!result->has_value());
+    CHECK(result->error().code() == FileError::NotFound);
+    REQUIRE(result->error().frames().size() == 2);
+    CHECK(result->error().frames()[1].message == "loading the configuration");
+}
+
+TEST_CASE("A body run with a context that succeeds passes its value through, never building the message", "[error][utils]") {
+    bool is_built = false;
+
+    const alp::Result<int, FileError> result = alp::run_with_context(
+        [&is_built] {
+            is_built = true;
+            return std::string("loading the configuration");
+        },
+        []() -> alp::Result<int, FileError> {
+            return 3;
+        });
+
+    CHECK(result.value() == 3);
+    CHECK(!is_built);
+}
+
+TEST_CASE("A body run with a context records the context at the location it is handed", "[error][utils]") {
+    const std::source_location location = std::source_location::current();
+    const alp::Result<int, FileError> result = alp::run_with_context(
+        "loading the configuration",
+        []() -> alp::Result<int, FileError> {
+            return alp::make_error(FileError::NotFound);
+        },
+        location);
+
+    REQUIRE(!result.has_value());
+    REQUIRE(result.error().frames().size() == 2);
+    CHECK(is_same_location(result.error().frames()[1].location, location));
+}

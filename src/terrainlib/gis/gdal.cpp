@@ -19,10 +19,12 @@
 
 #include <mutex>
 
+#include <cpl_conv.h>
 #include <gdal.h>
 
+#include "build_config.h"
 #include "gis/gdal.h"
-#include "cli_support/log.h"
+#include "log.h"
 
 namespace gis::gdal {
 
@@ -53,7 +55,7 @@ inline void GdalErrorHandler(CPLErr eErrClass, int err_no, const char *msg) {
             break;
     }
 
-    cli_support::Log::get_logger().get()->log(level, "GDAL({}): {}", err_no, msg);
+    logging::Log::get_logger().get()->log(level, "GDAL({}): {}", err_no, msg);
 }
 
 } // namespace
@@ -62,6 +64,15 @@ void initialize_once() {
     std::call_once(g_gdal_initialized_once_flag, []() {
         LOG_DEBUG("calling GDALAllRegister...");
         CPLSetErrorHandler(GdalErrorHandler);
+
+        // TODO: enable again once longitudes beyond 180 pass the check; GDAL rejects them because their round trip comes back within the turn, which fails the scenario "antimeridian" of "ECEF coverage encloses the transformed box" in unittests/terrainlib/gis_srs_coverage.cpp.
+        /*
+        if constexpr (IS_DEBUG_BUILD) {
+            // Every coordinate transformation checks each result by mapping it back.
+            CPLSetConfigOption("CHECK_WITH_INVERT_PROJ", "YES");
+        }
+        */
+
         GDALAllRegister();
         // Initialize GDAL's global block-cache lock before concurrent reads.
         GDALGetCacheMax64();

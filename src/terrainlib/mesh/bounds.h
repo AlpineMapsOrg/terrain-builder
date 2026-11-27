@@ -27,13 +27,15 @@
 #include "mesh/SimpleMesh.h"
 #include "VecRange.h"
 
+// TODO: move to geometry/bounds.h
 template <glm::length_t n_dims, typename T, VecRange<n_dims, T> Range>
 void extend_bounds(radix::geometry::Aabb<n_dims, T> &bounds, const Range &points);
+// TODO: move to geometry/bounds.h
 template <AnyVecRange Range>
 auto calculate_bounds(const Range &points);
 
 namespace mesh {
-    
+
 template <glm::length_t n_dims, typename T>
 radix::geometry::Aabb<n_dims, T> calculate_bounds(const SimpleMesh_<n_dims, T> &mesh);
 template <glm::length_t n_dims, typename T>

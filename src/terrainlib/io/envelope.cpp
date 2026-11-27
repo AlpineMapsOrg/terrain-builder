@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,47 +19,45 @@
 
 #include "io/envelope.h"
 
+#include <utility>
+
+#include <fmt/format.h>
 #include <magic_enum/magic_enum.hpp>
 
 namespace io::envelope {
 
-Expected<Header> read_header(const std::filesystem::path& path)
-{
-    auto file_bytes = ::io::byte::read(path, max_header_size);
-    if (!file_bytes) {
-        return Error::propagate(std::move(file_bytes), "reading envelope file \"" + path.string() + "\"");
+alp::Result<Header, ReadHeaderError> read_header(const std::filesystem::path &path) {
+    const auto context = alp::make_context("reading the envelope header from {}", path);
+    ALP_TRY_CONTEXT(const bytes::vector prefix, bytes::read_prefix(path, max_header_size), context);
+
+    auto header_result = serde::deserialize_prefix<Header, max_header_size>(prefix);
+    if (!header_result.has_value()) {
+        return detail::to_envelope_error(std::move(header_result).error(), context);
     }
-    // zpp_bits resizes containers before checking their size against the input, so the limit bounds allocations.
-    Header header {};
-    zpp::bits::in input(*file_bytes, zpp::bits::alloc_limit<max_header_size>());
-    if (const zpp::bits::errc result = input(header); zpp::bits::failure(result)) {
-        return Error::fail(Error::Code::CorruptData, "deserialize envelope header of \"" + path.string() + "\"", std::make_error_code(result.code));
-    }
-    if (auto valid = detail::validate_header(header); !valid) {
-        return Error::propagate(std::move(valid), "decoding envelope header of \"" + path.string() + "\"");
-    }
-    return header;
+    ALP_TRY_CONTEXT(detail::validate_header(header_result.value().value), context);
+    return std::move(header_result).value().value;
 }
 
 namespace detail {
 
-    Expected<void> validate_header(const Header& header)
-    {
-        if (header.magic != magic) {
-            return Error::fail(Error::Code::CorruptData, "invalid envelope magic");
-        }
-        if (header.class_name.size() > max_class_name_size || header.hash.size() > max_hash_size) {
-            return Error::fail(Error::Code::CorruptData, "envelope header exceeds its size limits");
-        }
-        if (!magic_enum::enum_contains(header.hash_algorithm)) {
-            return Error::fail(Error::Code::Unsupported, "unsupported hash algorithm " + std::to_string(static_cast<unsigned>(header.hash_algorithm)));
-        }
-        if (!magic_enum::enum_contains(header.compression_algorithm)) {
-            return Error::fail(
-                Error::Code::Unsupported, "unsupported compression algorithm " + std::to_string(static_cast<unsigned>(header.compression_algorithm)));
-        }
-        return {};
+alp::Result<void, HeaderError> validate_header(const Header &header) {
+    if (header.magic != magic) {
+        return alp::make_error(CorruptData{}, fmt::format("the data starts with {:#018x} instead of the envelope magic number", header.magic));
     }
+    if (header.class_name.size() > max_class_name_size) {
+        return alp::make_error(CorruptData{}, fmt::format("the class name has {} bytes, more than the {} the format allows", header.class_name.size(), max_class_name_size));
+    }
+    if (header.hash.size() > max_hash_size) {
+        return alp::make_error(CorruptData{}, fmt::format("the hash has {} bytes, more than the {} the format allows", header.hash.size(), max_hash_size));
+    }
+    if (!magic_enum::enum_contains(header.hash_algorithm)) {
+        return alp::make_error(Unsupported{}, fmt::format("the header names the unknown hash algorithm {}", std::to_underlying(header.hash_algorithm)));
+    }
+    if (!magic_enum::enum_contains(header.compression_algorithm)) {
+        return alp::make_error(Unsupported{}, fmt::format("the header names the unknown compression algorithm {}", std::to_underlying(header.compression_algorithm)));
+    }
+    return {};
+}
 
 } // namespace detail
 

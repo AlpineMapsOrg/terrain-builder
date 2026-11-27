@@ -146,7 +146,7 @@ GLFWwindow* Window::handle() {
 
 bool Window::is_key_pressed(int key) {
     auto result = m_key_states.find(key);
-    
+
     if (result == m_key_states.end()) {
         return false;
     }
@@ -216,7 +216,7 @@ void Window::key_callback(GLFWwindow* window, int key, int /*scancode*/, int act
 
 void Window::mouse_button_callback(GLFWwindow* window, int button, int action, int /*mods*/) {
     Window* w = (Window*)glfwGetWindowUserPointer(window);
-    
+
     if (!w->m_mouse_button_states.contains(button)) {
         w->m_mouse_button_states.emplace(button, false);
     }

@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,18 +23,25 @@
 #include <string>
 
 #include "octree/Id.h"
+#include "octree/id_serialization.h"
 
 namespace octree {
 
-struct StoreTraits {
+struct KeyTraits {
     using Key = Id;
     using Hasher = std::hash<Key>;
+
+    static constexpr bool is_valid(const Key& key) {
+        return Key::try_make(key.level(), key.index_on_level()).has_value();
+    }
+};
+
+struct HierarchyTraits {
+    using Key = Id;
 
     static constexpr Key root() { return Key::root(); }
     static constexpr auto parent(const Key& key) { return key.parent(); }
     static constexpr auto children(const Key& key) { return key.children(); }
-    static constexpr bool is_valid(const Key& key) { return key.level() <= Key::max_level() && key.index_on_level() <= Key::max_index_on_level(key.level()); }
-    static std::string key_to_string(const Key& key) { return key.to_string(); }
 };
 
 } // namespace octree

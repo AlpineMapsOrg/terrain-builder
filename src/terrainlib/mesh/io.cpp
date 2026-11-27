@@ -18,48 +18,84 @@
  *****************************************************************************/
 
 #include "mesh/io.h"
-#include "cli_support/log.h"
-#include "mesh/io/gltf.h"
-#include "mesh/codec/SfMesh.h"
-#include "mesh/validate.h"
+
+#include <string>
+#include <string_view>
+
+#include <fmt/format.h>
+#include <fmt/std.h>
+#include <libassert/assert.hpp>
+
+#include "error/try.h"
+#include "io/UnknownExtension.h"
+#include "log.h"
+#include "mesh/validate/debug_assert.h"
+#include "string_utils.h"
 
 namespace mesh::io {
 
-Expected<SimpleMesh> load_from_path(
+namespace {
+
+    // The mesh formats load_from_path and save_to_path dispatch to.
+    enum class Format {
+        Gltf,
+        SfMesh,
+    };
+
+    // The format that `extension`, with its dot, names, ignoring ASCII case.
+    alp::Result<Format, Unsupported> format_from_extension(const std::string_view extension) {
+        if (gltf::container_from_extension(extension).has_value()) {
+            return Format::Gltf;
+        }
+        if (equals_ignore_ascii_case(extension, sf_mesh::extension)) {
+            return Format::SfMesh;
+        }
+        return ::io::make_unsupported_extension_error(extension, extensions);
+    }
+
+    // The format that the extension of `path` names, ignoring ASCII case.
+    alp::Result<Format, Unsupported> format_from_path(const std::filesystem::path &path) {
+        ALP_TRY_CONTEXT(const Format format, format_from_extension(path.extension().string()), fmt::format("choosing the mesh format for {}", path));
+        return format;
+    }
+
+} // namespace
+
+alp::Result<SimpleMesh, LoadError> load_from_path(
     const std::filesystem::path &path,
     const LoadOptions& options) {
-    const std::filesystem::path extension = path.extension();
-    if (extension == ".glb" || extension == ".gltf") {
-        return gltf::load_from_path(path, options);
-    } else if (extension == ".sfmesh") {
-        std::filesystem::path node_path = path;
-        node_path.replace_extension();
-        const mesh::codec::SfMesh codec;
-        return codec.read(node_path);
-    } else {
-        return Error::fail(Error::Code::Unsupported, "unsupported mesh input format: " + extension.string());
+    ALP_TRY(const Format format, format_from_path(path));
+    switch (format) {
+    case Format::Gltf: {
+        ALP_TRY(SimpleMesh mesh, gltf::load_from_path(path, options));
+        return mesh;
     }
+    case Format::SfMesh: {
+        ALP_TRY(SimpleMesh mesh, sf_mesh::load_from_path(path));
+        return mesh;
+    }
+    }
+    UNREACHABLE("invalid mesh format", format);
 }
 
-Expected<void> save_to_path(
+alp::Result<void, SaveError> save_to_path(
     const SimpleMesh &mesh,
     const std::filesystem::path &path,
     const SaveOptions &options) {
     LOG_TRACE("Saving mesh to path {}", path);
 
-    mesh::validate_basic(mesh);
+    mesh::debug_assert_valid_basic(mesh);
 
-    const std::filesystem::path extension = path.extension();
-    if (extension == ".glb" || extension == ".gltf") {
-        return gltf::save_to_path(mesh, path, options);
-    } else if (extension == ".sfmesh") {
-        std::filesystem::path node_path = path;
-        node_path.replace_extension();
-        const mesh::codec::SfMesh codec;
-        return codec.write(node_path, mesh, mesh::EncodeOptions { .texture_format = options.texture_format }, options.write_mode).transform([](auto&&) { });
-    } else {
-        return Error::fail(Error::Code::Unsupported, "unsupported mesh output format: " + extension.string());
+    ALP_TRY(const Format format, format_from_path(path));
+    switch (format) {
+    case Format::Gltf:
+        ALP_TRY(gltf::save_to_path(mesh, path, options));
+        return {};
+    case Format::SfMesh:
+        ALP_TRY(sf_mesh::save_to_path(mesh, path, options));
+        return {};
     }
+    UNREACHABLE("invalid mesh format", format);
 }
 
 }

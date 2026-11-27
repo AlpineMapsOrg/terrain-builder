@@ -19,10 +19,8 @@
 #include "../catch2_helpers.h"
 #include "containers/SegmentedBuffer.h"
 
-using SB = SegmentedBuffer<int>;
-
 TEST_CASE("SegmentedBuffer default construction") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     CHECK(buf.segment_count() == 1);
     CHECK(buf.total_size() == 0);
@@ -31,7 +29,7 @@ TEST_CASE("SegmentedBuffer default construction") {
 
 TEST_CASE("SegmentedBuffer construct from vector") {
     std::vector<int> data = {10, 20, 30};
-    SB buf(data);
+    SegmentedBuffer<int> buf(data);
 
     REQUIRE(buf.segment_count() == 1);
     CHECK(buf.total_size() == 3);
@@ -42,7 +40,7 @@ TEST_CASE("SegmentedBuffer construct from vector") {
 }
 
 TEST_CASE("SegmentedBuffer push_to_last_segment") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_to_last_segment(1);
     buf.push_to_last_segment(2);
@@ -56,7 +54,7 @@ TEST_CASE("SegmentedBuffer push_to_last_segment") {
 }
 
 TEST_CASE("SegmentedBuffer start_new_segment then push_to_last_segment") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_to_last_segment(10);
     buf.push_to_last_segment(20);
@@ -79,7 +77,7 @@ TEST_CASE("SegmentedBuffer start_new_segment then push_to_last_segment") {
 }
 
 TEST_CASE("SegmentedBuffer push_new_segment with size") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_new_segment(4, 99);
 
@@ -93,7 +91,7 @@ TEST_CASE("SegmentedBuffer push_new_segment with size") {
 }
 
 TEST_CASE("SegmentedBuffer resize_last_segment after start_new_segment") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_new_segment(2, 1);
     buf.push_new_segment(3, 2);
@@ -110,7 +108,7 @@ TEST_CASE("SegmentedBuffer resize_last_segment after start_new_segment") {
 }
 
 TEST_CASE("SegmentedBuffer push_new_segment from range") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_to_last_segment(1);
 
@@ -128,7 +126,7 @@ TEST_CASE("SegmentedBuffer push_new_segment from range") {
 }
 
 TEST_CASE("SegmentedBuffer init with segment sizes") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     std::vector<size_t> sizes = {2, 3, 1};
     buf.init(sizes, 42);
@@ -144,7 +142,7 @@ TEST_CASE("SegmentedBuffer init with segment sizes") {
 }
 
 TEST_CASE("SegmentedBuffer operator() access across segments") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     std::vector<size_t> sizes = {2, 3};
     buf.init(sizes, 0);
@@ -163,7 +161,7 @@ TEST_CASE("SegmentedBuffer operator() access across segments") {
 }
 
 TEST_CASE("SegmentedBuffer segment() span view") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_to_last_segment(5);
     buf.push_to_last_segment(6);
@@ -184,7 +182,7 @@ TEST_CASE("SegmentedBuffer segment() span view") {
 }
 
 TEST_CASE("SegmentedBuffer flat() view") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_to_last_segment(1);
     buf.push_to_last_segment(2);
@@ -206,7 +204,7 @@ TEST_CASE("SegmentedBuffer flat() view") {
 }
 
 TEST_CASE("SegmentedBuffer reset") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_to_last_segment(1);
     buf.push_to_last_segment(2);
@@ -224,7 +222,7 @@ TEST_CASE("SegmentedBuffer reset") {
 }
 
 TEST_CASE("SegmentedBuffer multiple segments with different sizes and last_segment") {
-    SB buf;
+    SegmentedBuffer<int> buf;
 
     buf.push_to_last_segment(10);
 
@@ -287,7 +285,7 @@ TEST_CASE("SegmentedBuffer keeps empty segments after reset") {
 // init and the vector constructor install real segments, so a later start_new_segment
 // must append rather than adopt one of them.
 TEST_CASE("SegmentedBuffer start_new_segment after init appends") {
-    SB buf;
+    SegmentedBuffer<int> buf;
     const std::vector<size_t> sizes{2, 3};
     buf.init(sizes);
 
@@ -299,12 +297,90 @@ TEST_CASE("SegmentedBuffer start_new_segment after init appends") {
 }
 
 TEST_CASE("SegmentedBuffer start_new_segment after the vector constructor appends") {
-    SB buf(std::vector<int>{1, 2, 3});
+    SegmentedBuffer<int> buf(std::vector<int>{1, 2, 3});
 
     buf.start_new_segment();
     buf.push_to_last_segment(9);
 
     REQUIRE(buf.segment_count() == 2);
     CHECK(buf.segment_size(0) == 3);
+    CHECK(buf.segment_size(1) == 1);
+}
+
+TEST_CASE("SegmentedBuffer pop_segment drops the last segment and its elements") {
+    SegmentedBuffer<int> buf;
+
+    buf.push_new_segment(std::vector<int>{1, 2});
+    buf.push_new_segment(std::vector<int>{3, 4, 5});
+
+    buf.pop_segment();
+
+    REQUIRE(buf.segment_count() == 1);
+    CHECK(buf.total_size() == 2);
+    CHECK(buf.segment_size(0) == 2);
+    CHECK(buf(0, 0) == 1);
+}
+
+TEST_CASE("SegmentedBuffer pop_segments drops several at once") {
+    SegmentedBuffer<int> buf;
+
+    buf.push_new_segment(std::vector<int>{1});
+    buf.push_new_segment(std::vector<int>{2, 3});
+    buf.push_new_segment(std::vector<int>{4, 5, 6});
+
+    buf.pop_segments(2);
+
+    REQUIRE(buf.segment_count() == 1);
+    CHECK(buf.total_size() == 1);
+    CHECK(buf(0, 0) == 1);
+}
+
+TEST_CASE("SegmentedBuffer popping every segment leaves it as constructed") {
+    SegmentedBuffer<int> buf;
+
+    buf.push_new_segment(std::vector<int>{1, 2});
+    buf.push_new_segment(std::vector<int>{3});
+
+    buf.pop_segments(buf.segment_count());
+
+    REQUIRE(buf.segment_count() == 1);
+    CHECK(buf.total_size() == 0);
+    CHECK(buf.segment_size(0) == 0);
+}
+
+TEST_CASE("SegmentedBuffer pushes after popping every segment do not leave an empty one") {
+    SegmentedBuffer<int> buf;
+
+    buf.push_new_segment(std::vector<int>{1, 2});
+    buf.pop_segment();
+    buf.push_new_segment(std::vector<int>{7, 8});
+
+    REQUIRE(buf.segment_count() == 1);
+    CHECK(buf.total_size() == 2);
+    CHECK(buf(0, 0) == 7);
+}
+
+TEST_CASE("SegmentedBuffer push_empty_segment adds a segment holding nothing") {
+    SegmentedBuffer<int> buf;
+
+    buf.push_new_segment(std::vector<int>{1, 2});
+    buf.push_empty_segment();
+
+    REQUIRE(buf.segment_count() == 2);
+    CHECK(buf.segment_size(1) == 0);
+    CHECK(buf.total_size() == 2);
+}
+
+TEST_CASE("SegmentedBuffer keeps empty segments when popping") {
+    SegmentedBuffer<int> buf;
+
+    buf.push_new_segment(std::span<const int>{});
+    buf.push_new_segment(std::vector<int>{1});
+    buf.push_new_segment(std::span<const int>{});
+
+    buf.pop_segment();
+
+    REQUIRE(buf.segment_count() == 2);
+    CHECK(buf.segment_size(0) == 0);
     CHECK(buf.segment_size(1) == 1);
 }

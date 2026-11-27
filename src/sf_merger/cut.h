@@ -2,6 +2,7 @@
  * AlpineMaps.org
  * Copyright (C) 2025 Martin Braunsperger
  * Copyright (C) 2025 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,65 +20,57 @@
 
 #pragma once
 
-#include <expected>
-
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "cli_support/log.h"
+#include "log.h"
+#include "hierarchy/NodeStatusOrMissing.h"
 #include "mask.h"
 #include "octree/Id.h"
 #include "mesh/storage.h"
 #include "octree/Space.h"
 #include "utils.h"
 #include "containers/Cow.h"
-#include "Error.h"
-#include "sf/finalize_storage.h"
+#include "sf/publish.h"
 #include "sf/validate_index.h"
 
 struct Context {
-    const mesh::storage::IndexedStorage& input;
-    mesh::storage::Storage& output;
+    const mesh::storage::Storage& input;
+    mesh::storage::Draft& output;
     const octree::Space space;
     const bool keep_inside;
 };
 
-Expected<void> cut_node(
+// A failure to read, link or save a node while cutting a subtree.
+using CutNodeError = alp::Error<mesh::storage::Storage::LoadError, mesh::storage::Draft::LinkError, mesh::storage::Draft::SaveError>;
+
+[[nodiscard]]
+alp::Result<void, CutNodeError> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask);
 
-inline Expected<void> cut_leaf_node(
+[[nodiscard]]
+inline alp::Result<void, CutNodeError> cut_leaf_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
 ) {
-    DEBUG_ASSERT(DEBUG_ASSERT_VAL(
-        ctx.input.index().is(store::NodeStatus::Leaf, id)).value());
+    DEBUG_ASSERT(ctx.input.index().status(id) == hierarchy::NodeStatus::Leaf);
 
-    auto mesh_result = ctx.input.load(id);
-    if (!mesh_result) {
-        return Error::propagate(std::move(mesh_result), "read cut input node " + id.to_string());
-    }
-    const SimpleMesh mesh = std::move(*mesh_result);
+    ALP_TRY(const SimpleMesh mesh, ctx.input.load(id));
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles",
         id, mask.vertex_count(), mask.face_count());
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        auto link_result = ctx.output.link_from(id, ctx.input);
-        if (!link_result) {
-            return link_result;
-        }
+        ALP_TRY(ctx.output.link_from(id, ctx.input));
     } else {
         const SimpleMesh &clipped_mesh = clipped;
         if (!clipped_mesh.is_empty()) {
             LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles",
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
-            auto save_result = ctx.output.save(id, clipped_mesh);
-            if (!save_result) {
-                return save_result;
-            }
+            ALP_TRY(ctx.output.save(id, clipped_mesh));
         } else {
             LOG_TRACE("Mesh was fully outside the mask");
         }
@@ -85,16 +78,14 @@ inline Expected<void> cut_leaf_node(
     return {};
 }
 
-inline Expected<void> cut_virtual_node(
+[[nodiscard]]
+inline alp::Result<void, CutNodeError> cut_virtual_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
 ) {
-    DEBUG_ASSERT(DEBUG_ASSERT_VAL(
-        ctx.input.index().is(store::NodeStatus::Virtual, id)).value());
-    DEBUG_ASSERT(id.has_children());
-
-    const auto children = id.children().value();
+    DEBUG_ASSERT(ctx.input.index().status(id) == hierarchy::NodeStatus::Virtual);
+    const auto children = *ASSERT_VAL(id.children());
     for (const octree::Id& child_id : children) {
         // TODO: split mask based on inner planes instead
         const auto child_bounds = geometry::pad_bounds_relative(ctx.space.get_node_bounds(child_id), 0.125);
@@ -108,7 +99,8 @@ inline Expected<void> cut_virtual_node(
     return {};
 }
 
-inline Expected<void> cut_node(
+[[nodiscard]]
+inline alp::Result<void, CutNodeError> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -126,70 +118,44 @@ inline Expected<void> cut_node(
     mesh::io::save_to_path(mask.mesh, new_path);
     */
 
-    const auto status_result = ctx.input.index().get(id);
-    DEBUG_ASSERT(status_result.has_value());
-    if (!status_result->has_value()) {
-        return {};
-    }
-
-    const store::NodeStatus status = status_result->value();
+    const hierarchy::NodeStatusOrMissing status = ctx.input.index().status(id);
     switch (status) {
-    case store::NodeStatus::Virtual:
+    case hierarchy::NodeStatusOrMissing::Missing:
+        return {};
+    case hierarchy::NodeStatusOrMissing::Virtual:
         return cut_virtual_node(ctx, id, mask);
-    case store::NodeStatus::Leaf:
+    case hierarchy::NodeStatusOrMissing::Leaf:
         return cut_leaf_node(ctx, id, mask);
     default:
         UNREACHABLE();
-        return {};
     }
-    return {};
 }
 
-inline Expected<void> cut_dataset(
-    const mesh::storage::IndexedStorage &input,
+using CutDatasetError = alp::Error<sf::UnexpectedInnerNode, CutNodeError>;
+[[nodiscard]]
+inline alp::Result<void, CutDatasetError> cut_dataset(
+    const mesh::storage::Storage &input,
     const MeshMask& mask,
-    mesh::storage::Storage &output,
+    mesh::storage::Draft &output,
     const bool keep_inside) {
-    auto validation = sf::validate_index(input.index());
-    if (!validation) {
-        return Error::propagate(
-            std::move(validation), "validate cut input dataset \"" + input.base_path().string() + "\"");
-    }
+    ALP_TRY_CONTEXT(sf::validate_index(input.index()), alp::make_context("checking the cut's input at {}", input.base_path()));
     Context ctx(input, output, octree::Space::earth(), keep_inside);
-    auto cut_result = cut_node(ctx, octree::Id::root(), mask);
-    if (!cut_result) {
-        return Error::propagate(std::move(cut_result), "cut dataset \"" + input.base_path().string() + "\"");
-    }
-    auto finalized = sf::finalize_storage(output);
-    if (!finalized) {
-        return Error::propagate(
-            std::move(finalized), "finalize cut output dataset \"" + output.base_path().string() + "\"");
-    }
+    ALP_TRY(cut_node(ctx, octree::Id::root(), mask));
     return {};
 }
 
-inline Expected<void> cut_dataset(
-    const mesh::storage::IndexedStorage &input_dataset,
+using CutError = alp::Error<mesh::storage::CreateError, CutDatasetError, sf::PublishError>;
+// Cuts `input_dataset` with `mask` into a new SF storage at `output_path`.
+[[nodiscard]]
+inline alp::Result<void, CutError> cut_dataset(
+    const mesh::storage::Storage &input_dataset,
     const MeshMask& mask,
     const std::filesystem::path &output_path,
     const bool keep_inside) {
     LOG_TRACE("Creating output dataset at {}", output_path);
-    mesh::storage::OpenOptions options;
-    options.default_mapping = input_dataset.layout().mapping();
-    options.preferred_extension = std::string(input_dataset.codec_selector().value_or(".sfmesh"));
-    auto output_result = mesh::storage::create(output_path, std::move(options));
-    if (!output_result) {
-        return Error::propagate(std::move(output_result), "create cut output dataset \"" + output_path.string() + "\"");
-    }
-    mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
-
-    auto cut = cut_dataset(input_dataset, mask, output_dataset, keep_inside);
-    if (!cut) {
-        return cut;
-    }
-    auto published = mesh::storage::publish(std::move(output_dataset));
-    if (!published) {
-        return Error::propagate(std::move(published), "publish cut output dataset \"" + output_path.string() + "\"");
-    }
+    const auto context = alp::make_context("cutting the SF storage at {} into {}", input_dataset.base_path(), output_path);
+    ALP_TRY_CONTEXT(mesh::storage::Draft output_dataset, mesh::storage::create(output_path, input_dataset.resolver().layout(), input_dataset.codec_id()), context);
+    ALP_TRY_CONTEXT(cut_dataset(input_dataset, mask, output_dataset, keep_inside), context);
+    ALP_TRY_CONTEXT(sf::publish(std::move(output_dataset)), context);
     return {};
 }

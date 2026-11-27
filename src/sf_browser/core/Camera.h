@@ -41,7 +41,7 @@ public:
 	void move_local(glm::dvec3 local_movement_delta);
 	void set_near(float near);
 	void set_far(float far);
-	
+
 	float get_aspect_ratio();
 	void set_aspect_ratio(float new_aspect_ratio);
 

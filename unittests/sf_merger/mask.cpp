@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +18,9 @@
  *****************************************************************************/
 
 #include "../catch2_helpers.h"
+#include "../result_helpers.h"
+#include "../temp_directory.h"
 
-#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
@@ -29,32 +31,22 @@
 
 #include "mask.h"
 #include "earth.h"
-#include "geometry/geometry.h"
+#include "gis/CplError.h"
+#include "gis/srs/well_known.h"
+#include "io/text.h"
 #include "mesh/cgal.h"
 #include "mesh/connectivity/manifold.h"
 #include "mesh/convert.h"
-#include "mesh/geometry.h"
-#include "octree/Id.h"
-#include "octree/Space.h"
-#include "utils.h"
 
 namespace {
 
-Polygon2 make_square(const glm::dvec2 min, const glm::dvec2 max) {
+Polygon2 make_rect(const glm::dvec2 min, const glm::dvec2 max) {
     Polygon2 polygon;
     polygon.push_back(Point2(min.x, min.y));
     polygon.push_back(Point2(max.x, min.y));
     polygon.push_back(Point2(max.x, max.y));
     polygon.push_back(Point2(min.x, max.y));
     return polygon;
-}
-
-SpherePolygonMask make_sphere_polygon_mask(const bool point_touching) {
-    MultipolygonWithHoles2 polygons;
-    polygons.add_polygon(make_square(glm::dvec2(-0.04, -0.02), glm::dvec2(-0.02, 0.02)));
-    const double second_min_x = point_touching ? -0.02 : 0.02;
-    polygons.add_polygon(make_square(glm::dvec2(second_min_x, 0.02), glm::dvec2(0.04, 0.06)));
-    return SpherePolygonMask{std::move(polygons), SphereProjector(glm::dvec3(100.0, 0.0, 0.0))};
 }
 
 void check_closed_volume(const SimpleMesh &mesh) {
@@ -66,75 +58,68 @@ void check_closed_volume(const SimpleMesh &mesh) {
     CHECK(CGAL::Polygon_mesh_processing::does_bound_a_volume(cgal_mesh));
 }
 
-SimpleMesh make_box(const glm::dvec3 min, const glm::dvec3 max) {
-    return SimpleMesh(
-        {
-            {0, 2, 1}, {0, 3, 2},
-            {4, 5, 6}, {4, 6, 7},
-            {0, 1, 5}, {0, 5, 4},
-            {1, 2, 6}, {1, 6, 5},
-            {2, 3, 7}, {2, 7, 6},
-            {3, 0, 4}, {3, 4, 7},
-        },
-        {
-            {min.x, min.y, min.z},
-            {max.x, min.y, min.z},
-            {max.x, max.y, min.z},
-            {min.x, max.y, min.z},
-            {min.x, min.y, max.z},
-            {max.x, min.y, max.z},
-            {max.x, max.y, max.z},
-            {min.x, max.y, max.z},
-        });
-}
-
-SimpleMesh make_plane() {
-    return SimpleMesh(
-        {{0, 1, 2}, {0, 2, 3}},
-        {
-            {-3.0, -1.0, 0.0},
-            {3.0, -1.0, 0.0},
-            {3.0, 1.0, 0.0},
-            {-3.0, 1.0, 0.0},
-        });
-}
-
-double area(const SimpleMesh &mesh) {
-    double result = 0.0;
-    for (const glm::uvec3 triangle : mesh.triangles) {
-        result += geometry::compute_triangle_area(
-            mesh.positions[triangle.x],
-            mesh.positions[triangle.y],
-            mesh.positions[triangle.z]);
-    }
-    return result;
-}
-
 } // namespace
 
-TEST_CASE("mask triangulation and extrusion preserve polygon components") {
-    for (const bool point_touching : {false, true}) {
-        CAPTURE(point_touching);
-
-        const SphereMeshMask triangulated = mask::triangulate(make_sphere_polygon_mask(point_touching));
-        REQUIRE(triangulated.components.size() == 2);
-        CHECK_FALSE(triangulated.components[0].is_empty());
-        CHECK_FALSE(triangulated.components[1].is_empty());
-
-        const MeshMask extruded = mask::extrude(triangulated, glm::dvec2(90.0, 110.0));
-        REQUIRE(extruded.components.size() == 2);
-        for (const SimpleMesh &component : extruded.components) {
-            check_closed_volume(component);
-        }
+TEST_CASE("triangulate and extrude preserve polygon components", "[sf_merger][mask]") {
+    const SphereProjector projector(glm::dvec3(100.0, 0.0, 0.0));
+    glm::dvec2 second_min;
+    SECTION("apart") {
+        second_min = glm::dvec2(0.02, 0.02);
     }
+    SECTION("touching at a point") {
+        second_min = glm::dvec2(-0.02, 0.02);
+    }
+    MultipolygonWithHoles2 polygons;
+    polygons.add_polygon(make_rect(glm::dvec2(-0.04, -0.02), glm::dvec2(-0.02, 0.02)));
+    polygons.add_polygon(make_rect(second_min, glm::dvec2(0.04, 0.06)));
+
+    const SphereMeshMask triangulated = mask::triangulate(SpherePolygonMask{std::move(polygons), projector});
+
+    const std::vector<glm::dvec3> first_corners = {
+        projector.unproject_point(glm::dvec2(-0.04, -0.02)),
+        projector.unproject_point(glm::dvec2(-0.02, -0.02)),
+        projector.unproject_point(glm::dvec2(-0.02, 0.02)),
+        projector.unproject_point(glm::dvec2(-0.04, 0.02)),
+    };
+    const std::vector<glm::dvec3> second_corners = {
+        projector.unproject_point(second_min),
+        projector.unproject_point(glm::dvec2(0.04, second_min.y)),
+        projector.unproject_point(glm::dvec2(0.04, 0.06)),
+        projector.unproject_point(glm::dvec2(second_min.x, 0.06)),
+    };
+    REQUIRE(triangulated.components.size() == 2);
+    CHECK_THAT(triangulated.components[0].positions, UnorderedWithinEpsilon(first_corners) || UnorderedWithinEpsilon(second_corners));
+    CHECK_THAT(triangulated.components[1].positions, UnorderedWithinEpsilon(first_corners) || UnorderedWithinEpsilon(second_corners));
+
+    const MeshMask extruded = mask::extrude(triangulated, glm::dvec2(90.0, 110.0));
+
+    REQUIRE(extruded.components.size() == 2);
+    check_closed_volume(extruded.components[0]);
+    check_closed_volume(extruded.components[1]);
 }
 
-TEST_CASE("masks split at the antimeridian are projected around their centre")
-{
+// The patch lies at radius 100, so the radii 90 and 110 scale each corner by 0.9 and 1.1.
+TEST_CASE("extrude turns a patch into a closed volume between the two radii", "[sf_merger][mask]") {
+    const SimpleMesh3d patch(
+        {{0, 1, 2}, {0, 2, 3}},
+        {{60.0, 0.0, 80.0}, {0.0, 60.0, 80.0}, {-60.0, 0.0, 80.0}, {0.0, -60.0, 80.0}});
+
+    const MeshMask extruded = mask::extrude(SphereMeshMask{{patch}}, glm::dvec2(90.0, 110.0));
+
+    REQUIRE(extruded.components.size() == 1);
+    const std::vector<glm::dvec3> expected_positions = {
+        {54.0, 0.0, 72.0}, {0.0, 54.0, 72.0}, {-54.0, 0.0, 72.0}, {0.0, -54.0, 72.0},
+        {66.0, 0.0, 88.0}, {0.0, 66.0, 88.0}, {-66.0, 0.0, 88.0}, {0.0, -66.0, 88.0},
+    };
+    CHECK_THAT(extruded.components[0].positions, UnorderedWithinEpsilon(expected_positions));
+    check_closed_volume(extruded.components[0]);
+}
+
+TEST_CASE("masks split at the antimeridian are projected around their centre", "[sf_merger][mask]") {
     MultipolygonWithHoles2 polygons;
-    polygons.add_polygon(make_square(glm::dvec2(170, -20), glm::dvec2(180, -15)));
-    polygons.add_polygon(make_square(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
-    const SpherePolygonMask mask = mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), gis::srs::wgs84() }, earth::radius());
+    polygons.add_polygon(make_rect(glm::dvec2(170, -20), glm::dvec2(180, -15)));
+    polygons.add_polygon(make_rect(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
+    const SpherePolygonMask mask = REQUIRE_VALUE(mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), gis::srs::wgs84() }, earth::radius));
     REQUIRE(mask.polygons.number_of_polygons_with_holes() == 2);
     radix::geometry::Aabb2d projected_bounds;
     for (const auto& polygon : mask.polygons.polygons_with_holes()) {
@@ -151,55 +136,20 @@ TEST_CASE("masks split at the antimeridian are projected around their centre")
     CHECK(projected_bounds.height() < 0.5);
 }
 
-TEST_CASE("multi-component masks use union semantics") {
-    const SimpleMesh source = make_plane();
-    const MeshMask mask{
-        .components = {
-            make_box(glm::dvec3(-2.0, -2.0, -1.0), glm::dvec3(-1.0, 2.0, 1.0)),
-            make_box(glm::dvec3(1.0, -2.0, -1.0), glm::dvec3(2.0, 2.0, 1.0)),
-        }};
+TEST_CASE("load_referenced_from_path fails for a missing mask", "[sf_merger][mask]") {
+    const TempDirectory directory("mask_missing");
 
-    const Cow<const SimpleMesh> inside = clip_on_mask(source, mask, true);
-    REQUIRE_FALSE(inside->is_empty());
-    CHECK(area(inside.get()) == Catch::Approx(4.0));
+    const mask::LoadReferencedError error = REQUIRE_ERROR(mask::load_referenced_from_path(directory.path() / "missing.geojson"));
 
-    const Cow<const SimpleMesh> outside = clip_on_mask(source, mask, false);
-    REQUIRE_FALSE(outside->is_empty());
-    CHECK(area(outside.get()) == Catch::Approx(8.0));
+    CHECK(error.holds<gis::CplError>());
 }
 
-TEST_CASE("empty component list has empty-union semantics") {
-    const SimpleMesh source = make_plane();
-    const MeshMask mask;
+TEST_CASE("load_referenced_from_path fails for a mask of points", "[sf_merger][mask]") {
+    const TempDirectory directory("mask_of_points");
+    const std::filesystem::path path = directory.path() / "point.geojson";
+    REQUIRE_VALUE(io::text::write(R"({"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Point", "coordinates": [11.0, 47.0]}}]})", path));
 
-    const Cow<const SimpleMesh> inside = clip_on_mask(source, mask, true);
-    CHECK_FALSE(inside.is_ref());
-    CHECK(inside->is_empty());
+    const mask::LoadReferencedError error = REQUIRE_ERROR(mask::load_referenced_from_path(path));
 
-    const Cow<const SimpleMesh> outside = clip_on_mask(source, mask, false);
-    CHECK(outside.is_ref());
-    CHECK_FALSE(outside->is_empty());
-}
-
-TEST_CASE("Tirol mask components remain valid after node-bounds clipping") {
-    const std::filesystem::path mask_path =
-        std::filesystem::path(ALP_TEST_DATA_DIR) / "sf_builder_merge_border/mask/tirol.shp";
-    const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2.0);
-    const auto loaded = mask::load_from_path(mask_path, radius_range);
-    REQUIRE(loaded.has_value());
-
-    const MeshMask &full_mask = loaded.value();
-    REQUIRE(full_mask.components.size() == 3);
-    for (const SimpleMesh &component : full_mask.components) {
-        check_closed_volume(component);
-    }
-
-    const octree::Id regression_node(15, 26290, 18610, 27235);
-    const radix::geometry::Aabb3d bounds = geometry::pad_bounds_relative(
-        octree::Space::earth().get_node_bounds(regression_node), 0.05);
-    const MeshMask local_mask = clip_mask_on_bounds(full_mask, bounds);
-    REQUIRE_FALSE(local_mask.is_empty());
-    for (const SimpleMesh &component : local_mask.components) {
-        check_closed_volume(component);
-    }
+    CHECK(error.holds_code(gis::vector_mask::InvalidMask::UnsupportedGeometry));
 }

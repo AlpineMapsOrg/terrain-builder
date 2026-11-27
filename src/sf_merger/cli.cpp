@@ -51,7 +51,7 @@ Args cli::parse(int argc, const char *const *argv) {
             "--output", merge_args.output_path, "New path for the merged dataset; it is written to <output>.part, which is renamed to <output> when complete")
         ->required();
 
-    merge.add_option("--cache", merge_args.cache_path, "Incomplete .part output of an earlier merge with the same inputs to reuse")
+    merge.add_option("--checkpoint", merge_args.checkpoint_path, "Draft of an earlier merge with the same inputs, whose nodes are reused")
         ->check(CLI::ExistingDirectory);
 
     /*

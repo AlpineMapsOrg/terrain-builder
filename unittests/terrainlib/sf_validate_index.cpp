@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,30 +17,31 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include "../result_helpers.h"
+
 #include <catch2/catch_test_macros.hpp>
 
-#include "octree/StoreTraits.h"
+#include <optional>
+
+#include "octree/Id.h"
+#include "octree/storage/Index.h"
 #include "sf/validate_index.h"
 
-TEST_CASE("Structura Fundamentalis validation accepts Leaf and Virtual nodes", "[sf][store]")
-{
-    store::Index<octree::StoreTraits> index;
+TEST_CASE("validate_index accepts leaf and virtual nodes", "[sf][validate_index]") {
+    octree::storage::Index index;
     const octree::Id leaf = octree::Id::root().child(2).value().child(5).value();
-    REQUIRE(index.add(leaf).has_value());
+    REQUIRE(index.add(leaf, std::nullopt));
 
-    CHECK(sf::validate_index(index).has_value());
+    REQUIRE_VALUE(sf::validate_index(index));
 }
 
-TEST_CASE("Structura Fundamentalis validation reports the first Inner node", "[sf][store]")
-{
-    store::Index<octree::StoreTraits> index;
+TEST_CASE("validate_index fails for an inner node", "[sf][validate_index]") {
+    octree::storage::Index index;
     const octree::Id root = octree::Id::root();
-    const octree::Id child = root.child(3).value();
-    REQUIRE(index.add(root).has_value());
-    REQUIRE(index.add(child).has_value());
+    REQUIRE(index.add(root, std::nullopt));
+    REQUIRE(index.add(root.child(3).value(), std::nullopt));
 
-    const auto result = sf::validate_index(index);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code() == Error::Code::CorruptData);
-    CHECK(result.error().to_string().contains(root.to_string()));
+    const auto error = REQUIRE_ERROR(sf::validate_index(index));
+
+    CHECK(error.holds_code(sf::UnexpectedInnerNode { root }));
 }

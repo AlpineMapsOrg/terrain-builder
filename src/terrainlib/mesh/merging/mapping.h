@@ -130,7 +130,7 @@ VertexMapping create_mapping(
     const CreateOptions<Mode> options = create_options()) {
     const auto mesh_span = detail::span_to_refs(std::span(meshes));
     switch (meshes.size()) {
-        case 0: 
+        case 0:
             return {};
         case 1:
             return VertexMapping::identity(mesh_span[0].get().vertex_count());
@@ -157,7 +157,7 @@ public:
     static ApplyOptions defaults() {
         return {};
     }
-    
+
     bool get_deduplicate_triangles() const {
         return this->_deduplicate_triangles;
     }
@@ -196,4 +196,3 @@ inline SimpleMesh apply_mapping(
 }
 
 } // namespace mesh::merging
-                                                                                                                

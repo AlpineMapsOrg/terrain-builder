@@ -31,13 +31,13 @@ add_library(dagbuilderlib
     correspondence.h
     dag_id.h
     dag_node.h
+    dag_validate.h
     fixed.h
     fixed_point.h
     inputs.h
     meshopt.h
     metadata.h
     optimize.h
-    parallel.h
     partition.h
     simplify.h
     slice.h

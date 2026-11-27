@@ -21,12 +21,26 @@
 
 #include <span>
 #include <vector>
-#include <expected>
+
+#include <CGAL/Surface_mesh_parameterization/Error_code.h>
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "error/Result.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
+
+template <>
+struct fmt::formatter<CGAL::Surface_mesh_parameterization::Error_code> {
+    constexpr fmt::format_parse_context::iterator parse(fmt::format_parse_context &context) {
+        return context.begin();
+    }
+
+    fmt::format_context::iterator format(const CGAL::Surface_mesh_parameterization::Error_code code, fmt::format_context &context) const {
+        return fmt::format_to(context.out(), "{}", CGAL::Surface_mesh_parameterization::get_error_message(code));
+    }
+};
 
 namespace uv {
 
@@ -49,20 +63,8 @@ enum class Border {
     Square
 };
 
-class UnwrapError {
-public:
-    UnwrapError() = default;
-    constexpr UnwrapError(int code) : code(code) {}
-
-    operator int() const {
-        return this->code;
-    }
-
-    std::string description() const;
-
-private:
-    int code;
-};
+// A parameterization CGAL could not compute.
+using UnwrapError = CGAL::Surface_mesh_parameterization::Error_code;
 
 using Uvs = std::vector<glm::dvec2>;
 using Texture = cv::Mat;
@@ -76,13 +78,15 @@ struct Map {
 inline constexpr Algorithm DEFAULT_ALGORITHM = Algorithm::TutteBarycentricMapping;
 inline constexpr Border DEFAULT_BORDER = Border::Circle;
 
-std::expected<Map, UnwrapError> unwrap(
+[[nodiscard]]
+alp::Result<Map, UnwrapError> unwrap(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::dvec3> positions,
     Algorithm algorithm = DEFAULT_ALGORITHM,
     Border border = DEFAULT_BORDER);
 
-inline std::expected<Map, UnwrapError> unwrap(
+[[nodiscard]]
+inline alp::Result<Map, UnwrapError> unwrap(
     const std::vector<glm::uvec3>& triangles,
     const std::vector<glm::dvec3>& positions,
     Algorithm algorithm = DEFAULT_ALGORITHM,
@@ -94,7 +98,8 @@ inline std::expected<Map, UnwrapError> unwrap(
         border);
 }
 
-inline std::expected<Map, UnwrapError> unwrap(
+[[nodiscard]]
+inline alp::Result<Map, UnwrapError> unwrap(
     const mesh::View &mesh,
     Algorithm algorithm = DEFAULT_ALGORITHM,
     Border border = DEFAULT_BORDER) {
@@ -105,7 +110,8 @@ inline std::expected<Map, UnwrapError> unwrap(
         border);
 }
 
-inline std::expected<Map, UnwrapError> unwrap(
+[[nodiscard]]
+inline alp::Result<Map, UnwrapError> unwrap(
     const mesh::Simple &mesh,
     Algorithm algorithm = DEFAULT_ALGORITHM,
     Border border = DEFAULT_BORDER) {

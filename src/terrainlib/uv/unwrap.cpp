@@ -34,19 +34,17 @@
 #include <CGAL/Unique_hash_map.h>
 #pragma GCC diagnostic pop
 
+#include "error/try.h"
+#include "error/utils.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "build_config.h"
 #include "unwrap.h"
 #include "fit.h"
 #include "mesh/connectivity/topology.h"
 
 namespace uv {
-
-std::string UnwrapError::description() const {
-    return CGAL::Surface_mesh_parameterization::get_error_message(this->code);
-}
 
 namespace {
 using CircleBorderParameterizer = CGAL::Surface_mesh_parameterization::Circular_border_uniform_parameterizer_3<cgal::Mesh>;
@@ -149,7 +147,8 @@ struct CgalMap {
     double aspect = 1.0;
 };
 
-std::expected<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
+[[nodiscard]]
+alp::Result<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
     const cgal::HalfedgeDescriptor bhd = CGAL::Polygon_mesh_processing::longest_border(mesh).first;
     DEBUG_ASSERT(bhd != boost::graph_traits<cgal::Mesh>::null_halfedge());
 
@@ -157,9 +156,7 @@ std::expected<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorith
     CgalUvPropMap uv_map(uv_uhm);
 
     CGAL::Surface_mesh_parameterization::Error_code result;
-    if (border != Border::Circle && border != Border::Square) {
-        throw std::invalid_argument("illegal border specifier");
-    }
+    ASSERT(border == Border::Circle || border == Border::Square, "illegal border specifier");
 
     if (algorithm == Algorithm::TutteBarycentricMapping) {
         if (border == Border::Circle) {
@@ -184,7 +181,7 @@ std::expected<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorith
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerCircularBorder(), bhd, uv_map);
         } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerSquareBorder(), bhd, uv_map);
-        } 
+        }
     } else if (algorithm == Algorithm::LeastSquaresConformalMap) {
         // free border
         result = CGAL::Surface_mesh_parameterization::parameterize(mesh,
@@ -194,11 +191,11 @@ std::expected<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorith
         result = CGAL::Surface_mesh_parameterization::parameterize(mesh,
             ARAPParameterizerFreeBorder(1000.0), bhd, uv_map);
     } else {
-        throw std::invalid_argument("illegal algorithm specifier");
+        UNREACHABLE("illegal algorithm specifier");
     }
 
     if (result != CGAL::Surface_mesh_parameterization::OK) {
-        return std::unexpected(UnwrapError(result));
+        return alp::make_error(result);
     }
 
     const auto vertex_count = CGAL::num_vertices(mesh);
@@ -227,21 +224,17 @@ std::vector<glm::dvec2> decode_uv_map(const UvMap &map, size_t vertex_count) {
 }
 }
 
-std::expected<Map, UnwrapError> unwrap(
+alp::Result<Map, UnwrapError> unwrap(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::dvec3> positions,
     Algorithm algorithm,
     Border border) {
     const mesh::View mesh(triangles, positions);
-    mesh::validate_manifold(mesh);
+    mesh::debug_assert_valid_manifold(mesh);
     DEBUG_ASSERT(mesh::compute_topology(mesh).is_disk(true));
-    
+
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
-    auto result = parameterize_mesh(cgal_mesh, algorithm, border);
-    if (!result) {
-        return std::unexpected(result.error());
-    }
-    const CgalMap &cgal_map = result.value();
+    ALP_TRY_CONTEXT(const CgalMap &cgal_map, parameterize_mesh(cgal_mesh, algorithm, border), "unwrapping a mesh");
     Uvs uvs = decode_uv_map(cgal_map.uvs, mesh.vertex_count());
     return Map{std::move(uvs), cgal_map.aspect};
 }

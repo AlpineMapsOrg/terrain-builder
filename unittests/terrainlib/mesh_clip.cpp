@@ -33,7 +33,7 @@
 #include "mesh/convert.h"
 #include "mesh/io.h"
 #include "mesh/bounds.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "mesh/connectivity/manifold.h"
 #include "mesh/geometry.h"
 #include "octree/Space.h"
@@ -296,7 +296,7 @@ TEST_CASE("single triangle split by one plane and partly discarded by the next")
 }
 
 void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const radix::geometry::Aabb3d &bounds) {
-    mesh::validate(clipped_mesh);
+    mesh::debug_assert_valid(clipped_mesh);
 
     // Check that no vertices are outside the bounds
     for (const auto &position : clipped_mesh.positions) {

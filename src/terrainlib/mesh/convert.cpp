@@ -27,7 +27,7 @@
 
 #include "mesh/convert.h"
 #include "mesh/cgal.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "build_config.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
@@ -72,7 +72,7 @@ cgal::Mesh to_cgal_mesh(const mesh::View &mesh) {
 
 SimpleMesh to_simple_mesh(const cgal::Mesh &cgal_mesh) {
     ASSERT(!cgal_mesh.has_garbage());
-    
+
     SimpleMesh mesh;
 
     auto uv_map_opt = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv");
@@ -80,7 +80,7 @@ SimpleMesh to_simple_mesh(const cgal::Mesh &cgal_mesh) {
     UvMap uv_map;
     if (has_uvs) {
         uv_map = std::move(uv_map_opt.value());
-    }   
+    }
 
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
     const size_t face_count = CGAL::num_faces(cgal_mesh);
@@ -109,9 +109,9 @@ SimpleMesh to_simple_mesh(const cgal::Mesh &cgal_mesh) {
         mesh.triangles.push_back(triangle);
     }
 
-    mesh::validate(mesh);
+    mesh::debug_assert_valid(mesh);
 
     return mesh;
 }
- 
+
 }

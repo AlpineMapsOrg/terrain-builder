@@ -30,7 +30,7 @@
 #include "mesh/merging/helpers.h"
 #include "mesh/merging/mapping.h"
 #include "octree/Id.h"
-#include "store/NodeStatusOrMissing.h"
+#include "hierarchy/NodeStatusOrMissing.h"
 #include "polygon/Polygon.h"
 #include "polygon/triangulate.h"
 #include "spatial_lookup/Hashmap.h"
@@ -45,7 +45,7 @@ namespace merge::visitor {
 
 class Masked {
 public:
-    using Status = store::NodeStatusOrMissing;
+    using Status = hierarchy::NodeStatusOrMissing;
     struct Context {
         MeshMask mask;
         bool has_left_parent;
@@ -64,7 +64,7 @@ public:
     }
 
     template <Status LeftStatus, Status RightStatus>
-    Result visit(
+    alp::Result<Result, NodeLoader::LoadError> visit(
         const octree::Id &id,
         const NodeData<LeftStatus> &left,
         const NodeData<RightStatus> &right,
@@ -89,7 +89,7 @@ public:
 
         LOG_TRACE("Clipping mask for {}", id);
         const auto bounds = geometry::pad_bounds_relative(this->_space.get_node_bounds(id), 0.05);
-        MeshMask mask = clip_mask_on_bounds(ctx.mask, bounds);
+        const MeshMask mask = clip_mask_on_bounds(ctx.mask, bounds);
 
         // Same when the current mask is empty
         if constexpr (LeftStatus != Status::Missing) {
@@ -100,18 +100,26 @@ public:
 
         // If we have two leaf nodes we can directly merge them.
         if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Leaf) {
-            return this->merge_meshes(left.mesh(), right.mesh(), true, true, mask);
+            ALP_TRY(const SimpleMesh &left_mesh, left.mesh());
+            ALP_TRY(const SimpleMesh &right_mesh, right.mesh());
+            return this->merge_meshes(left_mesh, right_mesh, true, true, mask);
         }
 
         // If we have a left leaf we either directly return it (after clipping)
         // or merge if right has a non-missing parent
         if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Missing) {
             if (ctx.has_right_parent) {
-                return this->merge_meshes(left.mesh(), right.mesh().value(), true, false, mask);
+                ALP_TRY(const SimpleMesh &left_mesh, left.mesh());
+
+                ALP_TRY(const auto right_mesh_opt, right.mesh());
+                const SimpleMesh &right_mesh = ASSERT_VAL(right_mesh_opt)->get();
+
+                return this->merge_meshes(left_mesh, right_mesh, true, false, mask);
             }
 
             // Right node is actually missing, just return the clipped left node
-            auto result = clip_on_mask(left.mesh(), mask, false);
+            ALP_TRY(const SimpleMesh &left_mesh, left.mesh());
+            auto result = clip_on_mask(left_mesh, mask, false);
             if (result->is_empty()) {
                 return Ignore{};
             } else if (result.is_ref()) {
@@ -125,11 +133,17 @@ public:
         // or merge if left has a non-missing parent
         if constexpr (LeftStatus == Status::Missing && RightStatus == Status::Leaf) {
             if (ctx.has_left_parent) {
-                return this->merge_meshes(left.mesh().value(), right.mesh(), false, true, mask);
+                ALP_TRY(const auto left_mesh_opt, left.mesh());
+                const SimpleMesh &left_mesh = ASSERT_VAL(left_mesh_opt)->get();
+
+                ALP_TRY(const SimpleMesh &right_mesh, right.mesh());
+
+                return this->merge_meshes(left_mesh, right_mesh, false, true, mask);
             }
 
             // Left node is actually missing, just return the clipped right node
-            auto result = clip_on_mask(right.mesh(), mask, true);
+            ALP_TRY(const SimpleMesh &right_mesh, right.mesh());
+            auto result = clip_on_mask(right_mesh, mask, true);
             if (result->is_empty()) {
                 return Ignore{};
             } else if (result.is_ref()) {
@@ -142,7 +156,9 @@ public:
         if constexpr (LeftStatus == Status::Missing && RightStatus == Status::Missing) {
             DEBUG_ASSERT(ctx.has_left_parent || ctx.has_right_parent);
             if (ctx.has_left_parent) {
-                auto result = clip_on_mask(left.mesh().value(), mask, false);
+                ALP_TRY(const auto left_mesh_opt, left.mesh());
+                const SimpleMesh &left_mesh = ASSERT_VAL(left_mesh_opt)->get();
+                auto result = clip_on_mask(left_mesh, mask, false);
                 if (result->is_empty()) {
                     return Ignore{};
                 } else {
@@ -150,7 +166,9 @@ public:
                 }
             }
             if (ctx.has_right_parent) {
-                auto result = clip_on_mask(right.mesh().value(), mask, true);
+                ALP_TRY(const auto right_mesh_opt, right.mesh());
+                const SimpleMesh &right_mesh = ASSERT_VAL(right_mesh_opt)->get();
+                auto result = clip_on_mask(right_mesh, mask, true);
                 if (result->is_empty()) {
                     return Ignore{};
                 } else {
@@ -210,7 +228,7 @@ private:
         };
         std::vector<size_t> vertex_offsets;
         SimpleMesh result_mesh = mesh::combine(meshes, vertex_offsets);
-        
+
         LOG_TRACE("Creating texture atlas");
         const atlas::HorizontalStripLayoutPlanner planner = {};
         const atlas::Layout layout = planner.plan(meshes);
@@ -224,7 +242,7 @@ private:
             }
         }
 
-        mesh::validate(result_mesh);
+        mesh::debug_assert_valid(result_mesh);
 
         return Merged{result_mesh};
 

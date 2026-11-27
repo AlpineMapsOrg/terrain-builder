@@ -24,6 +24,9 @@
 #include <spdlog/spdlog.h>
 
 #include "cli_support/log.h"
+#include "cli_support/octree_id.h"
+#include "error/format.h"
+#include "expected_utils.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -79,23 +82,9 @@ AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
 }
 
 octree::Id make_octree_id(const std::vector<uint64_t> &values) {
-    if (values.size() == 2) {
-        const octree::Id::Level level = values[0];
-        const octree::Id::Index index = values[1];
-
-        return octree::Id(level, index);
-    }
-
-    if (values.size() == 4) {
-        const octree::Id::Level level = values[0];
-        const octree::Id::Coord x = values[1];
-        const octree::Id::Coord y = values[2];
-        const octree::Id::Coord z = values[3];
-
-        return octree::Id(level, x, y, z);
-    }
-
-    throw CLI::ValidationError("--root-node expects either: <level> <index> or <level> <x> <y> <z>");
+    return alp::value_or_else(cli_support::parse_octree_id(values), [](const alp::ErasedError &error) -> octree::Id {
+        throw CLI::ValidationError("--root-node", fmt::format("{}", error));
+    });
 }
 
 } // namespace
@@ -122,7 +111,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
-        .cache_path = std::nullopt
+        .checkpoint_path = std::nullopt
     };
 
     app.add_option("--input", args.input_path, "Path to input mesh dataset")
@@ -176,7 +165,7 @@ Args cli::parse(int argc, const char *const *argv) {
         ->default_val(args.texture_gutter)
         ->check(CLI::NonNegativeNumber);
 
-    app.add_option("--cache", args.cache_path, "Incomplete .part output of an earlier build with the same inputs and options to reuse")
+    app.add_option("--checkpoint", args.checkpoint_path, "Draft of an earlier build with the same inputs, whose nodes are reused")
         ->check(CLI::ExistingDirectory);
 
     app.add_flag("--write-debug-meshes", args.write_debug_meshes, "Write debug .glb meshes alongside the output");

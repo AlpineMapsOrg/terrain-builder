@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,30 +23,20 @@
 
 #include <radix/raster.h>
 
-#include "Error.h"
-
 namespace raster_store {
 
-inline constexpr unsigned default_tile_side = 4096;
-
-inline Expected<void> validate_dimensions(const glm::uvec2 dimensions)
-{
-    if (dimensions.x == 0 || dimensions.x != dimensions.y) {
-        return Error::fail(Error::Code::InvalidInput, "raster tile dimensions must be positive and square");
-    }
-    return {};
-}
+inline constexpr uint32_t default_tile_side = 4096;
 
 template <typename PixelType>
 struct Tile {
-    explicit Tile(const unsigned side = default_tile_side)
+    explicit Tile(const uint32_t side = default_tile_side)
         : data(side)
-        , attribution(glm::uvec2(side), std::uint16_t { 0 })
+        , attribution(glm::uvec2(side), uint16_t { 0 })
     {
     }
 
     radix::Raster<PixelType> data;
-    radix::Raster<std::uint16_t> attribution;
+    radix::Raster<uint16_t> attribution;
 };
 
 } // namespace raster_store

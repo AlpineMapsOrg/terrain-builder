@@ -26,6 +26,7 @@
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 #include <libassert/assert.hpp>
+#include <radix/geometry.h>
 
 #include "build_config.h"
 #include "mesh/SimpleMesh.h"
@@ -111,7 +112,7 @@ struct UvRemap {
     }
     std::vector<glm::dvec2> remap_uvs(const std::span<const glm::dvec2> uvs) const {
         if (this->is_identity()) {
-            return std::vector<glm::dvec2>(uvs.begin(), uvs.end());
+            return to_vector(uvs);
         }
 
         std::vector<glm::dvec2> remapped;

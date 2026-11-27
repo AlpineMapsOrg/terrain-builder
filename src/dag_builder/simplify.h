@@ -34,7 +34,7 @@
 #include "cluster.h"
 #include "meshopt.h"
 #include "utils.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "mesh/connectivity/boundary.h"
 #include "validate.h"
 #include "range_utils.h"
@@ -296,13 +296,13 @@ inline Clustering simplify(
             .texture_id = original_cluster.texture_id,
             .absolute_error = combined_error
         };
-        validate(simplified_cluster, simplified_clustering.positions);
+        assert_valid(simplified_cluster, simplified_clustering.positions);
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));
     }
 
     if (options.preserve_cluster_count) {
         DEBUG_ASSERT(original_clustering.cluster_count() == simplified_clustering.cluster_count());
     }
-    validate(simplified_clustering);
+    assert_valid(simplified_clustering);
     return simplified_clustering;
 }

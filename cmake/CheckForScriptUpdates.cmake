@@ -73,4 +73,3 @@ function(alp_check_for_script_updates script_path)
 endfunction()
 
 alp_check_for_script_updates("${CMAKE_CURRENT_LIST_FILE}")
-

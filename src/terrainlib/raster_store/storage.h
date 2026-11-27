@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,166 +21,129 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <limits>
-#include <memory>
 #include <optional>
 #include <string>
-#include <system_error>
+#include <string_view>
 #include <utility>
 
-#include "raster_store/attribution.h"
+#include <fmt/format.h>
+#include <fmt/std.h>
+
+#include "common_error_codes.h"
+#include "error/Error.h"
+#include "error/MessageCode.h"
+#include "error/Result.h"
+#include "error/try.h"
+#include "error/utils.h"
+#include "io/compression.h"
+#include "raster_store/Tile.h"
 #include "raster_store/io/TileCodec.h"
-#include "raster_store/io/manifest.h"
-#include "raster_store/path_layout.h"
+#include "raster_store/attribution/table_file.h"
+#include "raster_store/pixel.h"
+#include "raster_store/storage/Index.h"
+#include "raster_store/storage/index_format.h"
+#include "raster_store/storage/metadata.h"
+#include "store/Metadata.h"
+#include "store/Draft.h"
+#include "store/Storage.h"
+#include "store/create.h"
+#include "store/path_layout.h"
 #include "store/open.h"
-#include "store/snapshot.h"
+#include "store/publish.h"
 
 namespace raster_store::storage {
 
 template <typename PixelType>
-using IndexedStorage = store::IndexedStorage<StoreTraits, Tile<PixelType>>;
+using Storage = store::Storage<Index, Tile<PixelType>>;
+template <typename PixelType>
+using Draft = store::Draft<Index, Tile<PixelType>>;
 
-struct OpenOptions {
-    bool allow_incomplete = false;
-};
+// The payload class of raster storages whose pixels are PixelType.
+template <typename PixelType>
+inline const std::string payload_class = pixel::identifier<PixelType>();
+
+using OpenError = alp::Error<store::ReadMetadataError, attribution::ReadTableError, store::ResolveError, store::OpenError>;
+// Opens the raster storage at `path`, if its state is one `accept` allows.
+template <typename PixelType>
+[[nodiscard]]
+alp::Result<Storage<PixelType>, OpenError> open(const std::filesystem::path& path, const store::Accept accept = store::Accept::Published) {
+    const auto context = alp::make_context("opening the raster storage of {} at {}", payload_class<PixelType>, path);
+
+    // Read the metadata and the attribution table
+    ALP_TRY_CONTEXT(const Metadata metadata, read_metadata(path), context);
+    // The tiles' attribution indices refer to this table, so a storage without a valid one is not opened.
+    ALP_TRY_CONTEXT(attribution::read_table(path), context);
+
+    // Open the storage
+    const auto resolve_codec = [&metadata](const std::string_view id) { return io::tile_codec::resolve<PixelType>(id, metadata.stored_tile_size); };
+    auto open_result = store::open<Index, Tile<PixelType>>(path, index_format(), metadata.ids, payload_class<PixelType>, resolve_codec, accept);
+    ALP_TRY_CONTEXT(auto storage, std::move(open_result), context);
+
+    return storage;
+}
 
 struct CreateOptions {
-    unsigned nominal_tile_size = default_tile_side;
-    unsigned halo_width = 0;
+    uint32_t nominal_tile_size = default_tile_side;
+    uint32_t halo_width = 0;
     pixel::Placement placement = pixel::Placement::Area;
-    unsigned overlap = 0;
+    // One for vertex tiles, which store the eastern column and southern row that close their grid.
+    uint32_t overlap = 0;
+    // The pixel type's default mapping if not given.
     std::optional<pixel::Mapping> value_mapping = std::nullopt;
-    std::string codec_selector = "amort";
-    ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression;
-    std::optional<std::filesystem::path> copy_attribution_from_index = std::nullopt;
+    std::string codec_id = std::string(io::tile_codec::amort_id);
+    ::io::compression::Algorithm compression_algorithm = ::io::compression::Algorithm::ZstdDefault;
+    // The storage whose attribution table the new storage gets a copy of; without one, it uses the table found beside it.
+    std::optional<std::filesystem::path> copy_attribution_from = std::nullopt;
 };
 
-namespace detail {
+struct InvalidOptions : alp::MessageCode<"the options do not describe a valid raster storage"> {};
 
-    // The owned handle is destroyed on return, before publication renames its directory.
-    template <typename PixelType>
-    Expected<void> finish_output(std::unique_ptr<IndexedStorage<PixelType>> storage)
-    {
-        return storage->save_index();
-    }
-
-} // namespace detail
-
+using CreateError = alp::Error<InvalidOptions, Unsupported, attribution::ReadTableError, store::CreateError, attribution::CopyTableError, store::WriteMetadataError>;
+// Makes an empty raster draft at `<final_path>.part` with the tiles `options` describes.
 template <typename PixelType>
-Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique_ptr<const io::manifest::Metadata>>> open(
-    const std::filesystem::path& base_path, const OpenOptions options = {})
-{
-    const auto normalized_path = store::snapshot::normalized(base_path);
-    if (!options.allow_incomplete && normalized_path.extension() == ".part") {
-        return Error::fail(Error::Code::InvalidInput, "opening an incomplete raster snapshot requires allow_incomplete", base_path);
+[[nodiscard]]
+alp::Result<Draft<PixelType>, CreateError> create(const std::filesystem::path& final_path, const CreateOptions& options = {}) {
+    const auto context = alp::make_context("creating the raster storage of {} at {}", payload_class<PixelType>, final_path);
+
+    // Check the options and the attribution table
+    const store::path_layout::Layout<radix::tile::Id> layout = index_format().default_layout();
+    const Metadata metadata{
+        .ids = {
+            .layout_id = std::string(layout.id),
+            .payload_class = payload_class<PixelType>,
+            .codec_id = options.codec_id,
+        },
+        // validate rejects a sum that wraps.
+        .stored_tile_size = options.nominal_tile_size + options.overlap + 2 * options.halo_width,
+        .nominal_tile_size = options.nominal_tile_size,
+        .halo_width = options.halo_width,
+        .value_mapping = options.value_mapping.value_or(pixel::default_mapping<PixelType>),
+        .placement = options.placement,
+        .overlap = options.overlap,
+    };
+    ALP_TRY_CONTEXT(alp::wrap_error(validate(metadata), InvalidOptions{}), context);
+    ALP_TRY_CONTEXT(auto codec, io::tile_codec::resolve<PixelType>(metadata.ids.codec_id, metadata.stored_tile_size, options.compression_algorithm), context);
+    // The tiles' attribution indices refer to this table, so nothing is created without a valid one.
+    const std::filesystem::path table_source = options.copy_attribution_from.value_or(final_path);
+    ALP_TRY_CONTEXT(attribution::read_table(table_source), context);
+
+    // Create the storage
+    auto create_result = store::create<Index, Tile<PixelType>>(final_path, index_format(), layout, std::move(codec));
+    ALP_TRY_CONTEXT(auto draft, std::move(create_result), context);
+    if (options.copy_attribution_from.has_value()) {
+        ALP_TRY_CONTEXT(attribution::copy_table(*options.copy_attribution_from, draft.base_path()), context);
     }
-    auto metadata = io::manifest::read_metadata(normalized_path);
-    if (!metadata) {
-        return Error::propagate(std::move(metadata), "open raster snapshot");
-    }
-    const auto index_path = normalized_path / io::manifest::index_file_name;
-    auto contents = io::manifest::read_hierarchy(index_path);
-    if (!contents) {
-        return Error::propagate(std::move(contents), "open raster snapshot");
-    }
-    auto table = attribution::read_table(index_path);
-    if (!table) {
-        return Error::propagate(std::move(table), "open raster snapshot attribution");
-    }
-    const auto resolve_codec
-        = [&metadata](const std::string_view name) { return io::tile_codec::from_name<PixelType>(name, glm::uvec2(metadata->stored_tile_size)); };
-    auto storage = store::open_index<StoreTraits, Tile<PixelType>>(index_path,
-        io::manifest::index_format(),
-        { std::move(contents->index), std::move(contents->hashes), metadata->layout_id, metadata->payload_type, metadata->codec_selector },
-        pixel::identifier<PixelType>(),
-        resolve_codec);
-    if (!storage) {
-        return Error::propagate(std::move(storage));
-    }
-    return std::pair { std::make_unique<const IndexedStorage<PixelType>>(std::move(*storage)),
-        std::make_unique<const io::manifest::Metadata>(std::move(*metadata)) };
+    ALP_TRY_CONTEXT(write_metadata(draft.base_path(), metadata), context);
+
+    return draft;
 }
 
+// Saves the draft's index, renames `<path>.part` to `<path>` and removes the input record.
 template <typename PixelType>
-Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<const io::manifest::Metadata>>> create(
-    const std::filesystem::path& final_path, const CreateOptions options = {})
-{
-    const auto destination = store::snapshot::normalized(final_path);
-    if (destination.filename().empty() || destination.filename() == "." || destination.filename() == ".." || destination.extension() == ".part") {
-        return Error::fail(Error::Code::InvalidInput, "creation requires a final snapshot path without a .part suffix", final_path);
-    }
-    const auto stored_tile_size = std::uint64_t(options.nominal_tile_size) + options.overlap + 2 * std::uint64_t(options.halo_width);
-    if (stored_tile_size > (std::numeric_limits<unsigned>::max)()) {
-        return Error::fail(Error::Code::InvalidInput, "stored raster size overflows");
-    }
-    auto metadata = std::make_unique<const io::manifest::Metadata>(std::string(path_layout::zoom_xy_google::zoom_x_y_google().id),
-        pixel::identifier<PixelType>(),
-        options.codec_selector,
-        unsigned(stored_tile_size),
-        options.nominal_tile_size,
-        options.halo_width,
-        options.value_mapping.value_or(pixel::default_mapping<PixelType>),
-        options.placement,
-        options.overlap);
-    if (auto valid = io::manifest::validate(*metadata); !valid) {
-        return Error::propagate(std::move(valid));
-    }
-    auto codec = io::tile_codec::from_name<PixelType>(options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm);
-    if (!codec) {
-        return Error::propagate(std::move(codec));
-    }
-    auto table
-        = attribution::read_table(options.copy_attribution_from_index.value_or(store::snapshot::partial_path(destination) / io::manifest::index_file_name));
-    if (!table) {
-        return Error::propagate(std::move(table), "resolve attribution for new raster snapshot");
-    }
-    auto created = store::snapshot::create_partial(destination);
-    if (!created) {
-        return Error::propagate(std::move(created));
-    }
-    const auto& partial_path = *created;
-    if (options.copy_attribution_from_index) {
-        auto copied = attribution::copy_table(*options.copy_attribution_from_index, partial_path);
-        if (!copied) {
-            return Error::propagate(std::move(copied));
-        }
-    }
-    auto written = io::manifest::write_metadata(*metadata, partial_path);
-    if (!written) {
-        return Error::propagate(std::move(written), "create raster metadata");
-    }
-    auto storage = store::make_storage<StoreTraits, Tile<PixelType>>(partial_path,
-        io::manifest::index_format(),
-        path_layout::zoom_xy_google::zoom_x_y_google(),
-        metadata->payload_type,
-        metadata->codec_selector,
-        std::move(*codec));
-    if (!storage) {
-        return Error::propagate(std::move(storage));
-    }
-    // Even an empty newly created snapshot has a readable checkpoint.
-    if (auto saved = storage->save_index(); !saved) {
-        return Error::propagate(std::move(saved), "create initial raster index");
-    }
-    return std::pair { std::make_unique<IndexedStorage<PixelType>>(std::move(*storage)), std::move(metadata) };
-}
-
-// Consumes the output handle on success or failure. An unsuccessful publication
-// leaves the .part snapshot available for explicit incomplete opening.
-template <typename PixelType>
-Expected<void> publish(std::unique_ptr<IndexedStorage<PixelType>> storage)
-{
-    if (!storage) {
-        return Error::fail(Error::Code::InvalidInput, "publication requires an output handle");
-    }
-    const auto partial_path = store::snapshot::normalized(storage->base_path());
-    if (!store::snapshot::is_partial(partial_path)) {
-        return Error::fail(Error::Code::InvalidInput, "publication requires an incomplete .part snapshot", partial_path);
-    }
-    if (auto finished = detail::finish_output(std::move(storage)); !finished) {
-        return Error::propagate(std::move(finished), "finish raster snapshot before publication");
-    }
-    return store::snapshot::publish(partial_path);
+[[nodiscard]]
+alp::Result<void, store::PublishError> publish(Draft<PixelType> draft) {
+    ALP_TRY(store::publish(std::move(draft)));
+    return {};
 }
 
 } // namespace raster_store::storage

@@ -87,4 +87,3 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
 inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}) {
     return merge_clusters(clustering, create_partitioning(clustering, options));
 }
-

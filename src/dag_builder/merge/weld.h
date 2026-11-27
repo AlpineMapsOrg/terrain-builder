@@ -32,7 +32,7 @@
 #include "cluster.h"
 #include "compact.h"
 #include "enumerate.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/connectivity/adjacency.h"
 #include "spatial_lookup/Hashmap.h"
 #include "validate.h"
@@ -144,6 +144,6 @@ inline Clustering weld_clustering(const Clustering &clustering, const double eps
 
     LOG_DEBUG("Welding with {} welded and {} unique vertices", clustering.vertex_count() - welded_vertex_count, welded_vertex_count);
 
-    validate(welded);
+    assert_valid(welded);
     return welded;
 }

@@ -20,13 +20,14 @@
 #include <unordered_set>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/connectivity/edges.h"
 #include "mesh/connectivity/vertex_index_range.h"
 
 namespace mesh {
-    
+
 template <glm::length_t n_dims, typename T>
 std::unordered_set<glm::uvec2> find_boundary_edges(const mesh::Simple_<n_dims, T> &mesh) {
     return find_boundary_edges(mesh.triangles);

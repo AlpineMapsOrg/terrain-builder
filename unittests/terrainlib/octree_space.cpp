@@ -18,6 +18,7 @@
 
 #include <glm/glm.hpp>
 
+#include "../assertion_helpers.h"
 #include "../catch2_helpers.h"
 
 #include "octree/Id.h"
@@ -66,7 +67,7 @@ TEST_CASE("find_smallest_node_encompassing_bounds throws on zero-size box", "[oc
 
     Bounds degenerate{p, p};
 
-    REQUIRE_THROWS_AS(space.find_smallest_node_encompassing_bounds(degenerate), std::invalid_argument);
+    REQUIRE_ASSERTS(space.find_smallest_node_encompassing_bounds(degenerate));
 }
 
 TEST_CASE("find_smallest_node_encompassing_bounds returns smallest valid node", "[octree]") {

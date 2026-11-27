@@ -19,35 +19,60 @@
 
 #pragma once
 
-#include <expected>
+#include <radix/geometry.h>
+#include <radix/tile.h>
 
+#include "error/Error.h"
+#include "error/MessageCode.h"
+#include "error/Result.h"
 #include "gis/Dataset.h"
-#include "gis/srs.h"
-
+#include "gis/srs/System.h"
 #include "mesh/SimpleMesh.h"
 #include "border.h"
+#include "TileProvider.h"
 
-namespace terrainbuilder {
+namespace sf {
 
-enum class BuildMeshError {
-    OutOfBounds,
-    EmptyRegion,
-    TransformationFailed
-};
-std::ostream &operator<<(std::ostream &os, BuildMeshError error);
+// The request lies outside the dataset.
+struct OutOfBounds : alp::MessageCode<"the request lies outside the dataset"> {};
 
-/// Parts of a dataset's native bounds that may contain points within the given ECEF bounds.
-/// Geographic longitudes are shifted by whole turns into the turn centred on the native bounds,
-/// so that a dataset stored, e.g., at longitudes [180, 190] is read for [-180, -170].
-/// Each location is read at most once, so there is a seam at the edges of that turn.
-Expected<std::vector<radix::tile::SrsBounds>> native_read_windows(
-    const OGRSpatialReference& dataset_srs, const radix::tile::SrsBounds& native_bounds, const radix::geometry::Aabb3d& ecef_bounds);
+// The request lies inside the dataset, which holds no terrain there.
+struct EmptyRegion : alp::MessageCode<"the requested region holds no terrain"> {};
 
-/// Builds a mesh from the given height dataset.
-std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
-    gis::Dataset &dataset,
-    const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
-    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds);
+// The dataset holds no terrain for the request.
+using NoTerrain = alp::Error<OutOfBounds, EmptyRegion>;
+
+// The dataset is not supported.
+struct UnsupportedDataset : alp::MessageCode<"the dataset is not supported"> {};
+
+// The heights in the requested region cannot be read.
+struct UnreadableHeights : alp::MessageCode<"the heights in the requested region cannot be read"> {};
+
+// The clip is not supported.
+struct UnsupportedClip : alp::MessageCode<"the clip is not supported"> {};
+
+// The mesh cannot be transformed.
+struct UntransformableMesh : alp::MessageCode<"the mesh cannot be transformed"> {};
+
+// An error from building a mesh from a height dataset.
+using BuildMeshError = alp::Error<NoTerrain, UnsupportedDataset, UnreadableHeights, UnsupportedClip, UntransformableMesh>;
+
+/// Builds the mesh of the dataset's terrain within the clip bounds, with its positions in `mesh_srs`.
+/// Its UVs span `texture_bounds`, which is set to the bounds of the mesh in `texture_srs`.
+[[nodiscard]]
+alp::Result<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
+    gis::Dataset& dataset,
+    const gis::srs::System& mesh_srs,
+    const gis::srs::System& clip_srs, const radix::geometry::Aabb3d& clip_bounds,
+    const gis::srs::System& texture_srs, radix::tile::SrsBounds& texture_bounds);
+
+using BuildPatchError = alp::Error<BuildMeshError, TileError>;
+// Builds the mesh of the dataset's terrain within the target bounds, textured from the tiles if there is a provider.
+[[nodiscard]]
+alp::Result<SimpleMesh, BuildPatchError> build_patch(
+    gis::Dataset& dataset,
+    const gis::srs::System& target_bounds_srs,
+    const radix::geometry::Aabb3d& target_bounds,
+    const TileProvider* tile_provider,
+    const gis::srs::System& mesh_srs);
 }
-

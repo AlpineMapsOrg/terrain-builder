@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # *****************************************************************************
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 
@@ -44,10 +44,15 @@ alp_setup_cmake_project(boost
         "-DBOOST_INCLUDE_LIBRARIES=graph\;multiprecision\;heap\;format\;logic\;asio\;beast\;url")
 find_package(Boost CONFIG REQUIRED)
 
+set(ALP_TBB_ARGUMENTS -DTBB_TEST=OFF -DTBBMALLOC_BUILD=OFF)
+if(ALP_ENABLE_THREAD_SANITIZER)
+    # gcc cannot instrument the standalone fences of tbb, and tbb builds warnings as errors.
+    list(APPEND ALP_TBB_ARGUMENTS -DTBB_STRICT=OFF)
+endif()
 alp_setup_cmake_project(tbb
     URL https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2023.1.0.tar.gz
     SHA256 191288b52e1e6b17198000b64d77d194bb65e791be46ebc606e9b091781e2070
-    CMAKE_ARGUMENTS -DTBB_TEST=OFF -DTBBMALLOC_BUILD=OFF)
+    CMAKE_ARGUMENTS ${ALP_TBB_ARGUMENTS})
 find_package(TBB REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
@@ -64,6 +69,8 @@ alp_setup_cmake_project(cgal
     SHA256 c752737f91d1af71fa96038f0e37945ce82a5f1fffb6200172cfcdd77755a356
     CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DWITH_examples=OFF)
 find_package(CGAL REQUIRED)
+# CGAL leaves PACKAGE_VERSION set, which breaks the libdwarf build that libassert pulls in (https://github.com/jeremy-rifkin/libassert/issues/146).
+unset(PACKAGE_VERSION)
 
 include(../cmake/SetupLibJpegTurbo.cmake)
 alp_setup_libjpeg_turbo(3.2.1 c27ad72a68da151177929aa969ae773a2da5ac2af9ce946079314fdac8cece7f)
@@ -79,22 +86,17 @@ alp_add_git_repository(cgltf URL https://github.com/AlpineMapsOrgDependencies/cg
 add_library(cgltf INTERFACE)
 target_include_directories(cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
 
-set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
-set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
-set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
-alp_add_git_repository(tinygltf URL https://github.com/syoyo/tinygltf COMMITISH 4fea26f6c8652f545560807bccc934cf0cdd86dd)
-
-alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
-add_library(stb INTERFACE)
-target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
-
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
-alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.17.0)
+alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH d5af52d903ed69f96c7350155e94aeff248b31eb)
 add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.7.3 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits SYSTEM INTERFACE ${zpp_bits_SOURCE_DIR})
+
+alp_add_git_repository(value_types URL https://github.com/jbcoe/value_types.git COMMITISH v1.0.1 DO_NOT_ADD_SUBPROJECT)
+add_library(value_types INTERFACE)
+target_include_directories(value_types SYSTEM INTERFACE ${value_types_SOURCE_DIR})
 
 alp_setup_cmake_project(zstd
     URL https://github.com/AlpineMapsOrgDependencies/zstd.git
@@ -112,7 +114,11 @@ alp_add_git_repository(xxhash URL https://github.com/Cyan4973/xxHash.git COMMITI
 add_library(xxhash INTERFACE)
 target_include_directories(xxhash SYSTEM INTERFACE ${xxhash_SOURCE_DIR})
 
-alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
+# Also used by libassert; keep in sync with the version it expects.
+alp_add_git_repository(cpptrace URL https://github.com/jeremy-rifkin/cpptrace.git COMMITISH v1.0.4 DO_NOT_ADD_SUBPROJECT)
+set(FETCHCONTENT_SOURCE_DIR_CPPTRACE ${cpptrace_SOURCE_DIR} CACHE INTERNAL "" FORCE)
+alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.2.1)
+
 alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
 

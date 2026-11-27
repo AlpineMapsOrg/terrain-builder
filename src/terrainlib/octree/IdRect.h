@@ -22,6 +22,7 @@
 #include <iterator>
 
 #include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 #include <libassert/assert.hpp>
 
 #include "octree/Id.h"

@@ -20,76 +20,93 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <string_view>
 #include <utility>
 
+#include <fmt/format.h>
+
 #include "codec.h"
-#include "octree/StoreTraits.h"
-#include "octree/storage/IndexFile.h"
-#include "octree/storage/snapshot.h"
-#include "octree/storage/open_runtime.h"
-#include "store/IndexedStorage.h"
+#include "common_error_codes.h"
+#include "dag_node.h"
+#include "error/Error.h"
+#include "error/Result.h"
+#include "error/try.h"
+#include "octree/Id.h"
+#include "octree/storage/Index.h"
+#include "octree/storage/create.h"
+#include "octree/storage/open.h"
+#include "octree/storage/publish.h"
+#include "store/Checkpoint.h"
+#include "store/Draft.h"
+#include "store/Storage.h"
+#include "store/open.h"
+#include "store/path_layout.h"
+#include "store/publish.h"
 
 namespace dag::storage {
 
 inline constexpr std::string_view payload_class = "dag.ClusterBatch";
 
-using OpenOptions = octree::storage::OpenOptions;
-using Storage = store::Storage<octree::StoreTraits, dag::ClusterBatch>;
-using IndexedStorage = store::IndexedStorage<octree::StoreTraits, dag::ClusterBatch>;
-using MetadataStorage = store::Storage<octree::StoreTraits, dag::NodeMetadata>;
-using IndexedMetadataStorage =
-    store::IndexedStorage<octree::StoreTraits, dag::NodeMetadata>;
+namespace detail {
 
-inline Expected<IndexedStorage> open_index(
-    const std::filesystem::path &path) {
-    return store::open_index<octree::StoreTraits, dag::ClusterBatch>(
-        path,
-        octree::storage::index_format(),
-        payload_class,
-        dag::codec::cluster_batch_from_extension);
+// The codec that `id` names, reading the clusters of a node.
+[[nodiscard]]
+inline alp::Result<std::unique_ptr<store::Codec<dag::ClusterBatch>>, Unsupported> resolve_cluster_batch_codec(const std::string_view id) {
+    if (id == codec::id) {
+        return std::make_unique<codec::ClusterBatch>();
+    } else {
+        return alp::make_error(Unsupported{}, fmt::format("the codec {} is unknown", id));
+    }
 }
 
-inline Expected<Storage> open_folder(
-    const std::filesystem::path &path,
-    OpenOptions options = {}) {
-    return octree::storage::open_folder<dag::ClusterBatch>(
-        path,
-        std::string(payload_class),
-        ".dag",
-        dag::codec::cluster_batch_from_extension,
-        std::move(options));
+// The codec that `id` names, reading only the metadata of a node.
+[[nodiscard]]
+inline alp::Result<std::unique_ptr<store::Codec<dag::NodeMetadata>>, Unsupported> resolve_metadata_codec(const std::string_view id) {
+    if (id == codec::id) {
+        return std::make_unique<codec::Metadata>();
+    } else {
+        return alp::make_error(Unsupported{}, fmt::format("the codec {} is unknown", id));
+    }
 }
 
-inline Expected<IndexedStorage>
-open_folder_indexed(const std::filesystem::path &path, OpenOptions options = {}) {
-    return octree::storage::open_folder_indexed<dag::ClusterBatch>(
-        path,
-        std::string(payload_class),
-        ".dag",
-        dag::codec::cluster_batch_from_extension,
-        std::move(options));
+} // namespace detail
+
+using Storage = store::Storage<octree::storage::Index, dag::ClusterBatch>;
+using Draft = store::Draft<octree::storage::Index, dag::ClusterBatch>;
+using Checkpoint = store::Checkpoint<octree::storage::Index, dag::ClusterBatch>;
+using MetadataStorage = store::Storage<octree::storage::Index, dag::NodeMetadata>;
+
+using OpenError = octree::storage::OpenError;
+// Opens the DAG storage at `path`, if its state is one `accept` allows.
+[[nodiscard]]
+inline alp::Result<Storage, OpenError> open(const std::filesystem::path& path, const store::Accept accept = store::Accept::Published) {
+    ALP_TRY(Storage storage, octree::storage::open<dag::ClusterBatch>(path, payload_class, detail::resolve_cluster_batch_codec, accept));
+    return storage;
 }
 
-// Creates an empty storage in <path>.part; see store::snapshot.
-inline Expected<IndexedStorage> create(const std::filesystem::path& path)
-{
-    return octree::storage::create<dag::ClusterBatch>(
-        path, std::string(payload_class), ".dag", dag::codec::cluster_batch_from_extension, octree::storage::default_mapping());
+// Opens the node metadata of the DAG storage at `path`, if its state is one `accept` allows.
+[[nodiscard]]
+inline alp::Result<MetadataStorage, OpenError> open_metadata(const std::filesystem::path& path, const store::Accept accept = store::Accept::Published) {
+    auto open_result = octree::storage::open<dag::NodeMetadata>(path, payload_class, detail::resolve_metadata_codec, accept);
+    ALP_TRY(MetadataStorage storage, std::move(open_result));
+    return storage;
 }
 
-inline Expected<void> publish(IndexedStorage storage) { return octree::storage::publish(std::move(storage)); }
+using CreateError = octree::storage::CreateError;
+// Makes an empty DAG draft at `<final_path>.part`, whose node files `layout` places.
+[[nodiscard]]
+inline alp::Result<Draft, CreateError> create(const std::filesystem::path& final_path, const store::path_layout::Layout<octree::Id> layout) {
+    ALP_TRY(Draft draft, octree::storage::create<dag::ClusterBatch>(final_path, std::string(payload_class), layout, std::make_unique<codec::ClusterBatch>()));
+    return draft;
+}
 
-inline Expected<IndexedMetadataStorage>
-open_metadata_indexed(const std::filesystem::path &path) {
-    const std::filesystem::path index_path =
-        path.filename() == octree::storage::index_file_name
-        ? path
-        : path / octree::storage::index_file_name;
-    return store::open_index<octree::StoreTraits, dag::NodeMetadata>(
-        index_path,
-        octree::storage::index_format(),
-        payload_class,
-        dag::codec::metadata_from_extension);
+// Saves the draft's index, renames `<path>.part` to `<path>` and removes the input record.
+[[nodiscard]]
+inline alp::Result<void, store::PublishError> publish(Draft draft) {
+    ALP_TRY(octree::storage::publish(std::move(draft)));
+    return {};
 }
 
 } // namespace dag::storage

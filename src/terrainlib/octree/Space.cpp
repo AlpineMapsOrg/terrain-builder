@@ -18,6 +18,12 @@
 
 #include "octree/Space.h"
 
+#include <libassert/assert.hpp>
+
+#include "earth.h"
+#include "fmt_impls.h"
+#include "geometry/geometry.h"
+
 namespace octree {
 
 namespace detail {
@@ -37,12 +43,11 @@ inline bool contains_inclusive(const Bounds &outer, const Bounds &inner, const d
 } // namespace detail
 
 Space::Space(Bounds bounds) : _bounds(bounds) {
-    DEBUG_ASSERT(glm::all(glm::greaterThan(this->_bounds.size(), glm::dvec3(0))));
+    ASSERT(geometry::is_finite(this->_bounds) && !geometry::is_empty(this->_bounds), this->_bounds);
 }
 
 Space Space::earth() {
-    constexpr float max_radius = 6384400; // from https://en.wikipedia.org/wiki/Summits_farthest_from_the_Earth%27s_center#:~:text=Dormant%20Volcano,6%2C267%20metres%20(20%2C561%20ft)
-    constexpr float extends = max_radius * 1.1;
+    constexpr float extends = earth::largest_radius * 1.1;
     return Space(Bounds(glm::dvec3(-extends), glm::dvec3(extends)));
 }
 std::optional<Id> Space::find_smallest_node_encompassing_bounds(
@@ -50,9 +55,7 @@ std::optional<Id> Space::find_smallest_node_encompassing_bounds(
     const Id root) const {
     const glm::dvec3 target_size = target_bounds.size();
 
-    if (target_size.x == 0 || target_size.y == 0 || target_size.z == 0) {
-        throw std::invalid_argument("target bounds cannot be empty");
-    }
+    ASSERT(target_size.x != 0 && target_size.y != 0 && target_size.z != 0, "target bounds cannot be empty");
 
     const Bounds root_bounds = get_node_bounds(root);
     if (!detail::contains_inclusive(root_bounds, target_bounds)) {
@@ -96,7 +99,7 @@ std::optional<Id> Space::find_node_at_level_containing_point(const glm::dvec3& p
 
     // TODO: this could be much more efficient
     while (current.level() < target_level) {
-        const auto children = current.children().value();
+        const auto children = *ASSERT_VAL(current.children());
         for (const auto& child : children) {
             const Bounds child_bounds = this->get_node_bounds(child);
             if (child_bounds.contains(point)) {

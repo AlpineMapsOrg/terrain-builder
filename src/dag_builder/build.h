@@ -20,17 +20,19 @@
 #pragma once
 
 #include <cstdint>
-#include <expected>
 #include <filesystem>
-#include <functional>
 #include <optional>
+#include <stop_token>
+#include <string_view>
 
 #include "Range.h"
 #include "build_config.h"
 #include "texturing.h"
+#include "error/Error.h"
+#include "error/Result.h"
 #include "mesh/storage.h"
+#include "stop.h"
 #include "storage.h"
-#include "Error.h"
 
 namespace dag {
 
@@ -47,26 +49,57 @@ struct BuildOptions {
     TextureOptions texture_options = {};
     octree::Id root_node = octree::Id::root();
     IncludeMode include_mode = IncludeMode::CurrentOnly;
-    bool write_debug_meshes = IS_DEBUG_BUILD;
     bool parallelize = false;
 };
 
+// A requirement on a DAG build's input or output that is not met.
+enum class BuildIoError {
+    // The input index is not a valid SF index.
+    InvalidIndex,
+    // A built node or its debug mesh could not be written.
+    UnwritableOutput,
+    // The checkpoint cannot be linked into the output.
+    IncompatibleCheckpoint,
+};
+
+inline std::string_view format_as(const BuildIoError error) {
+    switch (error) {
+    case BuildIoError::InvalidIndex:
+        return "the input index is not a valid SF index";
+    case BuildIoError::UnwritableOutput:
+        return "a built node or its debug mesh could not be written";
+    case BuildIoError::IncompatibleCheckpoint:
+        return "the checkpoint cannot be linked into the output";
+    default:
+        return "an unknown DAG build failure";
+    }
+}
+
+using BuildError = alp::Error<BuildIoError, Stopped>;
+
 // Debug meshes go beside the output as <output>-debug, also while it is built in <output>.part.
-std::filesystem::path debug_mesh_path(const std::filesystem::path& output_path);
+std::filesystem::path make_debug_mesh_path(const std::filesystem::path& output_path);
 
-Expected<void> build_full(
-    const mesh::storage::IndexedStorage &input_storage,
-    dag::storage::IndexedStorage &output_storage,
-    const BuildOptions &options);
+[[nodiscard]]
+alp::Result<void, BuildError> build_full(
+    const mesh::storage::Storage& input_storage,
+    dag::storage::Draft& output_storage,
+    const BuildOptions& options,
+    const dag::storage::Checkpoint& checkpoint = {},
+    mesh::storage::Draft* debug_output = nullptr,
+    const std::stop_token& stop = {});
 
-// Builds the levels into output_storage, linking nodes that the cache has instead of
-// building them. When stop_requested returns true, the active nodes are finished and
-// the result is an error with code Cancelled.
-Expected<void> build_levels(const mesh::storage::IndexedStorage& input_storage,
-    dag::storage::IndexedStorage& output_storage,
+// Builds the levels into output_storage, linking nodes that the checkpoint has instead of building them.
+// With a debug output, it also saves a mesh of each built node there.
+// Once a stop is requested through `stop`, it finishes the active nodes and fails with Stopped.
+[[nodiscard]]
+alp::Result<void, BuildError> build_levels(
+    const mesh::storage::Storage& input_storage,
+    dag::storage::Draft& output_storage,
     const BuildOptions& options,
     const AnyRange<uint32_t>& level_range,
-    const dag::storage::IndexedStorage* cache = nullptr,
-    const std::function<bool()>& stop_requested = {});
+    const dag::storage::Checkpoint& checkpoint = {},
+    mesh::storage::Draft* debug_output = nullptr,
+    const std::stop_token& stop = {});
 
 } // namespace dag

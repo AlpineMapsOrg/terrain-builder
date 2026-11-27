@@ -23,7 +23,6 @@
 #include <array>
 #include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <functional>
 #include <type_traits>
 
@@ -78,7 +77,7 @@ inline constexpr void for_each_nd_index(const IndexT extent, Function &&function
 template <
     size_t Dimensions,
     size_t MaxLevel,
-    typename LevelT = uint_for_bits_t<std::bit_width(MaxLevel)>,
+    typename LevelT = uint_for_max_t<MaxLevel>,
     typename IndexT = uint_for_bits_t<Dimensions * MaxLevel>,
     typename CoordT = uint_for_bits_t<MaxLevel>>
 class Id_ {
@@ -117,14 +116,13 @@ public:
         return Coords(max_coord_on_level(level));
     }
 
-    constexpr Id_() = default;
+    constexpr Id_() : Id_(0, 0) {}
     template <typename... Coordinates>
         requires(sizeof...(Coordinates) == Dimensions && (std::convertible_to<Coordinates, Coord> && ...))
     constexpr Id_(const Level level, Coordinates... coordinates) : Id_(level, Coords{coordinates...}) {}
     constexpr Id_(const Level level, const Coords coords) : Id_(level, interleave(coords)) {}
     constexpr Id_(const Level level, const Index index) : _level(level), _index(index) {
-        DEBUG_ASSERT(level <= Id_::max_level());
-        DEBUG_ASSERT(index <= Id_::max_index_on_level(level));
+        DEBUG_ASSERT(Id_::is_valid(level, index), level, index);
     }
 
     [[nodiscard]] static std::optional<Id_> try_make(const Level level, const Coords coords) {
@@ -136,14 +134,12 @@ public:
         }
         return Id_(level, coords);
     }
-    [[nodiscard]] static std::optional<Id_> try_make(const Level level, const Index index) {
-        if (level > Id_::max_level()) {
+    [[nodiscard]] static constexpr std::optional<Id_> try_make(const Level level, const Index index) {
+        if (Id_::is_valid(level, index)) {
+            return Id_(level, index);
+        } else {
             return std::nullopt;
         }
-        if (index > Id_::max_index_on_level(level)) {
-            return std::nullopt;
-        }
-        return Id_(level, index);
     }
 
     [[nodiscard]] constexpr Level level() const {
@@ -221,9 +217,7 @@ public:
     }
 
     [[nodiscard]] constexpr std::optional<Id_> child(size_t child_index) const {
-        if (child_index >= child_count) {
-            throw std::invalid_argument(fmt::format("Invalid child index (must be 0-{})", child_count));
-        }
+        ASSERT(child_index < child_count, "Invalid child index");
         if (!this->has_children()) {
             return std::nullopt;
         }
@@ -316,6 +310,10 @@ public:
 private:
     Level _level;
     Index _index;
+
+    [[nodiscard]] static constexpr bool is_valid(const Level level, const Index index) {
+        return level <= Id_::max_level() && index <= Id_::max_index_on_level(level);
+    }
 
     [[nodiscard]] constexpr Id_ _child(const size_t child_index) const {
         DEBUG_ASSERT(child_index < child_count);

@@ -127,7 +127,7 @@ OffsetTable build_offset_table(const std::span<const Clustering> clusterings) {
     OffsetTable offsets(clusterings.size());
 
     for (const Clustering &clustering : clusterings) {
-        offsets.append_length(clustering.vertex_count());
+        offsets.append_segment(clustering.vertex_count());
     }
 
     return offsets;
@@ -290,7 +290,7 @@ Clustering rebuild_clustering(
             new_cluster.local_triangles = cluster.local_triangles;
             new_cluster.uvs = cluster.uvs;
             new_cluster.id = cluster.id;
-            new_cluster.texture_id = map(cluster.texture_id, [&](const auto &id) { return texture_id_map[id]; });
+            new_cluster.texture_id = cluster.texture_id.transform([&](const auto &id) { return texture_id_map[id]; });
             new_cluster.absolute_error = cluster.absolute_error;
 
             new_cluster.vertex_indices.reserve(cluster.vertex_count());
@@ -308,7 +308,7 @@ Clustering rebuild_clustering(
     }
 
     DEBUG_ASSERT(merged.cluster_count() == sum(clusterings, [](const Clustering &clustering) { return clustering.cluster_count(); }));
-    validate(merged);
+    assert_valid(merged);
     return merged;
 }
 
@@ -412,7 +412,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
 
         switch (matches.size()) {
         case 0:
-            // Found no other vertex nearby -> unique 
+            // Found no other vertex nearby -> unique
             break;
 
         case 1: {

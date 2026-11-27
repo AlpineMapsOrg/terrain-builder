@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,22 +19,20 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
-#include <span>
-#include <vector>
 
-#include "io/byte.h"
+#include "io/bytes.h"
 
 namespace io::hash {
 
-enum class Algorithm : std::uint8_t {
+enum class Algorithm : uint8_t {
+    // No hash; its hash has no bytes.
     None,
+    // XXH3-64 with seed 0; its hash is the 8 bytes in big-endian order, the canonical xxHash form.
     Xxh3_64,
 };
 
-// Returns no bytes for None and the 8 bytes of XXH3-64 with seed 0 in big-endian order, the canonical
-// xxHash form, for Xxh3_64. The algorithm must be an enumerator.
-byte::vector data(byte::span bytes, Algorithm algorithm);
+// Hashes `bytes` with `algorithm`.
+bytes::vector compute(bytes::span bytes, Algorithm algorithm);
 
 } // namespace io::hash

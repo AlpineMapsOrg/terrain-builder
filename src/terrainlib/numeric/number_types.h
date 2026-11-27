@@ -75,6 +75,8 @@ using float64_t = double;
 
 
 // -------------- integer_for_width --------------
+#include <bit>
+
 #include "numeric/int_math.h"
 #include "numeric/wide_integer.h"
 
@@ -143,3 +145,10 @@ struct int_for_bits {
 };
 template <std::size_t Bits>
 using int_for_bits_t = typename int_for_bits<Bits>::type;
+
+template <std::size_t Max>
+struct uint_for_max {
+    using type = uint_for_bits_t<std::bit_width(Max)>;
+};
+template <std::size_t Max>
+using uint_for_max_t = typename uint_for_max<Max>::type;

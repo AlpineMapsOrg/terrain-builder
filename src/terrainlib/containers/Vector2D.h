@@ -19,6 +19,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 template <typename T>

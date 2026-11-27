@@ -36,16 +36,16 @@
 
 #include "build_config.h"
 #include "containers/UnionFind.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/convert.h"
 #include "mesh/connectivity/boundary.h"
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
 #include "mesh/merging/helpers.h"
 #include "mesh/merging/mapping.h"
-#include "mesh/validate.h"
+#include "mesh/validate/debug_assert.h"
 #include "spatial_lookup/Grid.h"
 #include "spatial_lookup/Hashmap.h"
-#include "type_utils.h"
+#include "type_name.h"
 #include "range_utils.h"
 
 namespace mesh::merging::detail {
@@ -262,7 +262,7 @@ SimpleMesh apply_mapping(
     if (max_vertex_index == 0) {
         return {};
     }
-    
+
     DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {
@@ -302,7 +302,7 @@ SimpleMesh apply_mapping(
         }
     }
 
-    mesh::validate_basic(merged_mesh);
+    mesh::debug_assert_valid_basic(merged_mesh);
 
     return merged_mesh;
 }

@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,51 +19,25 @@
 
 #pragma once
 
-#include <filesystem>
-#include <iterator>
+#include <array>
 #include <optional>
-#include <string>
+#include <string_view>
 
-#include "raster_store/StoreTraits.h"
+#include "raster_store/path_layout/zoom_x_y_google.h"
 #include "store/path_layout.h"
-#include "string_utils.h"
 
-namespace raster_store::path_layout::zoom_xy_google {
+namespace raster_store::path_layout {
 
-inline std::filesystem::path key_to_node_path(const radix::tile::Id& key)
+inline std::array<store::path_layout::Layout<radix::tile::Id>, 1> all() { return { zoom_x_y_google::layout() }; }
+
+inline std::optional<store::path_layout::Layout<radix::tile::Id>> resolve_layout(const std::string_view id)
 {
-    return std::to_string(key.zoom_level) + "/" + std::to_string(key.coords.x) + "/" + std::to_string(key.coords.y);
-}
-
-inline std::optional<radix::tile::Id> node_path_to_key(const std::filesystem::path& path)
-{
-    if (path.is_absolute() || std::distance(path.begin(), path.end()) != 3) {
-        return std::nullopt;
-    }
-    auto part = path.begin();
-    const auto zoom = from_chars<std::uint32_t>(part->string());
-    ++part;
-    const auto x = from_chars<std::uint32_t>(part->string());
-    ++part;
-    const auto y = from_chars<std::uint32_t>(part->string());
-    if (!zoom || !x || !y) {
-        return std::nullopt;
-    }
-    const radix::tile::Id key { *zoom, { *x, *y } };
-    return StoreTraits::is_valid(key) ? std::optional(key) : std::nullopt;
-}
-
-inline store::path_layout::Mapping<radix::tile::Id> zoom_x_y_google()
-{
-    return { "zoom/x/y_google", key_to_node_path, node_path_to_key };
-}
-
-inline std::optional<store::path_layout::Mapping<radix::tile::Id>> from_id(const std::string_view id)
-{
-    if (id == zoom_x_y_google().id) {
-        return zoom_x_y_google();
+    for (const store::path_layout::Layout<radix::tile::Id> layout : all()) {
+        if (layout.id == id) {
+            return layout;
+        }
     }
     return std::nullopt;
 }
 
-} // namespace raster_store::path_layout::zoom_xy_google
+} // namespace raster_store::path_layout

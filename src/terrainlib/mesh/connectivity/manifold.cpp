@@ -31,7 +31,7 @@
 #include "mesh/connectivity/vertex_index_range.h"
 
 namespace mesh {
-    
+
 std::vector<glm::uvec2> find_non_manifold_edges(const std::span<const glm::uvec3> triangles) {
     const auto edges_to_triangles = create_edge_to_triangle_mapping_non_manifold(triangles);
     std::vector<glm::uvec2> non_manifold_edges;

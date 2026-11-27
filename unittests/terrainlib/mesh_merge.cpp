@@ -78,7 +78,7 @@ TEST_CASE("mesh::merge") {
         mesh2.uvs.push_back(glm::dvec2(0, 1));
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        SimpleMesh actual = mesh::merge(mesh1, mesh2, 
+        SimpleMesh actual = mesh::merge(mesh1, mesh2,
             mesh::merging::create_options().epsilon(0.1),
             mesh::merging::apply_options().merge_uvs(true)
         );

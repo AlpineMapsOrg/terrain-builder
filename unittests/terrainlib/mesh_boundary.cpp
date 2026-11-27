@@ -26,13 +26,14 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/connectivity/boundary.h"
+#include "range_utils.h"
 
 TEST_CASE("mesh::find_boundary_edges") {
     SECTION("empty for empty mesh") {
         SimpleMesh mesh;
         auto edges = mesh::find_boundary_edges(mesh);
 
-        std::vector<glm::uvec2> actual(edges.begin(), edges.end());
+        std::vector<glm::uvec2> actual = to_vector(edges);
         std::vector<glm::uvec2> expected;
 
         CHECK_THAT(actual, Catch::Matchers::UnorderedEquals(expected));
@@ -48,7 +49,7 @@ TEST_CASE("mesh::find_boundary_edges") {
 
         auto edges = mesh::find_boundary_edges(mesh);
 
-        std::vector<glm::uvec2> actual(edges.begin(), edges.end());
+        std::vector<glm::uvec2> actual = to_vector(edges);
         std::vector<glm::uvec2> expected = {
             {0, 1}, {1, 2}, {2, 0}};
         CHECK_THAT(actual, Catch::Matchers::UnorderedEquals(expected));
@@ -67,7 +68,7 @@ TEST_CASE("mesh::find_boundary_edges") {
 
         auto edges = mesh::find_boundary_edges(mesh);
 
-        std::vector<glm::uvec2> actual(edges.begin(), edges.end());
+        std::vector<glm::uvec2> actual = to_vector(edges);
         std::vector<glm::uvec2> expected = {
             {0, 1}, {2, 0}, {1, 3}, {3, 2} // shared edge {1,2} not included
         };
@@ -99,7 +100,7 @@ TEST_CASE("mesh::find_boundary_edges") {
 
         auto edges = mesh::find_boundary_edges(mesh);
 
-        std::vector<glm::uvec2> actual(edges.begin(), edges.end());
+        std::vector<glm::uvec2> actual = to_vector(edges);
         std::vector<glm::uvec2> expected;
 
         CHECK_THAT(actual, Catch::Matchers::UnorderedEquals(expected));

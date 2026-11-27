@@ -6,7 +6,7 @@
 - Class data members have an `m_` prefix and are usually private. Struct data members have no prefix and are usually public.
 - Use `void set_attribute(int value)` and `int attribute() const` for setters and getters; avoid a `get_` prefix. Follow the [Qt recommendations](https://wiki.qt.io/API_Design_Principles#Naming_Boolean_Getters,_Setters,_and_Properties) for boolean getters.
 - Structs are usually small and simple, have few or no methods, and never use inheritance.
-- Files use CamelCase when they contain a CamelCase class. Otherwise, files use snake_case and their contents belong to a matching snake_case namespace.
+- Files use CamelCase when they contain a CamelCase class or concept. Otherwise, files use snake_case and their contents belong to a matching snake_case namespace.
 - Reflect the directory and file structure in namespaces. For example, `folder/structure.h` corresponds to `namespace folder::structure { ... }`.
 - Indent with four spaces. Do not use tabs.
 - Format new code, and only new code, with the repository's [`.clang-format`](../.clang-format) file. Do not reformat unrelated existing code.

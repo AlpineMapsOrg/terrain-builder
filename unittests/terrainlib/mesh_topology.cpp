@@ -30,6 +30,7 @@
 #include "mesh/connectivity/triangle_compare.h"
 #include "mesh/connectivity/vertex_index_range.h"
 #include "mesh/normalize.h"
+#include "range_utils.h"
 
 namespace {
 
@@ -42,7 +43,7 @@ void sort_edges(std::vector<glm::uvec2> &edges) {
     });
 }
 std::vector<glm::uvec2> sorted_edges_from_set(const std::unordered_set<glm::uvec2> &set) {
-    std::vector<glm::uvec2> result(set.begin(), set.end());
+    std::vector<glm::uvec2> result = to_vector(set);
     sort_edges(result);
     return result;
 }

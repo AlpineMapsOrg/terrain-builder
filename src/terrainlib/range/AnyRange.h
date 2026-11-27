@@ -64,4 +64,6 @@ struct AnyRange : RangeBounds<AnyRange<T>, T> {
             : (this->end.kind == BoundKind::Included ? *this->end.value + 1 : *this->end.value);
         return {range_start, range_end};
     }
+
+    [[nodiscard]] constexpr bool operator==(const AnyRange &) const noexcept = default;
 };

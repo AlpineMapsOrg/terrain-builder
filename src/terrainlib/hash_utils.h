@@ -18,6 +18,11 @@
 
 #pragma once
 
+#include <climits>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+
 namespace hash {
 
 namespace {

@@ -102,7 +102,7 @@ inline void remove_unused_vertices_inplace(Clustering &clustering) {
     }
     clustering.positions = new_positions;
 
-    validate(clustering);
+    assert_valid(clustering);
 }
 inline Clustering remove_unused_vertices(const Clustering &clustering) {
     Clustering copy = clustering;
@@ -128,5 +128,5 @@ inline void remove_unused_textures_inplace(Clustering &clustering) {
     }
     clustering.textures = std::move(textures);
 
-    validate(clustering);
+    assert_valid(clustering);
 }

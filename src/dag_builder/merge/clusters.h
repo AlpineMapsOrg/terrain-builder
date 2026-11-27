@@ -25,11 +25,12 @@
 #include <ranges>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "build_config.h"
 #include "cluster.h"
 #include "enumerate.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/connectivity/adjacency.h"
 #include "range_utils.h"
 #include "validate.h"
@@ -123,6 +124,6 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
 
     Clustering merged{.positions = clustering.positions, .clusters = std::move(merged_clusters)};
     LOG_DEBUG("Merged {} clusters into {} partitions", clustering.cluster_count(), partitioning.partition_count);
-    validate(merged);
+    assert_valid(merged);
     return merged;
 }

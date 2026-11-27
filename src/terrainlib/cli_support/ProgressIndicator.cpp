@@ -70,11 +70,9 @@ std::jthread ProgressIndicator::start_monitoring() const {
                     lock, stop_token, delta_t, [this]() { return this->m_step >= this->m_n_steps; });
             }
 
-            if (!stop_token.stop_requested()) {
-                const auto t1 = std::chrono::steady_clock::now();
-                print(this->m_n_steps, std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0));
-                std::cout << std::endl;
-            }
+            const auto t1 = std::chrono::steady_clock::now();
+            print(this->m_step, std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0));
+            std::cout << std::endl;
         } catch (...) {
             // Console output and formatting must not terminate the process from
             // inside the monitoring thread.

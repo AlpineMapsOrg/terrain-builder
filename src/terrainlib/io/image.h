@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,54 +19,88 @@
 
 #pragma once
 
-#include <cstdint>
+#include <concepts>
 #include <filesystem>
 #include <optional>
-#include <span>
-#include <vector>
 
 #include <glm/gtc/type_precision.hpp>
 #include <radix/raster.h>
 
-#include "Error.h"
-#include "io/byte.h"
+#include "common_error_codes.h"
+#include "error/Error.h"
+#include "error/MessageCode.h"
+#include "error/Result.h"
+#include "io/WriteMode.h"
+#include "io/alloc.h"
+#include "io/bytes.h"
+#include "io/image/Format.h"
+#include "io/limits.h"
 
 namespace io::image {
+
+struct CorruptData : alp::MessageCode<"the data is not a valid image"> {};
 
 using RGB8 = radix::Raster<glm::u8vec3>;
 using RGBA8 = radix::Raster<glm::u8vec4>;
 
-enum class Format { Jpeg, Png, JpegXl };
+// An 8-bit RGB or RGBA raster.
+template <typename Image>
+concept ImageRaster = std::same_as<Image, RGB8> || std::same_as<Image, RGBA8>;
+
+struct Unknown : alp::MessageCode<"the image library reported a failure of unknown meaning"> {};
 
 struct EncodeOptions {
+    // JPEG quality, from 0 to 100.
     int jpeg_quality = 95;
+    // PNG compression level, from 0 to 9.
     int png_compression = 1;
-    // Butteraugli distance 0..25, where 0 selects lossless coding.
+    // Butteraugli distance, from 0 to 25, where 0 selects lossless coding.
     float jpegxl_distance = 0.6f;
-    // 1 (fastest) to 10.
+    // JPEG XL encoding effort, from 1 (fastest) to 10.
     int jpegxl_effort = 3;
 };
 
-struct WriteOptions {
-    EncodeOptions encoding {};
-    bool overwrite = false;
-    bool make_dirs = true;
+using EncodeError = alp::Error<Unsupported, OutOfMemory, Unknown>;
+// Encodes `image`, with its first row at the top, in `format`, keeping all of its channels; JPEG XL tags the colour channels as sRGB.
+// Fails if `image` is empty or `format` cannot store its channels.
+// Each field of `options` must lie in its stated range.
+template <ImageRaster Image>
+[[nodiscard]]
+alp::Result<bytes::vector, EncodeError> encode(const Image &image, Format format, EncodeOptions options = {});
+
+struct DecodeOptions {
+    // The size the image must have, if given.
+    std::optional<glm::uvec2> expected_size = std::nullopt;
 };
 
-/// RGB(A) channels, first row at the top. No flipping, scaling or premultiplication.
-Expected<byte::vector> encode(const RGB8& image, Format format, EncodeOptions options = {});
-/// PNG and JPEG XL preserve all four channels. JPEG rejects RGBA input. JPEG XL tags the channels as sRGB.
-Expected<byte::vector> encode(const RGBA8& image, Format format, EncodeOptions options = {});
-/// RGB readers discard alpha. RGBA readers supply opaque alpha when absent.
-/// Both return 8-bit channels and ignore EXIF orientation. CMYK JPEG images are unsupported. Given an expected
-/// size, images of other sizes are corrupt data; JPEG and JPEG XL reject them before allocating their pixels.
-Expected<RGB8> decode_rgb8(byte::span bytes, std::optional<glm::uvec2> expected_size = std::nullopt);
-Expected<RGBA8> decode_rgba8(byte::span bytes, std::optional<glm::uvec2> expected_size = std::nullopt);
-Expected<RGB8> read_rgb8(const std::filesystem::path& path);
-Expected<RGBA8> read_rgba8(const std::filesystem::path& path);
+using DecodeError = alp::Error<CorruptData, AllocError, Unsupported, Unknown>;
+// Decodes the 8-bit image that `bytes` encodes, with its first row at the top and EXIF orientation ignored, dropping alpha or adding opaque alpha as `Image` needs.
+// Fails if the image's size differs from `options.expected_size`.
+// Fails for a CMYK JPEG image.
+template <ImageRaster Image>
+[[nodiscard]]
+alp::Result<Image, DecodeError> decode(bytes::span bytes, DecodeOptions options = {});
 
-/// Select JPEG/PNG/JPEG XL from the extension. Existing symlinks and nonregular files are rejected.
-Expected<void> write(const RGB8& image, const std::filesystem::path& path, WriteOptions options = {});
-Expected<void> write(const RGBA8& image, const std::filesystem::path& path, WriteOptions options = {});
+using ReadOptions = DecodeOptions;
+
+using ReadError = alp::Error<bytes::ReadError, DecodeError>;
+// Reads and decodes the image file at `path`.
+template <ImageRaster Image>
+[[nodiscard]]
+alp::Result<Image, ReadError> read(const std::filesystem::path &path, ReadOptions options = {});
+
+struct WriteOptions {
+    WriteMode mode = default_write_mode;
+    bool make_dirs = default_make_dirs;
+    EncodeOptions encoding {};
+};
+
+using WriteError = alp::Error<Unsupported, EncodeError, bytes::WriteError>;
+// Encodes `image` in the format that the extension of `path` names and writes it to the file at `path`.
+template <ImageRaster Image>
+[[nodiscard]]
+alp::Result<void, WriteError> write(const Image &image, const std::filesystem::path &path, WriteOptions options = {});
+
+using Error = alp::Error<ReadError, WriteError>;
 
 } // namespace io::image

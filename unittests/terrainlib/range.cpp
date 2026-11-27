@@ -166,6 +166,12 @@ TEST_CASE("AnyRange: constructs from and behaves like each concrete range type")
     CHECK_FALSE(from_full.is_empty());
 }
 
+TEST_CASE("AnyRange: compares by its bounds") {
+    CHECK(AnyRange<int>(Range<int>(2, 8)) == AnyRange<int>(Range<int>(2, 8)));
+    CHECK_FALSE(AnyRange<int>(Range<int>(2, 8)) == AnyRange<int>(Range<int>(100, 200)));
+    CHECK_FALSE(AnyRange<int>(Range<int>(2, 8)) == AnyRange<int>(RangeInclusive<int>(2, 8)));
+}
+
 TEST_CASE("AnyRange: is_empty") {
     CHECK(AnyRange<int>(Range<int>(3, 3)).is_empty());
     CHECK_FALSE(AnyRange<int>(Range<int>(2, 5)).is_empty());

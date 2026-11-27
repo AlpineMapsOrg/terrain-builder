@@ -23,7 +23,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
@@ -37,16 +36,17 @@
 #include <radix/geometry.h>
 
 #include "build_config.h"
+#include "error/utils.h"
 #include "hash_utils.h"
-#include "cli_support/log.h"
+#include "log.h"
 #include "mesh/cgal.h"
 #include "mesh/clip.h"
 #include "mesh/convert.h"
 #include "mesh/geometry.h"
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/normalize.h"
-#include "mesh/validate.h"
-#include "mesh/validate_cgal.h"
+#include "mesh/validate/debug_assert.h"
+#include "mesh/validate/cgal.h"
 #include "containers/FixedVector.h"
 #include "vector_utils.h"
 
@@ -154,7 +154,7 @@ public:
             }
             return parts->second <=> other.parts->second;
         }
-        
+
         bool operator==(const Inside& other) const {
             if (plane_index != other.plane_index) {
                 return false;
@@ -313,15 +313,13 @@ private:
 } // namespace
 
 Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
-    validate(mesh);
+    debug_assert_valid(mesh);
 
     if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
         return Cow(SimpleMesh());
     }
 
-    if (mesh.has_uvs() && mesh.uvs.size() != mesh.vertex_count()) {
-        LOG_ERROR_AND_EXIT("Mesh has Uvs, but the number of Uvs does not match the number of vertices.");
-    }
+    ASSERT(!mesh.has_uvs() || mesh.uvs.size() == mesh.vertex_count(), "Mesh has Uvs, but the number of Uvs does not match the number of vertices.");
 
     // Construct 6 axis-aligned clipping planes from the bounding box
     using Plane = radix::geometry::Plane<double>;
@@ -427,7 +425,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
         }
 
         // Slow path: Clip triangle against all planes
-        
+
         // Prepare vertex provenance
         const std::array<VertexProvenance, 3> source_provenance = {
             VertexProvenance::make_original(source_triangle[0]),
@@ -490,8 +488,8 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                     const glm::dvec3 outside1_vertex = vertices[outside1_tri_index];
                     const glm::dvec3 outside2_vertex = vertices[outside2_tri_index];
 
-                    const Intersection intersection1 = compute_intersection(radix::geometry::Edge{inside_vertex, outside1_vertex}, plane).value();
-                    const Intersection intersection2 = compute_intersection(radix::geometry::Edge{inside_vertex, outside2_vertex}, plane).value();
+                    const Intersection intersection1 = *ASSERT_VAL(compute_intersection(radix::geometry::Edge{inside_vertex, outside1_vertex}, plane));
+                    const Intersection intersection2 = *ASSERT_VAL(compute_intersection(radix::geometry::Edge{inside_vertex, outside2_vertex}, plane));
 
                     // Compute the uvs for the vertices and intersection points
                     const glm::dvec2 inside_uv = uvs[inside_tri_index];
@@ -534,8 +532,8 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                     const glm::dvec3 inside1_vertex = vertices[inside1_tri_index];
                     const glm::dvec3 inside2_vertex = vertices[inside2_tri_index];
 
-                    const Intersection intersection1 = compute_intersection(radix::geometry::Edge{outside_vertex, inside1_vertex}, plane).value();
-                    const Intersection intersection2 = compute_intersection(radix::geometry::Edge{outside_vertex, inside2_vertex}, plane).value();
+                    const Intersection intersection1 = *ASSERT_VAL(compute_intersection(radix::geometry::Edge{outside_vertex, inside1_vertex}, plane));
+                    const Intersection intersection2 = *ASSERT_VAL(compute_intersection(radix::geometry::Edge{outside_vertex, inside2_vertex}, plane));
 
                     // Compute the Uvs for the vertices and intersection points
                     const glm::dvec2 outside_uv = uvs[outside_tri_index];
@@ -633,7 +631,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
     }
 
     SimpleMesh clipped_mesh(new_triangles, new_positions, new_uvs, mesh.texture);
-    validate(clipped_mesh);
+    debug_assert_valid(clipped_mesh);
     return Cow(std::move(clipped_mesh));
 }
 
@@ -645,17 +643,17 @@ struct HasIntersectionsVisitor : public CGAL::Polygon_mesh_processing::Corefinem
     bool has_intersections = false;
 
     // called when a new intersection point is detected.
-    // The intersection is detected using a face of tm_f and an edge of tm_e. 
+    // The intersection is detected using a face of tm_f and an edge of tm_e.
     void intersection_point_detected(
         size_t /*i_id*/, int /*sdim*/,
-        HalfedgeDescriptor /*h_e*/, HalfedgeDescriptor /*h_f*/, 
+        HalfedgeDescriptor /*h_e*/, HalfedgeDescriptor /*h_f*/,
         const TriangleMesh& /*tm_e*/, const TriangleMesh& /*tm_f*/, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
         this->has_intersections = true;
     }
 };
 } // namespace
 
-Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
+alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
     ASSERT(!mesh.has_uvs());
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
 
@@ -667,7 +665,7 @@ Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix
         .visitor(visitor);
     const bool success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_bounds, clip_params);
     if (!success) {
-        throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
+        return alp::make_error(NonManifoldResult{});
     }
     if (cgal_mesh.number_of_faces() == 0) {
         return Cow(SimpleMesh());
@@ -681,7 +679,7 @@ Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix
     if (!remesh_planar_patches) {
         return Cow(convert::to_simple_mesh(cgal_mesh));
     }
-    
+
     cgal::Mesh remeshed_cgal_mesh;
     const auto remesh_params = CGAL::Polygon_mesh_processing::parameters::cosine_of_maximum_angle(0.999);
     CGAL::Polygon_mesh_processing::remesh_planar_patches(cgal_mesh, remeshed_cgal_mesh, remesh_params);
@@ -717,10 +715,10 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
     std::vector<std::variant<EdgeIntersection, FaceIntersection>> intersections;
 
     // called when a new intersection point is detected.
-    // The intersection is detected using a face of tm_f and an edge of tm_e. 
+    // The intersection is detected using a face of tm_f and an edge of tm_e.
     void intersection_point_detected(
         size_t i_id, int /*sdim*/,
-        HalfedgeDescriptor h_e, HalfedgeDescriptor h_f, 
+        HalfedgeDescriptor h_e, HalfedgeDescriptor h_f,
         const TriangleMesh& tm_e, const TriangleMesh& tm_f, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
         DEBUG_ASSERT(i_id == intersections.size());
         ALP_UNUSED(i_id);
@@ -786,7 +784,7 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
 };
 } // namespace
 
-Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh, const bool keep_inside) {
+alp::Result<Cow<const SimpleMesh>, NonManifoldResult> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh, const bool keep_inside) {
     // short circuit the empty mesh case
     // this is a common case since we clip the mask in the terrainmerger on the octree node bounds
     // which often results in empty masks
@@ -797,14 +795,14 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
             return Cow<const SimpleMesh>::from_ref(mesh);
         }
     }
-    
+
     // If we want to keep everything outside the clip_mesh we simply invert it and recurse
     if (!keep_inside) {
         SimpleMesh clip_mesh_inv(clip_mesh.triangles, clip_mesh.positions);
         flip_orientation(clip_mesh_inv);
         return mesh::clip_on_mesh(mesh, clip_mesh_inv, !keep_inside);
     }
-    
+
     // Convert both meshes to cgal and use their clipping logic.
     using UvMap = cgal::Mesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
@@ -817,7 +815,8 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
     bool success;
     bool has_intersections;
     if (mesh.has_uvs()) {
-        UvMap uv_map = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv").value();
+        const auto uv_map_opt = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv");
+        UvMap uv_map = *ASSERT_VAL(uv_map_opt);
         UvInterpolatorVisitor<cgal::Mesh, UvMap> visitor(uv_map, cgal_mesh);
         const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
         success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
@@ -829,7 +828,7 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
         has_intersections = visitor.has_intersections;
     }
     if (!success) {
-        throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
+        return alp::make_error(NonManifoldResult{});
     }
     if (cgal_mesh.number_of_faces() == 0) {
         return Cow(SimpleMesh());
@@ -837,7 +836,7 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
     if (!has_intersections && cgal_mesh.number_of_faces() == mesh.face_count()) {
         return Cow(mesh);
     }
-    
+
     cgal_mesh.collect_garbage();
     cgal::validate(cgal_mesh);
     SimpleMesh result = convert::to_simple_mesh(cgal_mesh);

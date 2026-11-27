@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,94 +21,91 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
-#include <expected>
+#include <fmt/format.h>
+#include <fmt/std.h>
 
-#include "store/IndexedStorage.h"
+#include "common_error_codes.h"
+#include "error/Result.h"
+#include "error/try.h"
+#include "error/utils.h"
+#include "store/Codec.h"
+#include "store/Index.h"
+#include "store/IndexFormat.h"
+#include "store/Metadata.h"
+#include "store/RawStorage.h"
+#include "store/Storage.h"
+#include "store/path_layout.h"
+#include "store/storage_paths.h"
 
 namespace store {
 
-template <HierarchyTraits Traits, typename NodeData, typename CodecResolver>
-Expected<IndexedStorage<Traits, NodeData>> open_index(
-    const std::filesystem::path& index_path, const IndexFormat<Traits> format, IndexMetadata<Traits> metadata,
-    const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
-{
-    using Key = typename Traits::Key;
-    if (metadata.payload_class != expected_payload_class) {
-        return Error::fail(Error::Code::Unsupported, "unexpected payload class: " + metadata.payload_class);
+// Which states of a storage `open` accepts.
+enum class Accept { Published, Draft, PublishedOrDraft };
+
+using OpenError = alp::Error<InvalidStoragePath, ReadIndexError>;
+// Opens the storage at `path`, whose node files `layout` locates and `codec` reads.
+// Fails if the storage's state is not one `accept` allows.
+template <Index IndexType, typename Payload>
+[[nodiscard]]
+alp::Result<Storage<IndexType, Payload>, OpenError> open(
+    const std::filesystem::path& path,
+    IndexFormat<IndexType> format,
+    path_layout::Layout<typename IndexType::Traits::Key> layout,
+    std::unique_ptr<Codec<Payload>> codec,
+    const Accept accept = Accept::Published
+) {
+    using Key = typename IndexType::Traits::Key;
+
+    const auto context = alp::make_context("opening the storage at {}", path);
+
+    // Check the state
+    const bool draft = is_draft(path);
+    if (draft && accept == Accept::Published) {
+        return alp::make_error(InvalidStoragePath{}, "the path names a draft").context(context);
     }
-    for (const auto& [key, status] : metadata.index) {
-        static_cast<void>(status);
-        if (!Traits::is_valid(key)) {
-            return Error::fail(Error::Code::CorruptData, "index contains invalid hierarchy key " + Traits::key_to_string(key));
-        }
+    if (!draft && accept == Accept::Draft) {
+        return alp::make_error(InvalidStoragePath{}, "the path does not name a draft").context(context);
     }
 
-    const auto mapping = format.mapping_from_id(metadata.layout_id);
-    if (!mapping.has_value()) {
-        return Error::fail(Error::Code::Unsupported, "unknown storage layout: " + metadata.layout_id);
-    }
-    auto codec = resolve_codec(metadata.codec_selector);
-    if (!codec) {
-        return Error::propagate(std::move(codec), "resolve storage codec \"" + metadata.codec_selector + "\"");
-    }
-    if (auto valid = validate_hashes(metadata.index, metadata.hashes, codec.value()->supports_hashing()); !valid) {
-        return Error::propagate(std::move(valid), "validate storage index hashes");
-    }
+    // Read the index
+    ALP_TRY_CONTEXT(IndexType index, format.read(path), context);
+    ALP_TRY_CONTEXT(validate_index(index, codec->supports_hashing()), context);
 
-    const std::filesystem::path base_path = index_path.parent_path();
-    using Storage = store::Storage<Traits, NodeData>;
-    return IndexedStorage<Traits, NodeData>(RawStorage<Traits, NodeData>(path_layout::Resolver<Key>(base_path, mapping.value()), std::move(codec.value())),
-        std::move(metadata.index),
-        std::move(metadata.hashes),
-        typename Storage::Persistence {
-            format,
-            index_path,
-            std::move(metadata.layout_id),
-            std::move(metadata.payload_class),
-            std::move(metadata.codec_selector),
-        });
+    // Create the storage
+    RawStorage<typename IndexType::Traits, Payload> raw(path_layout::Resolver<Key>(path, layout), std::move(codec));
+    return Storage<IndexType, Payload>(std::move(raw), std::move(index));
 }
 
-template <HierarchyTraits Traits, typename NodeData, typename CodecResolver>
-Expected<IndexedStorage<Traits, NodeData>> open_index(
-    const std::filesystem::path& index_path, const IndexFormat<Traits> format,
-    const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
-{
-    auto metadata = format.read(index_path);
-    if (!metadata) {
-        return Error::propagate(std::move(metadata), "read storage index \"" + index_path.string() + "\"");
-    }
-    return open_index<Traits, NodeData>(index_path, format, std::move(*metadata),
-        expected_payload_class, std::forward<CodecResolver>(resolve_codec));
-}
+using ResolveError = alp::Error<UnexpectedPayloadClass, Unsupported>;
+// Opens the storage at `path` that holds payloads of class `payload_class`, with the layout and codec `metadata` records.
+template <Index IndexType, typename Payload>
+[[nodiscard]]
+alp::Result<Storage<IndexType, Payload>, ResolveError, OpenError> open(
+    const std::filesystem::path& path,
+    IndexFormat<IndexType> format,
+    const Metadata& metadata,
+    const std::string_view payload_class,
+    CodecResolver<Payload> auto resolve_codec,
+    const Accept accept = Accept::Published
+) {
+    const auto context = alp::make_context("opening the storage of {} at {}", payload_class, path);
 
-template <HierarchyTraits Traits, typename NodeData>
-Expected<Storage<Traits, NodeData>> make_storage(const std::filesystem::path& base_path,
-    const IndexFormat<Traits> format,
-    const path_layout::Mapping<typename Traits::Key> mapping,
-    std::string payload_class,
-    std::string codec_selector,
-    std::unique_ptr<Codec<NodeData>> codec)
-{
-    using Key = typename Traits::Key;
-    std::error_code error;
-    std::filesystem::create_directories(base_path, error);
-    if (error) {
-        return Error::fail(Error::Code::Io, "create directories", base_path, error);
+    if (metadata.payload_class != payload_class) {
+        return alp::make_error(UnexpectedPayloadClass{metadata.payload_class, std::string(payload_class)}).context(context);
     }
-
-    typename Storage<Traits, NodeData>::Persistence persistence {
-        format,
-        base_path / format.index_filename,
-        std::string(mapping.id),
-        std::move(payload_class),
-        std::move(codec_selector),
-    };
-    RawStorage<Traits, NodeData> raw(path_layout::Resolver<Key>(base_path, mapping), std::move(codec));
-    return Storage<Traits, NodeData>(std::move(raw), Index<Traits> {}, Key2Hash_Map<Traits> {}, std::move(persistence), true);
+    const std::optional<path_layout::Layout<typename IndexType::Traits::Key>> layout_opt = format.resolve_layout(metadata.layout_id);
+    if (!layout_opt.has_value()) {
+        return alp::make_error(Unsupported{}, fmt::format("the layout {} is unknown", metadata.layout_id)).context(context);
+    }
+    ALP_TRY_CONTEXT(std::unique_ptr<Codec<Payload>> codec, resolve_codec(metadata.codec_id), context);
+    auto open_result = open<IndexType, Payload>(path, std::move(format), *layout_opt, std::move(codec), accept);
+    ALP_TRY_CONTEXT(auto storage, std::move(open_result), context);
+    return storage;
 }
 
 } // namespace store

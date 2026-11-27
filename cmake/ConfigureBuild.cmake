@@ -63,6 +63,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-O${ALP_RELEASE_OPT_LEVEL}>)
 endif()
 
+# Source locations name files relative to the source root.
+add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-fmacro-prefix-map=${PROJECT_SOURCE_DIR}/=>)
+
 # Compiler launchers must be configured before targets are created.
 find_program(SCCACHE_PROGRAM sccache)
 find_program(CCACHE_PROGRAM ccache)

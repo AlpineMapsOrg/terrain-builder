@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2026 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,37 +20,48 @@
 #pragma once
 
 #include <filesystem>
-#include <memory>
 #include <optional>
 #include <string_view>
 #include <vector>
 
 #include "dag_node.h"
+#include "error/Result.h"
 #include "store/Codec.h"
 
 namespace dag::codec {
 
-// A node's identity is the sixteen-byte concatenation of the .dag and .dagmeta envelope hashes,
-// so that each file can be verified on its own.
+// The id of both DAG codecs, which names them in a storage's metadata.
+inline constexpr std::string_view id = ".dag";
+
+// Stores a batch as its clustering in a .dag file and its metadata in a .dagmeta file.
 class ClusterBatch final : public store::Codec<dag::ClusterBatch> {
 public:
+    std::string_view id() const override { return codec::id; }
+
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override;
-    Expected<dag::ClusterBatch> read(
-        const std::filesystem::path& node_path, std::optional<store::NodeDataHashView> expected_hash = std::nullopt) const override;
-    Expected<store::NodeDataHash> write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const override;
+    [[nodiscard]]
+    alp::Result<dag::ClusterBatch, store::CodecReadError> read(
+        const std::filesystem::path& node_path, std::optional<store::PayloadHashView> expected_hash = std::nullopt) const override;
+    [[nodiscard]]
+    alp::Result<store::PayloadHash, store::CodecWriteError> write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const override;
     bool supports_hashing() const override { return true; }
 };
 
-// Reads only the .dagmeta file and verifies it against the second half of an expected node identity.
+// Reads only the metadata of a batch that ClusterBatch stored.
 class Metadata final : public store::Codec<dag::NodeMetadata> {
 public:
+    std::string_view id() const override { return codec::id; }
+
     std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override;
-    Expected<dag::NodeMetadata> read(
-        const std::filesystem::path& node_path, std::optional<store::NodeDataHashView> expected_hash = std::nullopt) const override;
+    [[nodiscard]]
+    alp::Result<dag::NodeMetadata, store::CodecReadError> read(
+        const std::filesystem::path& node_path, std::optional<store::PayloadHashView> expected_hash = std::nullopt) const override;
     bool supports_hashing() const override { return true; }
 };
 
-Expected<std::unique_ptr<store::Codec<dag::ClusterBatch>>> cluster_batch_from_extension(std::string_view extension);
-Expected<std::unique_ptr<store::Codec<dag::NodeMetadata>>> metadata_from_extension(std::string_view extension);
+// The extension of the file holding a batch's clustering.
+inline constexpr std::string_view clustering_extension = ".dag";
+// The extension of the file holding a batch's metadata.
+inline constexpr std::string_view metadata_extension = ".dagmeta";
 
 } // namespace dag::codec

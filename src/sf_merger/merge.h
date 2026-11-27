@@ -2,6 +2,7 @@
  * AlpineMaps.org
  * Copyright (C) 2024 Martin Braunsperger
  * Copyright (C) 2024 Adam Celarek-Litofcenko
+ * Copyright (C) 2026 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,16 +20,18 @@
 
 #pragma once
 
-#include <chrono>
-#include <expected>
 #include <filesystem>
-#include <functional>
 #include <optional>
+#include <stop_token>
 #include <string>
+#include <utility>
 
-#include "Error.h"
 #include "NodeLoader.h"
 #include "NodeWriter.h"
+#include "error/Result.h"
+#include "error/log.h"
+#include "error/try.h"
+#include "hierarchy/NodeStatusOrMissing.h"
 #include "inputs.h"
 #include "mask.h"
 #include "merge/NodeData.h"
@@ -37,29 +40,24 @@
 #include "merge/visitor/Simple.h"
 #include "merge/visitor/Visitor.h"
 #include "mesh/storage.h"
+#include "numeric/number_types.h"
 #include "octree/Id.h"
-#include "sf/finalize_storage.h"
+#include "sf/publish.h"
 #include "sf/validate_index.h"
-#include "store/NodeStatusOrMissing.h"
-#include "store/cache/Dummy.h"
+#include "stop.h"
+#include "store/Checkpoint.h"
 #include "store/inputs.h"
-#include "store/snapshot.h"
 
 inline std::string get_dataset_name(const mesh::storage::Storage &storage) {
-    return storage.layout().base_path().filename().string();
+    return storage.resolver().base_path().filename().string();
 }
 
-template <auto N>
-using smallest_uint_t =
-    std::conditional_t<(N <= UINT8_MAX), uint8_t,
-                       std::conditional_t<(N <= UINT16_MAX), uint16_t,
-                                          std::conditional_t<(N <= UINT32_MAX), uint32_t,
-                                                             uint64_t>>>;
+using MergeNodeError = alp::Error<Stopped, NodeLoader::LoadError, mesh::storage::Draft::SaveError, NodeWriter::LinkSubtreeError>;
 
 template <merge::Visitor Visitor>
 class Merger {
 public:
-    using Status = store::NodeStatusOrMissing;
+    using Status = hierarchy::NodeStatusOrMissing;
     using Context = Visitor::Context;
     using Result = merge::Result<Context>;
 
@@ -67,99 +65,79 @@ public:
         NodeLoader left,
         NodeLoader right,
         NodeWriter output,
-        const mesh::storage::IndexedStorage* cache = nullptr,
-        std::function<bool()> stop_requested = {})
+        const mesh::storage::Checkpoint& checkpoint,
+        std::stop_token stop = {})
         : _visitor(visitor)
         , _left(left)
         , _right(right)
-        , _output(output)
-        , _cache(cache)
-        , _stop_requested(std::move(stop_requested))
+        , _output(std::move(output))
+        , _checkpoint(checkpoint)
+        , _stop(std::move(stop))
     {
     }
 
-    Expected<void> merge_root() {
+    [[nodiscard]]
+    alp::Result<void, MergeNodeError> merge_root() {
         const octree::Id id = octree::Id::root();
         const Context ctx = this->_visitor.make_root_context();
         return merge_node(id, ctx);
     }
 
-    Expected<void> merge_node(const octree::Id &id, const Context& ctx) {
+    [[nodiscard]]
+    alp::Result<void, MergeNodeError> merge_node(const octree::Id &id, const Context& ctx) {
         const Status left_status = this->_left.get_status(id);
         const Status right_status = this->_right.get_status(id);
         return this->merge_node(id, left_status, right_status, ctx);
     }
 
-    Expected<void> merge_node(
+    [[nodiscard]]
+    alp::Result<void, MergeNodeError> merge_node(
         const octree::Id &id,
         const Status left_status,
         const Status right_status,
         const Context& ctx
     ) {
         LOG_DEBUG("[{}] Start merging (left = {}, right = {})", id, left_status, right_status);
-        if (auto polled = this->poll(); !polled) {
-            return polled;
-        }
-        if (this->_cache != nullptr) {
-            auto cached = this->_cache->has(id);
-            if (!cached) {
-                return Error::propagate(std::move(cached), "check merge cache for node " + id.to_string());
-            }
-            if (cached.value()) {
-                LOG_DEBUG("[{}] Restored from cache", id);
-                return this->_output.link_node(id, *this->_cache);
-            }
+        ALP_TRY(check_not_stopped(this->_stop));
+        if (this->_checkpoint.has(id)) {
+            LOG_DEBUG("[{}] Linked from the checkpoint", id);
+            ALP_TRY(this->_output.link_node(id, this->_checkpoint));
+            return {};
         }
 
-        const auto merge_result = this->call_merge(id, left_status, right_status, ctx);
-        return std::visit([&](const auto &result) -> Expected<void> {
+        ALP_TRY(const Result merge_result, this->call_merge(id, left_status, right_status, ctx));
+        return std::visit([&](const auto &result) -> alp::Result<void, MergeNodeError> {
             using Result = std::decay_t<decltype(result)>;
             if constexpr (std::is_same_v<Result, merge::Recurse<Context>>) {
                 LOG_DEBUG("[{}] needs recursion", id);
-                DEBUG_ASSERT(id.has_children());
-                const auto children = id.children().value();
+                const auto children = *ASSERT_VAL(id.children());
                 for (const auto &child_id : children) {
-                    auto child_result = this->merge_node(child_id, result.context);
-                    if (!child_result) {
-                        return child_result;
-                    }
+                    ALP_TRY(this->merge_node(child_id, result.context));
                 }
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Unchanged>) {
                 LOG_DEBUG("[{}] remains unchanged (same as {})", id, (result.source == merge::Source::Left ? "left" : "right"));
                 // If the node should remain unchanged, but its not present on disk we cannot link it.
                 if (result.source == merge::Source::Left && left_status == Status::Missing) {
-                    auto mesh_opt = this->_left.load_node(id);
+                    ALP_TRY(const std::optional<SimpleMesh> mesh_opt, this->_left.load_node(id));
                     if (mesh_opt.has_value()) {
-                        auto write_result = this->_output.write_node(id, *mesh_opt);
-                        if (!write_result) {
-                            return write_result;
-                        }
+                        ALP_TRY(this->_output.write_node(id, *mesh_opt));
                     }
                 } else if (result.source == merge::Source::Right && right_status == Status::Missing) {
-                    auto mesh_opt = this->_right.load_node(id);
+                    ALP_TRY(const std::optional<SimpleMesh> mesh_opt, this->_right.load_node(id));
                     if (mesh_opt.has_value()) {
-                        auto write_result = this->_output.write_node(id, *mesh_opt);
-                        if (!write_result) {
-                            return write_result;
-                        }
+                        ALP_TRY(this->_output.write_node(id, *mesh_opt));
                     }
                 } else {
-                    auto link_result = this->_output.link_subtree_to_output(
+                    ALP_TRY(this->_output.link_subtree_to_output(
                         id,
                         result.source == merge::Source::Left ? this->_left : this->_right,
-                        [this] { return this->poll(); });
-                    if (!link_result) {
-                        return link_result;
-                    }
+                        this->_stop));
                 }
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Merged>) {
                 LOG_DEBUG("[{}] was merged", id);
-                auto write_result = this->_output.write_node(id, result.mesh);
-                if (!write_result) {
-                    return write_result;
-                }
+                ALP_TRY(this->_output.write_node(id, result.mesh));
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Ignore>) {
                 LOG_DEBUG("[{}] was ignored", id);
@@ -169,23 +147,10 @@ public:
     }
 
 private:
-    // Stops before the next node when requested, and checkpoints the output index.
-    Expected<void> poll()
-    {
-        if (this->_stop_requested && this->_stop_requested()) {
-            return Error::fail(Error::Code::Cancelled, "SF merge cancelled; incomplete snapshot retained");
-        }
-        if (std::chrono::steady_clock::now() - this->_last_checkpoint < store::snapshot::checkpoint_interval) {
-            return {};
-        }
-        this->_last_checkpoint = std::chrono::steady_clock::now();
-        return this->_output.save_index();
-    }
-
     static constexpr auto STATUSES = magic_enum::enum_values<Status::Value>();
     static constexpr auto _STATUS_COUNT = STATUSES.size();
     static constexpr auto _MAX_INDEX = _STATUS_COUNT * _STATUS_COUNT;
-    using Index = smallest_uint_t<_MAX_INDEX>;
+    using Index = uint_for_max_t<_MAX_INDEX>;
     static constexpr Index STATUS_COUNT = static_cast<Index>(_STATUS_COUNT);
     static constexpr Index MAX_INDEX = static_cast<Index>(_MAX_INDEX);
 
@@ -193,7 +158,7 @@ private:
         return static_cast<Index>(left) * STATUS_COUNT + static_cast<Index>(right);
     }
 
-    Result call_merge(
+    alp::Result<Result, NodeLoader::LoadError> call_merge(
         const octree::Id &id,
         Status left,
         Status right,
@@ -230,117 +195,77 @@ private:
     NodeLoader _left;
     NodeLoader _right;
     NodeWriter _output;
-    const mesh::storage::IndexedStorage* _cache;
-    std::function<bool()> _stop_requested;
-    std::chrono::steady_clock::time_point _last_checkpoint = std::chrono::steady_clock::now();
+    const mesh::storage::Checkpoint& _checkpoint;
+    std::stop_token _stop;
 };
 
-// Merges into output_dataset, linking nodes that the cache has instead of merging them.
-// When stop_requested returns true, the merge stops before the next node with an error
-// with code Cancelled. On failure, the output index is saved for a later cache.
-inline Expected<void> merge_datasets(const mesh::storage::IndexedStorage& left_dataset,
-    const mesh::storage::IndexedStorage& right_dataset,
-    mesh::storage::Storage& output_dataset,
+using MergeDatasetsError = alp::Error<sf::UnexpectedInnerNode, MergeNodeError>;
+// Merges into output_dataset, linking nodes that the checkpoint has instead of merging them.
+// Once a stop is requested through `stop`, the merge stops before the next node and fails with Stopped.
+// On failure, the output index is saved, so that the draft can serve a later merge as a checkpoint.
+[[nodiscard]]
+inline alp::Result<void, MergeDatasetsError> merge_datasets(const mesh::storage::Storage& left_dataset,
+    const mesh::storage::Storage& right_dataset,
+    mesh::storage::Draft& output_dataset,
     const std::optional<MeshMask> mask = std::nullopt,
-    const mesh::storage::IndexedStorage* cache = nullptr,
-    const std::function<bool()>& stop_requested = {})
+    const mesh::storage::Checkpoint& checkpoint = {},
+    const std::stop_token& stop = {})
 {
-    for (const mesh::storage::IndexedStorage *input : {&left_dataset, &right_dataset}) {
-        auto validation = sf::validate_index(input->index());
-        if (!validation) {
-            return Error::propagate(
-                std::move(validation), "validate merge input dataset \"" + get_dataset_name(*input) + "\"");
-        }
+    for (const mesh::storage::Storage *input : {&left_dataset, &right_dataset}) {
+        ALP_TRY_CONTEXT(sf::validate_index(input->index()), alp::make_context("checking the merge input {}", input->base_path()));
     }
 
     LOG_TRACE("Merging {} and {} into {}",
         get_dataset_name(left_dataset),
         get_dataset_name(right_dataset),
-        get_dataset_name(output_dataset));
+        output_dataset.base_path());
 
     octree::Space space = octree::Space::earth();
-    store::cache::Dummy<octree::StoreTraits, mesh::Simple> left_cache;
-    NodeLoader left(left_dataset, left_cache, space);
-    store::cache::Dummy<octree::StoreTraits, mesh::Simple> right_cache;
-    NodeLoader right(right_dataset, right_cache, space);
+    NodeLoader left(left_dataset, space);
+    NodeLoader right(right_dataset, space);
     NodeWriter output(output_dataset);
-    Expected<void> result;
+    alp::Result<void, MergeNodeError> result;
     if (mask.has_value()) {
         merge::visitor::Masked visitor {mask.value(), space};
-        Merger<merge::visitor::Masked> merger(visitor, left, right, output, cache, stop_requested);
+        Merger<merge::visitor::Masked> merger(visitor, left, right, std::move(output), checkpoint, stop);
         result = merger.merge_root();
     } else {
         merge::visitor::Simple visitor;
-        Merger<merge::visitor::Simple> merger(visitor, left, right, output, cache, stop_requested);
+        Merger<merge::visitor::Simple> merger(visitor, left, right, std::move(output), checkpoint, stop);
         result = merger.merge_root();
     }
-    if (!result) {
-        if (auto saved = output_dataset.save_or_create_index(); !saved) {
-            LOG_ERROR("Failed to save the index of the incomplete merge output: {}", saved.error().to_string());
-        }
-        if (result.error().code() == Error::Code::Cancelled) {
-            return result;
-        }
-        return Error::propagate(std::move(result), mask.has_value() ? "merge masked datasets" : "merge datasets");
+    if (!result.has_value()) {
+        LOG_WARN_IF_ERROR(output_dataset.save_index(), "saving the index of the interrupted merge's draft");
     }
-
-    auto finalized = sf::finalize_storage(output_dataset);
-    if (!finalized) {
-        return Error::propagate(
-            std::move(finalized), "finalize merged output dataset \"" + get_dataset_name(output_dataset) + "\"");
-    }
+    ALP_TRY(std::move(result));
     return {};
 }
 
-// Merges into <output_path>.part and publishes it to output_path; see store::snapshot.
-// The cache must be an incomplete merge output with the same record.
-inline Expected<void> merge_datasets(const mesh::storage::IndexedStorage& left_dataset,
-    const mesh::storage::IndexedStorage& right_dataset,
+using MergeError = alp::Error<io::FileError, store::inputs::ValidateReuseError, mesh::storage::OpenError, mesh::storage::CreateError, store::inputs::WriteError, MergeDatasetsError, sf::PublishError>;
+// Merges into a new SF storage at `output_path`, reusing the nodes of the draft at `checkpoint_path`, which must have been produced from `inputs`.
+[[nodiscard]]
+inline alp::Result<void, MergeError> merge_datasets(const mesh::storage::Storage& left_dataset,
+    const mesh::storage::Storage& right_dataset,
     const std::filesystem::path& output_path,
     const std::optional<MeshMask>& mask,
-    const sf_merger::inputs::Record& record,
-    const std::optional<std::filesystem::path>& cache_path = std::nullopt,
-    const std::function<bool()>& stop_requested = {})
+    const sf_merger::inputs::Merge& inputs,
+    const std::optional<std::filesystem::path>& checkpoint_path = std::nullopt,
+    const std::stop_token& stop = {})
 {
-    for (const mesh::storage::IndexedStorage* input : { &left_dataset, &right_dataset }) {
-        if (auto linkable = store::snapshot::check_link_filesystem(input->base_path(), output_path); !linkable) {
-            return linkable;
-        }
+    const auto context = alp::make_context("merging the SF storages at {} and {} into {}", left_dataset.base_path(), right_dataset.base_path(), output_path);
+    for (const mesh::storage::Storage* input : { &left_dataset, &right_dataset }) {
+        ALP_TRY_CONTEXT(store::inputs::validate_linkable(input->base_path(), output_path), context);
     }
-    std::optional<mesh::storage::IndexedStorage> cache;
-    if (cache_path.has_value()) {
-        if (auto valid = store::inputs::validate_cache<sf_merger::inputs::Schema>(*cache_path, record); !valid) {
-            return Error::propagate(std::move(valid), "validate SF merge cache");
-        }
-        if (auto linkable = store::snapshot::check_link_filesystem(*cache_path, output_path); !linkable) {
-            return linkable;
-        }
-        auto opened = mesh::storage::open_index(*cache_path / octree::storage::index_file_name);
-        if (!opened) {
-            return Error::propagate(std::move(opened), "open SF merge cache");
-        }
-        cache.emplace(std::move(*opened));
+    mesh::storage::Checkpoint checkpoint;
+    if (checkpoint_path.has_value()) {
+        auto open_result = store::open_for_reuse<sf_merger::inputs::Schema>(checkpoint_path.value(), output_path, inputs, mesh::storage::open);
+        ALP_TRY_CONTEXT(checkpoint, std::move(open_result), context);
     }
 
-    mesh::storage::OpenOptions options;
-    options.default_mapping = left_dataset.layout().mapping();
-    options.preferred_extension = std::string(left_dataset.codec_selector().value_or(".sfmesh"));
-    auto output_result = mesh::storage::create(output_path, std::move(options));
-    if (!output_result) {
-        return Error::propagate(std::move(output_result), "create merge output dataset \"" + output_path.string() + "\"");
-    }
-    mesh::storage::IndexedStorage output = std::move(output_result.value());
-    if (auto written = store::inputs::write<sf_merger::inputs::Schema>(output.base_path(), record); !written) {
-        return written;
-    }
+    ALP_TRY_CONTEXT(mesh::storage::Draft output, mesh::storage::create(output_path, left_dataset.resolver().layout(), left_dataset.codec_id()), context);
+    ALP_TRY_CONTEXT(store::inputs::write<sf_merger::inputs::Schema>(output.base_path(), inputs), context);
 
-    auto merged = merge_datasets(left_dataset, right_dataset, output, mask, cache ? &cache.value() : nullptr, stop_requested);
-    if (!merged) {
-        return merged;
-    }
-    auto published = mesh::storage::publish(std::move(output));
-    if (!published) {
-        return Error::propagate(std::move(published), "publish merge output dataset \"" + output_path.string() + "\"");
-    }
+    ALP_TRY_CONTEXT(merge_datasets(left_dataset, right_dataset, output, mask, checkpoint, stop), context);
+    ALP_TRY_CONTEXT(sf::publish(std::move(output)), context);
     return {};
 }

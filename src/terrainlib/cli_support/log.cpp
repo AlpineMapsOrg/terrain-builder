@@ -16,38 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include "cli_support/log.h"
 
 #include <cstdlib>
 
 #include <libassert/assert.hpp>
 
-#include "cli_support/log.h"
-
 namespace cli_support {
-
-const std::shared_ptr<spdlog::logger>& Log::get_logger()
-{
-    static const std::shared_ptr<spdlog::logger> logger = [] {
-        spdlog::set_pattern("[%Y-%m-%d %T.%e] [%=3n] [%^%l%$] %v");
-        auto created = spdlog::stderr_color_mt("LOG");
-        created->set_level(spdlog::level::info);
-        return created;
-    }();
-    return logger;
-}
-
-void Log::init(spdlog::level::level_enum log_level) { get_logger()->set_level(log_level); }
-
-void Log::add_file(const std::filesystem::path& path)
-{
-    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path.string(), false);
-    file_sink->set_pattern("[%Y-%m-%d %T.%e] [%n] [%l] %v");
-    get_logger()->sinks().push_back(std::move(file_sink));
-    get_logger()->flush_on(spdlog::level::info);
-}
 
 const std::map<std::string, spdlog::level::level_enum>& log_level_names()
 {
@@ -67,7 +42,7 @@ void log_assertion_failures()
 {
     libassert::set_failure_handler([](const libassert::assertion_info& info) {
         LOG_ERROR("{}", info.to_string(0, libassert::color_scheme::blank));
-        Log::get_logger()->flush();
+        logging::Log::get_logger()->flush();
         std::abort();
     });
 }
