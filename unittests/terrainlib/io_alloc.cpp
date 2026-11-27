@@ -20,10 +20,13 @@
 
 #include <cstdint>
 #include <limits>
+#include <new>
+#include <ranges>
 #include <span>
 #include <vector>
 
 #include "../result_helpers.h"
+#include "common_error_codes.h"
 #include "error/prelude.h"
 #include "io/alloc.h"
 #include "io/limits.h"
@@ -67,4 +70,45 @@ TEST_CASE("try_reserve leaves the vector unchanged when it fails", "[io][alloc]"
 
     CHECK(error.holds_code(io::BufferLimitExceeded(9, 10)));
     CHECK(vector.capacity() == capacity);
+}
+
+TEST_CASE("catch_out_of_memory fails with OutOfMemory when the function throws std::bad_alloc", "[io][alloc]") {
+    SECTION("returning a value") {
+        const auto error = REQUIRE_ERROR(io::catch_out_of_memory([]() -> int { throw std::bad_alloc(); }));
+
+        CHECK(error.holds<OutOfMemory>());
+    }
+
+    SECTION("returning void") {
+        const auto error = REQUIRE_ERROR(io::catch_out_of_memory([] { throw std::bad_alloc(); }));
+
+        CHECK(error.holds<OutOfMemory>());
+    }
+}
+
+TEST_CASE("try_append_range appends up to the limit", "[io][alloc]") {
+    std::vector<uint16_t> vector{1, 2};
+    const std::vector<uint16_t> range{3, 4};
+
+    REQUIRE_VALUE(io::try_append_range(vector, range, 8));
+
+    CHECK(vector == std::vector<uint16_t>{1, 2, 3, 4});
+}
+
+TEST_CASE("try_append_range counts the elements already in the vector and leaves it unchanged when it fails", "[io][alloc]") {
+    std::vector<uint16_t> vector{1, 2};
+    const std::vector<uint16_t> range{3, 4};
+
+    const auto error = REQUIRE_ERROR(io::try_append_range(vector, range, 7));
+
+    CHECK(error.holds_code(io::BufferLimitExceeded(7, 8)));
+    CHECK(vector == std::vector<uint16_t>{1, 2});
+}
+
+TEST_CASE("try_append_range fails when the total size cannot be represented", "[io][alloc]") {
+    std::vector<uint8_t> vector{1};
+
+    const auto error = REQUIRE_ERROR(io::try_append_range(vector, std::views::iota(size_t{0}, std::numeric_limits<size_t>::max())));
+
+    CHECK(error.holds_code(io::BufferLimitExceeded(io::max_buffer_size)));
 }
