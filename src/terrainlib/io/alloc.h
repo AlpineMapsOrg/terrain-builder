@@ -37,6 +37,7 @@
 #include "error/utils.h"
 #include "io/limits.h"
 #include "range_utils.h"
+#include "std_compat.h"
 
 namespace io {
 
@@ -106,7 +107,7 @@ alp::Result<void, AllocError> try_append_range(std::vector<T> &vector, Range &&r
     }
     ALP_TRY(check_buffer_size<T>(vector.size() + added_count, max_bytes));
     // Appending at the end has no effect if the allocation throws.
-    return catch_out_of_memory([&] { vector.append_range(std::forward<Range>(range)); });
+    return catch_out_of_memory([&] { std_compat::append_range(vector, std::forward<Range>(range)); });
 }
 
 } // namespace io

@@ -18,6 +18,10 @@
 
 #pragma once
 
+#include <concepts>
+#include <ranges>
+#include <vector>
+
 // Stand-ins for standard library facilities that a supported standard library lacks or that a supported compiler rejects.
 namespace std_compat {
 
@@ -58,9 +62,16 @@ using like_t = typename detail::like_impl<T &&, U &>::type;
 template <typename T, typename U>
 [[nodiscard]]
 constexpr like_t<T, U> forward_like(U &&x) noexcept {
-    // libstdc++ 14.2 deduces the return type of std::forward_like, which clang 23 rejects inside decltype.
     // TODO: switch back to std::forward_like once CI no longer builds with clang against libstdc++ 14.2
     return static_cast<like_t<T, U>>(x);
+}
+
+// Appends the elements of `range` to `vector`, as std::vector::append_range for a range whose begin and end have the same type.
+template <typename T, typename Allocator, std::ranges::common_range Range>
+    requires std::convertible_to<std::ranges::range_reference_t<Range>, T>
+void append_range(std::vector<T, Allocator> &vector, Range &&range) {
+    // TODO: switch back to std::vector::append_range once CI no longer builds against libstdc++ 14
+    vector.insert(vector.end(), std::ranges::begin(range), std::ranges::end(range));
 }
 
 } // namespace std_compat
