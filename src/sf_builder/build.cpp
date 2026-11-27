@@ -211,8 +211,8 @@ alp::Result<void, BuildError> build_and_save_node(
     return {};
 }
 
-// Nodes within this radius contain no terrain: it is the smallest distance from the earth's centre to its surface.
-constexpr double terrain_free_radius = earth::smallest_radius;
+// Nodes within this radius contain no terrain: it lies 10 km below the point of the earth's surface closest to its centre.
+constexpr double terrain_free_radius = earth::smallest_radius - 10'000;
 
 // Whether the bounds lie so close to the earth's centre that they hold no terrain.
 bool lies_within_terrain_free_radius(const radix::geometry::Aabb3d &bounds) {
